@@ -55,6 +55,21 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   return undefined
 }
 
+export function isExpectedAgentProcess(
+  processName: string | null | undefined,
+  expectedProcess: string
+): boolean {
+  const normalizedProcess = normalizeProcessName(processName)
+  const normalizedExpected = normalizeProcessName(expectedProcess)
+  if (!normalizedProcess || !normalizedExpected) {
+    return false
+  }
+  return (
+    normalizedProcess === normalizedExpected ||
+    normalizedProcess.startsWith(`${normalizedExpected}.`)
+  )
+}
+
 export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {

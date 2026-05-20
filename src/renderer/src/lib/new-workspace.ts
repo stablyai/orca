@@ -8,6 +8,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
+import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -294,11 +295,7 @@ async function waitForAgentForeground(ptyId: string, expectedProcess: string): P
     try {
       const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      const owns =
-        foreground === expectedProcess ||
-        foreground.startsWith(`${expectedProcess}.`) ||
-        foreground.endsWith(`/${expectedProcess}`)
-      if (owns) {
+      if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return
       }
       if (attempt >= 4 && !isShellProcess(foreground)) {

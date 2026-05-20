@@ -1,4 +1,5 @@
 import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
@@ -92,11 +93,7 @@ export async function waitForAgentReady(
     try {
       const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (
-        foreground === expectedProcess ||
-        foreground.startsWith(`${expectedProcess}.`) ||
-        foreground.endsWith(`/${expectedProcess}`)
-      ) {
+      if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return { ready: true, reason: 'foreground-match' }
       }
 
