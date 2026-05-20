@@ -8,6 +8,7 @@ import type * as CommitMessageTextGenerationModule from '../text-generation/comm
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
 
 const mocks = vi.hoisted(() => ({
+  abortMerge: vi.fn(),
   getStagedCommitContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../git/status', async () => ({
   ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
+  abortMerge: mocks.abortMerge,
   getStagedCommitContext: mocks.getStagedCommitContext
 }))
 
@@ -58,6 +60,7 @@ function makeCommands(worktreePath: string): RuntimeGitCommands {
 describe('RuntimeGitCommands', () => {
   beforeEach(() => {
     mocks.getStagedCommitContext.mockReset()
+    mocks.abortMerge.mockReset()
     mocks.generateCommitMessageFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
     mocks.getSshGitProvider.mockReset()
@@ -80,6 +83,32 @@ describe('RuntimeGitCommands', () => {
     await expect(commands.discardRuntimeGitPath('id:wt-1', '///')).rejects.toThrow(
       'invalid_relative_path'
     )
+  })
+
+  it('aborts a local merge through the resolved worktree', async () => {
+    const commands = makeCommands('/repo')
+    mocks.abortMerge.mockResolvedValue(undefined)
+
+    await expect(commands.abortMergeRuntimeGit('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(mocks.abortMerge).toHaveBeenCalledWith('/repo')
+  })
+
+  it('aborts a remote merge through the SSH git provider', async () => {
+    const provider = { abortMerge: vi.fn().mockResolvedValue(undefined) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/home/user/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.abortMergeRuntimeGit('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(provider.abortMerge).toHaveBeenCalledWith('/home/user/repo')
+    expect(mocks.abortMerge).not.toHaveBeenCalled()
   })
 
   it('prepares the selected local agent environment before generating commit messages', async () => {

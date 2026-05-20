@@ -967,6 +967,13 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
+/**
+ * Abort an in-progress merge.
+ */
+export async function abortMerge(worktreePath: string): Promise<void> {
+  await gitExecFileAsync(['merge', '--abort'], { cwd: worktreePath })
+}
+
 export async function getStagedCommitContext(
   worktreePath: string
 ): Promise<CommitMessageDraftContext | null> {

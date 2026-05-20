@@ -1,8 +1,10 @@
 // Why: split from source-control-primary-action because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
 import type { PrimaryActionInputs } from './source-control-primary-action'
+import type { GitConflictOperation } from '../../../../shared/types'
 
 export type DropdownActionKind =
+  | 'abort_merge'
   | 'commit'
   | 'commit_push'
   | 'commit_sync'
@@ -20,6 +22,7 @@ export type DropdownItem = {
   title: string
   disabled: boolean
   hint?: string
+  variant?: 'destructive'
 }
 
 export type DropdownSeparator = { kind: 'separator' }
@@ -50,11 +53,15 @@ function formatSyncLabel(base: string, ahead: number, behind: number): string {
 }
 
 /**
- * Resolve the chevron dropdown items. Every item is always rendered so the
- * menu shape stays stable across states; inapplicable rows are disabled
- * with a tooltip reason rather than hidden.
+ * Resolve the chevron dropdown items. Standard actions are always rendered so
+ * the menu shape stays stable; the destructive merge-abort action only appears
+ * while a merge is actually in progress.
  */
-export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry[] {
+type DropdownActionInputs = PrimaryActionInputs & {
+  conflictOperation?: GitConflictOperation
+}
+
+export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const {
     stagedCount,
     hasPartiallyStagedChanges,
@@ -66,7 +73,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     prState,
     isPRStateLoading,
     hostedReviewCreation,
-    branchCommitsAhead
+    branchCommitsAhead,
+    conflictOperation = 'unknown'
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -89,6 +97,14 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   // A running push shouldn't let a second pull/sync click queue up behind it
   // on a stale status snapshot.
   const globalBusy = isCommitting || isRemoteOperationActive
+
+  const abortMergeItem: DropdownItem = {
+    kind: 'abort_merge',
+    label: 'Abort Merge',
+    title: globalBusy ? 'Git operation in progress' : 'Abort the in-progress merge',
+    disabled: globalBusy,
+    variant: 'destructive'
+  }
 
   const commitDisabledReason = (() => {
     if (hasUnresolvedConflicts) {
@@ -308,6 +324,7 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   }
 
   return [
+    ...(conflictOperation === 'merge' ? [abortMergeItem, { kind: 'separator' } as const] : []),
     commitItem,
     commitPushItem,
     commitSyncItem,

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: runtime git routing tests share compatibility-cache and IPC stubs; splitting would hide cross-environment contract drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  abortMergeRuntimeGit,
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
@@ -25,6 +26,7 @@ const gitDiff = vi.fn()
 const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
 const gitBulkDiscard = vi.fn()
+const gitAbortMerge = vi.fn()
 const gitCommit = vi.fn()
 const gitPush = vi.fn()
 const gitGenerateCommitMessage = vi.fn()
@@ -42,6 +44,7 @@ beforeEach(() => {
   gitHistory.mockReset()
   gitBulkStage.mockReset()
   gitBulkDiscard.mockReset()
+  gitAbortMerge.mockReset()
   gitCommit.mockReset()
   gitPush.mockReset()
   gitGenerateCommitMessage.mockReset()
@@ -62,6 +65,7 @@ beforeEach(() => {
         history: gitHistory,
         bulkStage: gitBulkStage,
         bulkDiscard: gitBulkDiscard,
+        abortMerge: gitAbortMerge,
         commit: gitCommit,
         push: gitPush,
         generateCommitMessage: gitGenerateCommitMessage,
@@ -290,6 +294,7 @@ describe('runtime git client', () => {
     }
 
     await bulkStageRuntimeGitPaths(context, ['a.ts', 'b.ts'])
+    await abortMergeRuntimeGit(context)
     await bulkDiscardRuntimeGitPaths(context, ['c.ts', 'd.ts'])
     await commitRuntimeGit(context, 'feat: test')
     await generateRuntimeCommitMessage(context)
@@ -304,29 +309,35 @@ describe('runtime git client', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
+      method: 'git.abortMerge',
+      params: { worktree: 'wt-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+      selector: 'env-1',
       method: 'git.bulkDiscard',
       params: { worktree: 'wt-1', filePaths: ['c.ts', 'd.ts'] },
       timeoutMs: 15_000
     })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
       selector: 'env-1',
       method: 'git.commit',
       params: { worktree: 'wt-1', message: 'feat: test' },
       timeoutMs: 30_000
     })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(5, {
       selector: 'env-1',
       method: 'git.generateCommitMessage',
       params: { worktree: 'wt-1', commitMessageDiscoveryHostKey: 'runtime:env-1' },
       timeoutMs: 75_000
     })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(5, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(6, {
       selector: 'env-1',
       method: 'git.cancelGenerateCommitMessage',
       params: { worktree: 'wt-1' },
       timeoutMs: 5_000
     })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(6, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(7, {
       selector: 'env-1',
       method: 'git.push',
       params: { worktree: 'wt-1', publish: true, pushTarget: { remote: 'origin' } },

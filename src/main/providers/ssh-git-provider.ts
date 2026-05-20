@@ -149,6 +149,10 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.bulkUnstage', { worktreePath, filePaths })
   }
 
+  async abortMerge(worktreePath: string): Promise<void> {
+    await this.mux.request('git.abortMerge', { worktreePath })
+  }
+
   async discardChanges(worktreePath: string, filePath: string): Promise<void> {
     await this.mux.request('git.discard', { worktreePath, filePath })
   }

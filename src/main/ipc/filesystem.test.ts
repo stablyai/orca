@@ -23,6 +23,7 @@ const {
   bulkStageFilesMock,
   unstageFileMock,
   bulkUnstageFilesMock,
+  abortMergeMock,
   bulkDiscardChangesMock,
   discardChangesMock,
   checkIgnoredPathsMock,
@@ -54,6 +55,7 @@ const {
   bulkStageFilesMock: vi.fn(),
   unstageFileMock: vi.fn(),
   bulkUnstageFilesMock: vi.fn(),
+  abortMergeMock: vi.fn(),
   bulkDiscardChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   checkIgnoredPathsMock: vi.fn(),
@@ -97,6 +99,7 @@ vi.mock('../git/status', () => ({
   bulkStageFiles: bulkStageFilesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
+  abortMerge: abortMergeMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
   discardChanges: discardChangesMock
 }))
@@ -206,6 +209,7 @@ describe('registerFilesystemHandlers', () => {
       bulkStageFilesMock,
       unstageFileMock,
       bulkUnstageFilesMock,
+      abortMergeMock,
       bulkDiscardChangesMock,
       discardChangesMock,
       listWorktreesMock,
@@ -624,6 +628,18 @@ describe('registerFilesystemHandlers', () => {
       path.join('src', 'file.ts'),
       path.join('nested', 'child.ts')
     ])
+  })
+
+  it('runs abort merge for a registered worktree', async () => {
+    abortMergeMock.mockResolvedValue(undefined)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:abortMerge')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+
+    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
   })
 
   it('rejects bulk unstage requests that escape the selected worktree', async () => {
@@ -1236,6 +1252,21 @@ describe('registerFilesystemHandlers', () => {
 
     expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('routes ssh git:abortMerge through the SSH provider', async () => {
+    const sshAbortMergeMock = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ abortMerge: sshAbortMergeMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:abortMerge')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1'
+    })
+
+    expect(sshAbortMergeMock).toHaveBeenCalledWith('/remote/repo')
+    expect(abortMergeMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:commit with empty message and does not call commitChanges', async () => {

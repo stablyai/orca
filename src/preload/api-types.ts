@@ -1588,6 +1588,7 @@ export type PreloadApi = {
       filePaths: string[]
       connectionId?: string
     }) => Promise<void>
+    abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     discard: (args: {
       worktreePath: string
       filePath: string

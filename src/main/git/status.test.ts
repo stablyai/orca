@@ -30,6 +30,7 @@ vi.mock('fs', () => ({
 }))
 
 import {
+  abortMerge,
   bulkStageFiles,
   bulkDiscardChanges,
   bulkUnstageFiles,
@@ -186,6 +187,20 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('abortMerge', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('runs git merge --abort in the worktree', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    await abortMerge('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['merge', '--abort'], { cwd: '/repo' })
   })
 })
 

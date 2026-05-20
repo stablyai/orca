@@ -227,6 +227,13 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('abortMerge sends git.abortMerge request', async () => {
+    await provider.abortMerge('/home/user/repo')
+    expect(mux.request).toHaveBeenCalledWith('git.abortMerge', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
   it('discardChanges sends git.discard request', async () => {
     await provider.discardChanges('/home/user/repo', 'src/file.ts')
     expect(mux.request).toHaveBeenCalledWith('git.discard', {

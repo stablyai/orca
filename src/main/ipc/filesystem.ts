@@ -36,6 +36,7 @@ import {
   commitChanges,
   stageFile,
   unstageFile,
+  abortMerge,
   bulkStageFiles,
   bulkUnstageFiles,
   bulkDiscardChanges,
@@ -1117,6 +1118,21 @@ export function registerFilesystemHandlers(
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:abortMerge',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.abortMerge(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await abortMerge(worktreePath)
     }
   )
 

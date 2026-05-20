@@ -605,6 +605,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
+    abortMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortMerge', { worktree: worktree.id })
+    },
     discard: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.discard', worktreePath, filePath),
     bulkDiscard: async ({ worktreePath, filePaths }) => {

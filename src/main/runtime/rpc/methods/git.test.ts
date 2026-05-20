@@ -142,6 +142,7 @@ describe('git RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       stageRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
       bulkUnstageRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true }),
+      abortMergeRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       discardRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
       bulkDiscardRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
@@ -153,6 +154,7 @@ describe('git RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('git.bulkUnstage', { worktree: 'id:wt-1', filePaths: ['src/a.ts', 'b.ts'] })
     )
+    await dispatcher.dispatch(makeRequest('git.abortMerge', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
       makeRequest('git.discard', { worktree: 'id:wt-1', filePath: 'src/a.ts' })
     )
@@ -162,6 +164,7 @@ describe('git RPC methods', () => {
 
     expect(runtime.stageRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
+    expect(runtime.abortMergeRuntimeGit).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
   })

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { PrimaryActionInputs } from './source-control-primary-action'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
-function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
+function inputs(
+  overrides: Partial<Parameters<typeof resolveDropdownItems>[0]> = {}
+): Parameters<typeof resolveDropdownItems>[0] {
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
@@ -41,6 +42,27 @@ describe('resolveDropdownItems', () => {
       'fetch',
       'publish'
     ])
+  })
+
+  it('shows Abort Merge only while a merge is in progress', () => {
+    const mergeItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'merge',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    expect(mergeItems.map((item) => item.kind).slice(0, 2)).toEqual(['abort_merge', 'separator'])
+    const abortMerge = mergeItems.find((item) => item.kind === 'abort_merge')
+    expect(abortMerge).toMatchObject({
+      label: 'Abort Merge',
+      disabled: false,
+      variant: 'destructive'
+    })
+
+    for (const conflictOperation of ['rebase', 'cherry-pick', 'unknown'] as const) {
+      const items = resolveDropdownItems(inputs({ conflictOperation }))
+      expect(items.some((item) => item.kind === 'abort_merge')).toBe(false)
+    }
   })
 
   it('disables compound commit actions when no staged files', () => {

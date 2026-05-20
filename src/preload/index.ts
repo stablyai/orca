@@ -2137,6 +2137,8 @@ const api = {
       filePaths: string[]
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('git:bulkUnstage', args),
+    abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:abortMerge', args),
     discard: (args: {
       worktreePath: string
       filePath: string

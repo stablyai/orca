@@ -560,6 +560,23 @@ export async function bulkUnstageRuntimeGitPaths(
   )
 }
 
+export async function abortMergeRuntimeGit(context: RuntimeGitContext): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.abortMerge({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.abortMerge',
+    { worktree: context.worktreeId },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function bulkDiscardRuntimeGitPaths(
   context: RuntimeGitContext,
   filePaths: string[]

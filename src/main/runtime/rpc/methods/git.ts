@@ -50,6 +50,11 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
+    name: 'git.abortMerge',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.abortMergeRuntimeGit(params.worktree)
+  }),
+  defineMethod({
     name: 'git.diff',
     params: GitDiff,
     handler: async (params, { runtime }) =>

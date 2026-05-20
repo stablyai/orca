@@ -100,6 +100,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -112,6 +113,7 @@ import {
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import {
+  abortMergeRuntimeGit,
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
@@ -775,6 +777,11 @@ function SourceControlInner(): React.JSX.Element {
     useState<HostedReviewCreationEligibility | null>(null)
   const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
+  const [abortMergeInFlightByWorktree, setAbortMergeInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const isAbortingMerge = abortMergeInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const confirmAction = useConfirmationDialog()
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const effectiveCommitMessageAgentId = useMemo(
     () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
@@ -1216,6 +1223,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitErrors((prev) => pruneRecord(prev))
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    setAbortMergeInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setGitHistoryByWorktree((prev) => pruneRecord(prev))
@@ -1628,6 +1636,48 @@ function SourceControlInner(): React.JSX.Element {
     setRightSidebarTab('checks')
   }, [setRightSidebarOpen, setRightSidebarTab])
 
+  const handleAbortMerge = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || conflictOperation !== 'merge' || isAbortingMerge) {
+      return
+    }
+
+    const confirmed = await confirmAction({
+      title: 'Abort Merge',
+      description:
+        'Abort the in-progress merge and restore the worktree to the state before the merge started.',
+      confirmLabel: 'Abort Merge',
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setAbortMergeInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    try {
+      await abortMergeRuntimeGit({
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId
+      })
+      await refreshActiveGitStatusAfterMutation()
+      void refreshGitHistoryRef.current()
+      toast.success('Merge aborted.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to abort merge')
+    } finally {
+      setAbortMergeInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+    }
+  }, [
+    activeWorktreeId,
+    confirmAction,
+    conflictOperation,
+    isAbortingMerge,
+    refreshActiveGitStatusAfterMutation,
+    worktreePath
+  ])
+
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
   const hasPartiallyStagedChanges = useMemo(() => {
     if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
@@ -1646,7 +1696,7 @@ function SourceControlInner(): React.JSX.Element {
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
-        isRemoteOperationActive,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingMerge,
         upstreamStatus: remoteStatus,
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
@@ -1666,6 +1716,7 @@ function SourceControlInner(): React.JSX.Element {
       hostedReviewCreation,
       isHostedReviewStateLoading,
       hostedReview?.state,
+      isAbortingMerge,
       branchSummary?.commitsAhead,
       branchSummary?.status,
       remoteStatus,
@@ -1682,7 +1733,8 @@ function SourceControlInner(): React.JSX.Element {
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
-        isRemoteOperationActive,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingMerge,
+        conflictOperation,
         upstreamStatus: remoteStatus,
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
@@ -1696,7 +1748,9 @@ function SourceControlInner(): React.JSX.Element {
       grouped.staged.length,
       hasUnstagedChanges,
       hasPartiallyStagedChanges,
+      conflictOperation,
       isCommitting,
+      isAbortingMerge,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
@@ -1716,6 +1770,9 @@ function SourceControlInner(): React.JSX.Element {
   const handleActionInvoke = useCallback(
     (kind: DropdownActionKind): void => {
       switch (kind) {
+        case 'abort_merge':
+          void handleAbortMerge()
+          return
         case 'commit':
           void handleCommit()
           return
@@ -1747,7 +1804,13 @@ function SourceControlInner(): React.JSX.Element {
         }
       }
     },
-    [handleCommit, openCreatePullRequestDialog, runCompoundCommitAction, runRemoteAction]
+    [
+      handleAbortMerge,
+      handleCommit,
+      openCreatePullRequestDialog,
+      runCompoundCommitAction,
+      runRemoteAction
+    ]
   )
 
   const handleOpenDiff = useCallback(
@@ -3720,6 +3783,9 @@ export function CommitArea({
                   key={entry.kind}
                   disabled={entry.disabled}
                   title={entry.title}
+                  className={cn(
+                    entry.variant === 'destructive' && 'text-destructive focus:text-destructive'
+                  )}
                   onSelect={(event) => {
                     if (entry.disabled) {
                       event.preventDefault()
