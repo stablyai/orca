@@ -1,11 +1,38 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, Server, X } from 'lucide-react'
-import { Command as CommandPrimitive } from 'cmdk'
+import React, { useCallback, useMemo, useState } from 'react'
+import { Server, X } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { Command, CommandEmpty, CommandItem, CommandList } from '@/components/ui/command'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../shared/types'
+
+function projectCommandFilter(_value: string, search: string, keywords?: string[]): number {
+  const query = search.trim().toLowerCase()
+  if (!query) {
+    return 1
+  }
+
+  const [displayName = '', path = ''] = keywords ?? []
+  const displayNameIndex = displayName.toLowerCase().indexOf(query)
+  if (displayNameIndex !== -1) {
+    return 2 + 1 / (displayNameIndex + 1)
+  }
+
+  const pathIndex = path.toLowerCase().indexOf(query)
+  if (pathIndex !== -1) {
+    return 1 + 1 / (pathIndex + 1)
+  }
+
+  return 0
+}
 
 const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilterSection() {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -13,7 +40,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const repos = useAppStore((s) => s.repos)
 
   const [query, setQuery] = useState('')
-  const [commandValue, setCommandValue] = useState('')
+  const [highlightedRepoId, setHighlightedRepoId] = useState('')
 
   const canFilterRepos = repos.length > 1
   // Why: derive from current repos so stale ids (e.g. lingering after a repo
@@ -33,10 +60,13 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),
     [repos, selectedRepoIdSet]
   )
-  const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
-  const suggestedRepos = useMemo(
-    () => filteredRepos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
-    [filteredRepos, selectedRepoIdSet]
+  const availableRepos = useMemo(
+    () => repos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
+    [repos, selectedRepoIdSet]
+  )
+  const matchingAvailableRepos = useMemo(
+    () => searchRepos(availableRepos, query),
+    [availableRepos, query]
   )
 
   const handleSelectRepo = useCallback(
@@ -56,17 +86,47 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     [filterRepoIds, setFilterRepoIds]
   )
 
-  // Why: with shouldFilter={false} cmdk won't auto-highlight a row, so Enter
-  // has no target. Keep the highlighted value pinned to the first filtered
-  // repo whenever the query changes.
-  useEffect(() => {
-    const first = suggestedRepos[0]
-    if (first && !suggestedRepos.some((repo) => repo.id === commandValue)) {
-      setCommandValue(first.id)
-    }
-  }, [suggestedRepos, commandValue])
-
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
+
+  const handleInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      // Why: this command is embedded in a Radix dropdown; text keys should
+      // stay in the search field instead of triggering menu typeahead.
+      if (event.key === 'Backspace' && query === '' && selectedRepos.length > 0) {
+        const lastRepo = selectedRepos.at(-1)
+        if (lastRepo) {
+          event.preventDefault()
+          event.stopPropagation()
+          handleRemoveRepo(lastRepo.id)
+        }
+        return
+      }
+
+      if (event.key === 'Enter') {
+        const highlightedRepo = availableRepos.find((repo) => repo.id === highlightedRepoId)
+        const repo = highlightedRepo ?? matchingAvailableRepos[0]
+        if (repo) {
+          event.preventDefault()
+          event.stopPropagation()
+          handleSelectRepo(repo.id)
+        }
+        return
+      }
+
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+        event.stopPropagation()
+      }
+    },
+    [
+      availableRepos,
+      handleRemoveRepo,
+      handleSelectRepo,
+      highlightedRepoId,
+      matchingAvailableRepos,
+      query,
+      selectedRepos
+    ]
+  )
 
   if (!canFilterRepos) {
     return null
@@ -81,25 +141,30 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
       />
 
       <Command
-        shouldFilter={false}
-        value={commandValue}
-        onValueChange={setCommandValue}
+        filter={projectCommandFilter}
+        onValueChange={setHighlightedRepoId}
         className="bg-transparent"
       >
-        <ProjectTokenInput
-          selectedRepos={selectedRepos}
+        <SelectedProjectPills selectedRepos={selectedRepos} onRemoveRepo={handleRemoveRepo} />
+        <CommandInput
+          autoFocus
+          placeholder={selectedRepos.length > 0 ? 'Add project...' : 'Filter projects...'}
           value={query}
           onValueChange={setQuery}
-          onRemoveRepo={handleRemoveRepo}
+          onKeyDown={handleInputKeyDown}
+          className="h-8 py-2 text-xs"
+          wrapperClassName="mx-1 rounded-[7px] border border-border/70 px-2"
+          iconClassName="h-3.5 w-3.5"
         />
         <CommandList className="max-h-40 py-1">
           <CommandEmpty className="py-4 text-[11px]">
-            {hasRepoFilter ? 'All matching projects selected' : 'No projects match'}
+            {hasRepoFilter ? 'No unselected projects match' : 'No projects match'}
           </CommandEmpty>
-          {suggestedRepos.map((repo) => (
+          {availableRepos.map((repo) => (
             <CommandItem
               key={repo.id}
               value={repo.id}
+              keywords={[repo.displayName, repo.path]}
               onSelect={() => handleSelectRepo(repo.id)}
               className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
             >
@@ -124,68 +189,44 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   )
 })
 
-function ProjectTokenInput({
+function SelectedProjectPills({
   selectedRepos,
-  value,
-  onValueChange,
   onRemoveRepo
 }: {
   selectedRepos: Repo[]
-  value: string
-  onValueChange: (value: string) => void
   onRemoveRepo: (repoId: string) => void
 }) {
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      event.stopPropagation()
-      if (event.key === 'Backspace' && value === '' && selectedRepos.length > 0) {
-        const lastRepo = selectedRepos.at(-1)
-        if (lastRepo) {
-          onRemoveRepo(lastRepo.id)
-        }
-      }
-    },
-    [onRemoveRepo, selectedRepos, value]
-  )
+  if (selectedRepos.length === 0) {
+    return null
+  }
 
   return (
-    <div
-      className="mx-1 flex min-h-8 items-center gap-1 rounded-[7px] border border-border/70 px-2 py-1"
-      data-cmdk-input-wrapper=""
-    >
-      <Search className="size-3.5 shrink-0 opacity-50" />
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-        {selectedRepos.map((repo) => (
-          <span
-            key={repo.id}
-            className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/45 px-1.5 py-0.5 text-[11px] font-medium text-foreground"
+    <div className="mx-1 mb-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto rounded-[7px] border border-border/70 bg-muted/25 p-1">
+      {selectedRepos.map((repo) => (
+        <Badge
+          key={repo.id}
+          variant="outline"
+          className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
+        >
+          <RepoDotLabel
+            name={repo.displayName}
+            color={repo.badgeColor}
+            className="max-w-[8rem]"
+            dotClassName="size-1.5"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Remove ${repo.displayName} filter`}
+            className="-mr-1 size-4 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onRemoveRepo(repo.id)}
           >
-            <RepoDotLabel
-              name={repo.displayName}
-              color={repo.badgeColor}
-              className="max-w-[7.5rem]"
-              dotClassName="size-1.5"
-            />
-            <button
-              type="button"
-              aria-label={`Remove ${repo.displayName} filter`}
-              className="-mr-0.5 rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onRemoveRepo(repo.id)}
-            >
-              <X className="size-2.5" strokeWidth={2.5} />
-            </button>
-          </span>
-        ))}
-        <CommandPrimitive.Input
-          data-slot="command-input"
-          value={value}
-          onValueChange={onValueChange}
-          onKeyDown={handleKeyDown}
-          placeholder={selectedRepos.length > 0 ? 'Add project...' : 'Filter projects...'}
-          className="min-w-20 flex-1 bg-transparent py-0.5 text-xs outline-none placeholder:text-muted-foreground"
-        />
-      </div>
+            <X className="size-2.5" strokeWidth={2.5} />
+          </Button>
+        </Badge>
+      ))}
     </div>
   )
 }
