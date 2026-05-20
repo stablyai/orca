@@ -16,6 +16,7 @@
 import { z } from 'zod'
 import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
+import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -129,15 +130,8 @@ export const workspaceCreateErrorClassSchema = z.enum([
 ])
 export type WorkspaceCreateErrorClass = z.infer<typeof workspaceCreateErrorClassSchema>
 
-export const workspaceSourceSchema = z.enum([
-  'command_palette',
-  'sidebar',
-  'shortcut',
-  'drag_drop',
-  'onboarding',
-  'unknown'
-])
-export type WorkspaceSource = z.infer<typeof workspaceSourceSchema>
+export const workspaceSourceSchema = z.enum(WORKSPACE_SOURCE_VALUES)
+export type { WorkspaceSource }
 
 export const launchSourceSchema = z.enum([
   'command_palette',

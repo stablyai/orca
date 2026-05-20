@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -7,6 +8,8 @@ export type PickerOption<T extends string = string> = {
   value: T
   label: string
   subtitle?: string
+  disabled?: boolean
+  renderIcon?: (selected: boolean) => ReactNode
 }
 
 type Props<T extends string = string> = {
@@ -15,6 +18,7 @@ type Props<T extends string = string> = {
   options: PickerOption<T>[]
   selected: T
   onSelect: (value: T) => void
+  onLongSelect?: (value: T) => void
   onClose: () => void
 }
 
@@ -24,6 +28,7 @@ export function PickerModal<T extends string = string>({
   options,
   selected,
   onSelect,
+  onLongSelect,
   onClose
 }: Props<T>) {
   return (
@@ -39,12 +44,30 @@ export function PickerModal<T extends string = string>({
             <View key={opt.value}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                disabled={opt.disabled}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && !opt.disabled && styles.rowPressed,
+                  opt.disabled && styles.rowDisabled
+                ]}
                 onPress={() => {
+                  if (opt.disabled) return
                   onSelect(opt.value)
                   onClose()
                 }}
+                onLongPress={
+                  onLongSelect
+                    ? () => {
+                        if (opt.disabled) return
+                        onLongSelect(opt.value)
+                        onClose()
+                      }
+                    : undefined
+                }
               >
+                {opt.renderIcon ? (
+                  <View style={styles.rowIcon}>{opt.renderIcon(isSelected)}</View>
+                ) : null}
                 <View style={styles.rowContent}>
                   <Text style={[styles.rowLabel, isSelected && styles.rowLabelSelected]}>
                     {opt.label}
@@ -90,8 +113,17 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
+  rowDisabled: {
+    opacity: 0.45
+  },
   rowContent: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
+  },
+  rowIcon: {
+    width: 22,
+    alignItems: 'center',
+    marginRight: spacing.sm
   },
   rowLabel: {
     fontSize: typography.bodySize,

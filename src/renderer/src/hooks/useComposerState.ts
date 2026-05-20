@@ -123,7 +123,11 @@ export type ComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   /** GitLab parallel of onBaseBranchPrSelect. */
-  onBaseBranchMrSelect?: (baseBranch: string, item: GitLabWorkItem) => void
+  onBaseBranchMrSelect?: (
+    baseBranch: string,
+    item: GitLabWorkItem,
+    pushTarget?: GitPushTarget
+  ) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   agentPrompt: string
@@ -1443,8 +1447,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // semantics — except the note prefill uses GitLab's `!N` MR convention
   // so a glance at the worktree sidebar makes the provider obvious.
   const handleBaseBranchMrSelect = useCallback(
-    (nextBaseBranch: string, item: GitLabWorkItem): void => {
+    (nextBaseBranch: string, item: GitLabWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
+      setPushTarget(nextPushTarget)
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
@@ -1544,7 +1549,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           if ('error' in result) {
             return
           }
-          handleBaseBranchMrSelect(result.baseBranch, item)
+          handleBaseBranchMrSelect(result.baseBranch, item, result.pushTarget)
         })
     },
     [applyLinkedGitLabWorkItem, eligibleRepos, handleBaseBranchMrSelect, selectedRepo]

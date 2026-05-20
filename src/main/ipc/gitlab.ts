@@ -65,6 +65,10 @@ function normalizeIssueAssignee(value: unknown): '@me' | undefined {
   return value === '@me' ? '@me' : undefined
 }
 
+function repoConnectionId(repo: Repo): string | null {
+  return repo.connectionId ?? null
+}
+
 export function registerGitLabHandlers(store: Store): void {
   ipcMain.handle('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
@@ -72,20 +76,25 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return getProjectSlug(repo.path)
+    return getProjectSlug(repo.path, repoConnectionId(repo))
   })
 
   ipcMain.handle(
     'gitlab:mrForBranch',
     async (_event, args: { repoPath: string; branch: string; linkedMRIid?: number | null }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return getMergeRequestForBranch(repo.path, args.branch, args.linkedMRIid ?? null)
+      return getMergeRequestForBranch(
+        repo.path,
+        args.branch,
+        args.linkedMRIid ?? null,
+        repoConnectionId(repo)
+      )
     }
   )
 
   ipcMain.handle('gitlab:mr', async (_event, args: { repoPath: string; iid: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return getMergeRequest(repo.path, args.iid)
+    return getMergeRequest(repo.path, args.iid, repoConnectionId(repo))
   })
 
   ipcMain.handle(
@@ -103,14 +112,21 @@ export function registerGitLabHandlers(store: Store): void {
       const state = normalizeMRListState(args.state)
       const page = normalizePositiveInteger(args.page, 1, 10_000)
       const perPage = normalizePositiveInteger(args.perPage, 20, 100)
-      const result = await listMergeRequests(repo.path, state, page, perPage)
-      return result
+      return listMergeRequests(
+        repo.path,
+        state,
+        page,
+        perPage,
+        repo.issueSourcePreference,
+        undefined,
+        repoConnectionId(repo)
+      )
     }
   )
 
   ipcMain.handle('gitlab:issue', async (_event, args: { repoPath: string; number: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return getIssue(repo.path, args.number)
+    return getIssue(repo.path, args.number, repoConnectionId(repo))
   })
 
   ipcMain.handle(
@@ -128,7 +144,14 @@ export function registerGitLabHandlers(store: Store): void {
       const limit = normalizePositiveInteger(args.limit, 20, 100)
       const state = normalizeIssueListState(args.state)
       const assignee = normalizeIssueAssignee(args.assignee)
-      const result = await listIssues(repo.path, limit, undefined, state, assignee)
+      const result = await listIssues(
+        repo.path,
+        limit,
+        repo.issueSourcePreference,
+        state,
+        assignee,
+        repoConnectionId(repo)
+      )
       // Why: Tasks page expects GitLabWorkItem[] so it can share row
       // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
       // doesn't need a separate code path.
@@ -152,7 +175,13 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:createIssue',
     async (_event, args: { repoPath: string; title: string; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return createIssue(repo.path, args.title, args.body)
+      return createIssue(
+        repo.path,
+        args.title,
+        args.body,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
@@ -160,7 +189,13 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:updateIssue',
     async (_event, args: { repoPath: string; number: number; updates: GitLabIssueUpdate }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return updateIssue(repo.path, args.number, args.updates)
+      return updateIssue(
+        repo.path,
+        args.number,
+        args.updates,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
@@ -168,18 +203,24 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:addIssueComment',
     async (_event, args: { repoPath: string; number: number; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return addIssueComment(repo.path, args.number, args.body)
+      return addIssueComment(
+        repo.path,
+        args.number,
+        args.body,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
   ipcMain.handle('gitlab:listLabels', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listLabels(repo.path)
+    return listLabels(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
   })
 
   ipcMain.handle('gitlab:listAssignableUsers', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listAssignableUsers(repo.path)
+    return listAssignableUsers(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
   })
 
   // Why: combined MR + issue list — Tasks screen and any future picker
@@ -201,7 +242,10 @@ export function registerGitLabHandlers(store: Store): void {
         repo.path,
         normalizeMRListState(args.state),
         normalizePositiveInteger(args.page, 1, 10_000),
-        normalizePositiveInteger(args.perPage, 20, 100)
+        normalizePositiveInteger(args.perPage, 20, 100),
+        repo.issueSourcePreference,
+        undefined,
+        repoConnectionId(repo)
       )
     }
   )
@@ -212,18 +256,24 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:workItemDetails',
     async (_event, args: { repoPath: string; iid: number; type: 'issue' | 'mr' }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return getWorkItemDetails(repo.path, args.iid, args.type)
+      return getWorkItemDetails(
+        repo.path,
+        args.iid,
+        args.type,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
   ipcMain.handle('gitlab:closeMR', async (_event, args: { repoPath: string; iid: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return closeMR(repo.path, args.iid)
+    return closeMR(repo.path, args.iid, repo.issueSourcePreference, repoConnectionId(repo))
   })
 
   ipcMain.handle('gitlab:reopenMR', async (_event, args: { repoPath: string; iid: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return reopenMR(repo.path, args.iid)
+    return reopenMR(repo.path, args.iid, repo.issueSourcePreference, repoConnectionId(repo))
   })
 
   ipcMain.handle(
@@ -233,7 +283,13 @@ export function registerGitLabHandlers(store: Store): void {
       args: { repoPath: string; iid: number; method?: 'merge' | 'squash' | 'rebase' }
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return mergeMR(repo.path, args.iid, args.method ?? 'merge')
+      return mergeMR(
+        repo.path,
+        args.iid,
+        args.method ?? 'merge',
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
@@ -241,7 +297,13 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:addMRComment',
     async (_event, args: { repoPath: string; iid: number; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return addMRComment(repo.path, args.iid, args.body)
+      return addMRComment(
+        repo.path,
+        args.iid,
+        args.body,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
     }
   )
 
@@ -250,7 +312,7 @@ export function registerGitLabHandlers(store: Store): void {
   // care about cwd because the endpoint is user-scoped.
   ipcMain.handle('gitlab:todos', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listTodos(repo.path)
+    return listTodos(repo.path, repoConnectionId(repo))
   })
 
   // Why: paste-URL flow in the picker. The user pastes a GitLab URL that
@@ -271,7 +333,13 @@ export function registerGitLabHandlers(store: Store): void {
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       const projectRef: ProjectRef = { host: args.host, path: args.path }
-      const result = await getWorkItemByProjectRef(repo.path, projectRef, args.iid, args.type)
+      const result = await getWorkItemByProjectRef(
+        repo.path,
+        projectRef,
+        args.iid,
+        args.type,
+        repoConnectionId(repo)
+      )
       // Why: only persist a recent entry when the lookup actually
       // produced an item. A 404 / auth failure shouldn't pollute the
       // user's recents list with project paths they can't read.

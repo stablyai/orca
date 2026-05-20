@@ -119,11 +119,15 @@ export async function getHostedReviewForBranch(input: {
   // Why: branch review status is tied to the branch publishing remote.
   // GitHub and GitLab task/project surfaces may use richer per-provider
   // source preferences, but this core status should follow origin.
-  const gitlabProject = await getProjectSlug(input.repoPath)
+  const gitlabProject = await getProjectSlug(input.repoPath, input.connectionId)
   if (gitlabProject) {
     const mr =
-      (await getMergeRequestForBranch(input.repoPath, branchName, input.linkedGitLabMR ?? null)) ??
-      null
+      (await getMergeRequestForBranch(
+        input.repoPath,
+        branchName,
+        input.linkedGitLabMR ?? null,
+        input.connectionId
+      )) ?? null
     return mr ? mapGitLabReview(mr) : null
   }
 

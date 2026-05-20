@@ -32,6 +32,19 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
+let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
+
+export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
+  if (!registeredConnectSshTarget) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  return registeredConnectSshTarget(targetId)
+}
+
+export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
+  return registeredGetSshState?.(targetId)
+}
 
 // Why: one session per SSH target encapsulates the entire relay lifecycle
 // (multiplexer, providers, abort controller, state machine). Eliminates the
@@ -370,8 +383,8 @@ export function registerSshHandlers(
 
   // ── Connection lifecycle ───────────────────────────────────────────
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    const reset = resetRelayInFlight.get(args.targetId)
+  async function connectTarget(targetId: string): Promise<SshConnectionState> {
+    const reset = resetRelayInFlight.get(targetId)
     if (reset) {
       await reset
     }
@@ -379,18 +392,25 @@ export function registerSshHandlers(
     // Why: serialize concurrent ssh:connect calls for the same target.
     // Multiple tabs can fire connect simultaneously; without this, they
     // interleave and the first session leaks.
-    const existing = connectInFlight.get(args.targetId)
+    const existing = connectInFlight.get(targetId)
     if (existing) {
       return existing
     }
 
-    const promise = doConnect(args.targetId)
-    connectInFlight.set(args.targetId, promise)
+    const promise = doConnect(targetId)
+    connectInFlight.set(targetId, promise)
     try {
       return await promise
     } finally {
-      connectInFlight.delete(args.targetId)
+      connectInFlight.delete(targetId)
     }
+  }
+
+  registeredConnectSshTarget = connectTarget
+  registeredGetSshState = (targetId: string) => getPublicSshState(targetId)
+
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
+    return connectTarget(args.targetId)
   })
 
   async function doConnect(targetId: string): Promise<SshConnectionState> {

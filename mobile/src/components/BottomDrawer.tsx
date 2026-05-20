@@ -40,7 +40,7 @@ type Props = {
   dragContentToDismiss?: boolean
 }
 
-export function BottomDrawer({ visible, onClose, children, dragContentToDismiss = false }: Props) {
+export function BottomDrawer({ visible, onClose, children, dragContentToDismiss = true }: Props) {
   const [mounted, setMounted] = useState(visible)
 
   useEffect(() => {
@@ -74,7 +74,7 @@ function MountedBottomDrawer({
   onClose,
   onHidden,
   children,
-  dragContentToDismiss = false
+  dragContentToDismiss = true
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)

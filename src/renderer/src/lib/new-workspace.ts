@@ -9,6 +9,8 @@ import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
+export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -155,43 +157,6 @@ export function getSetupConfig(
     return { source: 'yaml', command: yamlSetup }
   }
   return null
-}
-
-// Why: branch names and on-disk worktree directories must be short, lowercase,
-// and ASCII-safe. Free-form text (prompts, GitHub titles) often contains
-// emoji, CJK, or hundreds of characters, which would otherwise make
-// sanitizeWorktreeName either produce a ludicrously long name or throw
-// "Invalid worktree name" when every character is stripped.
-function slugifyForWorkspaceName(input: string): string {
-  return (
-    input
-      .trim()
-      .toLowerCase()
-      .replace(/[\\/]+/g, '-')
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9._-]+/g, '-')
-      .replace(/-+/g, '-')
-      // Why: git check-ref-format rejects any ref containing `..`, so a prompt
-      // like "../../foo" must not turn into a branch seed with internal `..`
-      // sequences (the main-process sanitizer collapses these too, but we
-      // mirror the rule here so the renderer preview matches the real name).
-      .replace(/\.{2,}/g, '.')
-      .replace(/^[.-]+|[.-]+$/g, '')
-      .slice(0, 48)
-      .replace(/[-._]+$/g, '')
-  )
-}
-
-export function getLinkedWorkItemSuggestedName(item: { title: string }): string {
-  const withoutLeadingNumber = item.title
-    .trim()
-    .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
-    .replace(/^#\d+\s*[:-]\s*/, '')
-    .replace(/\(#\d+\)/gi, '')
-    .replace(/\b#\d+\b/g, '')
-    .trim()
-  const seed = withoutLeadingNumber || item.title.trim()
-  return slugifyForWorkspaceName(seed)
 }
 
 export function getWorkspaceSeedName(args: {

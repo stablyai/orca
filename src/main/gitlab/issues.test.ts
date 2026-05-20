@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: GitLab issue mutation/list coverage shares glab mocks across related endpoint cases. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 
@@ -30,7 +31,15 @@ vi.mock('./gl-utils', async () => {
   }
 })
 
-import { addIssueComment, createIssue, getIssue, listIssues, updateIssue } from './issues'
+import {
+  addIssueComment,
+  createIssue,
+  getIssue,
+  listAssignableUsers,
+  listIssues,
+  listLabels,
+  updateIssue
+} from './issues'
 
 describe('gitlab issue operations', () => {
   beforeEach(() => {
@@ -226,6 +235,62 @@ describe('gitlab issue operations', () => {
     )
   })
 
+  it('updateIssue applies body edits via the issue API', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await expect(updateIssue('/repo-root', 5, { body: 'Updated body' })).resolves.toEqual({
+      ok: true
+    })
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', '-X', 'PUT', 'projects/stablyai%2Forca/issues/5', '-f', 'description=Updated body'],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('routes issue metadata reads through the selected SSH GitLab host', async () => {
+    getIssueProjectRefMock
+      .mockResolvedValueOnce({ host: 'git.internal', path: 'stablyai/orca' })
+      .mockResolvedValueOnce({ host: 'git.internal', path: 'stablyai/orca' })
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'bug\nfeature\n' })
+      .mockResolvedValueOnce({
+        stdout: '{"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png"}\n'
+      })
+
+    await expect(listLabels('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
+      'bug',
+      'feature'
+    ])
+    await expect(listAssignableUsers('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
+      {
+        username: 'alice',
+        name: 'Alice',
+        avatarUrl: 'https://example.com/a.png'
+      }
+    ])
+
+    expect(glabExecFileAsyncMock.mock.calls[0][0]).toEqual([
+      'api',
+      '--hostname',
+      'git.internal',
+      '--paginate',
+      'projects/stablyai%2Forca/labels',
+      '--jq',
+      '.[].name'
+    ])
+    expect(glabExecFileAsyncMock.mock.calls[1][0]).toEqual([
+      'api',
+      '--hostname',
+      'git.internal',
+      '--paginate',
+      'projects/stablyai%2Forca/members/all?per_page=100',
+      '--jq',
+      '.[] | {username, name, avatar_url}'
+    ])
+  })
+
   it('addIssueComment posts to /notes and maps the response', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockResolvedValueOnce({
@@ -253,6 +318,32 @@ describe('gitlab issue operations', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '-X', 'POST', 'projects/stablyai%2Forca/issues/5/notes', '-f', 'body=Hello'],
       { cwd: '/repo-root' }
+    )
+  })
+
+  it('addIssueComment passes hostname for SSH-backed self-hosted repos', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({
+      host: 'gitlab.example.com',
+      path: 'stablyai/orca'
+    })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ id: 100, body: 'Hello' })
+    })
+
+    await addIssueComment('/repo-root', 5, 'Hello', undefined, 'conn-1')
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        '--hostname',
+        'gitlab.example.com',
+        '-X',
+        'POST',
+        'projects/stablyai%2Forca/issues/5/notes',
+        '-f',
+        'body=Hello'
+      ],
+      {}
     )
   })
 

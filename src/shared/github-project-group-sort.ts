@@ -1,12 +1,12 @@
 // Why: grouping and sorting of Project rows is deterministic shared logic
 // driven by `selectedView` — it must not depend on fetch ordering. Keeping it
-// in a pure module makes the comparator easily fixture-testable.
+// in a pure shared module lets desktop and mobile render Project views the same.
 import type {
   GitHubProjectField,
   GitHubProjectRow,
   GitHubProjectSort,
   GitHubProjectTable
-} from '../../../../shared/github-project-types'
+} from './github-project-types'
 
 export type ProjectGroup = {
   /** Stable key used for React reconciliation. */
@@ -63,7 +63,6 @@ function getFieldValueForGrouping(
       iteration: null
     }
   }
-  // Fallback: use stringified value as both key and label.
   const label = deriveStringValue(value)
   return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
 }
@@ -122,7 +121,6 @@ export function groupRows(
   const entries = Array.from(buckets.entries())
   // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
-    // Empty group always last.
     if (a[0] === EMPTY_GROUP_KEY) {
       return 1
     }
@@ -146,7 +144,6 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   const field = sort.field
   const aValue = a.fieldValuesByFieldId[field.id]
   const bValue = b.fieldValuesByFieldId[field.id]
-  // Missing values sort last (regardless of direction).
   if (!aValue && !bValue) {
     return 0
   }
@@ -208,12 +205,7 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
     }
   } else {
     // Why: unknown sort-field kind — ignore this sort field and fall through
-    // to tie-breaks (and eventually row.position). Dev-time warning gated so
-    // production builds don't spam the console.
-    if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.warn('[projectView] unknown sort-field kind', field)
-    }
+    // to tie-breaks (and eventually row.position).
     return 0
   }
   return sort.direction === 'DESC' ? -cmp : cmp
@@ -229,14 +221,12 @@ export function sortRows(table: GitHubProjectTable, rows: GitHubProjectRow[]): G
         return cmp
       }
     }
-    // Final tie-break: row.position preserves GitHub rank order.
-    return a.position - b.position
+    return (a.position ?? UNKNOWN_INDEX_SENTINEL) - (b.position ?? UNKNOWN_INDEX_SENTINEL)
   })
   return out
 }
 
 export function isIterationCurrent(iteration: { startDate: string; duration: number }): boolean {
-  // Parse as YYYY-MM-DD in UTC to avoid TZ-shift false negatives near midnight.
   const start = new Date(`${iteration.startDate}T00:00:00Z`).getTime()
   if (Number.isNaN(start)) {
     return false

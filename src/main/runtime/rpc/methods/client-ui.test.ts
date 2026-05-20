@@ -11,6 +11,80 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('client UI RPC methods', () => {
+  it('returns the runtime host agent settings needed by mobile create flows', async () => {
+    const settings = {
+      defaultTuiAgent: 'codex',
+      agentCmdOverrides: { codex: 'codex --profile work' },
+      defaultTaskSource: 'gitlab',
+      defaultTaskViewPreset: 'my-prs',
+      visibleTaskProviders: ['github', 'gitlab'],
+      defaultRepoSelection: ['repo-1'],
+      defaultLinearTeamSelection: ['team-1'],
+      githubProjects: {
+        pinned: [],
+        recent: [],
+        lastViewByProject: {},
+        activeProject: null
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getClientSettings: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('settings.get'))
+
+    expect(runtime.getClientSettings).toHaveBeenCalledTimes(1)
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
+  it('persists the runtime host task source setting for mobile Tasks', async () => {
+    const settings = {
+      defaultTuiAgent: null,
+      agentCmdOverrides: {},
+      defaultTaskSource: 'linear',
+      defaultTaskViewPreset: 'issues',
+      visibleTaskProviders: ['github', 'linear'],
+      defaultRepoSelection: ['repo-1', 'repo-2'],
+      defaultLinearTeamSelection: ['team-1', 'team-2'],
+      githubProjects: {
+        pinned: [],
+        recent: [],
+        lastViewByProject: {
+          'organization:stablyai:1': { viewId: 'view-1' }
+        },
+        activeProject: { owner: 'stablyai', ownerType: 'organization', number: 1 }
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        defaultTuiAgent: 'codex',
+        defaultTaskSource: 'linear',
+        defaultTaskViewPreset: 'my-prs',
+        defaultRepoSelection: settings.defaultRepoSelection,
+        defaultLinearTeamSelection: ['team-1', 'team-2'],
+        githubProjects: settings.githubProjects
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      defaultTuiAgent: 'codex',
+      defaultTaskSource: 'linear',
+      defaultTaskViewPreset: 'my-prs',
+      defaultRepoSelection: settings.defaultRepoSelection,
+      defaultLinearTeamSelection: ['team-1', 'team-2'],
+      githubProjects: settings.githubProjects
+    })
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
   it('returns the runtime host persisted UI state', async () => {
     const ui: PersistedUIState = {
       ...getDefaultUIState(),
@@ -66,7 +140,10 @@ describe('client UI RPC methods', () => {
       statusBarItems: ['codex'],
       taskResumeState: {
         githubMode: 'items',
-        githubItemsQuery: 'is:open'
+        githubItemsQuery: 'is:open',
+        githubProjectHiddenFieldIdsByView: {
+          'project-1:view-1': ['field-1']
+        }
       },
       workspaceCleanup: {
         dismissals: {
@@ -88,7 +165,13 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'inline-agents'],
       statusBarItems: ['codex'],
-      taskResumeState: { githubMode: 'items', githubItemsQuery: 'is:open' },
+      taskResumeState: {
+        githubMode: 'items',
+        githubItemsQuery: 'is:open',
+        githubProjectHiddenFieldIdsByView: {
+          'project-1:view-1': ['field-1']
+        }
+      },
       workspaceCleanup: {
         dismissals: {
           'repo::/worktree': {

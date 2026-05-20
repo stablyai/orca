@@ -779,6 +779,57 @@ describe('OrcaRuntimeRpcServer', () => {
     const browserSetViewport = vi.fn().mockResolvedValue({ ok: true })
     const browserDialogAccept = vi.fn().mockResolvedValue({ ok: true })
     const browserDialogDismiss = vi.fn().mockResolvedValue({ ok: true })
+    const listGitHubProjects = vi.fn().mockResolvedValue({ ok: true, projects: [] })
+    const listGitHubLabelsBySlug = vi.fn().mockResolvedValue({ ok: true, labels: ['bug'] })
+    const listGitHubAssignableUsersBySlug = vi
+      .fn()
+      .mockResolvedValue({ ok: true, users: [{ login: 'alex' }] })
+    const listGitHubIssueTypesBySlug = vi.fn().mockResolvedValue({
+      ok: true,
+      types: [{ id: 'type-1', name: 'Bug', color: 'RED', description: null }]
+    })
+    const updateGitHubProjectItemField = vi.fn().mockResolvedValue({ ok: true })
+    const clearGitHubProjectItemField = vi.fn().mockResolvedValue({ ok: true })
+    const updateGitHubIssueBySlug = vi.fn().mockResolvedValue({ ok: true })
+    const updateGitHubIssueTypeBySlug = vi.fn().mockResolvedValue({ ok: true })
+    const updateGitHubPullRequestBySlug = vi.fn().mockResolvedValue({ ok: true })
+    const updateRepoIssue = vi.fn().mockResolvedValue({ ok: true })
+    const listRepoLabels = vi.fn().mockResolvedValue(['bug'])
+    const listRepoAssignableUsers = vi.fn().mockResolvedValue([{ login: 'alex' }])
+    const addRepoIssueComment = vi.fn().mockResolvedValue({ ok: true, comment: { id: 2 } })
+    const addRepoPRReviewComment = vi.fn().mockResolvedValue({ ok: true, comment: { id: 3 } })
+    const addRepoPRReviewCommentReply = vi.fn().mockResolvedValue({
+      ok: true,
+      comment: { id: 4 }
+    })
+    const getRepoPRFileContents = vi.fn().mockResolvedValue({
+      original: 'before',
+      modified: 'after',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+    const rerunRepoPRChecks = vi.fn().mockResolvedValue({ ok: true, count: 1 })
+    const resolveRepoReviewThread = vi.fn().mockResolvedValue(true)
+    const setRepoPRFileViewed = vi.fn().mockResolvedValue(true)
+    const requestRepoPRReviewers = vi.fn().mockResolvedValue({ ok: true })
+    const mergeRepoPR = vi.fn().mockResolvedValue({ ok: true })
+    const addGitLabRepoIssueComment = vi.fn().mockResolvedValue({ ok: true })
+    const addGitLabRepoMRComment = vi.fn().mockResolvedValue({ ok: true })
+    const mergeGitLabRepoMR = vi.fn().mockResolvedValue({ ok: true })
+    const addGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({
+      ok: true,
+      comment: { id: 1, author: 'me', body: 'done', createdAt: '2026-01-01T00:00:00Z', url: '' }
+    })
+    const updateGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({ ok: true })
+    const deleteGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({ ok: true })
+    const linearSearchIssues = vi.fn().mockResolvedValue([])
+    const linearSelectWorkspace = vi.fn().mockReturnValue({
+      connected: true,
+      selectedWorkspaceId: 'workspace-1'
+    })
+    const linearTeamLabels = vi.fn().mockResolvedValue([{ id: 'label-1', name: 'bug' }])
+    const linearTeamMembers = vi.fn().mockResolvedValue([{ id: 'member-1', displayName: 'Alex' }])
+    const linearAddIssueComment = vi.fn().mockResolvedValue({ ok: true, id: 'comment-1' })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -796,7 +847,41 @@ describe('OrcaRuntimeRpcServer', () => {
       browserTabCreate,
       browserSetViewport,
       browserDialogAccept,
-      browserDialogDismiss
+      browserDialogDismiss,
+      listGitHubProjects,
+      listGitHubLabelsBySlug,
+      listGitHubAssignableUsersBySlug,
+      listGitHubIssueTypesBySlug,
+      updateGitHubProjectItemField,
+      clearGitHubProjectItemField,
+      updateGitHubIssueBySlug,
+      updateGitHubIssueTypeBySlug,
+      updateGitHubPullRequestBySlug,
+      updateRepoIssue,
+      listRepoLabels,
+      listRepoAssignableUsers,
+      addRepoIssueComment,
+      addRepoPRReviewComment,
+      addRepoPRReviewCommentReply,
+      getRepoPRFileContents,
+      rerunRepoPRChecks,
+      resolveRepoReviewThread,
+      setRepoPRFileViewed,
+      requestRepoPRReviewers,
+      mergeRepoPR,
+      addGitLabRepoIssueComment,
+      addGitLabRepoMRComment,
+      mergeGitLabRepoMR,
+      addGitHubIssueCommentBySlug,
+      updateGitHubIssueCommentBySlug,
+      deleteGitHubIssueCommentBySlug,
+      linearSearchIssues,
+      linearSelectWorkspace,
+      linearTeamLabels,
+      linearTeamMembers,
+      linearAddIssueComment,
+      getClientSettings: vi.fn(() => ({ defaultTuiAgent: 'codex', agentCmdOverrides: {} })),
+      updateClientSettings: vi.fn(() => ({ defaultTaskSource: 'linear' }))
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -818,6 +903,447 @@ describe('OrcaRuntimeRpcServer', () => {
         id: 'req_allowed',
         method: 'status.get',
         deviceToken: mobile.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_settings_get',
+        method: 'settings.get',
+        deviceToken: mobile.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_settings_update',
+        method: 'settings.update',
+        deviceToken: mobile.token,
+        params: { defaultTaskSource: 'linear' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_projects',
+        method: 'github.project.listAccessible',
+        deviceToken: mobile.token,
+        params: {}
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_issue_types',
+        method: 'github.project.listIssueTypesBySlug',
+        deviceToken: mobile.token,
+        params: { owner: 'stablyai', repo: 'orca' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_labels',
+        method: 'github.project.listLabelsBySlug',
+        deviceToken: mobile.token,
+        params: { owner: 'stablyai', repo: 'orca' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_assignees',
+        method: 'github.project.listAssignableUsersBySlug',
+        deviceToken: mobile.token,
+        params: { owner: 'stablyai', repo: 'orca', seedLogins: ['alex'] }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_update_issue',
+        method: 'github.project.updateIssueBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          number: 123,
+          updates: { title: 'New title' }
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_update_issue_type',
+        method: 'github.project.updateIssueTypeBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          number: 123,
+          issueTypeId: 'type-1'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_update_field',
+        method: 'github.project.updateItemField',
+        deviceToken: mobile.token,
+        params: {
+          projectId: 'project-1',
+          itemId: 'item-1',
+          fieldId: 'field-1',
+          value: { kind: 'text', text: 'Ready' }
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_clear_field',
+        method: 'github.project.clearItemField',
+        deviceToken: mobile.token,
+        params: {
+          projectId: 'project-1',
+          itemId: 'item-1',
+          fieldId: 'field-1'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_update_pr',
+        method: 'github.project.updatePullRequestBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          number: 456,
+          updates: { state: 'closed' }
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_add_comment',
+        method: 'github.project.addIssueCommentBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          number: 123,
+          body: 'done'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_update_comment',
+        method: 'github.project.updateIssueCommentBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          commentId: 101,
+          body: 'edited'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_project_delete_comment',
+        method: 'github.project.deleteIssueCommentBySlug',
+        deviceToken: mobile.token,
+        params: {
+          owner: 'stablyai',
+          repo: 'orca',
+          commentId: 101
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_update_issue',
+        method: 'github.updateIssue',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          number: 123,
+          updates: { title: 'New title', addLabels: ['bug'] }
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_labels',
+        method: 'github.listLabels',
+        deviceToken: mobile.token,
+        params: { repo: 'id:repo-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_assignees',
+        method: 'github.listAssignableUsers',
+        deviceToken: mobile.token,
+        params: { repo: 'id:repo-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_add_comment',
+        method: 'github.addIssueComment',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          number: 123,
+          body: 'done'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_add_review_comment',
+        method: 'github.addPRReviewComment',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          commitId: 'abc123',
+          path: 'src/app.ts',
+          line: 10,
+          body: 'please fix'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_reply_review_comment',
+        method: 'github.addPRReviewCommentReply',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          commentId: 99,
+          body: 'fixed',
+          threadId: 'thread-1',
+          path: 'src/app.ts',
+          line: 10
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_pr_file_contents',
+        method: 'github.prFileContents',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          path: 'src/app.ts',
+          status: 'modified',
+          headSha: 'abc123',
+          baseSha: 'def456'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_rerun_checks',
+        method: 'github.rerunPRChecks',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          headSha: 'abc123',
+          failedOnly: true
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_resolve_thread',
+        method: 'github.resolveReviewThread',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          threadId: 'thread-1',
+          resolve: true
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_file_viewed',
+        method: 'github.setPRFileViewed',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          pullRequestId: 'PR_kw',
+          path: 'src/app.ts',
+          viewed: true
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_request_reviewers',
+        method: 'github.requestPRReviewers',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          reviewers: ['alex']
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_github_merge_pr',
+        method: 'github.mergePR',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          prNumber: 456,
+          method: 'squash'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_gitlab_add_issue_comment',
+        method: 'gitlab.addIssueComment',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          number: 123,
+          body: 'done'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_gitlab_add_mr_comment',
+        method: 'gitlab.addMRComment',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          iid: 456,
+          body: 'ship it'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_gitlab_merge_mr',
+        method: 'gitlab.mergeMR',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          iid: 456,
+          method: 'merge'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_linear_search',
+        method: 'linear.searchIssues',
+        deviceToken: mobile.token,
+        params: { query: 'auth', limit: 10, workspaceId: 'workspace-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_linear_select_workspace',
+        method: 'linear.selectWorkspace',
+        deviceToken: mobile.token,
+        params: { workspaceId: 'workspace-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_linear_team_labels',
+        method: 'linear.teamLabels',
+        deviceToken: mobile.token,
+        params: { teamId: 'team-1', workspaceId: 'workspace-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_linear_team_members',
+        method: 'linear.teamMembers',
+        deviceToken: mobile.token,
+        params: { teamId: 'team-1', workspaceId: 'workspace-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_linear_add_comment',
+        method: 'linear.addIssueComment',
+        deviceToken: mobile.token,
+        params: { issueId: 'issue-1', workspaceId: 'workspace-1', body: 'done' }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
@@ -981,6 +1507,92 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_allowed', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_settings_get', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_settings_update', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_github_projects', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_issue_types', ok: true })
+    )
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_project_labels', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_assignees', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_update_issue', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_update_issue_type', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_update_field', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_clear_field', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_update_pr', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_add_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_update_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_project_delete_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_update_issue', ok: true })
+    )
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_github_labels', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_assignees', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_add_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_add_review_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_reply_review_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_pr_file_contents', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_rerun_checks', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_resolve_thread', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_file_viewed', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_github_request_reviewers', ok: true })
+    )
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_github_merge_pr', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_gitlab_add_issue_comment', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_gitlab_add_mr_comment', ok: true })
+    )
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_gitlab_merge_mr', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_linear_search', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_linear_select_workspace', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_linear_team_labels', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_linear_team_members', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_linear_add_comment', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_status', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_push', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_upstream', ok: true }))
@@ -1038,6 +1650,116 @@ describe('OrcaRuntimeRpcServer', () => {
       worktree: 'id:wt-1',
       page: 'page-1'
     })
+    expect(listGitHubIssueTypesBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(listGitHubLabelsBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(listGitHubAssignableUsersBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      seedLogins: ['alex']
+    })
+    expect(updateGitHubIssueBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 123,
+      updates: { title: 'New title' }
+    })
+    expect(updateGitHubIssueTypeBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 123,
+      issueTypeId: 'type-1'
+    })
+    expect(updateGitHubPullRequestBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 456,
+      updates: { state: 'closed' }
+    })
+    expect(addGitHubIssueCommentBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 123,
+      body: 'done'
+    })
+    expect(updateGitHubIssueCommentBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      commentId: 101,
+      body: 'edited'
+    })
+    expect(deleteGitHubIssueCommentBySlug).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      commentId: 101
+    })
+    expect(updateRepoIssue).toHaveBeenCalledWith('id:repo-1', 123, {
+      title: 'New title',
+      addLabels: ['bug']
+    })
+    expect(listRepoLabels).toHaveBeenCalledWith('id:repo-1')
+    expect(listRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
+    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done')
+    expect(addRepoPRReviewComment).toHaveBeenCalledWith('id:repo-1', {
+      prNumber: 456,
+      commitId: 'abc123',
+      path: 'src/app.ts',
+      line: 10,
+      startLine: undefined,
+      body: 'please fix'
+    })
+    expect(addRepoPRReviewCommentReply).toHaveBeenCalledWith('id:repo-1', {
+      prNumber: 456,
+      commentId: 99,
+      body: 'fixed',
+      threadId: 'thread-1',
+      path: 'src/app.ts',
+      line: 10
+    })
+    expect(getRepoPRFileContents).toHaveBeenCalledWith('id:repo-1', {
+      prNumber: 456,
+      path: 'src/app.ts',
+      oldPath: undefined,
+      status: 'modified',
+      headSha: 'abc123',
+      baseSha: 'def456'
+    })
+    expect(rerunRepoPRChecks).toHaveBeenCalledWith('id:repo-1', 456, {
+      headSha: 'abc123',
+      failedOnly: true
+    })
+    expect(resolveRepoReviewThread).toHaveBeenCalledWith('id:repo-1', 'thread-1', true)
+    expect(setRepoPRFileViewed).toHaveBeenCalledWith('id:repo-1', {
+      pullRequestId: 'PR_kw',
+      path: 'src/app.ts',
+      viewed: true
+    })
+    expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'])
+    expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
+    expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
+    expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
+    expect(mergeGitLabRepoMR).toHaveBeenCalledWith('id:repo-1', 456, 'merge', undefined)
+    expect(updateGitHubProjectItemField).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      itemId: 'item-1',
+      fieldId: 'field-1',
+      value: { kind: 'text', text: 'Ready' }
+    })
+    expect(clearGitHubProjectItemField).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      itemId: 'item-1',
+      fieldId: 'field-1'
+    })
+    expect(linearSearchIssues).toHaveBeenCalledWith('auth', 10, 'workspace-1')
+    expect(linearSelectWorkspace).toHaveBeenCalledWith('workspace-1')
+    expect(linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
+    expect(linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')
+    expect(linearAddIssueComment).toHaveBeenCalledWith('issue-1', 'done', 'workspace-1')
     expect(removeClaudeAccount).not.toHaveBeenCalled()
   })
 

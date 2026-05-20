@@ -16,10 +16,14 @@ import type {
 import { derivePipelineStatus, mapIssueToWorkItem, mapMRInfo, mapMRToWorkItem } from './mappers'
 import {
   acquire,
+  classifyGlabError,
   classifyListIssuesError,
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
+  glabHostnameArgs,
+  glabRepoExecOptions,
+  glabApiWithHeaders,
   glabExecFileAsync,
   release,
   resolveIssueSource,
@@ -31,25 +35,6 @@ import type { IssueListState } from './issues'
 // so call sites don't forget the slash escapes for nested groups.
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
-}
-
-function projectRefToGlabRepo(projectRef: ProjectRef): string {
-  // Why: `glab mr list` otherwise infers from cwd and can ignore an
-  // upstream/origin preference. A full URL also works for self-hosted hosts.
-  return `https://${projectRef.host}/${projectRef.path}`
-}
-
-function mrListStateFlags(state: MRListState): string[] {
-  switch (state) {
-    case 'opened':
-      return []
-    case 'merged':
-      return ['--merged']
-    case 'closed':
-      return ['--closed']
-    case 'all':
-      return ['--all']
-  }
 }
 
 /**
@@ -80,9 +65,12 @@ export async function getAuthenticatedViewer(): Promise<GitLabViewer | null> {
  * Resolve a project's full GitLab project ref (host + path). Mirrors
  * github/getRepoSlug. Returns null for non-GitLab remotes.
  */
-export async function getProjectSlug(repoPath: string): Promise<ProjectRef | null> {
+export async function getProjectSlug(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<ProjectRef | null> {
   const knownHosts = await getGlabKnownHosts()
-  return getProjectRef(repoPath, knownHosts)
+  return getProjectRef(repoPath, knownHosts, connectionId)
 }
 
 /**
@@ -90,15 +78,23 @@ export async function getProjectSlug(repoPath: string): Promise<ProjectRef | nul
  * Returns null when the MR doesn't exist or glab fails — callers
  * decide whether to surface "not found" UI.
  */
-export async function getMergeRequest(repoPath: string, iid: number): Promise<MRInfo | null> {
+export async function getMergeRequest(
+  repoPath: string,
+  iid: number,
+  connectionId?: string | null
+): Promise<MRInfo | null> {
   const knownHosts = await getGlabKnownHosts()
-  const projectRef = await getProjectRef(repoPath, knownHosts)
+  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
   await acquire()
   try {
     const args = projectRef
-      ? ['api', `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`]
+      ? [
+          'api',
+          ...glabHostnameArgs(projectRef, connectionId),
+          `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
+        ]
       : ['mr', 'view', String(iid), '--output', 'json']
-    const { stdout } = await glabExecFileAsync(args, { cwd: repoPath })
+    const { stdout } = await glabExecFileAsync(args, glabRepoExecOptions(repoPath, connectionId))
     const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
@@ -125,14 +121,15 @@ export async function getMergeRequest(repoPath: string, iid: number): Promise<MR
 export async function getMergeRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedMRIid?: number | null
+  linkedMRIid?: number | null,
+  connectionId?: string | null
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedMRIid == null) {
     return null
   }
   const knownHosts = await getGlabKnownHosts()
-  const projectRef = await getProjectRef(repoPath, knownHosts)
+  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
   if (!projectRef) {
     return null
   }
@@ -142,9 +139,10 @@ export async function getMergeRequestForBranch(
       const { stdout } = await glabExecFileAsync(
         [
           'api',
+          ...glabHostnameArgs(projectRef, connectionId),
           `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1`
         ],
-        { cwd: repoPath }
+        glabRepoExecOptions(repoPath, connectionId)
       )
       const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
         head_pipeline?: { status?: string } | null
@@ -162,8 +160,12 @@ export async function getMergeRequestForBranch(
     // than the MR source branch. Fall back to the durable linked iid so the
     // core review status still follows the workspace.
     const { stdout } = await glabExecFileAsync(
-      ['api', `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}`],
-      { cwd: repoPath }
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
     )
     const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
@@ -187,80 +189,60 @@ export async function listMergeRequests(
   state: MRListState = 'opened',
   page = 1,
   perPage = 20,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  query?: string,
+  connectionId?: string | null
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts()
-  const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
+  // Why: MRs sit on `origin` in the fork model (the user's fork is where
+  // they push branches and submit MRs). Mirror github's `getOwnerRepo`
+  // call site by going through the upstream/origin preference resolver
+  // so cross-fork workflows reuse the same plumbing.
+  const { source: projectRef } = await resolveIssueSource(
+    repoPath,
+    preference,
+    knownHosts,
+    connectionId
+  )
+  if (!projectRef) {
+    return {
+      items: [],
+      page,
+      perPage,
+      totalCount: 0,
+      totalPages: 0,
+      error: {
+        type: 'not_found',
+        message: 'No GitLab project found for this repository.'
+      }
+    }
+  }
+  // Why: 'all' is exposed as the picker filter but GitLab's API expects
+  // no state param to mean "any state". Drop the param when 'all'.
+  const stateParam = state === 'all' ? '' : `&state=${state}`
+  const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+  const path =
+    `projects/${encodedProject(projectRef.path)}/merge_requests?` +
+    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
+  const repoId = projectRef.path
 
   await acquire()
   try {
-    if (projectRef) {
-      // Why: use `glab mr list` (CLI) instead of the REST API directly.
-      // The CLI respects the user's glab auth configuration; `--repo`
-      // keeps upstream/origin preference resolution explicit.
-      const stateFlag = mrListStateFlags(state)
-      const { stdout } = await glabExecFileAsync(
-        [
-          'mr',
-          'list',
-          '--output',
-          'json',
-          '--per-page',
-          String(perPage),
-          '--page',
-          String(page),
-          '--order',
-          'updated_at',
-          '--sort',
-          'desc',
-          '--repo',
-          projectRefToGlabRepo(projectRef),
-          ...stateFlag
-        ],
-        { cwd: repoPath }
-      )
-      const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
-      return {
-        items: data.map((d) => mapMRToWorkItem(d, projectRef.path)),
-        page,
-        perPage,
-        // Why: the CLI doesn't return x-total headers, so totals are
-        // approximate. For the Tasks UI this is acceptable — pagination
-        // still works via page+per_page.
-        totalCount: data.length,
-        totalPages: data.length < perPage ? page : page + 1
-      }
-    }
-    // Fallback — let glab infer project from cwd. This path is taken when
-    // the repo's remote host is not in getGlabKnownHosts() (e.g. a fresh
-    // self-hosted instance), but glab itself can still resolve it from the
-    // local git config.
-    const stateFlag = mrListStateFlags(state)
-    const { stdout } = await glabExecFileAsync(
-      [
-        'mr',
-        'list',
-        '--output',
-        'json',
-        '--per-page',
-        String(perPage),
-        '--page',
-        String(page),
-        '--order',
-        'updated_at',
-        '--sort',
-        'desc',
-        ...stateFlag
-      ],
-      { cwd: repoPath }
+    const { body, headers } = await glabApiWithHeaders(
+      [...glabHostnameArgs(projectRef, connectionId), path],
+      glabRepoExecOptions(repoPath, connectionId)
     )
-    const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
+    const data = JSON.parse(body) as Parameters<typeof mapMRToWorkItem>[0][]
     return {
-      items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
+      items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
       perPage,
-      totalCount: data.length,
-      totalPages: data.length < perPage ? page : page + 1
+      totalCount: parseHeaderInt(headers['x-total'], 0),
+      // Why: when 'all' state is requested or the per_page is large,
+      // GitLab may not include x-total-pages; fall back to ceil(total/perPage).
+      totalPages:
+        parseHeaderInt(headers['x-total-pages'], 0) ||
+        Math.max(1, Math.ceil(parseHeaderInt(headers['x-total'], 0) / perPage))
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
@@ -277,6 +259,14 @@ export async function listMergeRequests(
   }
 }
 
+function parseHeaderInt(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
 /**
  * Fetch a work item (MR or issue) given an explicit project ref +
  * iid + type. Mirrors github/getWorkItemByOwnerRepo — used by the
@@ -287,20 +277,25 @@ export async function getWorkItemByProjectRef(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  type: 'issue' | 'mr'
+  type: 'issue' | 'mr',
+  connectionId?: string | null
 ): Promise<GitLabWorkItem | null> {
   await acquire()
   try {
     const resource = type === 'mr' ? 'merge_requests' : 'issues'
     const { stdout } = await glabExecFileAsync(
-      ['api', `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`],
-      { cwd: repoPath }
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
     )
     const data = JSON.parse(stdout)
     if (type === 'mr') {
-      return mapMRToWorkItem(data, projectRef.path)
+      return mapMRToWorkItem(data, projectRef.path, projectRef)
     }
-    return mapIssueToWorkItem(data, projectRef.path)
+    return mapIssueToWorkItem(data, projectRef.path, projectRef)
   } catch {
     return null
   } finally {
@@ -337,11 +332,18 @@ export async function listWorkItems(
   state: MRListState = 'opened',
   page = 1,
   perPage = 20,
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  query?: string,
+  connectionId?: string | null
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
   const knownHosts = await getGlabKnownHosts()
-  const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
+  const { source: projectRef } = await resolveIssueSource(
+    repoPath,
+    preference,
+    knownHosts,
+    connectionId
+  )
   if (!projectRef) {
     return {
       items: [],
@@ -366,13 +368,13 @@ export async function listWorkItems(
   // raw issues API directly and run mapIssueToWorkItem against the
   // raw payload instead.
   const [mrs, issues] = await Promise.all([
-    listMergeRequests(repoPath, state, page, perPage, preference),
+    listMergeRequests(repoPath, state, page, perPage, preference, query, connectionId),
     issueState === null
       ? Promise.resolve({
           items: [] as GitLabWorkItem[],
           error: undefined as ClassifiedError | undefined
         })
-      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, perPage)
+      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, perPage, query, connectionId)
   ])
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
@@ -401,21 +403,25 @@ export async function fetchIssuesAsWorkItems(
   repoPath: string,
   projectRef: ProjectRef,
   state: IssueListState,
-  perPage: number
+  perPage: number,
+  query?: string,
+  connectionId?: string | null
 ): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
   await acquire()
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
+    const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
     const { stdout } = await glabExecFileAsync(
       [
         'api',
-        `projects/${encodedProject(projectRef.path)}/issues?per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}`
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/issues?per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}`
       ],
-      { cwd: repoPath }
+      glabRepoExecOptions(repoPath, connectionId)
     )
     const data = JSON.parse(stdout) as Parameters<typeof mapIssueToWorkItem>[0][]
     return {
-      items: data.map((d) => mapIssueToWorkItem(d, projectRef.path)),
+      items: data.map((d) => mapIssueToWorkItem(d, projectRef.path, projectRef)),
       error: undefined
     }
   } catch (err) {
@@ -439,15 +445,27 @@ export async function fetchIssuesAsWorkItems(
  * work directly from a mention/assignment without going to gitlab.com
  * first.
  */
-export async function listTodos(repoPath: string): Promise<GitLabTodo[]> {
+export async function listTodos(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<GitLabTodo[]> {
+  const projectRef = await getProjectRef(repoPath, await getGlabKnownHosts(), connectionId)
+  if (connectionId && !projectRef) {
+    return []
+  }
   await acquire()
   try {
     // Why: per_page=50 keeps the first-page round-trip small. Pagination
     // is left for a follow-up — most users have <50 pending todos in
     // practice and the UI shows the highest-priority ones first.
     const { stdout } = await glabExecFileAsync(
-      ['api', '--paginate', 'todos?state=pending&per_page=50'],
-      { cwd: repoPath }
+      [
+        'api',
+        ...(projectRef ? glabHostnameArgs(projectRef, connectionId) : []),
+        '--paginate',
+        'todos?state=pending&per_page=50'
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
     )
     type RESTTodo = {
       id?: number
@@ -498,11 +516,15 @@ export async function listTodos(repoPath: string): Promise<GitLabTodo[]> {
 
 async function withProjectRef<T>(
   repoPath: string,
+  preference: IssueSourcePreference | undefined,
+  connectionId: string | null | undefined,
+  explicitProjectRef: ProjectRef | null | undefined,
   fn: (projectRef: ProjectRef, repoFlag: string) => Promise<T>,
   fallback: T
 ): Promise<T> {
-  const knownHosts = await getGlabKnownHosts()
-  const projectRef = await getProjectRef(repoPath, knownHosts)
+  const projectRef =
+    explicitProjectRef ??
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
   if (!projectRef) {
     return fallback
   }
@@ -511,14 +533,30 @@ async function withProjectRef<T>(
 
 export async function closeMR(
   repoPath: string,
-  iid: number
+  iid: number,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
-    async (_pr, repoFlag) => {
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef, repoFlag) => {
       await acquire()
       try {
-        await glabExecFileAsync(['mr', 'close', String(iid), '-R', repoFlag], { cwd: repoPath })
+        await glabExecFileAsync(
+          [
+            'mr',
+            'close',
+            String(iid),
+            '-R',
+            repoFlag,
+            ...glabHostnameArgs(projectRef, connectionId)
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -539,14 +577,30 @@ export async function closeMR(
 
 export async function reopenMR(
   repoPath: string,
-  iid: number
+  iid: number,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
-    async (_pr, repoFlag) => {
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef, repoFlag) => {
       await acquire()
       try {
-        await glabExecFileAsync(['mr', 'reopen', String(iid), '-R', repoFlag], { cwd: repoPath })
+        await glabExecFileAsync(
+          [
+            'mr',
+            'reopen',
+            String(iid),
+            '-R',
+            repoFlag,
+            ...glabHostnameArgs(projectRef, connectionId)
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -565,11 +619,17 @@ export async function reopenMR(
 export async function mergeMR(
   repoPath: string,
   iid: number,
-  method: 'merge' | 'squash' | 'rebase' = 'merge'
+  method: 'merge' | 'squash' | 'rebase' = 'merge',
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
-    async (_pr, repoFlag) => {
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef, repoFlag) => {
       await acquire()
       try {
         // Why: glab mr merge accepts --squash and --rebase flags;
@@ -578,8 +638,17 @@ export async function mergeMR(
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
         await glabExecFileAsync(
-          ['mr', 'merge', String(iid), '-R', repoFlag, '--yes', ...methodFlag],
-          { cwd: repoPath }
+          [
+            'mr',
+            'merge',
+            String(iid),
+            '-R',
+            repoFlag,
+            '--yes',
+            ...methodFlag,
+            ...glabHostnameArgs(projectRef, connectionId)
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
         )
         return { ok: true }
       } catch (err) {
@@ -595,23 +664,30 @@ export async function mergeMR(
 export async function addMRComment(
   repoPath: string,
   iid: number,
-  body: string
+  body: string,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
 ): Promise<{ ok: true; comment: MRComment } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true; comment: MRComment } | { ok: false; error: string }>(
     repoPath,
+    preference,
+    connectionId,
+    projectRef,
     async (projectRef) => {
       await acquire()
       try {
         const { stdout } = await glabExecFileAsync(
           [
             'api',
+            ...glabHostnameArgs(projectRef, connectionId),
             '-X',
             'POST',
             `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/notes`,
             '-f',
             `body=${body}`
           ],
-          { cwd: repoPath }
+          glabRepoExecOptions(repoPath, connectionId)
         )
         const data = JSON.parse(stdout) as {
           id?: number
@@ -633,6 +709,73 @@ export async function addMRComment(
         }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+export async function updateMR(
+  repoPath: string,
+  iid: number,
+  updates: {
+    title?: string
+    body?: string
+    addLabels?: string[]
+    removeLabels?: string[]
+  },
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return withProjectRef<{ ok: true } | { ok: false; error: string }>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      const fields: string[] = []
+      const title = updates.title?.trim()
+      if (updates.title !== undefined) {
+        if (!title) {
+          return { ok: false, error: 'Title is required' }
+        }
+        fields.push(`title=${title}`)
+      }
+      if (updates.body !== undefined) {
+        fields.push(`description=${updates.body}`)
+      }
+      const addLabels = (updates.addLabels ?? []).filter((label) => label.trim().length > 0)
+      const removeLabels = (updates.removeLabels ?? []).filter((label) => label.trim().length > 0)
+      if (addLabels.length > 0) {
+        fields.push(`add_labels=${addLabels.join(',')}`)
+      }
+      if (removeLabels.length > 0) {
+        fields.push(`remove_labels=${removeLabels.join(',')}`)
+      }
+      if (fields.length === 0) {
+        return { ok: true }
+      }
+
+      await acquire()
+      try {
+        await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            '-X',
+            'PUT',
+            `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`,
+            ...fields.flatMap((field) => ['-f', field])
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()
       }

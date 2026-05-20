@@ -376,6 +376,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         linkedLinearIssue: args.linkedLinearIssue,
+        linkedGitLabIssue: args.linkedGitLabIssue,
+        linkedGitLabMR: args.linkedGitLabMR,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
@@ -392,9 +394,13 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         headRefName,
         isCrossRepository
       }),
-    resolveMrBase: async () => ({
-      error: 'GitLab merge request base resolution is unavailable on web.'
-    }),
+    resolveMrBase: async ({ repoId, mrIid, sourceBranch, isCrossRepository }) =>
+      callRuntimeResult('worktree.resolveMrBase', {
+        repo: repoId,
+        mrIid,
+        sourceBranch,
+        isCrossRepository
+      }),
     remove: async ({ worktreeId, force }) => {
       cachedWorktrees = null
       await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
@@ -1467,9 +1473,13 @@ function mapRepoPathArg(args: unknown): unknown {
     return args
   }
   const record = args as Record<string, unknown>
+  const repoId = typeof record.repoId === 'string' && record.repoId.trim() ? record.repoId : null
   return {
     ...record,
-    repo: record.repoPath
+    // Why: runtime repo selectors accept loose path/name forms, but duplicate
+    // checked-out repos can make those ambiguous. The renderer already passes
+    // Orca's repo id on task calls, so prefer the explicit selector.
+    repo: repoId ? `id:${repoId}` : record.repoPath
   }
 }
 

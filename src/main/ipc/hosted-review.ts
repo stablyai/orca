@@ -77,42 +77,30 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      if (repo.connectionId) {
-        return {
-          provider: 'unsupported' as const,
-          review: null,
-          canCreate: false,
-          blockedReason: 'unsupported_provider' as const,
-          nextAction: null,
-          defaultBaseRef: args.base ?? null,
-          head: args.branch,
-          title: null,
-          body: null
-        }
-      }
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-      return getHostedReviewCreationEligibility({ ...args, repoPath: worktreePath })
+      return getHostedReviewCreationEligibility({
+        ...args,
+        repoPath: worktreePath,
+        connectionId: repo.connectionId ?? null
+      })
     }
   )
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    if (repo.connectionId) {
-      return {
-        ok: false as const,
-        code: 'unsupported_provider' as const,
-        error: 'Creating pull requests from SSH worktrees is not supported yet.'
-      }
-    }
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-    const result = await createHostedReview(worktreePath, {
-      provider: args.provider,
-      base: args.base,
-      head: args.head,
-      title: args.title,
-      body: args.body,
-      draft: args.draft
-    })
+    const result = await createHostedReview(
+      worktreePath,
+      {
+        provider: args.provider,
+        base: args.base,
+        head: args.head,
+        title: args.title,
+        body: args.body,
+        draft: args.draft
+      },
+      repo.connectionId ?? null
+    )
     if (result.ok && !stats.hasCountedPR(result.url)) {
       stats.record({
         type: 'pr_created',

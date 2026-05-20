@@ -1362,7 +1362,9 @@ async function findOpenPRByHeadBase(args: {
   ownerRepo: OwnerRepo
   head: string
   base: string
+  connectionId?: string | null
 }): Promise<{ number: number; url: string } | null> {
+  const context = githubRepoContext(args.repoPath, args.connectionId)
   const { stdout } = await ghExecFileAsync(
     [
       'pr',
@@ -1380,7 +1382,7 @@ async function findOpenPRByHeadBase(args: {
       '--json',
       'number,url'
     ],
-    { cwd: args.repoPath }
+    ghRepoExecOptions(context)
   )
   const list = JSON.parse(stdout) as { number?: number; url?: string }[]
   if (list.length !== 1 || !list[0]?.number || !list[0]?.url) {
@@ -1391,7 +1393,8 @@ async function findOpenPRByHeadBase(args: {
 
 export async function createGitHubPullRequest(
   repoPath: string,
-  input: CreateHostedReviewInput
+  input: CreateHostedReviewInput,
+  connectionId?: string | null
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'github') {
     return {
@@ -1401,7 +1404,7 @@ export async function createGitHubPullRequest(
     }
   }
 
-  const ownerRepo = await getOwnerRepo(repoPath)
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
   if (!ownerRepo) {
     return {
       ok: false,
@@ -1452,8 +1455,9 @@ export async function createGitHubPullRequest(
       createArgs.push('--draft')
     }
     try {
+      const context = githubRepoContext(repoPath, connectionId)
       const { stdout } = await ghExecFileAsync(createArgs, {
-        cwd: repoPath,
+        ...ghRepoExecOptions(context),
         timeout: 60_000,
         idempotent: false
       })
@@ -1462,7 +1466,9 @@ export async function createGitHubPullRequest(
         return { ok: true, ...created }
       }
       const found = head
-        ? await findOpenPRByHeadBase({ repoPath, ownerRepo, head, base }).catch(() => null)
+        ? await findOpenPRByHeadBase({ repoPath, ownerRepo, head, base, connectionId }).catch(
+            () => null
+          )
         : null
       if (found) {
         return { ok: true, ...found }
@@ -1479,9 +1485,13 @@ export async function createGitHubPullRequest(
         (classified.code === 'already_exists' || classified.code === 'unknown_completion') &&
         head
       ) {
-        const existing = await findOpenPRByHeadBase({ repoPath, ownerRepo, head, base }).catch(
-          () => null
-        )
+        const existing = await findOpenPRByHeadBase({
+          repoPath,
+          ownerRepo,
+          head,
+          base,
+          connectionId
+        }).catch(() => null)
         if (existing) {
           return {
             ok: false,
@@ -3002,6 +3012,56 @@ export async function updatePRTitle(
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
     return false
+  } finally {
+    release()
+  }
+}
+
+export async function updatePRDetails(
+  repoPath: string,
+  prNumber: number,
+  updates: { title?: string; body?: string },
+  connectionId?: string | null,
+  prRepo?: OwnerRepo | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+
+  const fields: string[] = []
+  if (updates.title !== undefined) {
+    const title = updates.title.trim()
+    if (!title) {
+      return { ok: false, error: 'Title is required' }
+    }
+    fields.push(`title=${title}`)
+  }
+  if (updates.body !== undefined) {
+    fields.push(`body=${updates.body}`)
+  }
+  if (fields.length === 0) {
+    return { ok: true }
+  }
+
+  await acquire()
+  try {
+    await ghExecFileAsync(
+      [
+        'api',
+        '-X',
+        'PATCH',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`,
+        ...fields.flatMap((field) => ['--raw-field', field])
+      ],
+      ghOptions
+    )
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: classifyGhError(message).message }
   } finally {
     release()
   }

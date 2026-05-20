@@ -35,7 +35,7 @@ const RepoUpdate = RepoSelector.extend({
     worktreeBaseRef: OptionalString,
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
-    issueSourcePreference: z.enum(['auto', 'github', 'linear']).optional()
+    issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional()
   })
 })
 
@@ -56,11 +56,35 @@ const RepoIssueCommandWrite = RepoSelector.extend({
   content: z.string()
 })
 
+const RepoSparsePresetSave = RepoSelector.extend({
+  id: OptionalString,
+  name: requiredString('Missing preset name'),
+  directories: z.array(z.string())
+})
+
 export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.list',
     params: null,
     handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
+  }),
+  defineMethod({
+    name: 'repo.sparsePresets',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => ({
+      presets: await runtime.listSparsePresets(params.repo)
+    })
+  }),
+  defineMethod({
+    name: 'repo.saveSparsePreset',
+    params: RepoSparsePresetSave,
+    handler: async (params, { runtime }) => ({
+      preset: await runtime.saveSparsePreset(params.repo, {
+        ...(params.id ? { id: params.id } : {}),
+        name: params.name,
+        directories: params.directories
+      })
+    })
   }),
   defineMethod({
     name: 'repo.add',

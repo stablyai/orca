@@ -146,6 +146,9 @@ export type GitLabWorkItem = {
   /** Stamped by the renderer fetcher / optimistic stubs so cross-project
    *  views can attribute rows. Mirrors GitHubWorkItem.repoId. */
   repoId: string
+  /** Exact GitLab project that produced this row. Mutations/details must use it
+   *  instead of re-resolving the repo preference later. */
+  projectRef?: GitLabProjectRef
 }
 
 export type GitLabMRFile = {
@@ -245,9 +248,8 @@ export type GitLabWorkItemDetails = {
 export type GitLabIssueUpdate = {
   state?: 'opened' | 'closed'
   title?: string
-  /** Mirrors GitHubIssueUpdate.body — kept ignored on the repoPath-based
-   *  flow for the same backward-compat reason. Slug-addressed write paths
-   *  cover the body-edit case end-to-end. */
+  /** Why: `glab issue update` handles title/labels/assignees, while body edits
+   *  use the REST issue endpoint so mobile can save the markdown description. */
   body?: string
   addLabels?: string[]
   removeLabels?: string[]

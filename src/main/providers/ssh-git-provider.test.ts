@@ -547,12 +547,16 @@ describe('SshGitProvider', () => {
   })
 
   it('addWorktree sends git.addWorktree request', async () => {
-    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', { base: 'main' })
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      base: 'main',
+      noCheckout: true
+    })
     expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
       repoPath: '/home/user/repo',
       branchName: 'feature',
       targetDir: '/home/user/feat',
-      base: 'main'
+      base: 'main',
+      noCheckout: true
     })
   })
 

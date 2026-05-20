@@ -61,9 +61,78 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('lists sparse checkout presets for a repo', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listSparsePresets: vi.fn().mockResolvedValue([
+        {
+          id: 'preset-1',
+          repoId: 'repo-1',
+          name: 'Frontend',
+          directories: ['src/renderer'],
+          createdAt: 1,
+          updatedAt: 2
+        }
+      ])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.sparsePresets', { repo: 'repo-1' })
+    )
+
+    expect(runtime.listSparsePresets).toHaveBeenCalledWith('repo-1')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { presets: [{ id: 'preset-1', directories: ['src/renderer'] }] }
+    })
+  })
+
+  it('saves sparse checkout presets for a repo', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      saveSparsePreset: vi.fn().mockResolvedValue({
+        id: 'preset-1',
+        repoId: 'repo-1',
+        name: 'Frontend',
+        directories: ['src/renderer'],
+        createdAt: 1,
+        updatedAt: 2
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.saveSparsePreset', {
+        repo: 'repo-1',
+        name: 'Frontend',
+        directories: ['src/renderer']
+      })
+    )
+
+    expect(runtime.saveSparsePreset).toHaveBeenCalledWith('repo-1', {
+      name: 'Frontend',
+      directories: ['src/renderer']
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { preset: { id: 'preset-1', directories: ['src/renderer'] } }
+    })
+  })
+
   it('routes repository hook operations to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      getRepoHooks: vi.fn().mockResolvedValue({
+        hasHooksFile: true,
+        hooks: { scripts: { setup: 'pnpm install' } },
+        setupRunPolicy: 'run-by-default',
+        source: 'orca.yaml',
+        setupTrust: {
+          contentHash: 'hash-1',
+          scriptContent: 'pnpm install'
+        }
+      }),
       checkRepoHooks: vi.fn().mockResolvedValue({
         hasHooks: true,
         hooks: { scripts: { setup: 'pnpm install' } },
@@ -88,6 +157,7 @@ describe('repo RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
+    const hooksResponse = await dispatcher.dispatch(makeRequest('repo.hooks', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.setupScriptImports', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.issueCommandRead', { repo: 'repo-1' }))
@@ -98,9 +168,41 @@ describe('repo RPC methods', () => {
       })
     )
 
+    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(hooksResponse).toMatchObject({
+      ok: true,
+      result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
+    })
     expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
     expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
     expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
+  })
+
+  it('persists GitHub issue source preference updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        issueSourcePreference: 'origin'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { issueSourcePreference: 'origin' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      issueSourcePreference: 'origin'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', issueSourcePreference: 'origin' } }
+    })
   })
 })

@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
+  AlertTriangle,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
@@ -32,7 +33,8 @@ import {
   Plus,
   RefreshCw,
   Smartphone,
-  SquareTerminal
+  SquareTerminal,
+  X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
@@ -548,18 +550,21 @@ export default function SessionScreen() {
     hostId,
     worktreeId,
     name: worktreeName,
-    created
+    created,
+    warning: createdWarning
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
+    warning?: string
   }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider. See
   // docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
@@ -575,6 +580,7 @@ export default function SessionScreen() {
   const [creating, setCreating] = useState(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [createWarning, setCreateWarning] = useState(initialCreateWarning)
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
@@ -666,6 +672,10 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'file' &&
     activeSessionTab?.type !== 'browser'
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    setCreateWarning(initialCreateWarning)
+  }, [initialCreateWarning])
 
   const showToast = useCallback((message: string, durationMs = 1200) => {
     setToastMessage(message)
@@ -2762,6 +2772,21 @@ export default function SessionScreen() {
           )}
         </SafeAreaView>
 
+        {createWarning ? (
+          <View style={styles.createWarningBanner}>
+            <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
+            <Text style={styles.createWarningText}>{createWarning}</Text>
+            <Pressable
+              style={styles.createWarningDismiss}
+              onPress={() => setCreateWarning('')}
+              accessibilityLabel="Dismiss workspace creation warning"
+              hitSlop={8}
+            >
+              <X size={16} color={colors.textMuted} strokeWidth={2.2} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {showLoadingState ? (
           <View style={styles.emptyState}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -3689,6 +3714,29 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.button,
     overflow: 'hidden'
+  },
+  createWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  createWarningText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 12,
+    lineHeight: 16
+  },
+  createWarningDismiss: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -4
   },
   emptyState: {
     flex: 1,

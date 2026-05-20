@@ -247,7 +247,11 @@ type GitLabMRRawForWorkItem = {
   target_project_id?: number
 }
 
-export function mapMRToWorkItem(data: GitLabMRRawForWorkItem, repoId: string): GitLabWorkItem {
+export function mapMRToWorkItem(
+  data: GitLabMRRawForWorkItem,
+  repoId: string,
+  projectRef?: GitLabWorkItem['projectRef']
+): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
   return {
@@ -268,7 +272,8 @@ export function mapMRToWorkItem(data: GitLabMRRawForWorkItem, repoId: string): G
       data.source_project_id !== undefined &&
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
-    repoId
+    repoId,
+    ...(projectRef ? { projectRef } : {})
   }
 }
 
@@ -286,7 +291,8 @@ type GitLabIssueRawForWorkItem = {
 
 export function mapIssueToWorkItem(
   data: GitLabIssueRawForWorkItem,
-  repoId: string
+  repoId: string,
+  projectRef?: GitLabWorkItem['projectRef']
 ): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
@@ -303,7 +309,8 @@ export function mapIssueToWorkItem(
     labels,
     updatedAt: data.updated_at ?? '',
     author: data.author?.username ?? null,
-    repoId
+    repoId,
+    ...(projectRef ? { projectRef } : {})
   }
 }
 

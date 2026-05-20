@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import { useAppStore, type AppState } from '@/store'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -67,26 +67,6 @@ export type LaunchWorkItemDirectArgs = {
    *  entry point (Tasks page row → `sidebar`, Create-from modal →
    *  `command_palette`). Omitted callers default to `unknown`. */
   telemetrySource?: WorkspaceCreateTelemetrySource
-}
-
-function pickAgent(
-  preferred: TuiAgent | 'blank' | null | undefined,
-  detected: Set<TuiAgent>
-): TuiAgent | null {
-  // Why: honor the explicit default when the agent is actually installed. A
-  // stale preference (uninstalled binary) must not block the flow — fall
-  // through to the first matching detected agent in catalog order, which
-  // matches the quick-composer's auto-pick behavior and keeps the experience
-  // consistent regardless of where the user launches the workspace from.
-  if (preferred && preferred !== 'blank' && detected.has(preferred)) {
-    return preferred
-  }
-  for (const entry of AGENT_CATALOG) {
-    if (detected.has(entry.id)) {
-      return entry.id
-    }
-  }
-  return null
 }
 
 async function resolveDirectPrStartPoint(
@@ -272,7 +252,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const worktreePath = result.worktree.path
 
     const detectedIds = new Set(await detectedAgentsPromise)
-    effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    effectiveAgent = pickTuiAgent(settings?.defaultTuiAgent, detectedIds)
     if (effectiveAgent) {
       // Why: direct task launch creates and starts the workspace in separate
       // steps so agent detection can overlap git worktree creation. Persist

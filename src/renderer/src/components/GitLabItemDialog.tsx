@@ -458,7 +458,7 @@ export default function GitLabItemDialog({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  Open in browser
+                  Open in GitLab
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (

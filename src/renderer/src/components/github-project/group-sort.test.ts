@@ -9,7 +9,7 @@ import type {
   GitHubProjectTable,
   GitHubProjectView
 } from '../../../../shared/github-project-types'
-import { sortRows, groupRows } from './group-sort'
+import { sortRows, groupRows } from '../../../../shared/github-project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
   kind: 'single-select',
@@ -204,6 +204,18 @@ describe('sortRows', () => {
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
     expect(sorted.map((r) => r.id)).toEqual(['rHas', 'rEmpty'])
+  })
+
+  it('keeps sort fallback finite when row positions are absent', () => {
+    const view = makeView(singleSelectField)
+    const rows = [
+      { ...makeRow('rA', 0, {}), position: undefined as unknown as number },
+      { ...makeRow('rB', 0, {}), position: undefined as unknown as number }
+    ]
+
+    const sorted = sortRows(makeTable(view, rows), rows)
+
+    expect(sorted.map((r) => r.id)).toEqual(['rA', 'rB'])
   })
 })
 

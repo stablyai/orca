@@ -22,10 +22,8 @@ import {
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { withWorktreeSpan } from '../observability/instrumentation'
-import { getDefaultRemote } from '../git/repo'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
-import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
-import { getWorkItemByProjectRef as getGitLabWorkItemByProjectRef } from '../gitlab/client'
+import { getDefaultRemote } from '../git/repo'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -234,6 +232,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:create')
   ipcMain.removeHandler('worktrees:resolvePrBase')
+  ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
@@ -488,13 +487,8 @@ export function registerWorktreeHandlers(
     }
   )
 
-  // Why: GitLab parallel of worktrees:resolvePrBase. Same shape, same
-  // semantics — caller passes mrIid (with optional source_branch +
-  // isCrossRepository hints from the picker) and we return either a
-  // `<remote>/<source_branch>` ref (same-project MRs) or a SHA fetched
-  // from refs/merge-requests/<iid>/head (fork MRs). The returned value
-  // is the workspace's base ref; the new worktree branch derives from
-  // the workspace name, not from the source ref.
+  // Why: keep desktop IPC and mobile/runtime RPC on the same MR base
+  // resolution path so SSH repos do not regress differently by surface.
   ipcMain.handle(
     'worktrees:resolveMrBase',
     async (
@@ -505,91 +499,13 @@ export function registerWorktreeHandlers(
         sourceBranch?: string
         isCrossRepository?: boolean
       }
-    ): Promise<{ baseBranch: string } | { error: string }> => {
-      const repo = store.getRepo(args.repoId)
-      if (!repo) {
-        return { error: 'Repo not found' }
-      }
-      // Why: parity with the gh-side guard above. Remote SSH repos are
-      // out of v1 scope; the picker disables the GitLab tab for them too.
-      if (repo.connectionId) {
-        return { error: 'MR start points are not supported for remote repos yet.' }
-      }
-      if (isFolderRepo(repo)) {
-        return { error: 'Folder mode does not support creating worktrees.' }
-      }
-
-      let sourceBranch = args.sourceBranch?.trim() ?? ''
-      let isCrossRepository = args.isCrossRepository === true
-
-      if (!sourceBranch) {
-        const knownHosts = await getGlabKnownHosts()
-        const projectRef = await getGlabProjectRef(repo.path, knownHosts)
-        if (!projectRef) {
-          return { error: 'No GitLab project found for this repository.' }
-        }
-        const item = await getGitLabWorkItemByProjectRef(repo.path, projectRef, args.mrIid, 'mr')
-        if (!item || item.type !== 'mr') {
-          return { error: `MR !${args.mrIid} not found.` }
-        }
-        sourceBranch = (item.branchName ?? '').trim()
-        if (!sourceBranch) {
-          return { error: `MR !${args.mrIid} has no source branch.` }
-        }
-        if (item.isCrossRepository === true) {
-          isCrossRepository = true
-        }
-      }
-
-      let remote: string
-      try {
-        remote = await getDefaultRemote(repo.path)
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
-      }
-
-      // Why: GitLab exposes every MR head (fork or same-project) as
-      // refs/merge-requests/<iid>/head on the target project. Using that
-      // ref lets us snapshot fork MRs without configuring the fork as a
-      // remote — same SHA-as-baseBranch shape as the gh-side branch above.
-      if (isCrossRepository) {
-        const mrRef = `refs/merge-requests/${args.mrIid}/head`
-        try {
-          await gitExecFileAsync(['fetch', remote, mrRef], { cwd: repo.path })
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return { error: `Failed to fetch ${mrRef}: ${message.split('\n')[0]}` }
-        }
-        let sha: string
-        try {
-          const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
-            cwd: repo.path
-          })
-          sha = stdout.trim()
-        } catch {
-          return { error: `Could not resolve fork MR !${args.mrIid} head after fetch.` }
-        }
-        if (!sha) {
-          return { error: `Empty SHA resolving fork MR !${args.mrIid} head.` }
-        }
-        return { baseBranch: sha }
-      }
-
-      try {
-        await gitExecFileAsync(['fetch', remote, sourceBranch], { cwd: repo.path })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { error: `Failed to fetch ${remote}/${sourceBranch}: ${message.split('\n')[0]}` }
-      }
-
-      const remoteRef = `${remote}/${sourceBranch}`
-      try {
-        await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
-      } catch {
-        return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
-      }
-
-      return { baseBranch: remoteRef }
+    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
+      return runtime.resolveManagedMrBase({
+        repoSelector: `id:${args.repoId}`,
+        mrIid: args.mrIid,
+        sourceBranch: args.sourceBranch,
+        isCrossRepository: args.isCrossRepository
+      })
     }
   )
 

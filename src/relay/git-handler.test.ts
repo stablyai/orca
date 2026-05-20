@@ -865,6 +865,33 @@ describe('GitHandler', () => {
       ])
     })
 
+    it('passes --no-checkout when sparse setup will checkout after configuration', async () => {
+      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // rev-parse refs/remotes/origin/main
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
+
+      await localDispatcher.callRequest('git.addWorktree', {
+        repoPath: '/relay/repo',
+        branchName: 'feature/sparse',
+        targetDir: '/relay/wt',
+        base: 'origin/main',
+        noCheckout: true
+      })
+
+      expect(gitMock.mock.calls[1]?.[0]).toEqual([
+        'worktree',
+        'add',
+        '--no-track',
+        '--no-checkout',
+        '-b',
+        'feature/sparse',
+        '/relay/wt',
+        'refs/remotes/origin/main'
+      ])
+    })
+
     it('preserves an existing push.autoSetupRemote value (does not overwrite user-set false)', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
