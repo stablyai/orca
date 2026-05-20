@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="#install"><strong>Download 🐋</strong></a>
+  <a href="#install"><strong>Download 🐬</strong></a>
 </p>
 
 ![Orca worktree IDE demo showing Claude Code, Codex, and OpenCode running in parallel across isolated git worktrees](docs/assets/file-drag.gif)
