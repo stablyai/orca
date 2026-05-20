@@ -1523,7 +1523,7 @@ function App(): React.JSX.Element {
                     <FloatingTerminalToggleButton
                       // Why: anchor the floating trigger to the center surface so it
                       // cannot cover the worktree sidebar or right sidebar.
-                      className="absolute bottom-7 right-3"
+                      className="absolute bottom-3 right-3"
                       open={floatingTerminalOpen}
                       onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
                     />

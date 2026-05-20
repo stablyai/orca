@@ -18,7 +18,7 @@ export function FloatingTerminalToggleButton({
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      className={cn('fixed bottom-7 right-3 z-40', className)}
+      className={cn('fixed bottom-3 right-3 z-40', className)}
     >
       <Tooltip>
         <TooltipTrigger asChild>
