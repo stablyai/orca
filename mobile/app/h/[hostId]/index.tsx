@@ -54,6 +54,7 @@ import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
 import {
   loadPinnedIds,
@@ -302,6 +303,9 @@ export default function HostScreen() {
   const { hostId, action } = useLocalSearchParams<{ hostId: string; action?: string }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  // Why: cap and center the worktree list on wide/tablet canvases; on phones
+  // isWideLayout is false so the list stays edge-to-edge as before.
+  const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
@@ -956,7 +960,11 @@ export default function HostScreen() {
           // Why: edge-to-edge — the list scrolls under the system nav bar
           // while reserving insets.bottom keeps the last worktree row reachable
           // above the Samsung 3-button nav / iOS home indicator.
-          contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: spacing.lg + insets.bottom },
+            isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+          ]}
           renderSectionHeader={({ section }) => {
             if (!section.title) return null
             const isCollapsed = collapsedGroups.has(section.title)

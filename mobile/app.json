@@ -3,7 +3,7 @@
     "name": "Orca",
     "slug": "orca-mobile",
     "version": "0.0.10",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
@@ -14,7 +14,7 @@
       "backgroundColor": "#111111"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
       "infoPlist": {
