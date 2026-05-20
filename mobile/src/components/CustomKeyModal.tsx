@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import {
+  buildTerminalShortcutKey,
+  normalizeShortcutKeyInput,
+  TERMINAL_SHORTCUT_SPECIAL_KEYS,
+  type TerminalShortcutModifier
+} from '../terminal/terminal-accessory-keys'
 
-const STORAGE_KEY = 'orca:custom-accessory-keys'
+export const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
 export type CustomKey = {
   id: string
@@ -14,17 +20,13 @@ export type CustomKey = {
   enter: boolean
 }
 
-type Step = 'choose-type' | 'pick-ctrl' | 'pick-alt' | 'text-macro'
+type Step = 'choose-type' | 'shortcut-combo' | 'text-macro'
 
-const ALPHA_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
-
-function ctrlBytes(letter: string): string {
-  return String.fromCharCode(letter.toUpperCase().charCodeAt(0) - 64)
-}
-
-function altBytes(letter: string): string {
-  return `\x1b${letter.toLowerCase()}`
-}
+const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string }[] = [
+  { id: 'ctrl', label: 'Ctrl' },
+  { id: 'alt', label: 'Alt' },
+  { id: 'shift', label: 'Shift' }
+]
 
 type Props = {
   visible: boolean
@@ -34,19 +36,21 @@ type Props = {
 
 export async function loadCustomKeys(): Promise<CustomKey[]> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
+    const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
     return raw ? (JSON.parse(raw) as CustomKey[]) : []
   } catch {
     return []
   }
 }
 
-async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(keys))
+export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
+  await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
 export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
   const [step, setStep] = useState<Step>('choose-type')
+  const [shortcutKey, setShortcutKey] = useState('c')
+  const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
   const [macroLabel, setMacroLabel] = useState('')
   const [macroText, setMacroText] = useState('')
   const [macroEnter, setMacroEnter] = useState(true)
@@ -54,6 +58,8 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
   useEffect(() => {
     if (visible) {
       setStep('choose-type')
+      setShortcutKey('c')
+      setShortcutModifiers(['ctrl'])
       setMacroLabel('')
       setMacroText('')
       setMacroEnter(true)
@@ -72,19 +78,31 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
     [onClose, onKeysChanged]
   )
 
-  const handleCtrlKey = useCallback(
-    (letter: string) => {
-      void addKey({ label: `Ctrl+${letter}`, bytes: ctrlBytes(letter), enter: false })
-    },
-    [addKey]
+  const shortcutPreview = useMemo(
+    () => buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers }),
+    [shortcutKey, shortcutModifiers]
   )
 
-  const handleAltKey = useCallback(
-    (letter: string) => {
-      void addKey({ label: `Alt+${letter}`, bytes: altBytes(letter), enter: false })
-    },
-    [addKey]
-  )
+  const toggleShortcutModifier = useCallback((modifier: TerminalShortcutModifier) => {
+    setShortcutModifiers((current) =>
+      current.includes(modifier)
+        ? current.filter((item) => item !== modifier)
+        : [...current, modifier]
+    )
+  }, [])
+
+  const handleShortcutKeyInput = useCallback((value: string) => {
+    const next = normalizeShortcutKeyInput(value)
+    if (next) {
+      setShortcutKey(next)
+    }
+  }, [])
+
+  const handleShortcutSave = useCallback(() => {
+    const built = buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers })
+    if (!built) return
+    void addKey({ label: built.label, bytes: built.bytes, enter: false })
+  }, [addKey, shortcutKey, shortcutModifiers])
 
   const handleMacroSave = useCallback(() => {
     const label = macroLabel.trim() || macroText.trim().slice(0, 12)
@@ -112,8 +130,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
         )}
         <Text style={styles.title}>
           {step === 'choose-type' && 'Add Shortcut'}
-          {step === 'pick-ctrl' && 'Ctrl + Key'}
-          {step === 'pick-alt' && 'Alt + Key'}
+          {step === 'shortcut-combo' && 'Shortcut Combo'}
           {step === 'text-macro' && 'Text Macro'}
         </Text>
         <View style={styles.backSpacer} />
@@ -123,18 +140,10 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
         <View style={styles.group}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setStep('pick-ctrl')}
+            onPress={() => setStep('shortcut-combo')}
           >
-            <Text style={styles.rowLabel}>Ctrl + Key</Text>
-            <Text style={styles.rowHint}>Control character shortcuts</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setStep('pick-alt')}
-          >
-            <Text style={styles.rowLabel}>Alt + Key</Text>
-            <Text style={styles.rowHint}>Alt/Option key combos</Text>
+            <Text style={styles.rowLabel}>Shortcut Combo</Text>
+            <Text style={styles.rowHint}>Build Ctrl, Alt, and Shift key chords</Text>
           </Pressable>
           <View style={styles.separator} />
           <Pressable
@@ -147,21 +156,83 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
         </View>
       )}
 
-      {(step === 'pick-ctrl' || step === 'pick-alt') && (
+      {step === 'shortcut-combo' && (
         <View style={styles.group}>
-          <ScrollView style={styles.keyGridScroll} contentContainerStyle={styles.keyGrid}>
-            {ALPHA_KEYS.map((letter) => (
-              <Pressable
-                key={letter}
-                style={({ pressed }) => [styles.keyCell, pressed && styles.keyCellPressed]}
-                onPress={() =>
-                  step === 'pick-ctrl' ? handleCtrlKey(letter) : handleAltKey(letter)
-                }
-              >
-                <Text style={styles.keyCellText}>{letter}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <View style={styles.shortcutForm}>
+            <Text style={styles.fieldLabel}>Modifiers</Text>
+            <View style={styles.modifierRow}>
+              {SHORTCUT_MODIFIERS.map((modifier) => {
+                const selected = shortcutModifiers.includes(modifier.id)
+                return (
+                  <Pressable
+                    key={modifier.id}
+                    style={({ pressed }) => [
+                      styles.modifierPill,
+                      selected && styles.modifierPillSelected,
+                      pressed && styles.modifierPillPressed
+                    ]}
+                    onPress={() => toggleShortcutModifier(modifier.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text
+                      style={[styles.modifierPillText, selected && styles.modifierPillTextSelected]}
+                    >
+                      {modifier.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Key</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
+              onChangeText={handleShortcutKeyInput}
+              placeholder="C"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={1}
+            />
+
+            <Text style={styles.fieldLabel}>Special Keys</Text>
+            <ScrollView style={styles.keyGridScroll} contentContainerStyle={styles.keyGrid}>
+              {TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => {
+                const selected = shortcutKey === key.id
+                return (
+                  <Pressable
+                    key={key.id}
+                    style={({ pressed }) => [
+                      styles.keyCell,
+                      selected && styles.keyCellSelected,
+                      pressed && styles.keyCellPressed
+                    ]}
+                    onPress={() => setShortcutKey(key.id)}
+                    accessibilityLabel={key.accessibilityLabel}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.keyCellText, selected && styles.keyCellTextSelected]}>
+                      {key.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+
+            <View style={styles.previewRow}>
+              <Text style={styles.previewLabel}>Preview</Text>
+              <Text style={styles.previewValue}>{shortcutPreview?.label ?? 'Unsupported'}</Text>
+            </View>
+            <Pressable
+              style={[styles.saveButton, !shortcutPreview && styles.saveButtonDisabled]}
+              disabled={!shortcutPreview}
+              onPress={handleShortcutSave}
+            >
+              <Text style={styles.saveButtonText}>Add Shortcut</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -264,19 +335,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted
   },
+  shortcutForm: {
+    padding: spacing.md,
+    gap: spacing.sm
+  },
+  modifierRow: {
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  modifierPill: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgBase,
+    borderRadius: radii.button,
+    paddingVertical: spacing.sm,
+    alignItems: 'center'
+  },
+  modifierPillSelected: {
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary
+  },
+  modifierPillPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  modifierPillText: {
+    color: colors.textSecondary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  modifierPillTextSelected: {
+    color: colors.bgBase
+  },
   keyGridScroll: {
-    maxHeight: 240
+    maxHeight: 154
   },
   keyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
     justifyContent: 'center',
-    padding: spacing.md
+    paddingVertical: spacing.xs
   },
   keyCell: {
-    width: 42,
+    minWidth: 42,
     height: 38,
+    paddingHorizontal: spacing.xs,
     borderRadius: radii.button,
     backgroundColor: colors.bgBase,
     alignItems: 'center',
@@ -285,11 +389,17 @@ const styles = StyleSheet.create({
   keyCellPressed: {
     backgroundColor: colors.bgRaised
   },
+  keyCellSelected: {
+    backgroundColor: colors.textPrimary
+  },
   keyCellText: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: typography.monoFamily
+  },
+  keyCellTextSelected: {
+    color: colors.bgBase
   },
   macroForm: {
     padding: spacing.md,
@@ -310,6 +420,26 @@ const styles = StyleSheet.create({
     fontFamily: typography.monoFamily,
     borderWidth: 1,
     borderColor: colors.borderSubtle
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bgBase,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.input,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  previewLabel: {
+    fontSize: 13,
+    color: colors.textSecondary
+  },
+  previewValue: {
+    fontSize: 14,
+    fontFamily: typography.monoFamily,
+    color: colors.textPrimary
   },
   switchRow: {
     flexDirection: 'row',
