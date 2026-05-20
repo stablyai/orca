@@ -157,13 +157,13 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             }}
             variant="outline"
             size="sm"
-            className="h-6 w-full justify-start"
+            className="h-6 w-full justify-stretch"
           >
             {GROUP_BY_OPTIONS.map((opt) => (
               <ToggleGroupItem
                 key={opt.id}
                 value={opt.id}
-                className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+                className="h-6 grow basis-0 px-1 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
               >
                 {opt.label}
               </ToggleGroupItem>
