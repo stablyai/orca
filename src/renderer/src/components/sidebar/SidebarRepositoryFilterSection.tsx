@@ -201,7 +201,7 @@ function SelectedProjectPills({
   }
 
   return (
-    <div className="mx-1 mb-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto rounded-[7px] border border-border/70 bg-muted/25 p-1">
+    <div className="scrollbar-sleek mx-1 mb-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto rounded-[7px] border border-border/70 bg-muted/25 p-1">
       {selectedRepos.map((repo) => (
         <Badge
           key={repo.id}
