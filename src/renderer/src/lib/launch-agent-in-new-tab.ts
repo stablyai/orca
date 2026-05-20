@@ -19,13 +19,12 @@ export type LaunchAgentInNewTabArgs = {
   /** The tab group the user clicked from. Keeps split-group launches in the
    *  pane the user initiated from instead of falling through to the active group. */
   groupId?: string
-  /** Optional initial prompt. When non-empty, dispatched per the agent's
-   *  `promptInjectionMode`: argv/flag agents auto-submit via the launch
-   *  command; followup-path agents land the prompt as an unsent draft. */
+  /** Optional initial prompt. Delivery depends on `promptDelivery` and the
+   *  agent's prompt mode. */
   prompt?: string
-  /** Force prompt text to land as an editable draft instead of being embedded
-   *  into the shell launch command. Used for generated review-note context. */
-  promptDelivery?: 'auto-submit' | 'draft'
+  /** Force generated prompt text out of the shell launch command. `draft`
+   *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
+  promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
@@ -50,11 +49,10 @@ export type LaunchAgentInNewTabResult = {
  * queued command on first mount and the local PTY provider writes it once the
  * shell is ready (see `pty-connection.ts`: startup-command path).
  *
- * Submission mode by `promptInjectionMode`: argv/flag agents include the
- * prompt directly in the launch command (auto-submit, atomic via the shell);
- * followup-path agents have no argv prompt slot, so we launch empty-prompt
- * and bracketed-paste the prompt as an unsent draft once the agent's input
- * box is ready.
+ * Default submission mode follows `promptInjectionMode`: argv/flag agents
+ * include the prompt directly in the launch command, while followup-path
+ * agents launch empty and receive a post-ready draft paste. Generated contexts
+ * can override this with draft or submit-after-ready delivery.
  *
  * Returns `null` when no startup plan can be built — for example, a whitespace-
  * only prompt on the trim-empty branch of `buildAgentStartupPlan`. Callers
@@ -71,14 +69,28 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
   // mental model, where the prompt is "the first turn the user sent".
-  // Followup-path agents have no argv prompt slot, so the only way to
-  // deliver a prompt is post-launch bracketed paste; we leave it as an
-  // unsent draft so the user confirms before sending (avoids the typed-`\r`
-  // race if readiness detection misses).
+  // Followup-path and generated-context launches can deliver a prompt via
+  // post-launch bracketed paste; callers decide whether that paste remains a
+  // draft or submits after readiness.
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
+  let submitPastedPrompt = false
+  let forcePasteAfterLaunch = false
 
-  if (hasPrompt && promptDelivery === 'draft') {
+  if (hasPrompt && promptDelivery === 'submit-after-ready') {
+    // Why: generated multi-line prompts are too large to echo through a shell
+    // argv/prefill command. Launch cleanly, then paste+submit inside the TUI.
+    startupPlan = buildAgentStartupPlan({
+      agent,
+      prompt: '',
+      cmdOverrides,
+      platform: CLIENT_PLATFORM,
+      allowEmptyPromptLaunch: true
+    })
+    pasteDraftAfterLaunch = trimmedPrompt
+    submitPastedPrompt = true
+    forcePasteAfterLaunch = true
+  } else if (hasPrompt && promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       agent,
       draft: trimmedPrompt,
@@ -163,6 +175,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       tabId,
       content: pasteDraftAfterLaunch,
       agent,
+      submit: submitPastedPrompt,
+      forcePaste: forcePasteAfterLaunch,
       onTimeout: () => {
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
@@ -180,7 +194,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (state.activeWorktreeId !== worktreeId) {
           return
         }
-        toast.message("Your notes weren't sent — paste them once the agent is ready.")
+        const label = submitPastedPrompt ? 'prompt' : 'notes'
+        toast.message(`Your ${label} wasn't sent — paste it once the agent is ready.`)
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

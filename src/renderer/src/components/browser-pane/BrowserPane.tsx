@@ -4545,7 +4545,7 @@ function BrowserPagePane({
                     groupId={activeGroupId ?? worktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={browserAnnotationsPrompt}
-                    promptDelivery="draft"
+                    promptDelivery="submit-after-ready"
                     launchSource="notes_send"
                   />
                 </DropdownMenuContent>
@@ -4731,7 +4731,7 @@ function BrowserPagePane({
                     groupId={activeGroupId ?? worktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={browserAnnotationsPrompt}
-                    promptDelivery="draft"
+                    promptDelivery="submit-after-ready"
                     launchSource="notes_send"
                   />
                 </DropdownMenuContent>

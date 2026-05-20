@@ -21,8 +21,8 @@ export type QuickLaunchAgentMenuItemsProps = {
    *  the picked agent boots with this prompt — argv/flag agents auto-submit,
    *  followup-path agents land it as a draft for the user to confirm. */
   prompt?: string
-  /** Use `'draft'` for generated context that must not become shell syntax. */
-  promptDelivery?: 'auto-submit' | 'draft'
+  /** Use non-default modes for generated context that must not become shell syntax. */
+  promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface for `agent_started.launch_source`. Defaults to
    *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
    *  unchanged. */
@@ -60,7 +60,7 @@ export function shouldShowLaunchWatchdogTimeout({
   hasPty: boolean
 }): boolean {
   return !(
-    launchSource === 'notes_send' &&
+    (launchSource === 'notes_send' || launchSource === 'conflict_resolution') &&
     (prompt?.trim().length ?? 0) > 0 &&
     pasteDraftAfterLaunch &&
     hasPty

@@ -139,6 +139,23 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
     expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
   })
+
+  it('can force paste and submit for native-prefill agents', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'claude',
+      submit: true,
+      forcePaste: true
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await vi.advanceTimersByTimeAsync(1500)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInput).toHaveBeenCalledWith({}, 'pty-1', `${PASTED_ISSUE_URL}\r`)
+  })
 })
 
 async function flushMicrotasks(): Promise<void> {

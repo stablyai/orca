@@ -1579,7 +1579,7 @@ export default function RichMarkdownEditor({
                   groupId={worktreeId}
                   onFocusTerminal={focusTerminalTabSurface}
                   prompt={markdownReviewPrompt}
-                  promptDelivery="draft"
+                  promptDelivery="submit-after-ready"
                   launchSource="notes_send"
                 />
               </DropdownMenuContent>
@@ -1625,7 +1625,7 @@ export default function RichMarkdownEditor({
                             [comment as MarkdownReviewNote],
                             markdownReviewContent
                           )}
-                          promptDelivery="draft"
+                          promptDelivery="submit-after-ready"
                           launchSource="notes_send"
                         />
                       </DropdownMenuContent>

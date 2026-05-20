@@ -145,6 +145,7 @@ export const launchSourceSchema = z.enum([
   'onboarding',
   'diff_notes_send',
   'notes_send',
+  'conflict_resolution',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

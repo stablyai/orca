@@ -7,10 +7,8 @@ import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-strea
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
 // OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
-// single atomic paste — the payload lands in the input buffer as a draft
-// instead of echoing character-by-character or triggering line-edit
-// shortcuts. Intentionally omit a trailing '\r' so the draft never auto-
-// submits; the user reviews and sends the prompt themselves.
+// single atomic paste instead of echoing character-by-character or triggering
+// line-edit shortcuts. Callers choose whether to append Enter after the paste.
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 
@@ -43,9 +41,8 @@ const READINESS_TIMEOUT_MS = 8000
 
 /**
  * Wait until the agent on `tabId` has rendered its input-accepting TUI,
- * then bracketed-paste `content` into its input buffer. Never appends
- * `\r`, so the draft stays editable for the user to review / append
- * before sending.
+ * then bracketed-paste `content` into its input buffer. By default the
+ * draft stays editable; `submit: true` appends Enter after the paste.
  *
  * Returns true when the paste was issued, false on timeout or missing
  * PTY. `onTimeout` lets the caller surface a UI hint (e.g. toast) when
@@ -63,10 +60,11 @@ export async function pasteDraftWhenAgentReady(args: {
   content: string
   agent?: TuiAgent
   submit?: boolean
+  forcePaste?: boolean
   timeoutMs?: number
   onTimeout?: () => void
 }): Promise<boolean> {
-  const { tabId, content, agent, submit, timeoutMs, onTimeout } = args
+  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
@@ -75,7 +73,7 @@ export async function pasteDraftWhenAgentReady(args: {
   // duplicate it. Callers should not invoke this helper for those agents;
   // the early return guards against accidental double-injection if a stale
   // call slips through.
-  if (agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar) {
+  if (!forcePaste && (agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar)) {
     return false
   }
 

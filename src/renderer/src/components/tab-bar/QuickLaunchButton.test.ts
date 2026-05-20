@@ -13,6 +13,17 @@ describe('shouldShowLaunchWatchdogTimeout', () => {
     ).toBe(false)
   })
 
+  it('lets the paste timeout own ready-but-not-pasteable conflict-resolution launches', () => {
+    expect(
+      shouldShowLaunchWatchdogTimeout({
+        launchSource: 'conflict_resolution',
+        prompt: 'Resolve the current rebase conflicts.',
+        pasteDraftAfterLaunch: true,
+        hasPty: true
+      })
+    ).toBe(false)
+  })
+
   it('still reports notes launches where no PTY appeared', () => {
     expect(
       shouldShowLaunchWatchdogTimeout({

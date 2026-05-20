@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea } from './SourceControl'
+import { CommitArea, ConflictSummaryCard } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 
@@ -272,5 +272,21 @@ describe('CommitArea', () => {
     const button = firstButton(renderCommitArea({ ...props, isCommitting: true }))
     expect(button).toContain('animate-spin')
     expect(button).not.toContain('lucide-check')
+  })
+})
+
+describe('ConflictSummaryCard', () => {
+  it('shows Resolve with AI above Review conflicts', () => {
+    const markup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="rebase"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(markup.indexOf('Resolve with AI')).toBeLessThan(markup.indexOf('Review conflicts'))
   })
 })
