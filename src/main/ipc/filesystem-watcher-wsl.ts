@@ -14,6 +14,7 @@ import { readdir } from 'fs/promises'
 import * as path from 'path'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
+import { appendWatcherEvents } from './filesystem-watcher-event-batch'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -155,11 +156,7 @@ export async function createWslWatcher(
       prevSnapshot = nextSnapshot
 
       if (events.length > 0) {
-        // Why: a large deletion/create burst can exceed V8's argument limit
-        // when appended with spread, even though each event is valid.
-        for (const event of events) {
-          root.batch.events.push(event)
-        }
+        appendWatcherEvents(root.batch.events, events)
         deps.scheduleBatchFlush(rootKey, root)
       }
     } catch {

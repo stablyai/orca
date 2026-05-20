@@ -200,6 +200,7 @@ describe('scroll state', () => {
     restoreScrollState(terminal, state)
 
     expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
+    expect(terminal.scrollLines).not.toHaveBeenCalled()
     expect(terminal.buffer.active.viewportY).toBe(250)
   })
 

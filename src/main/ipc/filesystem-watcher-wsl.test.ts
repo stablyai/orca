@@ -143,24 +143,13 @@ describe('createWslWatcher', () => {
     await root.subscription.unsubscribe()
   })
 
-  it('flushes large WSL snapshot diffs without overflowing the call stack', async () => {
+  it('accepts a large WSL poll event batch without overflowing V8 arguments', async () => {
     const scheduleBatchFlush = vi.fn()
-    const largeEntrySet = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.txt`))
-    let rootReads = 0
+    const initialEntries = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.ts`))
 
-    readdirMock.mockImplementation((dirPath: string) => {
-      if (dirPath !== rootPath) {
-        return Promise.resolve([])
-      }
-      rootReads += 1
-      if (rootReads === 1) {
-        return Promise.resolve([])
-      }
-      return Promise.resolve(largeEntrySet)
-    })
+    readdirMock.mockResolvedValueOnce(initialEntries).mockResolvedValueOnce([])
 
     const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-
     await vi.advanceTimersByTimeAsync(2_000)
 
     expect(scheduleBatchFlush).toHaveBeenCalledOnce()
