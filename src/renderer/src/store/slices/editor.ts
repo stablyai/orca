@@ -484,19 +484,23 @@ function openWorkspaceEditorItem(
     targetGroupId ??
     state.activeGroupIdByWorktree?.[worktreeId] ??
     state.groupsByWorktree?.[worktreeId]?.[0]?.id
-  if (!resolvedGroupId) {
-    return fileId
-  }
-  const existing = state.findTabForEntityInGroup?.(worktreeId, resolvedGroupId, fileId, contentType)
-  if (existing) {
-    state.activateTab?.(existing.id)
-    return existing.id
+  if (resolvedGroupId) {
+    const existing = state.findTabForEntityInGroup?.(
+      worktreeId,
+      resolvedGroupId,
+      fileId,
+      contentType
+    )
+    if (existing) {
+      state.activateTab?.(existing.id)
+      return existing.id
+    }
   }
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
-    targetGroupId: resolvedGroupId
+    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
   })
   return created?.id ?? fileId
 }

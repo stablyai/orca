@@ -3,6 +3,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorSlice } from './editor'
+import { createTabsSlice } from './tabs'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -33,6 +34,19 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+  })) as unknown as StoreApi<AppState>
+}
+
+function createEditorTabsStore(): StoreApi<AppState> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return createStore<any>()((...args: any[]) => ({
+    activeWorktreeId: 'wt-1',
+    tabsByWorktree: {},
+    browserTabsByWorktree: {},
+    activeBrowserTabId: null,
+    activeBrowserTabIdByWorktree: {},
+    ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -262,6 +276,37 @@ describe('createEditorSlice openDiff', () => {
 })
 
 describe('createEditorSlice floating editor activation', () => {
+  it('creates a visible floating editor tab when the floating workspace is empty', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/tmp/orca/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    const tab = store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+    expect(tab).toMatchObject({
+      contentType: 'editor',
+      entityId: '/tmp/orca/notes.md',
+      label: 'notes.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toMatchObject({
+      activeTabId: tab?.id,
+      tabOrder: [tab?.id]
+    })
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      '/tmp/orca/notes.md'
+    )
+  })
+
   it('opens floating markdown tabs without changing the main active editor surface', () => {
     const store = createEditorStore()
     store.setState({
