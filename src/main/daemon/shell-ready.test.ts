@@ -190,6 +190,24 @@ describePosix('daemon shell-ready launch config', () => {
     expect(bashRc).toContain(piRestoreLine)
   })
 
+  // Why: regression guard for issue #2422. The daemon-side bash wrapper must
+  // emit OSC 133 C/D so SSH/remote bash sessions also clear stale 'working'
+  // agent rows when the foreground command exits.
+  it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+    getShellReadyLaunchConfig('/bin/bash')
+
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+
+    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(zshrc).toContain('printf "\\033]133;C\\007"')
+  })
+
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
     // Why: users who run a custom zsh dotfiles directory legitimately set
     // ZDOTDIR before launching Orca. We only want to reject the self-loop

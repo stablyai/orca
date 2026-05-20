@@ -268,6 +268,27 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(bashRc).toContain(piRestoreLine)
   })
 
+  // Why: regression guard for issue #2422. Without OSC 133 C/D markers in the
+  // bash rc, Linux/bash sessions kept the worktree spinner "working" for up to
+  // 30 min after the agent CLI exited, because the renderer's command
+  // lifecycle never observed a 'D' marker to drop the stale agent row.
+  it('emits OSC 133 C/D markers in the bash wrapper so agent exit cleanup fires', async () => {
+    const { getBashShellReadyRcfileContent, getZshShellReadyRcfileContent } =
+      await importFreshLocalPtyShellReady()
+
+    const bashRc = getBashShellReadyRcfileContent()
+    const zshRc = getZshShellReadyRcfileContent()
+
+    // The exact escape sequences the renderer's terminal-command-lifecycle
+    // parses (133;D for command-finished, 133;C for command-start).
+    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    // Sanity: zsh wrapper still emits the same markers — both branches must
+    // stay in sync.
+    expect(zshRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(zshRc).toContain('printf "\\033]133;C\\007"')
+  })
+
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
     const previousZdotdir = process.env.ZDOTDIR
     process.env.ZDOTDIR = '/Users/alice/.config/zsh'

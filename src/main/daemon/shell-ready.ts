@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: this module owns the daemon-side shell
+   wrapper generation for zsh, bash, and PowerShell plus the launch-config
+   plumbing; keeping them together lets the wrapper/marker contract be
+   reviewed as a unit (mirrors src/main/providers/local-pty-shell-ready.ts). */
 import { tmpdir } from 'os'
 import { basename, dirname, join, win32 as pathWin32 } from 'path'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
@@ -72,6 +76,72 @@ function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): s
 
 function shellReadyWrappersExist(): boolean {
   return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+}
+
+export function getDaemonBashShellReadyRcfileContent(): string {
+  return `# Orca daemon bash shell-ready wrapper
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+__orca_restore_attribution_path
+# Why: user startup files may set the default OpenCode config after Orca's
+# spawn env; restore the PTY-scoped overlay before the first prompt.
+[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+# Why: PI_CODING_AGENT_DIR is also a single-root env var users may re-export.
+[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
+# status when the foreground command exits — mirrors the zsh daemon wrapper.
+# Without this, bash users (default on most Linux distros) keep a stuck
+# 'working' spinner after the CLI exits without a Stop/SessionEnd hook.
+__orca_osc133_precmd() {
+  local exit_code=$?
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    printf "\\033]133;D;%s\\007" "$exit_code"
+    unset __orca_in_command
+  fi
+  printf "\\033]133;A\\007"
+}
+__orca_osc133_preexec() {
+  # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
+  # bodies. Skip our own prompt-time helpers so they don't mark the shell as
+  # "in command" before the prompt has even drawn.
+  case "$BASH_COMMAND" in
+    *__orca_osc133_precmd*|*__orca_prompt_mark*) return ;;
+  esac
+  printf "\\033]133;C\\007"
+  __orca_in_command=1
+}
+# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}}"
+trap '__orca_osc133_preexec' DEBUG
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "${SHELL_READY_MARKER}"
+  }
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
+  else
+    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+    else
+      PROMPT_COMMAND="__orca_prompt_mark"
+    fi
+  fi
+fi
+`
 }
 
 export function getDaemonZshShellReadyRcfileContent(): string {
@@ -199,44 +269,7 @@ if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   add-zle-hook-widget line-init __orca_prompt_mark
 fi
 `
-  const bashRc = `# Orca daemon bash shell-ready wrapper
-[[ -f /etc/profile ]] && source /etc/profile
-if [[ -f "$HOME/.bash_profile" ]]; then
-  source "$HOME/.bash_profile"
-elif [[ -f "$HOME/.bash_login" ]]; then
-  source "$HOME/.bash_login"
-elif [[ -f "$HOME/.profile" ]]; then
-  source "$HOME/.profile"
-fi
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-__orca_restore_attribution_path
-# Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the PTY-scoped overlay before the first prompt.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-# Why: PI_CODING_AGENT_DIR is also a single-root env var users may re-export.
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "${SHELL_READY_MARKER}"
-  }
-  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-  else
-    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
-    else
-      PROMPT_COMMAND="__orca_prompt_mark"
-    fi
-  fi
-fi
-`
+  const bashRc = getDaemonBashShellReadyRcfileContent()
 
   const files = [
     [join(zshDir, '.zshenv'), zshEnv],
