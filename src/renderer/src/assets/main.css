@@ -318,7 +318,7 @@
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
   /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 6px;
+  padding-right: 2px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
