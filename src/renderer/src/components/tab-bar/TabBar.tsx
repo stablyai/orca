@@ -26,6 +26,7 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,9 +59,6 @@ type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
-  /** Whether WSL is installed on this Windows machine. When true, the "+"
-   *  dropdown shows a WSL option under the terminal submenu. */
-  wslAvailable?: boolean
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -142,8 +140,7 @@ function TabBarInner({
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
-  hoveredTabInsertion,
-  wslAvailable
+  hoveredTabInsertion
 }: TabBarProps): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const defaultWindowsShell = useAppStore(
@@ -152,15 +149,7 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
-  const [pwshAvailable, setPwshAvailable] = useState(false)
-  useEffect(() => {
-    if (!isWindows) {
-      setPwshAvailable(false)
-      return
-    }
-
-    void window.api.pwsh.isAvailable().then(setPwshAvailable)
-  }, [])
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(isWindows)
   const resolvedGroupId = groupId ?? worktreeId
 
   const statusByRelativePath = useMemo(
@@ -497,7 +486,9 @@ function TabBarInner({
               }[] = [
                 { label: 'PowerShell', shell: 'powershell.exe' },
                 { label: 'CMD Prompt', shell: 'cmd.exe' },
-                ...(wslAvailable ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const) : [])
+                ...(windowsTerminalCapabilities.wslAvailable
+                  ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
+                  : [])
               ]
               const defaultEntry =
                 allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
@@ -520,7 +511,7 @@ function TabBarInner({
                         resolveWindowsShellLaunchTarget(
                           entry.shell,
                           defaultWindowsPowerShellImplementation,
-                          pwshAvailable
+                          windowsTerminalCapabilities.pwshAvailable
                         )
                       )
                     }}

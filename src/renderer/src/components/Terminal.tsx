@@ -176,14 +176,6 @@ function Terminal(): React.JSX.Element | null {
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
 
-  const [wslAvailable, setWslAvailable] = useState(false)
-  useEffect(() => {
-    // Why: wsl:isAvailable is synchronous on the main-process side but we
-    // call it asynchronously so the renderer doesn't block on startup. The
-    // result only gates UI options, so a brief false→true transition is fine.
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
-
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
@@ -1338,7 +1330,6 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
-            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

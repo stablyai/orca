@@ -38,7 +38,20 @@ vi.mock('node-pty', () => ({
 }))
 
 vi.mock('../wsl', () => ({
-  parseWslPath: () => null
+  parseWslPath: (path: string) => {
+    const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+    if (!match) {
+      return null
+    }
+    return {
+      distro: match[1],
+      linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
+    }
+  },
+  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
+  toWindowsWslPath: (path: string, distro: string) =>
+    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
+  isWslAvailable: () => true
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
@@ -56,8 +69,11 @@ describe('LocalPtyProvider', () => {
   }
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
+  let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
     process.env.SHELL = '/bin/zsh'
 
@@ -87,6 +103,9 @@ describe('LocalPtyProvider', () => {
   })
 
   afterEach(() => {
+    if (origPlatform) {
+      Object.defineProperty(process, 'platform', origPlatform)
+    }
     if (origShell === undefined) {
       delete process.env.SHELL
     } else {
@@ -242,6 +261,31 @@ describe('LocalPtyProvider', () => {
         expect.any(String),
         expect.any(Array),
         expect.objectContaining({ cwd: 'D:\\Users\\orca' })
+      )
+    })
+
+    it('launches POSIX cwd split panes through WSL when worktree context is WSL', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/jin/repo/subdir',
+          shellOverride: 'powershell.exe',
+          worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo/subdir' && exec bash -l"],
+        expect.objectContaining({ cwd: expect.any(String) })
       )
     })
   })

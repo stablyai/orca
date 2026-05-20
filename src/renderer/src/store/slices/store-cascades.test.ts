@@ -718,6 +718,39 @@ describe('setActiveWorktree', () => {
     }
   })
 
+  it('uses WSL as the default shell for WSL worktree terminals on Windows', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::/wsl/path'
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'powershell.exe' },
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({
+              id: wt,
+              repoId: 'repo1',
+              path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+            })
+          ]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt)
+      expect(terminal.shellOverride).toBe('wsl.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
   it('does not stamp local Windows shell icons onto SSH terminal tabs', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {

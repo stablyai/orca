@@ -1245,7 +1245,11 @@ const api = {
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
-    remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
+    remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove'),
+    getWslInstallStatus: (): Promise<CliInstallStatus> =>
+      ipcRenderer.invoke('cli:getWslInstallStatus'),
+    installWsl: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:installWsl'),
+    removeWsl: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:removeWsl')
   },
 
   agentHooks: {

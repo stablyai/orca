@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
+   preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'fs'
 import { win32 as pathWin32 } from 'path'
@@ -18,6 +20,8 @@ import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { parseWslPath } from '../wsl'
+import { getWslContextFromSessionId } from './wsl-session-context'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -185,7 +189,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // setting, relayed by main) takes priority over env.COMSPEC — otherwise
   // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
   // no matter which shell the user actually picked.
-  let shellPath = opts.shellOverride || resolvePtyShellPath(env)
+  const cwdWslInfo = process.platform === 'win32' ? parseWslPath(opts.cwd ?? '') : null
+  const sessionWslContext =
+    process.platform === 'win32' ? getWslContextFromSessionId(opts.sessionId) : undefined
+  // Why: WSL worktree cwd is the repo's execution environment. Older persisted
+  // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
+  // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
+  let shellPath =
+    cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let spawnCwd = opts.cwd || getDefaultCwd()
   let validationCwd = spawnCwd
@@ -217,7 +228,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Reuse the same shared launch-args helper after resolving the effective
     // PowerShell executable so daemon-backed terminals preserve parity with the
     // in-process PTY path.
-    const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
+    const resolved = resolveWindowsShellLaunchArgs(
+      shellPath,
+      spawnCwd,
+      getDefaultCwd(),
+      sessionWslContext
+    )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd

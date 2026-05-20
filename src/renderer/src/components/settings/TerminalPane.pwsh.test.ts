@@ -211,4 +211,46 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(link).not.toBeNull()
     expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
   })
+
+  it('shows WSL as a Windows default shell option when available', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      ghostty: ghosttyMock,
+      wslAvailable: true,
+      pwshAvailable: false
+    })
+
+    expect(collectText(element)).toContain('WSL')
+  })
+
+  it('hides WSL as a Windows default shell option when unavailable', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      ghostty: ghosttyMock,
+      wslAvailable: false,
+      pwshAvailable: false
+    })
+
+    expect(collectText(element)).not.toContain('WSL')
+  })
 })

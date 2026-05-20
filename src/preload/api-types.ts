@@ -1209,6 +1209,9 @@ export type PreloadApi = {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
+    getWslInstallStatus: () => Promise<CliInstallStatus>
+    installWsl: () => Promise<CliInstallStatus>
+    removeWsl: () => Promise<CliInstallStatus>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>

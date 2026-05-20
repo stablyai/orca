@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { parseWslUncPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {
   distro: string
@@ -19,19 +20,7 @@ export function parseWslPath(windowsPath: string): WslPathInfo | null {
     return null
   }
 
-  // Normalize backslashes to forward slashes for uniform matching
-  const normalized = windowsPath.replace(/\\/g, '/')
-
-  // Match //wsl.localhost/Distro/... or //wsl$/Distro/...
-  const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/)
-  if (!match) {
-    return null
-  }
-
-  return {
-    distro: match[2],
-    linuxPath: match[3] || '/'
-  }
+  return parseWslUncPath(windowsPath)
 }
 
 export function isWslPath(path: string): boolean {

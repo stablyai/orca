@@ -951,7 +951,10 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
   return {
     getInstallStatus: () => Promise.resolve(status),
     install: () => Promise.resolve(status),
-    remove: () => Promise.resolve(status)
+    remove: () => Promise.resolve(status),
+    getWslInstallStatus: () => Promise.resolve(status),
+    installWsl: () => Promise.resolve(status),
+    removeWsl: () => Promise.resolve(status)
   } as NonNullable<Partial<PreloadApi>['cli']>
 }
 

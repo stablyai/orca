@@ -10,6 +10,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -89,6 +90,14 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+function getWslContextFromWorktreeId(
+  worktreeId: string | undefined
+): { distro: string } | undefined {
+  const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
+  const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
+  return wslInfo ? { distro: wslInfo.distro } : undefined
+}
+
 function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
@@ -163,6 +172,8 @@ export class LocalPtyProvider implements IPtyProvider {
     const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+    const worktreeWslContext =
+      process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
 
     let shellPath: string
     let shellArgs: string[]
@@ -182,11 +193,12 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
       // changing the user's setting. It takes priority over the setting.
-      const shellFamily =
+      const requestedShellFamily =
         args.shellOverride ||
         this.opts.getWindowsShell?.() ||
         process.env.COMSPEC ||
         'powershell.exe'
+      const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
       // Why: shell selection can arrive either as a canonical setting value
       // ('powershell.exe') or as a concrete PowerShell executable path from a
@@ -215,7 +227,7 @@ export class LocalPtyProvider implements IPtyProvider {
       // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
       // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
       // wsl.exe /mnt/<drive> cwd translation in one place.
-      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, worktreeWslContext)
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd

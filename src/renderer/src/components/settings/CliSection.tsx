@@ -14,6 +14,7 @@ import {
 } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { WslCliRegistration } from './WslCliRegistration'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -245,6 +246,8 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
           </div>
         ) : null}
       </div>
+
+      <WslCliRegistration currentPlatform={currentPlatform} />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

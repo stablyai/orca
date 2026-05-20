@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import type { AppState } from '../types'
 import { createPreflightSlice } from './preflight'
 
@@ -37,6 +38,39 @@ function makeStatus(glabInstalled: boolean): PreflightStatus {
     git: { installed: true },
     gh: { installed: true, authenticated: true },
     glab: { installed: glabInstalled, authenticated: glabInstalled }
+  }
+}
+
+function makeRepo(overrides: Partial<Repo> & { id: string; path: string }): Repo {
+  return {
+    displayName: 'Repo',
+    badgeColor: '#000000',
+    addedAt: 0,
+    ...overrides
+  }
+}
+
+function makeWorktree(
+  overrides: Partial<Worktree> & { id: string; repoId: string; path: string }
+): Worktree {
+  return {
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'main',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    ...overrides
   }
 }
 
@@ -104,5 +138,89 @@ describe('createPreflightSlice', () => {
     await Promise.all([forced, lazy])
 
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('checks integrations inside the active WSL worktree distro', async () => {
+    preflightCheck.mockReset()
+    preflightCheck.mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        makeRepo({
+          id: 'repo-1',
+          path: 'C:\\repo'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+          })
+        ]
+      },
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1'
+    } as Partial<AppState>)
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledWith({ wslDistro: 'Ubuntu' })
+  })
+
+  it('keeps preflight request dedupe scoped by WSL distro context', async () => {
+    preflightCheck.mockReset()
+    const ubuntu = deferred<PreflightStatus>()
+    const debian = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(ubuntu.promise).mockReturnValueOnce(debian.promise)
+    const store = createTestStore()
+    store.setState({
+      repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
+      worktreesByRepo: {},
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    } as Partial<AppState>)
+
+    const first = store.getState().refreshPreflightStatus()
+    store.setState({
+      repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Debian\\home\\alice\\repo' })]
+    } as Partial<AppState>)
+    const second = store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenNthCalledWith(1, { wslDistro: 'Ubuntu' })
+    expect(preflightCheck).toHaveBeenNthCalledWith(2, { wslDistro: 'Debian' })
+    ubuntu.resolve(makeStatus(false))
+    debian.resolve(makeStatus(true))
+    await Promise.all([first, second])
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('clears checked status immediately when refreshing a different local context', async () => {
+    preflightCheck.mockReset()
+    const host = deferred<PreflightStatus>()
+    const wsl = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(host.promise).mockReturnValueOnce(wsl.promise)
+    const store = createTestStore()
+
+    const first = store.getState().refreshPreflightStatus()
+    host.resolve(makeStatus(true))
+    await first
+    expect(store.getState().preflightStatusChecked).toBe(true)
+
+    store.setState({
+      repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    } as Partial<AppState>)
+    const second = store.getState().refreshPreflightStatus()
+
+    expect(store.getState().preflightStatus).toBeNull()
+    expect(store.getState().preflightStatusChecked).toBe(false)
+    expect(store.getState().preflightStatusLoading).toBe(true)
+
+    wsl.resolve(makeStatus(false))
+    await second
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(false)
   })
 })
