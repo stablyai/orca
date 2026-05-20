@@ -147,6 +147,11 @@ function releaseScrollStateMarker(state: ScrollState): void {
 // A synchronous one-line jiggle updates the scrollbar without a visible paint.
 function forceViewportScrollbarSync(terminal: Terminal): void {
   const buf = terminal.buffer.active
+  if (buf.viewportY >= buf.baseY) {
+    // Why: jiggle-scrolling at bottom makes xterm stop following active output
+    // after split-pane resizes; scrollToBottom already places the thumb there.
+    return
+  }
   if (buf.viewportY > 0) {
     terminal.scrollLines(-1)
     terminal.scrollLines(1)
