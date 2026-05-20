@@ -34,13 +34,6 @@ export function FloatingWorkspacePane({
 
   return (
     <section className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Floating Workspace</h3>
-        <p className="text-xs text-muted-foreground">
-          Global terminal, browser, and markdown tabs outside any repo or worktree.
-        </p>
-      </div>
-
       <SearchableSetting
         title="Floating Workspace"
         description="Enable the floating workspace and choose where new tabs start."
