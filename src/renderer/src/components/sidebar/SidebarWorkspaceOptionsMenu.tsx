@@ -172,9 +172,6 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         </div>
 
         <DropdownMenuSeparator />
-        <SidebarWorkspaceFilterSection />
-
-        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
@@ -218,6 +215,10 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        <DropdownMenuSeparator />
+        <SidebarWorkspaceFilterSection />
+
+        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
