@@ -332,7 +332,18 @@ test.describe('Tab Rename (Inline)', () => {
     // hit area users aim for.
     const tabTitle = tabLocator.getByText(targetTitle, { exact: true })
     await expect(tabTitle).toBeVisible()
-    await tabTitle.dblclick()
+    // Why: this spec is about saturated-tab input width. The real pointer
+    // double-click path is covered above; dispatching the tab's own dblclick
+    // handler avoids pixel-level overlap flakes in the crowded strip.
+    await tabLocator.evaluate((element) => {
+      element.dispatchEvent(
+        new MouseEvent('dblclick', {
+          bubbles: true,
+          cancelable: true,
+          button: 0
+        })
+      )
+    })
 
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${targetTitle}`,

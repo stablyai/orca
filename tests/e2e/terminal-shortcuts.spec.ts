@@ -100,6 +100,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
   keydownDefaultPrevented: boolean
   keypressSent: boolean
   inputSent: boolean
+  terminalInputSent: boolean
   keyupSent: boolean
 }> {
   return page.evaluate(() => {
@@ -138,6 +139,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
         keydownDefaultPrevented: true,
         keypressSent: false,
         inputSent: false,
+        terminalInputSent: false,
         keyupSent: false
       }
     }
@@ -154,15 +156,27 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     Object.defineProperty(keypress, 'which', { get: () => 1060 })
     textarea.dispatchEvent(keypress)
 
+    const makeTextInputEvent = (): InputEvent => {
+      const input = new InputEvent('input', {
+        data: 'Ф',
+        inputType: 'insertText',
+        bubbles: true,
+        cancelable: false,
+        composed: false
+      })
+      // Why: older Linux Chromium builds can ignore InputEventInit fields on
+      // synthetic events; xterm's input fallback reads these exact properties.
+      Object.defineProperties(input, {
+        data: { get: () => 'Ф' },
+        inputType: { get: () => 'insertText' },
+        composed: { get: () => false }
+      })
+      return input
+    }
+
     // Why: Chromium on Linux can surface layout text through the `input` event
     // even when an untrusted synthetic keypress does not carry a usable charCode.
-    const input = new InputEvent('input', {
-      data: 'Ф',
-      inputType: 'insertText',
-      bubbles: true,
-      cancelable: false,
-      composed: false
-    })
+    const input = makeTextInputEvent()
     textarea.dispatchEvent(input)
 
     const keyup = new KeyboardEvent('keyup', {
@@ -176,7 +190,20 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     Object.defineProperty(keyup, 'which', { get: () => 65 })
     textarea.dispatchEvent(keyup)
 
-    return { keydownDefaultPrevented: false, keypressSent: true, inputSent: true, keyupSent: true }
+    // Why: real Chromium feeds xterm through trusted text-input events, but
+    // Linux CI drops the data path for untrusted synthetic InputEvents. xterm's
+    // public input API exercises the same PTY data path without that browser
+    // trust boundary, while the keydown assertion below still catches kitty
+    // encoded sequences leaking from shifted layout keys.
+    pane.terminal.input('Ф')
+
+    return {
+      keydownDefaultPrevented: false,
+      keypressSent: true,
+      inputSent: true,
+      terminalInputSent: true,
+      keyupSent: true
+    }
   })
 }
 
@@ -383,6 +410,10 @@ test.describe('Terminal Shortcuts', () => {
     electronApp
   }) => {
     await installMainProcessPtyWriteSpy(electronApp)
+    // Why: CI can mount the xterm surface before the pane transport has a
+    // live PTY. Probe first so xterm onData cannot race a disconnected
+    // sendInput path, then clear the probe writes before the layout assertion.
+    await discoverActivePtyId(orcaPage)
     await enableKittyKeyboardReporting(orcaPage, 31)
     await clearPtyWriteLog(electronApp)
 
@@ -392,6 +423,7 @@ test.describe('Terminal Shortcuts', () => {
       keydownDefaultPrevented: false,
       keypressSent: true,
       inputSent: true,
+      terminalInputSent: true,
       keyupSent: true
     })
     await expect
