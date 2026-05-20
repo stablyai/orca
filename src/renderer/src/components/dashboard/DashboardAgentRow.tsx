@@ -5,6 +5,8 @@ import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { DashboardAgentHoverCardContent } from './DashboardAgentHoverCardContent'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -160,13 +162,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const prompt = agent.entry.prompt.trim()
+  const dotState = asDotState(agent.state)
   // Why: `agent.entry.prompt` is normalized to '' when the prompt is unknown
   // (fresh agent, missing telemetry). Rendering the row with an empty primary
   // slot would collapse the text column and leave the row with no human-
   // readable label — just a state dot and icon. Fall back to the state label
   // ("Working", "Done", "Waiting", …) so every row is identifiable at a
   // glance.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const displayLabel = prompt || agentStateLabel(dotState)
   // Why: the tool row describes what the agent is *currently* doing; once it
   // leaves working, that line goes stale and misleads (a done row showing
   // "Bash: pnpm test" reads as if the command is still running). Gate tool
@@ -191,10 +194,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     tsParts.push(`done ${formatTimeAgo(doneAt, now)}`)
   }
 
-  return (
+  const row = (
     // Why: NOT role="button" / tabIndex={0}. The row contains real <button>
-    // children (dismiss X, expand chevron) and tooltip triggers that forward
-    // button semantics to their children — nesting them inside an outer
+    // children (dismiss X, expand chevron) and is itself the hover-card
+    // trigger — nesting them inside an outer
     // role=button violates ARIA's "no interactive content inside interactive
     // content" rule and breaks keyboard/AT navigation. Keyboard users reach
     // the agent via the child buttons and the tab switcher; the outer <div>
@@ -211,7 +214,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         // active-state pattern) so the lift is symmetric across themes.
         'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30'
       )}
-      title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}
     >
       <div className="flex items-center gap-1.5">
         {/* Why: state indicator lives in the leading gutter so the user's
@@ -223,9 +225,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overpowering the prompt text. */}
         <span
           className="inline-flex shrink-0 items-center justify-center"
-          title={agent.entry.interrupted ? 'Interrupted' : agentStateLabel(asDotState(agent.state))}
+          aria-label={agent.entry.interrupted ? 'Interrupted' : agentStateLabel(dotState)}
         >
-          <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
+          <AgentStateDot state={dotState} size={stateDotSize} />
         </span>
         {/* Why: identity (Claude/Codex/Gemini/…) sits inline with the prompt
             so the reader gets "state → who → what they said" left-to-right
@@ -234,7 +236,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
         {!hideIdentityIcon && (
-          <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+          <span className="inline-flex shrink-0" aria-label={formatAgentTypeLabel(agent.agentType)}>
             <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
           </span>
         )}
@@ -262,9 +264,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
           )}
-          // Why: tooltip should only reveal truncated prompt text — not echo state-word fallbacks
-          // (e.g. "Working"/"Done") that already fit on one line and never overflow.
-          title={expanded || !prompt ? undefined : displayLabel}
         >
           {displayLabel}
         </span>
@@ -398,9 +397,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 <Wrench className="size-2.5 shrink-0" />
                 <code className="shrink-0 font-mono text-[10px]">{toolName}</code>
                 {!expanded && toolInput && (
-                  <span className="min-w-0 truncate text-muted-foreground/60" title={toolInput}>
-                    {toolInput}
-                  </span>
+                  <span className="min-w-0 truncate text-muted-foreground/60">{toolInput}</span>
                 )}
               </div>
               {/* Why: grid-rows [0fr]→[1fr] is the CSS-only height animation
@@ -461,7 +458,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             !expanded &&
               'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
           )}
-          title={!expanded ? lastAssistantMessage : undefined}
         />
       ) : (
         !expanded && (
@@ -469,6 +465,29 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )
       )}
     </div>
+  )
+
+  return (
+    <HoverCard openDelay={250} closeDelay={120}>
+      <HoverCardTrigger asChild>{row}</HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        sideOffset={10}
+        className="w-96 max-w-[calc(100vw-2rem)] p-0"
+      >
+        <DashboardAgentHoverCardContent
+          agent={agent}
+          dotState={dotState}
+          prompt={prompt}
+          isWorking={isWorking}
+          toolName={toolName}
+          toolInput={toolInput}
+          lastAssistantMessage={lastAssistantMessage}
+          tsParts={tsParts}
+        />
+      </HoverCardContent>
+    </HoverCard>
   )
 })
 

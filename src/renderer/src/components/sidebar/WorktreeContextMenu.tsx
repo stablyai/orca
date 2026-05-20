@@ -427,6 +427,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         >
           {!isMultiContext && (
             <>
+              <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+                <Pencil className="size-3.5" />
+                Edit details
+              </DropdownMenuItem>
               <WorktreeOpenInSubMenu
                 worktreePath={worktree.path}
                 connectionId={repo?.connectionId ?? null}
@@ -503,12 +507,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          {!isMultiContext && (
-            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-              <Pencil className="size-3.5" />
-              Update
-            </DropdownMenuItem>
-          )}
           <DropdownMenuSeparator />
           <Tooltip>
             <TooltipTrigger asChild>
