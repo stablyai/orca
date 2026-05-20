@@ -155,7 +155,11 @@ export async function createWslWatcher(
       prevSnapshot = nextSnapshot
 
       if (events.length > 0) {
-        root.batch.events.push(...events)
+        // Why: a large deletion/create burst can exceed V8's argument limit
+        // when appended with spread, even though each event is valid.
+        for (const event of events) {
+          root.batch.events.push(event)
+        }
         deps.scheduleBatchFlush(rootKey, root)
       }
     } catch {

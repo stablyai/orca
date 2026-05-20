@@ -35,6 +35,7 @@ const WATCHER_IGNORE_DIRS: string[] = [
 
 const DEBOUNCE_TRAILING_MS = 150
 const DEBOUNCE_MAX_WAIT_MS = 500
+const MAX_BATCHED_CHANGE_EVENTS = 5_000
 
 // ── Per-root watcher state ───────────────────────────────────────────
 // WatchedRoot and WatcherSubscription are defined in filesystem-watcher-wsl.ts
@@ -159,12 +160,31 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
+function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
+  const payload: FsChangedPayload = {
+    worktreePath: rootKey,
+    events: [{ kind: 'overflow', absolutePath: rootKey }]
+  }
+  for (const [, wc] of root.listeners) {
+    if (!wc.isDestroyed()) {
+      wc.send('fs:changed', payload)
+    }
+  }
+}
+
 async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
   const rawEvents = root.batch.events.splice(0)
   root.batch.timer = null
   root.batch.firstEventAt = 0
 
   if (rawEvents.length === 0 || root.listeners.size === 0) {
+    return
+  }
+
+  if (rawEvents.length > MAX_BATCHED_CHANGE_EVENTS) {
+    // Why: deletion storms can be valid but too large to coalesce/stat/send
+    // per path. One overflow asks the renderer for the same conservative refresh.
+    emitOverflowPayload(rootKey, root)
     return
   }
 
@@ -257,15 +277,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // as overflow so the renderer conservatively refreshes all visible
           // tree state rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
-          const overflowPayload: FsChangedPayload = {
-            worktreePath: rootKey,
-            events: [{ kind: 'overflow', absolutePath: rootKey }]
-          }
-          for (const [, wc] of root.listeners) {
-            if (!wc.isDestroyed()) {
-              wc.send('fs:changed', overflowPayload)
-            }
-          }
+          emitOverflowPayload(rootKey, root)
           // Why: after a watcher error the native subscription may be invalid
           // (e.g. watched root was deleted). Tear down the dead watcher so we
           // don't leave a dangling subscription for a root that no longer
@@ -285,7 +297,11 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           return
         }
 
-        root.batch.events.push(...events)
+        // Why: worktree deletion can deliver enough events in one callback
+        // that spread exceeds V8's argument limit and crashes main.
+        for (const event of events) {
+          root.batch.events.push(event)
+        }
         scheduleBatchFlush(rootKey, root)
       },
       watcherOptions

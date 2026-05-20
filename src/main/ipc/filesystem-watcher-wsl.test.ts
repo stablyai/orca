@@ -142,4 +142,29 @@ describe('createWslWatcher', () => {
     expect(readPaths).not.toContain(path.join(rootPath, 'package.json'))
     await root.subscription.unsubscribe()
   })
+
+  it('flushes large WSL snapshot diffs without overflowing the call stack', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const largeEntrySet = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.txt`))
+    let rootReads = 0
+
+    readdirMock.mockImplementation((dirPath: string) => {
+      if (dirPath !== rootPath) {
+        return Promise.resolve([])
+      }
+      rootReads += 1
+      if (rootReads === 1) {
+        return Promise.resolve([])
+      }
+      return Promise.resolve(largeEntrySet)
+    })
+
+    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
+
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
+    expect(root.batch.events).toHaveLength(200_000)
+    await root.subscription.unsubscribe()
+  })
 })
