@@ -25,9 +25,10 @@ function requestDevParentShutdown(): void {
 }
 
 export function installUncaughtPipeErrorGuard(): void {
-  process.on('uncaughtException', (error) => {
+  const onUncaughtException = (error: unknown): void => {
     if (
       error &&
+      typeof error === 'object' &&
       'code' in error &&
       ((error as NodeJS.ErrnoException).code === 'EIO' ||
         (error as NodeJS.ErrnoException).code === 'EPIPE')
@@ -35,8 +36,16 @@ export function installUncaughtPipeErrorGuard(): void {
       return
     }
 
-    throw error
-  })
+    process.off('uncaughtException', onUncaughtException)
+    // Why: throwing inside an uncaughtException handler makes Node exit with
+    // status 7, hiding the original fault. Re-throw on the next tick so the
+    // default fatal-exception path reports the real status and stack.
+    setImmediate(() => {
+      throw error
+    })
+  }
+
+  process.on('uncaughtException', onUncaughtException)
 }
 
 export function patchPackagedProcessPath(): void {
