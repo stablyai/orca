@@ -523,7 +523,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
-  it('closes the empty floating workspace from the empty state', async () => {
+  it('minimizes the empty floating workspace from the empty state', async () => {
     const onOpenChange = vi.fn()
     const element = await renderPanel(true, onOpenChange)
 
