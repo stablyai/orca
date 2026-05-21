@@ -779,6 +779,19 @@ type PartialWorkItemsResult = {
   issuesError?: ClassifiedError
 }
 
+function assertSshRepoHasResolvedGitHubSource(args: {
+  connectionId?: string | null
+  issueOwnerRepo: OwnerRepo | null
+  prOwnerRepo: OwnerRepo | null
+}): void {
+  if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
+    return
+  }
+  // Why: SSH repo paths are remote-only, so gh cannot use cwd to infer repo
+  // context. Without a resolved owner/repo, running gh would query local state.
+  throw new Error('GitHub work items require a GitHub remote for SSH repositories')
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -787,7 +800,9 @@ async function listRecentWorkItems(
   connectionId?: string | null
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  if (issueOwnerRepo || prOwnerRepo) {
+  const requiresExplicitRepo = Boolean(connectionId)
+  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
+  if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
     // PR half — the UI renders partial results plus a banner for the failing
     // side, matching the parent design doc's partial-failure rule (§2).
@@ -802,19 +817,21 @@ async function listRecentWorkItems(
             ],
             ghOptions
           )
-        : ghExecFileAsync(
-            [
-              'issue',
-              'list',
-              '--limit',
-              String(limit),
-              '--state',
-              'open',
-              '--json',
-              'number,title,state,url,labels,updatedAt,author'
-            ],
-            ghOptions
-          ),
+        : requiresExplicitRepo
+          ? Promise.resolve({ stdout: '[]' })
+          : ghExecFileAsync(
+              [
+                'issue',
+                'list',
+                '--limit',
+                String(limit),
+                '--state',
+                'open',
+                '--json',
+                'number,title,state,url,labels,updatedAt,author'
+              ],
+              ghOptions
+            ),
       prOwnerRepo
         ? ghExecFileAsync(
             [
@@ -825,19 +842,21 @@ async function listRecentWorkItems(
             ],
             ghOptions
           )
-        : ghExecFileAsync(
-            [
-              'pr',
-              'list',
-              '--limit',
-              String(limit),
-              '--state',
-              'open',
-              '--json',
-              WORK_ITEM_PR_LIST_JSON_FIELDS
-            ],
-            ghOptions
-          )
+        : requiresExplicitRepo
+          ? Promise.resolve({ stdout: '[]' })
+          : ghExecFileAsync(
+              [
+                'pr',
+                'list',
+                '--limit',
+                String(limit),
+                '--state',
+                'open',
+                '--json',
+                WORK_ITEM_PR_LIST_JSON_FIELDS
+              ],
+              ghOptions
+            )
     ])
 
     let issues: MainWorkItem[] = []
@@ -946,6 +965,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const requiresExplicitRepo = Boolean(connectionId)
+  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
     query.state === 'merged' ||
     query.draft ||
@@ -959,6 +980,9 @@ async function listQueriedWorkItems(
   // failures retain the prior swallow-and-log behavior per parent doc §6.
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
     if (!issueScope) {
+      return { items: [] }
+    }
+    if (requiresExplicitRepo && !issueOwnerRepo) {
       return { items: [] }
     }
     const args = buildWorkItemListArgs({
@@ -981,6 +1005,9 @@ async function listQueriedWorkItems(
 
   const prFetch = (async (): Promise<MainWorkItem[]> => {
     if (!prScope) {
+      return []
+    }
+    if (requiresExplicitRepo && !prOwnerRepo) {
       return []
     }
     const args = buildWorkItemListArgs({
