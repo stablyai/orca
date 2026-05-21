@@ -280,6 +280,7 @@ export function FileExplorerRow({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
+  const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
@@ -457,7 +458,9 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={onFindInFolder}>
             <Search />
             Find in Folder
-            <ContextMenuShortcut>{isMac ? '⇧⌘F' : 'Ctrl+Shift+F'}</ContextMenuShortcut>
+            {findInFolderShortcutLabel !== 'Unassigned' ? (
+              <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
+            ) : null}
           </ContextMenuItem>
         )}
         <ContextMenuItem

@@ -33,7 +33,7 @@ const platform: NodeJS.Platform = isMac
     : 'linux'
 
 const CTRL_TAB_BEHAVIOR_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Ctrl+Tab Order',
+  title: 'Recent Tab Order',
   description: 'Choose recent or sequential tab switching.',
   keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
 }
@@ -227,15 +227,15 @@ export function ShortcutsPane(): React.JSX.Element {
 
         {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY) ? (
           <SearchableSetting
-            title="Ctrl+Tab Order"
+            title="Recent Tab Order"
             description="Choose recent or sequential tab switching."
             keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRY.keywords}
             className="flex items-center justify-between gap-4 px-1 py-2"
           >
             <div className="space-y-0.5">
-              <Label>Ctrl+Tab Order</Label>
+              <Label>Recent Tab Order</Label>
               <p className="text-xs text-muted-foreground">
-                Choose whether Ctrl+Tab follows recent use or the tab strip order.
+                Choose whether recent tab switching follows recent use or the tab strip order.
               </p>
             </div>
             <Select
