@@ -470,6 +470,7 @@ function LocalPortRow({
   )
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -499,6 +500,9 @@ function LocalPortRow({
                 <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
               </div>
               <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="truncate">{address}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <span className="truncate">{ownerLabel}</span>
                 {confidenceLabel && (
                   <span className="shrink-0 text-muted-foreground/70">{confidenceLabel}</span>
@@ -534,13 +538,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleCopyButtonClick}
-                  aria-label="Copy Address"
+                  aria-label={`Copy ${address}`}
                 >
                   <Copy size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Copy Address
+                Copy {address}
               </TooltipContent>
             </Tooltip>
             {canStopProcess && (
