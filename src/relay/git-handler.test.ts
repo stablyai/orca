@@ -45,6 +45,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.unstage')
     expect(methods).toContain('git.bulkStage')
     expect(methods).toContain('git.bulkUnstage')
+    expect(methods).toContain('git.abortMerge')
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.bulkDiscard')
     expect(methods).toContain('git.conflictOperation')
@@ -62,6 +63,35 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.renameCurrentBranch')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  describe('abortMerge', () => {
+    it('aborts an in-progress merge', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseBranch = execFileSync('git', ['branch', '--show-current'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }).trim()
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'feature\n')
+      gitCommit(tmpDir, 'feature change')
+      execFileSync('git', ['checkout', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'main\n')
+      gitCommit(tmpDir, 'main change')
+
+      expect(() =>
+        execFileSync('git', ['merge', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      await expect(fs.access(path.join(tmpDir, '.git', 'MERGE_HEAD'))).resolves.toBeUndefined()
+
+      await dispatcher.callRequest('git.abortMerge', { worktreePath: tmpDir })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'MERGE_HEAD'))).rejects.toThrow()
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('main\n')
+    })
   })
 
   describe('renameCurrentBranch', () => {

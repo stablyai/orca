@@ -61,6 +61,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
+    this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -181,6 +182,11 @@ export class GitHandler {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
       await this.git(['restore', '--staged', '--', ...chunk], worktreePath)
     }
+  }
+
+  private async abortMerge(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    await this.git(['merge', '--abort'], worktreePath)
   }
 
   private normalizeGitPathForCompare(filePath: string): string {
