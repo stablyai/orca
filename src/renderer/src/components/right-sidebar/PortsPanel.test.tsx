@@ -253,4 +253,12 @@ describe('PortsPanel runtime routing', () => {
   it('defaults unknown protocols to http for built-in browser opens', () => {
     expect(browserUrlForPort(workspacePort)).toBe('http://127.0.0.1:63468')
   })
+
+  it('prefers advertisedUrl over the OS-derived host:port', () => {
+    const advertised: WorkspacePort = {
+      ...workspacePort,
+      advertisedUrl: 'https://local.getmontecarlo.com:63468'
+    }
+    expect(browserUrlForPort(advertised)).toBe('https://local.getmontecarlo.com:63468')
+  })
 })

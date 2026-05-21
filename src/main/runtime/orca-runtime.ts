@@ -80,6 +80,7 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
@@ -1982,6 +1983,7 @@ export class OrcaRuntimeService {
 
   registerPty(ptyId: string, worktreeId: string): void {
     this.recordPtyWorktree(ptyId, worktreeId, { connected: true })
+    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
   }
 
   onPtyData(ptyId: string, data: string, at: number): void {
@@ -1992,6 +1994,10 @@ export class OrcaRuntimeService {
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
     this.agentDetector?.onData(ptyId, data, at)
+    // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
+    // `Network: https://local.example.com:3001/`) so the workspace ports
+    // panel can surface them in place of the kernel bind address.
+    advertisedUrlWatcher.ingest(ptyId, data, at)
     // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
     // MUST run before trackHeadlessTerminalData so the eager-state pattern
     // (set headlessTerminals + writeChain head = seedPromise) is in place
@@ -3092,6 +3098,7 @@ export class OrcaRuntimeService {
   }
 
   onPtyExit(ptyId: string, exitCode: number): void {
+    advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.mobileDisplayModes.delete(ptyId)
