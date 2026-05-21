@@ -31,6 +31,8 @@ export type OtlpExporterOptions = {
   readonly serviceName: string
   /** Override for the default 5-second timeout on each POST. */
   readonly timeoutMs?: number
+  /** Test/diagnostic override for the in-memory span queue cap. */
+  readonly maxQueueSpans?: number
 }
 
 export type OtlpExporter = {
@@ -44,6 +46,7 @@ export type OtlpExporter = {
 
 const FLUSH_INTERVAL_MS = 1_000
 const MAX_BATCH = 64
+const DEFAULT_MAX_QUEUE_SPANS = 1_024
 
 type InternalSpan = {
   span: RedactableSpan
@@ -69,6 +72,7 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
   let warned = false
   let closed = false
   let flushPromise: Promise<void> | null = null
+  const maxQueueSpans = Math.max(1, Math.floor(opts.maxQueueSpans ?? DEFAULT_MAX_QUEUE_SPANS))
 
   function ensureTimer(): void {
     if (timer || closed) {
@@ -131,6 +135,12 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
       // three locations the spec calls for redactor application.
       const redacted = redactSpan(span, 'client')
       queue.push({ span: redacted })
+      if (queue.length > maxQueueSpans) {
+        // Why: a slow or misconfigured collector must not turn optional OTLP
+        // export into unbounded memory growth. Keep the newest spans because
+        // they are closest to the user action being diagnosed.
+        queue.splice(0, queue.length - maxQueueSpans)
+      }
       if (queue.length >= MAX_BATCH) {
         void runFlushLoop()
       } else {

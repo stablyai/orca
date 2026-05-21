@@ -94,6 +94,48 @@ describe('otlp-exporter — flushing', () => {
     expect(requestCount).toBe(2)
     expect(maxConcurrentRequests).toBe(1)
   })
+
+  it('caps queued spans and keeps the newest records', async () => {
+    const receivedSpanIds: string[] = []
+    const baseUrl = await listen((req, res) => {
+      let body = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk) => {
+        body += chunk
+      })
+      req.on('end', () => {
+        const payload = JSON.parse(body) as ReturnType<typeof encodeOtlpPayload>
+        receivedSpanIds.push(
+          ...payload.resourceSpans.flatMap((resourceSpan) =>
+            resourceSpan.scopeSpans.flatMap((scopeSpan) =>
+              scopeSpan.spans.map((exportedSpan) => exportedSpan.spanId)
+            )
+          )
+        )
+        res.setHeader('content-type', 'application/json')
+        res.end('{}')
+      })
+    })
+    const exporter = createOtlpExporter({
+      tracesUrl: `${baseUrl}/v1/traces`,
+      serviceName: 'orca-test',
+      timeoutMs: 1_000,
+      maxQueueSpans: 4
+    })
+
+    for (let i = 0; i < 6; i++) {
+      exporter.exportSpan(span({ spanId: i.toString(16).padStart(16, '0') }))
+    }
+    await exporter.flush()
+    exporter.close()
+
+    expect(receivedSpanIds).toEqual([
+      '0000000000000002',
+      '0000000000000003',
+      '0000000000000004',
+      '0000000000000005'
+    ])
+  })
 })
 
 describe('otlp-exporter — attribute encoding', () => {
