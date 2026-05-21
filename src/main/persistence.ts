@@ -78,7 +78,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
-import { normalizeVisibleTaskProviders } from '../shared/task-providers'
+import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
@@ -1359,6 +1359,10 @@ export class Store {
         const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
           ? (parsed.settings?.experimentalActivity ?? false)
           : false
+        const taskProviderSettings = normalizeTaskProviderSettings({
+          visibleTaskProviders: parsed.settings?.visibleTaskProviders,
+          defaultTaskSource: parsed.settings?.defaultTaskSource
+        })
         result = {
           ...defaults,
           ...parsed,
@@ -1382,9 +1386,8 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
-            visibleTaskProviders: normalizeVisibleTaskProviders(
-              parsed.settings?.visibleTaskProviders
-            ),
+            defaultTaskSource: taskProviderSettings.defaultTaskSource,
+            visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             voice: {
@@ -2262,10 +2265,19 @@ export class Store {
         updates.terminalQuickCommands
       )
     }
-    if ('visibleTaskProviders' in updates) {
-      sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
-        updates.visibleTaskProviders
-      )
+    if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
+      const taskProviderSettings = normalizeTaskProviderSettings({
+        visibleTaskProviders:
+          'visibleTaskProviders' in updates
+            ? updates.visibleTaskProviders
+            : this.state.settings.visibleTaskProviders,
+        defaultTaskSource:
+          'defaultTaskSource' in updates
+            ? updates.defaultTaskSource
+            : this.state.settings.defaultTaskSource
+      })
+      sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
+      sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)

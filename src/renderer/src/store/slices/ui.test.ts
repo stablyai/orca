@@ -493,6 +493,44 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('prefetches the restored default task source when provider settings drifted', () => {
+    const store = createUIStore()
+    const prefetchWorkItems = vi.fn()
+    const prefetchLinearIssues = vi.fn()
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github',
+        defaultTaskViewPreset: 'all'
+      } as unknown as AppState['settings'],
+      linearStatus: { connected: true } as AppState['linearStatus'],
+      preflightStatus: { glab: { installed: false } } as AppState['preflightStatus'],
+      prefetchWorkItems,
+      prefetchLinearIssues
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage()
+
+    expect(prefetchWorkItems).toHaveBeenCalledWith(
+      'repo-1',
+      '/repo',
+      expect.any(Number),
+      'is:issue is:open'
+    )
+    expect(prefetchLinearIssues).not.toHaveBeenCalled()
+  })
+
   it('returns to the tasks page after visiting settings from an in-progress draft', () => {
     const store = createUIStore()
 

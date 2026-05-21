@@ -138,8 +138,8 @@ import {
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
 import {
-  filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
+  restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 
@@ -1801,7 +1801,7 @@ export default function TaskPage(): React.JSX.Element {
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
   const visibleTaskProviders = useMemo(
     () =>
-      filterAvailableTaskProviders(
+      restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatus?.glab?.installed === true,

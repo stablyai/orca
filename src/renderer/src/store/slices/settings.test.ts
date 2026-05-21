@@ -86,6 +86,29 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('repairs drifted task provider settings before sending updates', async () => {
+    settingsSet.mockResolvedValueOnce({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github'
+      } as AppState['settings']
+    })
+
+    await store.getState().updateSettings({
+      visibleTaskProviders: ['linear']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+  })
+
   it('rebases local state to the authoritative settings:set response', async () => {
     settingsSet.mockResolvedValueOnce({
       openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],

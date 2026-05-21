@@ -693,6 +693,38 @@ describe('Store', () => {
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
   })
 
+  it('repairs drifted task provider defaults on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { visibleTaskProviders: ['linear'], defaultTaskSource: 'github' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().defaultTaskSource).toBe('github')
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear'])
+  })
+
+  it('normalizes invalid task provider defaults on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'jira' as never },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().defaultTaskSource).toBe('gitlab')
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+  })
+
   it('normalizes persisted open-in applications on load', async () => {
     writeDataFile({
       schemaVersion: 1,

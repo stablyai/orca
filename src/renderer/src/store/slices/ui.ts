@@ -26,6 +26,7 @@ import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/fe
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
+  restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import {
@@ -559,7 +560,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     // be deduped. This removes ~300–800ms of perceived latency on initial
     // page load.
     const state = get()
-    const visibleTaskProviders = normalizeVisibleTaskProviders(state.settings?.visibleTaskProviders)
+    const preferredVisibleTaskProviders = normalizeVisibleTaskProviders(
+      state.settings?.visibleTaskProviders
+    )
+    const visibleTaskProviders = restoreAvailableDefaultTaskProvider(
+      preferredVisibleTaskProviders,
+      {
+        gitlabInstalled: state.preflightStatus?.glab?.installed === true,
+        linearConnected: state.linearStatus?.connected === true
+      },
+      state.settings?.defaultTaskSource
+    )
     const resolvedSource = resolveVisibleTaskProvider(
       data.taskSource ?? state.settings?.defaultTaskSource,
       visibleTaskProviders
