@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Cable, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+import { Plug, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -74,7 +74,7 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
   },
   {
     id: 'ports',
-    icon: Cable,
+    icon: Plug,
     title: 'Ports',
     shortcut: '',
     sshOnly: true
