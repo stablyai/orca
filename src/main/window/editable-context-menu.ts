@@ -1,3 +1,4 @@
+import { clipboard } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,
   type RichMarkdownContextMenuCommand,
@@ -83,12 +84,34 @@ function buildNativeEditMenuTemplate(): Electron.MenuItemConstructorOptions[] {
   ]
 }
 
+function buildReadOnlyTextMenuTemplate(
+  params: Electron.ContextMenuParams
+): Electron.MenuItemConstructorOptions[] {
+  const template: Electron.MenuItemConstructorOptions[] = []
+  if (params.linkURL) {
+    template.push({
+      label: 'Copy URL',
+      click: () => clipboard.writeText(params.linkURL)
+    })
+  }
+  if (params.selectionText) {
+    if (template.length > 0) {
+      template.push({ type: 'separator' })
+    }
+    template.push({ role: 'copy' })
+  }
+  if (template.length > 0) {
+    template.push({ role: 'selectAll' })
+  }
+  return template
+}
+
 export function buildEditableContextMenuTemplate(
   params: Electron.ContextMenuParams,
   webContents: EditableContextMenuWebContents
 ): Electron.MenuItemConstructorOptions[] {
   if (!params.isEditable) {
-    return []
+    return buildReadOnlyTextMenuTemplate(params)
   }
 
   const suggestions = params.dictionarySuggestions.slice(0, 5)

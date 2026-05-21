@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { DashboardAgentHoverCardContent } from './DashboardAgentHoverCardContent'
 import type { DashboardAgentRow } from './useDashboardData'
 
@@ -41,23 +42,30 @@ function makeAgentRow(): DashboardAgentRow {
 describe('DashboardAgentHoverCardContent', () => {
   it('renders prompt and assistant markdown in structured sections', () => {
     const markup = renderToStaticMarkup(
-      <DashboardAgentHoverCardContent
-        agent={makeAgentRow()}
-        dotState="working"
-        prompt="Review **markdown** formatting"
-        isWorking
-        toolName="Bash"
-        toolInput="pnpm test"
-        lastAssistantMessage="Rendered **markdown** in the hover card."
-        tsParts={['started 1m ago']}
-      />
+      <TooltipProvider>
+        <DashboardAgentHoverCardContent
+          agent={makeAgentRow()}
+          dotState="working"
+          prompt="Review **markdown** formatting"
+          isWorking
+          toolName="Bash"
+          toolInput="pnpm test"
+          lastAssistantMessage="Rendered **markdown** in the hover card."
+          headerTimestamp="1m ago"
+          onActivate={() => {}}
+        />
+      </TooltipProvider>
     )
 
     expect(markup).toContain('Prompt')
     expect(markup).toContain('Current tool')
     expect(markup).toContain('Latest message')
+    expect(markup).toContain('Copy prompt')
+    expect(markup).toContain('Copy latest message')
     expect(markup).toContain('data-slot="scroll-area"')
     expect(markup).toContain('data-slot="scroll-area-viewport"')
+    expect(markup).toContain('whitespace-pre')
+    expect(markup).toContain('[&amp;_pre]:max-w-none')
     expect(markup).not.toContain('overflow-auto')
     expect(markup).toContain('<strong>markdown</strong>')
     expect(markup).toContain('pnpm test')

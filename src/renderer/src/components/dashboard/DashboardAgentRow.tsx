@@ -117,6 +117,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   hideExpand = false
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [hoverCardOpen, setHoverCardOpen] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
   // card's click handler (which navigates away from the dashboard).
   const handleDismiss = useCallback(
@@ -159,6 +160,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     },
     [onActivate, agent.tab.id, agent.paneKey]
   )
+  const handleHoverCardActivate = useCallback(
+    (e: React.SyntheticEvent) => {
+      e.stopPropagation()
+      setHoverCardOpen(false)
+      onActivate(agent.tab.id, agent.paneKey)
+    },
+    [onActivate, agent.tab.id, agent.paneKey]
+  )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const prompt = agent.entry.prompt.trim()
@@ -193,6 +202,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   if (doneAt !== null) {
     tsParts.push(`done ${formatTimeAgo(doneAt, now)}`)
   }
+  const headerTimestamp =
+    doneAt !== null
+      ? formatTimeAgo(doneAt, now)
+      : startedAt !== null
+        ? formatTimeAgo(startedAt, now)
+        : null
 
   const row = (
     // Why: NOT role="button" / tabIndex={0}. The row contains real <button>
@@ -469,7 +484,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
 
   return (
-    <HoverCard openDelay={250} closeDelay={120}>
+    <HoverCard
+      open={hoverCardOpen}
+      onOpenChange={setHoverCardOpen}
+      openDelay={250}
+      closeDelay={120}
+    >
       <HoverCardTrigger asChild>{row}</HoverCardTrigger>
       <HoverCardContent
         side="right"
@@ -485,7 +505,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           toolName={toolName}
           toolInput={toolInput}
           lastAssistantMessage={lastAssistantMessage}
-          tsParts={tsParts}
+          headerTimestamp={headerTimestamp}
+          onActivate={handleHoverCardActivate}
         />
       </HoverCardContent>
     </HoverCard>

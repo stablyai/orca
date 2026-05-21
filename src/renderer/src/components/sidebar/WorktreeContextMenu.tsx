@@ -39,6 +39,7 @@ import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedSc
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
+import { WORKTREE_CONTEXT_MENU_SCOPE_ATTR } from './worktree-context-menu-scope'
 
 type Props = {
   worktree: Worktree
@@ -50,7 +51,6 @@ type Props = {
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
-const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 
 function shouldIgnoreNestedWorktreeContextMenuScope(

@@ -8,6 +8,7 @@ function ScrollArea({
   viewportClassName,
   viewportRef,
   viewportTabIndex,
+  scrollbars = 'vertical',
   children,
   ...props
 }: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
@@ -15,6 +16,7 @@ function ScrollArea({
   viewportRef?: React.Ref<HTMLDivElement>
   /** Set e.g. -1 so the viewport can receive programmatic focus (explorer keyboard shortcuts after inline rename). */
   viewportTabIndex?: number
+  scrollbars?: 'vertical' | 'horizontal' | 'both'
 }) {
   return (
     <ScrollAreaPrimitive.Root
@@ -33,7 +35,10 @@ function ScrollArea({
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar />
+      {(scrollbars === 'vertical' || scrollbars === 'both') && <ScrollBar />}
+      {(scrollbars === 'horizontal' || scrollbars === 'both') && (
+        <ScrollBar orientation="horizontal" />
+      )}
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   )

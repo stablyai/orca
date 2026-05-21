@@ -1,4 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+
+const { writeTextMock } = vi.hoisted(() => ({
+  writeTextMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  clipboard: { writeText: writeTextMock }
+}))
+
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { richMarkdownContextMenuCommandChannel } from '../../shared/rich-markdown-context-menu'
 
@@ -137,6 +146,31 @@ describe('buildEditableContextMenuTemplate', () => {
         webContents
       )
     ).toEqual([])
+  })
+
+  it('builds a native read-only text menu for selected markdown text and links', () => {
+    const template = buildEditableContextMenuTemplate(
+      contextParams({
+        isEditable: false,
+        linkURL: 'https://example.com/docs',
+        selectionText: 'https://example.com/docs'
+      }),
+      {
+        replaceMisspelling: vi.fn(),
+        send: vi.fn(),
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      }
+    )
+
+    expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
+      'Copy URL',
+      'separator',
+      'copy',
+      'selectAll'
+    ])
+
+    template[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    expect(writeTextMock).toHaveBeenCalledWith('https://example.com/docs')
   })
 
   it('keeps regular text inputs to spelling and native edit actions', () => {
