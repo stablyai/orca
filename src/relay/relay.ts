@@ -49,6 +49,7 @@ import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugi
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
 const CONNECT_TIMEOUT_MS = 5_000
+const STALE_SOCKET_PROBE_TIMEOUT_MS = 500
 const EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
   'ORCA_RELAY_EMPTY_STARTUP_GRACE_MS',
   60_000
@@ -58,6 +59,10 @@ type SocketIdentity = {
   dev: bigint
   ino: bigint
   ctimeNs: bigint
+}
+
+function sameSocketIdentity(a: SocketIdentity, b: SocketIdentity): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.ctimeNs === b.ctimeNs
 }
 
 function parseNonNegativeIntEnv(name: string, fallback: number): number {
@@ -196,9 +201,7 @@ async function main(): Promise<void> {
       ownsSocketPath &&
       ownedSocketIdentity !== null &&
       currentIdentity !== null &&
-      currentIdentity.dev === ownedSocketIdentity.dev &&
-      currentIdentity.ino === ownedSocketIdentity.ino &&
-      currentIdentity.ctimeNs === ownedSocketIdentity.ctimeNs
+      sameSocketIdentity(currentIdentity, ownedSocketIdentity)
     )
   }
   const cleanupOwnedSocket = (): void => {
@@ -563,11 +566,23 @@ async function main(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       let staleRetryAttempted = false
 
-      const onListening = (): void => {
+      function removeStartupListeners(): void {
+        server.off('listening', onListening)
+        server.off('error', onInitialError)
+        server.off('error', failInitial)
+      }
+
+      function listenForStartupError(onError: (err: NodeJS.ErrnoException) => void): void {
+        server.once('listening', onListening)
+        server.once('error', onError)
+        server.listen(sockPath)
+      }
+
+      function onListening(): void {
+        removeStartupListeners()
         restoreUmask()
         ownsSocketPath = true
         ownedSocketIdentity = readSocketIdentity(sockPath)
-        server.off('error', onInitialError)
         server.on('error', (err) => {
           process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
         })
@@ -575,9 +590,9 @@ async function main(): Promise<void> {
         resolve()
       }
 
-      const failInitial = (err: NodeJS.ErrnoException): void => {
+      function failInitial(err: NodeJS.ErrnoException): void {
+        removeStartupListeners()
         restoreUmask()
-        server.off('listening', onListening)
         if (err.code === 'EADDRINUSE') {
           process.stderr.write(
             `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.\n`
@@ -588,55 +603,81 @@ async function main(): Promise<void> {
         reject(err)
       }
 
+      function unlinkIfStillStale(blockedIdentity: SocketIdentity | null): boolean {
+        const currentIdentity = readSocketIdentity(sockPath)
+        if (currentIdentity === null) {
+          return true
+        }
+        if (blockedIdentity === null || !sameSocketIdentity(currentIdentity, blockedIdentity)) {
+          return false
+        }
+        try {
+          unlinkSync(sockPath)
+          return true
+        } catch (unlinkErr) {
+          const e = unlinkErr as NodeJS.ErrnoException
+          return e.code === 'ENOENT'
+        }
+      }
+
       // Why: a previous relay killed by SIGKILL/OOM/host-crash leaves the
       // socket file on disk with no listener. EADDRINUSE on bind in that
       // case is not "duplicate active" — it is a stale inode. Probe with a
       // short connect; if it refuses, the socket is dead and we may unlink
       // and retry once. If it connects, a live relay owns it and we keep
       // the existing "duplicate detected" rejection.
-      const onInitialError = (err: NodeJS.ErrnoException): void => {
+      function onInitialError(err: NodeJS.ErrnoException): void {
         if (err.code !== 'EADDRINUSE' || staleRetryAttempted) {
           failInitial(err)
           return
         }
         staleRetryAttempted = true
+        const blockedIdentity = readSocketIdentity(sockPath)
         const probe = createConnection({ path: sockPath })
-        const probeTimeout = setTimeout(() => {
-          probe.destroy()
-          failInitial(err)
-        }, 500)
-        probe.once('connect', () => {
-          clearTimeout(probeTimeout)
-          probe.destroy()
-          failInitial(err)
-        })
-        probe.once('error', (probeErr: NodeJS.ErrnoException) => {
-          clearTimeout(probeTimeout)
-          if (probeErr.code !== 'ECONNREFUSED' && probeErr.code !== 'ENOENT') {
-            failInitial(err)
+        let probeSettled = false
+        let probeTimeout: NodeJS.Timeout | null = null
+        const finishProbe = (callback: () => void): void => {
+          if (probeSettled) {
             return
           }
-          try {
-            unlinkSync(sockPath)
-          } catch (unlinkErr) {
-            const e = unlinkErr as NodeJS.ErrnoException
-            if (e.code !== 'ENOENT') {
+          probeSettled = true
+          if (probeTimeout) {
+            clearTimeout(probeTimeout)
+          }
+          callback()
+        }
+        probe.once('connect', () => {
+          finishProbe(() => {
+            probe.destroy()
+            failInitial(err)
+          })
+        })
+        probe.once('error', (probeErr: NodeJS.ErrnoException) => {
+          finishProbe(() => {
+            if (probeErr.code !== 'ECONNREFUSED' && probeErr.code !== 'ENOENT') {
               failInitial(err)
               return
             }
-          }
-          process.stderr.write(
-            `[relay] Removed stale socket at ${sockPath} and retrying listen\n`
-          )
-          server.once('listening', onListening)
-          server.once('error', failInitial)
-          server.listen(sockPath)
+            if (!unlinkIfStillStale(blockedIdentity)) {
+              failInitial(err)
+              return
+            }
+            process.stderr.write(
+              `[relay] Removed stale socket at ${sockPath} and retrying listen\n`
+            )
+            removeStartupListeners()
+            listenForStartupError(failInitial)
+          })
         })
+        probeTimeout = setTimeout(() => {
+          finishProbe(() => {
+            probe.destroy()
+            failInitial(err)
+          })
+        }, STALE_SOCKET_PROBE_TIMEOUT_MS)
       }
 
-      server.once('listening', onListening)
-      server.once('error', onInitialError)
-      server.listen(sockPath)
+      listenForStartupError(onInitialError)
     })
 
     return server

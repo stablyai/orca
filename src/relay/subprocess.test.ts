@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: subprocess coverage shares one bundled relay artifact; splitting this file would rebuild the same daemon bundle across suites and make these lifecycle tests slower/flakier. */
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { rm } from 'fs/promises'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -262,6 +262,49 @@ describe('Subprocess: Relay entry point', () => {
       } finally {
         bridge.kill('SIGTERM')
         await bridge.waitForExit().catch(() => {})
+      }
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'reclaims a socket path left behind by a killed detached relay',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-stale-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const first = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+      let bridge: RelayProcess | null = null
+      try {
+        await first.sentinelReceived
+
+        first.kill('SIGKILL')
+        await first.waitForExit(2000)
+        expect(existsSync(sockPath)).toBe(true)
+
+        relay = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+        await relay.sentinelReceived
+
+        bridge = spawn(['--connect', '--sock-path', sockPath])
+        await bridge.sentinelReceived
+        const id = bridge.send('relay.status')
+        const resp = await bridge.waitForResponse(id)
+        expect(resp.error).toBeUndefined()
+        expect(
+          resp.result as {
+            pid: number | undefined
+            socket: { path: string; owned: boolean; listening: boolean }
+          }
+        ).toMatchObject({
+          pid: relay.proc.pid,
+          socket: { path: sockPath, owned: true, listening: true }
+        })
+      } finally {
+        bridge?.kill('SIGTERM')
+        await bridge?.waitForExit().catch(() => {})
+        if (first.proc.exitCode === null && first.proc.signalCode === null) {
+          first.kill('SIGKILL')
+          await first.waitForExit().catch(() => {})
+        }
       }
     },
     10_000
