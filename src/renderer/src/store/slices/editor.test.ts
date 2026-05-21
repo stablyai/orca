@@ -1079,6 +1079,18 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('records clean git status checks with an explicit empty entry list', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-clean', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitStatusByWorktree).toHaveProperty('wt-clean')
+    expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
+  })
+
   it('clears ignored path cache when status refresh omits ignored paths', () => {
     const store = createEditorStore()
 

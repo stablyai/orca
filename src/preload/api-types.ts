@@ -225,6 +225,8 @@ import type {
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type {
+  WorkspacePackageManagerCacheCleanupRequest,
+  WorkspacePackageManagerCacheCleanupResult,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
@@ -680,6 +682,9 @@ export type PreloadApi = {
   workspaceSpace: {
     analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
     cancel: () => Promise<boolean>
+    cleanupPackageManagerCache: (
+      request: WorkspacePackageManagerCacheCleanupRequest
+    ) => Promise<WorkspacePackageManagerCacheCleanupResult>
     onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void) => () => void
   }
   workspacePorts: {

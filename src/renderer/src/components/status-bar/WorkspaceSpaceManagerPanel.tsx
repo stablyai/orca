@@ -1,32 +1,56 @@
 /* eslint-disable max-lines -- Why: the analyzer's private treemap, selection,
    breakdown, and table pieces share one scan state and should evolve as one resource-manager surface. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Bot,
   Check,
   Circle,
+  ExternalLink,
+  FileWarning,
   GitBranch,
+  GitPullRequest,
   HardDrive,
   Loader2,
   Minus,
+  Package,
   RefreshCw,
   Search,
   Server,
+  ShieldCheck,
+  Terminal,
   Trash2,
   ZoomIn,
   ZoomOut,
   X
 } from 'lucide-react'
 import type {
+  AgentStatusEntry,
+  MigrationUnsupportedPtyEntry
+} from '../../../../shared/agent-status-types'
+import type { GitStatusResult, TerminalTab, Worktree } from '../../../../shared/types'
+import type {
+  WorkspacePackageManagerCacheCleanupAction,
+  WorkspacePackageManagerCacheCleanupResult,
+  WorkspacePackageManagerCacheTarget,
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
+import {
+  getPackageManagerCacheSafetyCopy,
+  getPackageManagerLabel
+} from '../../../../shared/package-manager-cache-cleanup'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
+import { getWorktreeMapFromState } from '../../store/selectors'
+import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
+import { refreshGitStatusForWorktree } from '../right-sidebar/git-status-refresh'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
+import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -35,6 +59,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '../ui/context-menu'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
 import { Input } from '../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import {
@@ -49,8 +74,11 @@ import {
 import { buildTreemapLayout, type TreemapRect } from './workspace-space-layout'
 import {
   filterWorkspaceSpaceRows,
+  countWorkspaceSpaceActiveAgents,
   getSelectedDeletableWorkspaceIds,
   getVisibleDeletableWorkspaceIds,
+  getWorkspaceSpaceGitStatusRefreshCandidates,
+  isWorkspaceSpaceRowReadyToDelete,
   sortWorkspaceSpaceRows,
   type WorkspaceSpaceSortDirection,
   type WorkspaceSpaceSortKey
@@ -63,6 +91,7 @@ const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--primary) 24%, var(--card))',
   'color-mix(in srgb, var(--chart-1) 38%, var(--card))'
 ]
+const GIT_STATUS_REFRESH_CONCURRENCY = 6
 
 type WorkspaceSpaceDeleteState = {
   isDeleting: boolean
@@ -70,11 +99,210 @@ type WorkspaceSpaceDeleteState = {
   canForceDelete: boolean
 }
 
+type PackageManagerCacheCleanupState = {
+  runningActionId: string | null
+  error: string | null
+  lastOutput: string | null
+}
+
+type WorkspaceGitRefreshState = {
+  isRefreshing: boolean
+  error: string | null
+}
+
+type PackageManagerCacheCleanupSuccess = Extract<
+  WorkspacePackageManagerCacheCleanupResult,
+  { ok: true }
+>
+
+type WorkspaceDecisionDetails = {
+  isActive: boolean
+  canOpenWorkspace: boolean
+  terminalTabCount: number
+  liveTerminalCount: number
+  activeAgentCount: number
+  completedAgentCount: number
+  openEditorFileCount: number
+  dirtyEditorBufferCount: number
+  browserTabCount: number
+  changedFileCount: number | null
+  branchStatus: string | null
+  reviewLabel: string | null
+  issueLabel: string | null
+  linearIssueLabel: string | null
+}
+
+type WorkspaceDecisionInputs = {
+  worktreeMap: Map<string, Worktree>
+  tabsByWorktree: Record<string, TerminalTab[]>
+  ptyIdsByTabId: Record<string, string[]>
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  retainedAgentsByPaneKey: Record<string, { worktreeId: string; entry: AgentStatusEntry }>
+  openFiles: { id: string; worktreeId: string; isDirty: boolean }[]
+  editorDrafts: Record<string, string>
+  browserTabsByWorktree: Record<string, unknown[]>
+  gitStatusByWorktree: Record<string, unknown[]>
+  remoteStatusesByWorktree: Record<string, { hasUpstream: boolean; ahead: number; behind: number }>
+  hostedReviewCache: Record<
+    string,
+    { data?: { number: number; state: string; status: string; title: string } | null }
+  >
+  issueCache: Record<string, { data?: { number: number; title: string; state: string } | null }>
+  linearIssueCache: Record<
+    string,
+    { data?: { identifier: string; title: string; state?: { name: string } } | null }
+  >
+  settings: Parameters<typeof getHostedReviewCacheKey>[2]
+  activeWorktreeId: string | null
+  now: number
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function formatReviewState(state: string): string {
+  return state.charAt(0).toUpperCase() + state.slice(1)
+}
+
+function countLiveTerminals(
+  tabs: readonly TerminalTab[],
+  ptyIdsByTabId: Record<string, string[]>
+): number {
+  return tabs.filter((tab) => (ptyIdsByTabId[tab.id]?.length ?? 0) > 0).length
+}
+
+function getBranchStatus(
+  status: { hasUpstream: boolean; ahead: number; behind: number } | undefined
+): string | null {
+  if (!status?.hasUpstream) {
+    return null
+  }
+  if (status.ahead === 0 && status.behind === 0) {
+    return 'Synced with upstream'
+  }
+  const parts: string[] = []
+  if (status.ahead > 0) {
+    parts.push(`${status.ahead} ahead`)
+  }
+  if (status.behind > 0) {
+    parts.push(`${status.behind} behind`)
+  }
+  return parts.join(', ')
+}
+
+function getWorkspaceDecisionDetails(
+  worktree: WorkspaceSpaceWorktree,
+  inputs: WorkspaceDecisionInputs
+): WorkspaceDecisionDetails {
+  const workspaceRecord = inputs.worktreeMap.get(worktree.worktreeId)
+  const tabs = inputs.tabsByWorktree[worktree.worktreeId] ?? []
+  const openFiles = inputs.openFiles.filter((file) => file.worktreeId === worktree.worktreeId)
+  const dirtyEditorBufferCount = openFiles.filter(
+    (file) => file.isDirty || inputs.editorDrafts[file.id] !== undefined
+  ).length
+  const gitEntries = inputs.gitStatusByWorktree[worktree.worktreeId]
+  const branch = workspaceRecord
+    ? branchDisplayName(workspaceRecord.branch)
+    : getWorkspaceSpaceBranchLabel(worktree)
+  const reviewCacheKey = getHostedReviewCacheKey(
+    worktree.repoPath,
+    branch,
+    inputs.settings,
+    worktree.repoId
+  )
+  const hostedReview = inputs.hostedReviewCache[reviewCacheKey]?.data
+  const linkedPR = workspaceRecord?.linkedPR ?? null
+  const reviewLabel =
+    hostedReview !== undefined && hostedReview !== null
+      ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
+          hostedReview.status && hostedReview.status !== 'none' ? `, ${hostedReview.status}` : ''
+        }`
+      : linkedPR
+        ? `PR #${linkedPR}`
+        : null
+  const linkedIssue = workspaceRecord?.linkedIssue ?? null
+  const issue = linkedIssue ? inputs.issueCache[`${worktree.repoId}::${linkedIssue}`]?.data : null
+  const issueLabel = linkedIssue
+    ? issue
+      ? `#${issue.number} ${issue.state}: ${issue.title}`
+      : `#${linkedIssue}`
+    : null
+  const linkedLinearIssue = workspaceRecord?.linkedLinearIssue ?? null
+  const linearIssue = linkedLinearIssue
+    ? (inputs.linearIssueCache[`selected::${linkedLinearIssue}`]?.data ??
+      inputs.linearIssueCache[linkedLinearIssue]?.data)
+    : null
+  const linearIssueLabel = linkedLinearIssue
+    ? linearIssue
+      ? `${linearIssue.identifier}${
+          linearIssue.state?.name ? ` ${linearIssue.state.name}` : ''
+        }: ${linearIssue.title}`
+      : linkedLinearIssue
+    : null
+
+  return {
+    isActive: inputs.activeWorktreeId === worktree.worktreeId,
+    canOpenWorkspace: workspaceRecord !== undefined,
+    terminalTabCount: tabs.length,
+    liveTerminalCount: countLiveTerminals(tabs, inputs.ptyIdsByTabId),
+    activeAgentCount: countWorkspaceSpaceActiveAgents({
+      worktreeId: worktree.worktreeId,
+      tabs,
+      agentStatusByPaneKey: inputs.agentStatusByPaneKey,
+      migrationUnsupportedByPtyId: inputs.migrationUnsupportedByPtyId,
+      runtimePaneTitlesByTabId: inputs.runtimePaneTitlesByTabId,
+      ptyIdsByTabId: inputs.ptyIdsByTabId,
+      now: inputs.now
+    }),
+    completedAgentCount: Object.values(inputs.retainedAgentsByPaneKey).filter(
+      (entry) => entry.worktreeId === worktree.worktreeId && entry.entry.state === 'done'
+    ).length,
+    openEditorFileCount: openFiles.length,
+    dirtyEditorBufferCount,
+    browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,
+    changedFileCount: gitEntries ? gitEntries.length : null,
+    branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId]),
+    reviewLabel,
+    issueLabel,
+    linearIssueLabel
+  }
+}
+
 function getTreemapFill(rect: TreemapRect, selected: boolean): string {
   if (selected) {
     return 'color-mix(in srgb, var(--ring) 40%, var(--card))'
   }
   return TREEMAP_FILLS[rect.index % TREEMAP_FILLS.length]
+}
+
+function getPackageManagerCleanupSuccessCopy(result: PackageManagerCacheCleanupSuccess): {
+  output: string
+  toastDescription: string
+} {
+  const commandOutput = [result.stdout, result.stderr].filter((part) => part.trim()).join('\n')
+  if (result.reclaimedBytes === null) {
+    return {
+      output: commandOutput || `${result.action.command} completed.`,
+      toastDescription: result.action.command
+    }
+  }
+
+  const summary =
+    result.reclaimedBytes > 0
+      ? `Freed ${formatBytes(result.reclaimedBytes)}`
+      : 'Cleanup completed; measured cache size was unchanged'
+  const measured =
+    result.cacheSizeBeforeBytes !== null && result.cacheSizeAfterBytes !== null
+      ? `${summary} (${formatBytes(result.cacheSizeBeforeBytes)} -> ${formatBytes(result.cacheSizeAfterBytes)}).`
+      : `${summary}.`
+
+  return {
+    output: commandOutput ? `${measured}\n${commandOutput}` : measured,
+    toastDescription: measured
+  }
 }
 
 function Metric({
@@ -194,9 +422,11 @@ function SortIndicator({
 
 function StatusBadge({
   worktree,
+  decisionDetails,
   deleteState
 }: {
   worktree: WorkspaceSpaceWorktree
+  decisionDetails?: WorkspaceDecisionDetails
   deleteState?: WorkspaceSpaceDeleteState
 }): React.JSX.Element {
   if (deleteState?.isDeleting) {
@@ -222,9 +452,246 @@ function StatusBadge({
     )
   }
   if (worktree.isMainWorktree) {
-    return <Badge variant="outline">Main</Badge>
+    return <Badge variant="outline">Keep: main</Badge>
   }
-  return <Badge variant="secondary">Deletable</Badge>
+  if (decisionDetails?.isActive) {
+    return <Badge variant="outline">Keep: active</Badge>
+  }
+  if ((decisionDetails?.changedFileCount ?? 0) > 0) {
+    return <Badge variant="outline">Keep: changed files</Badge>
+  }
+  if (decisionDetails?.changedFileCount === null) {
+    return <Badge variant="outline">Keep: git not checked</Badge>
+  }
+  if ((decisionDetails?.dirtyEditorBufferCount ?? 0) > 0) {
+    return <Badge variant="outline">Keep: unsaved edits</Badge>
+  }
+  if (
+    (decisionDetails?.activeAgentCount ?? 0) > 0 ||
+    (decisionDetails?.liveTerminalCount ?? 0) > 0 ||
+    (decisionDetails?.browserTabCount ?? 0) > 0
+  ) {
+    return <Badge variant="outline">Keep: in use</Badge>
+  }
+  if (
+    decisionDetails?.reviewLabel ||
+    decisionDetails?.issueLabel ||
+    decisionDetails?.linearIssueLabel
+  ) {
+    return <Badge variant="outline">Keep: linked</Badge>
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    >
+      Can delete
+    </Badge>
+  )
+}
+
+function DecisionLine({
+  icon,
+  label,
+  value,
+  tone = 'default'
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  tone?: 'default' | 'warning'
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span
+        className={cn(
+          'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground [&>svg]:size-3',
+          tone === 'warning' && 'border-destructive/25 bg-destructive/8 text-destructive'
+        )}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-0.5 truncate text-xs" title={value}>
+          {value}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string {
+  if (details.activeAgentCount > 0 && details.completedAgentCount > 0) {
+    return `${pluralize(details.activeAgentCount, 'active agent')}, ${pluralize(
+      details.completedAgentCount,
+      'completed agent'
+    )}`
+  }
+  if (details.activeAgentCount > 0) {
+    return pluralize(details.activeAgentCount, 'active agent')
+  }
+  if (details.completedAgentCount > 0) {
+    return `${pluralize(details.completedAgentCount, 'completed agent')} retained`
+  }
+  return 'No tracked agents running'
+}
+
+function getTerminalDecisionLabel(details: WorkspaceDecisionDetails): string {
+  if (details.terminalTabCount === 0) {
+    return 'No terminal tabs'
+  }
+  return `${details.liveTerminalCount} live of ${pluralize(details.terminalTabCount, 'terminal tab')}`
+}
+
+function getGitDecisionLabel(
+  details: WorkspaceDecisionDetails,
+  gitRefreshState?: WorkspaceGitRefreshState
+): string {
+  if (details.changedFileCount === null) {
+    if (gitRefreshState?.error) {
+      return `Git status unavailable: ${gitRefreshState.error}`
+    }
+    return 'Git status has not loaded yet'
+  }
+  if (details.changedFileCount === 0) {
+    return 'No uncommitted files'
+  }
+  return pluralize(details.changedFileCount, 'changed file')
+}
+
+function getEditorDecisionLabel(details: WorkspaceDecisionDetails): string {
+  if (details.openEditorFileCount === 0) {
+    return 'No editor files open'
+  }
+  if (details.dirtyEditorBufferCount === 0) {
+    return `${pluralize(details.openEditorFileCount, 'editor file')} open`
+  }
+  return `${pluralize(details.dirtyEditorBufferCount, 'dirty editor buffer')} of ${pluralize(
+    details.openEditorFileCount,
+    'open file'
+  )}`
+}
+
+function getDeleteDecisionLabel(
+  worktree: WorkspaceSpaceWorktree,
+  details: WorkspaceDecisionDetails
+): string {
+  if (details.isActive) {
+    return 'This is the active workspace'
+  }
+  if (worktree.status !== 'ok') {
+    return worktree.error ?? getWorkspaceSpaceStatusLabel(worktree.status)
+  }
+  if (worktree.isMainWorktree) {
+    return 'Main worktree is protected'
+  }
+  if (!worktree.canDelete) {
+    return 'Workspace is protected'
+  }
+  return 'Can be deleted after review'
+}
+
+function WorkspaceDecisionHoverCard({
+  worktree,
+  details,
+  gitRefreshState,
+  onOpenWorkspace
+}: {
+  worktree: WorkspaceSpaceWorktree
+  details: WorkspaceDecisionDetails
+  gitRefreshState?: WorkspaceGitRefreshState
+  onOpenWorkspace: () => void
+}): React.JSX.Element {
+  const deleteDecision = getDeleteDecisionLabel(worktree, details)
+  const issueLabel =
+    [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') || 'No linked issue'
+  return (
+    <HoverCardContent
+      align="end"
+      side="bottom"
+      sideOffset={8}
+      collisionPadding={12}
+      className="max-h-[min(34rem,calc(100vh-1.5rem))] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto p-0 scrollbar-sleek"
+    >
+      <div className="border-b border-border/60 px-4 py-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">{worktree.displayName}</div>
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+              {worktree.repoDisplayName} · {formatBytes(worktree.sizeBytes)}
+            </div>
+          </div>
+          <StatusBadge worktree={worktree} decisionDetails={details} />
+        </div>
+      </div>
+
+      <div className="space-y-3 px-4 py-3">
+        <DecisionLine
+          icon={<Trash2 />}
+          label="Delete decision"
+          value={deleteDecision}
+          tone={worktree.canDelete && worktree.status === 'ok' ? 'default' : 'warning'}
+        />
+        <DecisionLine icon={<Bot />} label="Agents" value={getAgentDecisionLabel(details)} />
+        <DecisionLine
+          icon={<Terminal />}
+          label="Terminals"
+          value={getTerminalDecisionLabel(details)}
+        />
+        <DecisionLine
+          icon={<FileWarning />}
+          label="Git changes"
+          value={getGitDecisionLabel(details, gitRefreshState)}
+          tone={
+            (details.changedFileCount ?? 0) > 0 || gitRefreshState?.error ? 'warning' : 'default'
+          }
+        />
+        <DecisionLine
+          icon={<FileWarning />}
+          label="Editor buffers"
+          value={getEditorDecisionLabel(details)}
+          tone={details.dirtyEditorBufferCount > 0 ? 'warning' : 'default'}
+        />
+        <DecisionLine
+          icon={<GitBranch />}
+          label="Branch"
+          value={details.branchStatus ?? getWorkspaceSpaceBranchLabel(worktree)}
+        />
+        <DecisionLine
+          icon={<GitPullRequest />}
+          label="Review"
+          value={details.reviewLabel ?? 'No linked PR'}
+        />
+        <DecisionLine icon={<ExternalLink />} label="Issue" value={issueLabel} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
+        <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+          {details.browserTabCount > 0
+            ? `${pluralize(details.browserTabCount, 'browser tab')} open`
+            : worktree.path}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onOpenWorkspace()
+          }}
+          disabled={!details.canOpenWorkspace}
+          className="shrink-0 gap-1.5"
+        >
+          <ExternalLink className="size-3.5" />
+          Go to workspace
+        </Button>
+      </div>
+    </HoverCardContent>
+  )
 }
 
 function WorkspaceTreemap({
@@ -474,14 +941,157 @@ function BreakdownRow({
   )
 }
 
+function PackageManagerCacheActions({
+  target,
+  state,
+  onRun
+}: {
+  target: WorkspacePackageManagerCacheTarget
+  state?: PackageManagerCacheCleanupState
+  onRun: (
+    target: WorkspacePackageManagerCacheTarget,
+    action: WorkspacePackageManagerCacheCleanupAction
+  ) => void
+}): React.JSX.Element {
+  const runningActionId = state?.runningActionId ?? null
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {target.cleanupActions.map((action) => {
+        const isRunning = runningActionId === action.id
+        return (
+          <Button
+            key={action.id}
+            variant={action.safety === 'aggressive' ? 'destructive' : 'outline'}
+            size="sm"
+            onClick={() => onRun(target, action)}
+            disabled={!target.cliAvailable || runningActionId !== null}
+            className="gap-1.5"
+            title={action.description}
+          >
+            {isRunning ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : action.safety === 'safe' ? (
+              <ShieldCheck className="size-3.5" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            {isRunning ? 'Running' : action.label}
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PackageManagerCacheSection({
+  targets,
+  stateByTargetId,
+  onRun
+}: {
+  targets: WorkspacePackageManagerCacheTarget[]
+  stateByTargetId: Record<string, PackageManagerCacheCleanupState>
+  onRun: (
+    target: WorkspacePackageManagerCacheTarget,
+    action: WorkspacePackageManagerCacheCleanupAction
+  ) => void
+}): React.JSX.Element | null {
+  if (targets.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-background/30">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Package className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Package Manager Caches</div>
+            <div className="text-xs text-muted-foreground">
+              Detected from lockfiles. Cleanup runs only when you choose an action.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="divide-y divide-border/50">
+        {targets.map((target) => {
+          const state = stateByTargetId[target.id]
+          const lastOutput = state?.lastOutput?.trim() ?? ''
+          return (
+            <div key={target.id} className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0 space-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="font-medium">
+                    {getPackageManagerLabel(target.packageManager)}
+                  </span>
+                  <Badge variant={target.cliAvailable ? 'secondary' : 'outline'}>
+                    {target.cliAvailable ? 'CLI found' : 'CLI missing'}
+                  </Badge>
+                  {target.isRemote ? (
+                    <Badge variant="outline" className="gap-1">
+                      <Server className="size-3" />
+                      SSH
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {target.targetLabel} · {target.detectedWorktreeCount}{' '}
+                  {target.detectedWorktreeCount === 1 ? 'workspace' : 'workspaces'} ·{' '}
+                  {target.detectedLockfiles.join(', ')}
+                </div>
+                <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Terminal className="size-3 shrink-0" />
+                  <span className="truncate font-mono">
+                    {target.cleanupActions.map((action) => action.command).join(' · ')}
+                  </span>
+                </div>
+                {target.unavailableReason ? (
+                  <div className="text-xs text-muted-foreground">{target.unavailableReason}</div>
+                ) : null}
+                {state?.error ? (
+                  <div className="flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/8 px-2 py-1.5 text-xs text-destructive">
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    <span className="min-w-0 break-words">{state.error}</span>
+                  </div>
+                ) : lastOutput ? (
+                  <div className="truncate rounded-md border border-border/60 bg-muted/20 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                    {lastOutput}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex min-w-0 flex-col items-start gap-2 md:items-end">
+                <div className="flex flex-wrap justify-start gap-1 md:justify-end">
+                  {target.cleanupActions.map((action) => (
+                    <Badge
+                      key={action.id}
+                      variant={action.safety === 'safe' ? 'secondary' : 'outline'}
+                    >
+                      {getPackageManagerCacheSafetyCopy(action.safety)}
+                    </Badge>
+                  ))}
+                </div>
+                <PackageManagerCacheActions target={target} state={state} onRun={onRun} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function WorkspaceRow({
   worktree,
   maxSize,
   selected,
   inspected,
+  decisionDetails,
+  gitRefreshState,
   deleteState,
   onToggleSelected,
   onInspect,
+  onOpenWorkspace,
   onDelete,
   onForceDelete
 }: {
@@ -489,16 +1099,19 @@ function WorkspaceRow({
   maxSize: number
   selected: boolean
   inspected: boolean
+  decisionDetails: WorkspaceDecisionDetails
+  gitRefreshState?: WorkspaceGitRefreshState
   deleteState?: WorkspaceSpaceDeleteState
   onToggleSelected: () => void
   onInspect: () => void
+  onOpenWorkspace: () => void
   onDelete: () => void
   onForceDelete: () => void
 }): React.JSX.Element {
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteError = deleteState?.error ?? null
   const canForceDelete = deleteState?.canForceDelete ?? false
-  const canDelete = worktree.canDelete && worktree.status === 'ok' && !isDeleting
+  const canDelete = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
   const handleForceDelete = (event: React.MouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -518,7 +1131,7 @@ function WorkspaceRow({
         onInspect()
       }}
       className={cn(
-        'grid w-full cursor-pointer grid-cols-[1.75rem_minmax(0,1.35fr)_minmax(9rem,0.65fr)_8rem_6rem] items-center gap-3 border-b border-border/45 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'grid w-full cursor-pointer grid-cols-[1.75rem_minmax(0,1.25fr)_minmax(9rem,0.55fr)_8rem_9.5rem] items-center gap-3 border-b border-border/45 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         inspected && 'bg-accent/55',
         isDeleting && 'cursor-wait opacity-50 grayscale hover:bg-transparent'
       )}
@@ -582,7 +1195,27 @@ function WorkspaceRow({
       </div>
 
       <div className="flex justify-end">
-        <StatusBadge worktree={worktree} deleteState={deleteState} />
+        <HoverCard openDelay={250} closeDelay={120}>
+          <HoverCardTrigger asChild>
+            <span
+              className="inline-flex"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <StatusBadge
+                worktree={worktree}
+                decisionDetails={decisionDetails}
+                deleteState={deleteState}
+              />
+            </span>
+          </HoverCardTrigger>
+          <WorkspaceDecisionHoverCard
+            worktree={worktree}
+            details={decisionDetails}
+            gitRefreshState={gitRefreshState}
+            onOpenWorkspace={onOpenWorkspace}
+          />
+        </HoverCard>
       </div>
     </div>
   )
@@ -614,6 +1247,28 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const removeWorkspaceSpaceWorktrees = useAppStore((state) => state.removeWorkspaceSpaceWorktrees)
   const removeWorktree = useAppStore((state) => state.removeWorktree)
   const deleteStateByWorktreeId = useAppStore((state) => state.deleteStateByWorktreeId)
+  const worktreeMap = useAppStore((state) => getWorktreeMapFromState(state))
+  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
+  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
+  const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
+  const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
+  const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
+  const openFiles = useAppStore((state) => state.openFiles)
+  const editorDrafts = useAppStore((state) => state.editorDrafts)
+  const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
+  const gitStatusByWorktree = useAppStore((state) => state.gitStatusByWorktree)
+  const remoteStatusesByWorktree = useAppStore((state) => state.remoteStatusesByWorktree)
+  const hostedReviewCache = useAppStore((state) => state.hostedReviewCache)
+  const issueCache = useAppStore((state) => state.issueCache)
+  const linearIssueCache = useAppStore((state) => state.linearIssueCache)
+  const settings = useAppStore((state) => state.settings)
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const setGitStatus = useAppStore((state) => state.setGitStatus)
+  const updateWorktreeGitIdentity = useAppStore((state) => state.updateWorktreeGitIdentity)
+  const setUpstreamStatus = useAppStore((state) => state.setUpstreamStatus)
+  const fetchUpstreamStatus = useAppStore((state) => state.fetchUpstreamStatus)
   const [query, setQuery] = useState('')
   const [onlyDeletable, setOnlyDeletable] = useState(false)
   const [sortKey, setSortKey] = useState<WorkspaceSpaceSortKey>('size')
@@ -621,6 +1276,13 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [inspectedWorktreeId, setInspectedWorktreeId] = useState<string | null>(null)
   const [treemapZoomWorktreeId, setTreemapZoomWorktreeId] = useState<string | null>(null)
+  const [cacheCleanupStateByTargetId, setCacheCleanupStateByTargetId] = useState<
+    Record<string, PackageManagerCacheCleanupState>
+  >({})
+  const [gitRefreshStateByWorktreeId, setGitRefreshStateByWorktreeId] = useState<
+    Record<string, WorkspaceGitRefreshState>
+  >({})
+  const inFlightGitStatusRefreshes = useRef<Set<string>>(new Set())
 
   const refresh = useCallback((): void => {
     void refreshWorkspaceSpace().catch(() => {
@@ -633,9 +1295,136 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [cancelWorkspaceSpaceScan])
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
+  const packageManagerCaches = useMemo(
+    () => analysis?.packageManagerCaches ?? [],
+    [analysis?.packageManagerCaches]
+  )
+  const decisionDetailsByWorktreeId = useMemo(() => {
+    // Why: active-agent freshness is time-based. The epoch bumps when fresh
+    // hook entries cross the stale boundary so delete readiness recomputes.
+    void agentStatusEpoch
+    const details = new Map<string, WorkspaceDecisionDetails>()
+    const now = Date.now()
+    for (const worktree of sourceRows) {
+      details.set(
+        worktree.worktreeId,
+        getWorkspaceDecisionDetails(worktree, {
+          worktreeMap,
+          tabsByWorktree,
+          ptyIdsByTabId,
+          agentStatusByPaneKey,
+          migrationUnsupportedByPtyId,
+          runtimePaneTitlesByTabId,
+          retainedAgentsByPaneKey,
+          openFiles,
+          editorDrafts,
+          browserTabsByWorktree,
+          gitStatusByWorktree,
+          remoteStatusesByWorktree,
+          hostedReviewCache,
+          issueCache,
+          linearIssueCache,
+          settings,
+          activeWorktreeId,
+          now
+        })
+      )
+    }
+    return details
+  }, [
+    activeWorktreeId,
+    agentStatusEpoch,
+    agentStatusByPaneKey,
+    browserTabsByWorktree,
+    editorDrafts,
+    gitStatusByWorktree,
+    hostedReviewCache,
+    issueCache,
+    linearIssueCache,
+    openFiles,
+    ptyIdsByTabId,
+    remoteStatusesByWorktree,
+    retainedAgentsByPaneKey,
+    migrationUnsupportedByPtyId,
+    runtimePaneTitlesByTabId,
+    settings,
+    sourceRows,
+    tabsByWorktree,
+    worktreeMap
+  ])
   const isWorktreeDeleting = useCallback(
     (worktreeId: string): boolean => deleteStateByWorktreeId[worktreeId]?.isDeleting ?? false,
     [deleteStateByWorktreeId]
+  )
+  const refreshWorkspaceGitStatus = useCallback(
+    (worktree: WorkspaceSpaceWorktree): Promise<void> => {
+      const currentState = useAppStore.getState()
+      if (currentState.gitStatusByWorktree[worktree.worktreeId] !== undefined) {
+        return Promise.resolve()
+      }
+      if (inFlightGitStatusRefreshes.current.has(worktree.worktreeId)) {
+        return Promise.resolve()
+      }
+      inFlightGitStatusRefreshes.current.add(worktree.worktreeId)
+
+      setGitRefreshStateByWorktreeId((current) => ({
+        ...current,
+        [worktree.worktreeId]: { isRefreshing: true, error: null }
+      }))
+
+      return refreshGitStatusForWorktree({
+        settings,
+        worktreeId: worktree.worktreeId,
+        worktreePath: worktree.path,
+        connectionId:
+          currentState.repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? undefined,
+        deps: {
+          setGitStatus,
+          updateWorktreeGitIdentity,
+          setUpstreamStatus,
+          fetchUpstreamStatus
+        }
+      })
+        .then(() => {
+          if (useAppStore.getState().gitStatusByWorktree[worktree.worktreeId] === undefined) {
+            setGitStatus(worktree.worktreeId, {
+              conflictOperation: 'unknown',
+              entries: [],
+              ignoredPaths: []
+            } as GitStatusResult)
+          }
+          setGitRefreshStateByWorktreeId((current) => ({
+            ...current,
+            [worktree.worktreeId]: { isRefreshing: false, error: null }
+          }))
+        })
+        .catch((error: unknown) => {
+          setGitRefreshStateByWorktreeId((current) => ({
+            ...current,
+            [worktree.worktreeId]: {
+              isRefreshing: false,
+              error: error instanceof Error ? error.message : String(error)
+            }
+          }))
+        })
+        .finally(() => {
+          inFlightGitStatusRefreshes.current.delete(worktree.worktreeId)
+        })
+    },
+    [fetchUpstreamStatus, setGitStatus, setUpstreamStatus, settings, updateWorktreeGitIdentity]
+  )
+  const isWorktreeUnavailableForDelete = useCallback(
+    (worktreeId: string): boolean => {
+      if (isWorktreeDeleting(worktreeId)) {
+        return true
+      }
+      const worktree = sourceRows.find((row) => row.worktreeId === worktreeId)
+      return (
+        !worktree ||
+        !isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetailsByWorktreeId.get(worktreeId))
+      )
+    },
+    [decisionDetailsByWorktreeId, isWorktreeDeleting, sourceRows]
   )
 
   const rows = useMemo(
@@ -648,6 +1437,32 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     [onlyDeletable, query, sortDirection, sortKey, sourceRows]
   )
 
+  useEffect(() => {
+    const candidates = getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows)
+    if (candidates.length === 0) {
+      return
+    }
+
+    let cancelled = false
+    let nextIndex = 0
+    const runWorker = async (): Promise<void> => {
+      while (!cancelled) {
+        const worktree = candidates[nextIndex]
+        nextIndex += 1
+        if (!worktree) {
+          return
+        }
+        await refreshWorkspaceGitStatus(worktree)
+      }
+    }
+    const workerCount = Math.min(GIT_STATUS_REFRESH_CONCURRENCY, candidates.length)
+    void Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshWorkspaceGitStatus, sourceRows])
+
   const inspectedWorktree =
     rows.find((row) => row.worktreeId === inspectedWorktreeId) ??
     rows.find((row) => row.status === 'ok') ??
@@ -657,16 +1472,16 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     null
   const maxSize = Math.max(...rows.map((row) => row.sizeBytes), 0)
   const selectedDeletableIds = useMemo(
-    () => getSelectedDeletableWorkspaceIds(rows, selectedIds, isWorktreeDeleting),
-    [isWorktreeDeleting, rows, selectedIds]
+    () => getSelectedDeletableWorkspaceIds(rows, selectedIds, isWorktreeUnavailableForDelete),
+    [isWorktreeUnavailableForDelete, rows, selectedIds]
   )
   const selectedDeletableIdSet = useMemo(
     () => new Set(selectedDeletableIds),
     [selectedDeletableIds]
   )
   const visibleDeletableIds = useMemo(
-    () => getVisibleDeletableWorkspaceIds(rows, isWorktreeDeleting),
-    [isWorktreeDeleting, rows]
+    () => getVisibleDeletableWorkspaceIds(rows, isWorktreeUnavailableForDelete),
+    [isWorktreeUnavailableForDelete, rows]
   )
   const allVisibleSelected =
     visibleDeletableIds.length > 0 && visibleDeletableIds.every((id) => selectedIds.has(id))
@@ -823,6 +1638,69 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     deleteWorktrees(selectedDeletableIds)
   }
 
+  const runPackageManagerCacheCleanup = useCallback(
+    (
+      target: WorkspacePackageManagerCacheTarget,
+      action: WorkspacePackageManagerCacheCleanupAction
+    ): void => {
+      setCacheCleanupStateByTargetId((current) => ({
+        ...current,
+        [target.id]: {
+          runningActionId: action.id,
+          error: null,
+          lastOutput: current[target.id]?.lastOutput ?? null
+        }
+      }))
+      void window.api.workspaceSpace
+        .cleanupPackageManagerCache({
+          targetId: target.id,
+          actionId: action.id,
+          packageManager: target.packageManager,
+          connectionId: target.connectionId,
+          cwd: target.cwd
+        })
+        .then((result) => {
+          if (!result.ok) {
+            setCacheCleanupStateByTargetId((current) => ({
+              ...current,
+              [target.id]: {
+                runningActionId: null,
+                error: result.error,
+                lastOutput: current[target.id]?.lastOutput ?? null
+              }
+            }))
+            toast.error('Cache cleanup failed', { description: result.error })
+            return
+          }
+          const copy = getPackageManagerCleanupSuccessCopy(result)
+          setCacheCleanupStateByTargetId((current) => ({
+            ...current,
+            [target.id]: {
+              runningActionId: null,
+              error: null,
+              lastOutput: copy.output
+            }
+          }))
+          toast.success('Cache cleanup completed', {
+            description: copy.toastDescription
+          })
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          setCacheCleanupStateByTargetId((current) => ({
+            ...current,
+            [target.id]: {
+              runningActionId: null,
+              error: message,
+              lastOutput: current[target.id]?.lastOutput ?? null
+            }
+          }))
+          toast.error('Cache cleanup failed', { description: message })
+        })
+    },
+    []
+  )
+
   return (
     <div className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border border-border/65 bg-background/35 md:grid-cols-4 md:divide-x md:divide-border/60">
@@ -909,6 +1787,12 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           ))}
         </div>
       ) : null}
+
+      <PackageManagerCacheSection
+        targets={packageManagerCaches}
+        stateByTargetId={cacheCleanupStateByTargetId}
+        onRun={runPackageManagerCacheCleanup}
+      />
 
       {hasRows || isInitialScan ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]">
@@ -1013,7 +1897,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
       {hasRows || isInitialScan ? (
         <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/30">
           <div className="min-w-[46rem]">
-            <div className="grid grid-cols-[1.75rem_minmax(0,1.35fr)_minmax(9rem,0.65fr)_8rem_6rem] gap-3 border-b border-border/60 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="grid grid-cols-[1.75rem_minmax(0,1.25fr)_minmax(9rem,0.55fr)_8rem_9.5rem] gap-3 border-b border-border/60 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               <div className="flex items-center">
                 <CheckButton
                   checked={visibleSelectionState}
@@ -1071,9 +1955,34 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                     maxSize={maxSize}
                     selected={selectedIds.has(worktree.worktreeId)}
                     inspected={inspectedWorktree?.worktreeId === worktree.worktreeId}
+                    decisionDetails={
+                      decisionDetailsByWorktreeId.get(worktree.worktreeId) ??
+                      getWorkspaceDecisionDetails(worktree, {
+                        worktreeMap,
+                        tabsByWorktree,
+                        ptyIdsByTabId,
+                        agentStatusByPaneKey,
+                        migrationUnsupportedByPtyId,
+                        runtimePaneTitlesByTabId,
+                        retainedAgentsByPaneKey,
+                        openFiles,
+                        editorDrafts,
+                        browserTabsByWorktree,
+                        gitStatusByWorktree,
+                        remoteStatusesByWorktree,
+                        hostedReviewCache,
+                        issueCache,
+                        linearIssueCache,
+                        settings,
+                        activeWorktreeId,
+                        now: Date.now()
+                      })
+                    }
+                    gitRefreshState={gitRefreshStateByWorktreeId[worktree.worktreeId]}
                     deleteState={deleteStateByWorktreeId[worktree.worktreeId]}
                     onToggleSelected={() => toggleSelection(worktree.worktreeId)}
                     onInspect={() => setInspectedWorktreeId(worktree.worktreeId)}
+                    onOpenWorkspace={() => activateAndRevealWorktree(worktree.worktreeId)}
                     onDelete={() => deleteWorktrees([worktree.worktreeId])}
                     onForceDelete={() => forceDeleteWorktree(worktree)}
                   />

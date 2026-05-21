@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process'
+import { delimiter, join } from 'node:path'
+import { existsSync } from 'node:fs'
 
 /**
  * Full path to icacls.exe. Electron's main process may have a stripped PATH
@@ -20,6 +22,33 @@ export function getCmdExePath(): string {
 /** Whether a resolved command path points to a Windows batch script (.cmd/.bat). */
 export function isWindowsBatchScript(commandPath: string): boolean {
   return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
+}
+
+export function resolveWindowsCommand(
+  command: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  if (process.platform !== 'win32') {
+    return command
+  }
+  if (/[\\/]/.test(command) || /\.[a-z0-9]+$/i.test(command)) {
+    return command
+  }
+
+  const pathEnv = env.PATH ?? env.Path
+  if (!pathEnv) {
+    return command
+  }
+
+  for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
+    for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
+      const candidate = join(directory, name)
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+  return command
 }
 
 export const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'

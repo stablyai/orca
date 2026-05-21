@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import {
+  countWorkspaceSpaceActiveAgents,
   filterWorkspaceSpaceRows,
   getSelectedDeletableWorkspaceIds,
   getVisibleDeletableWorkspaceIds,
+  getWorkspaceSpaceGitStatusRefreshCandidates,
+  isWorkspaceSpaceRowReadyToDelete,
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree {
   return {
@@ -30,6 +34,35 @@ function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree
     topLevelItems: [],
     omittedTopLevelItemCount: 0,
     omittedTopLevelSizeBytes: 0,
+    ...overrides
+  }
+}
+
+function ready(
+  overrides: Partial<NonNullable<Parameters<typeof isWorkspaceSpaceRowReadyToDelete>[1]>> = {}
+) {
+  return {
+    isActive: false,
+    changedFileCount: 0,
+    dirtyEditorBufferCount: 0,
+    activeAgentCount: 0,
+    liveTerminalCount: 0,
+    browserTabCount: 0,
+    reviewLabel: null,
+    issueLabel: null,
+    linearIssueLabel: null,
+    ...overrides
+  }
+}
+
+function activeAgent(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+  return {
+    state: 'working',
+    prompt: '',
+    updatedAt: 1_000,
+    stateStartedAt: 1_000,
+    paneKey: 'tab-1:00000000-0000-4000-8000-000000000001',
+    stateHistory: [],
     ...overrides
   }
 }
@@ -89,5 +122,102 @@ describe('workspace space presentation helpers', () => {
     expect(
       getSelectedDeletableWorkspaceIds(rows, new Set(['idle', 'deleting']), isDeleting)
     ).toEqual(['idle'])
+  })
+
+  it('treats open browser tabs as active workspace usage for deletion readiness', () => {
+    const workspace = row({ worktreeId: 'with-browser', canDelete: true, status: 'ok' })
+
+    expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready())).toBe(true)
+    expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready({ browserTabCount: 1 }))).toBe(false)
+  })
+
+  it('counts hookless title-derived running agents as active workspace usage', () => {
+    const count = countWorkspaceSpaceActiveAgents({
+      worktreeId: 'wt',
+      tabs: [{ id: 'tab-1', title: 'Codex working' }],
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      now: 1_000
+    })
+
+    expect(count).toBe(1)
+  })
+
+  it('does not count title-derived agents when the terminal has no live pty', () => {
+    const count = countWorkspaceSpaceActiveAgents({
+      worktreeId: 'wt',
+      tabs: [{ id: 'tab-1', title: 'Codex working' }],
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: {},
+      now: 1_000
+    })
+
+    expect(count).toBe(0)
+  })
+
+  it('counts fresh explicit active agents and ignores stale active entries', () => {
+    expect(
+      countWorkspaceSpaceActiveAgents({
+        worktreeId: 'wt',
+        tabs: [{ id: 'tab-1', title: 'Terminal' }],
+        agentStatusByPaneKey: {
+          [activeAgent().paneKey]: activeAgent()
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimePaneTitlesByTabId: {},
+        ptyIdsByTabId: {},
+        now: 1_000
+      })
+    ).toBe(1)
+
+    expect(
+      countWorkspaceSpaceActiveAgents({
+        worktreeId: 'wt',
+        tabs: [{ id: 'tab-1', title: 'Terminal' }],
+        agentStatusByPaneKey: {
+          [activeAgent().paneKey]: activeAgent({ updatedAt: 1_000 })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimePaneTitlesByTabId: {},
+        ptyIdsByTabId: {},
+        now: 60 * 60 * 1_000
+      })
+    ).toBe(0)
+  })
+
+  it('counts migration-unsupported agent entries by worktree id', () => {
+    const count = countWorkspaceSpaceActiveAgents({
+      worktreeId: 'wt',
+      tabs: [],
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {
+        'pty-1': {
+          ptyId: 'pty-1',
+          worktreeId: 'wt',
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 1_000
+        }
+      },
+      runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: {},
+      now: 1_000
+    })
+
+    expect(count).toBe(1)
+  })
+
+  it('returns every refreshable git-status row without a first-page cap', () => {
+    const rows = Array.from({ length: 60 }, (_, index) =>
+      row({ worktreeId: `wt-${index}`, isMainWorktree: false, canDelete: true, status: 'ok' })
+    )
+
+    expect(
+      getWorkspaceSpaceGitStatusRefreshCandidates(rows).map((item) => item.worktreeId)
+    ).toEqual(rows.map((item) => item.worktreeId))
   })
 })

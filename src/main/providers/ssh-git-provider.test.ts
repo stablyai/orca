@@ -20,6 +20,15 @@ function createMockMux(): MockMultiplexer {
   }
 }
 
+async function waitForRequestCount(mock: ReturnType<typeof vi.fn>, count: number): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    if (mock.mock.calls.length >= count) {
+      return
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('SshGitProvider', () => {
   let mux: MockMultiplexer
   let provider: SshGitProvider
@@ -106,6 +115,33 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(commitResult)
   })
 
+  it('execNonInteractive delegates fixed binary commands to the relay', async () => {
+    const execResult = {
+      stdout: '10.0.0\n',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: 'pnpm',
+      args: ['--version'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 8000
+    })
+    expect(result).toEqual(execResult)
+  })
+
+  it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
+    await provider.cancelNonInteractiveExec('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+  })
+
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
     mux.request.mockImplementation(async (method, payload) => {
       expect(method).toBe('git.exec')
@@ -174,6 +210,151 @@ describe('SshGitProvider', () => {
       timeoutMs: 60_000
     })
     expect(result).toEqual(execResult)
+  })
+
+  it('serializes non-interactive relay execs for the same cwd', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeRequests.push(() =>
+            resolve({
+              stdout: '',
+              stderr: '',
+              exitCode: 0,
+              timedOut: false
+            })
+          )
+        })
+    )
+
+    const first = provider.execNonInteractive('pnpm', ['store', 'prune'], '/home/user/repo', 8000)
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    expect(mux.request).toHaveBeenCalledTimes(1)
+
+    completeRequests.shift()?.()
+    await first
+    await waitForRequestCount(mux.request, 2)
+
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    completeRequests.shift()?.()
+    await second
+  })
+
+  it('cancels a queued non-interactive exec without canceling the active relay child', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeRequests.push(() =>
+            resolve({
+              stdout: '',
+              stderr: '',
+              exitCode: 0,
+              timedOut: false
+            })
+          )
+        })
+    )
+
+    const first = provider.execNonInteractive('pnpm', ['store', 'prune'], '/home/user/repo', 8000)
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    await provider.cancelNonInteractiveExec('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(mux.request).not.toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+
+    completeRequests.shift()?.()
+    await first
+    const secondResult = await second
+
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(secondResult).toMatchObject({ canceled: true })
+  })
+
+  it('uses an exec abort signal to cancel the matching active relay child with queued work present', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation((method) => {
+      if (method === 'agent.cancelExec') {
+        return Promise.resolve({ canceled: true })
+      }
+      return new Promise((resolve) => {
+        completeRequests.push(() =>
+          resolve({
+            stdout: '',
+            stderr: '',
+            exitCode: 0,
+            timedOut: false
+          })
+        )
+      })
+    })
+
+    const controller = new AbortController()
+    const first = provider.execNonInteractive(
+      'pnpm',
+      ['store', 'prune'],
+      '/home/user/repo',
+      8000,
+      controller.signal
+    )
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    controller.abort()
+    await waitForRequestCount(mux.request, 2)
+
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.cancelExec', { cwd: '/home/user/repo' })
+
+    completeRequests.shift()?.()
+    await first
+    await waitForRequestCount(mux.request, 3)
+    expect(mux.request).toHaveBeenNthCalledWith(3, 'agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    completeRequests.shift()?.()
+    await second
   })
 
   it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {

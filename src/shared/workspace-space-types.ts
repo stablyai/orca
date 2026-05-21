@@ -51,6 +51,63 @@ export type WorkspaceSpaceRepoSummary = {
   error: string | null
 }
 
+export type WorkspacePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
+
+export type WorkspacePackageManagerCacheCleanupSafety = 'safe' | 'aggressive'
+
+export type WorkspacePackageManagerCacheCleanupAction = {
+  id: string
+  packageManager: WorkspacePackageManager
+  safety: WorkspacePackageManagerCacheCleanupSafety
+  binary: string
+  args: string[]
+  command: string
+  label: string
+  description: string
+}
+
+export type WorkspacePackageManagerCacheTargetWorktree = {
+  worktreeId: string
+  lockfiles: string[]
+}
+
+export type WorkspacePackageManagerCacheTarget = {
+  id: string
+  packageManager: WorkspacePackageManager
+  connectionId: string | null
+  isRemote: boolean
+  targetLabel: string
+  cwd: string
+  cachePath: string | null
+  detectedWorktreeCount: number
+  detectedWorktrees: WorkspacePackageManagerCacheTargetWorktree[]
+  detectedLockfiles: string[]
+  cliAvailable: boolean
+  unavailableReason: string | null
+  cleanupActions: WorkspacePackageManagerCacheCleanupAction[]
+}
+
+export type WorkspacePackageManagerCacheCleanupRequest = {
+  targetId: string
+  actionId: string
+  packageManager: WorkspacePackageManager
+  connectionId: string | null
+  cwd: string
+}
+
+export type WorkspacePackageManagerCacheCleanupResult =
+  | {
+      ok: true
+      action: WorkspacePackageManagerCacheCleanupAction
+      stdout: string
+      stderr: string
+      cachePath: string | null
+      cacheSizeBeforeBytes: number | null
+      cacheSizeAfterBytes: number | null
+      reclaimedBytes: number | null
+    }
+  | { ok: false; error: string }
+
 export type WorkspaceSpaceAnalysis = {
   scannedAt: number
   totalSizeBytes: number
@@ -58,6 +115,7 @@ export type WorkspaceSpaceAnalysis = {
   worktreeCount: number
   scannedWorktreeCount: number
   unavailableWorktreeCount: number
+  packageManagerCaches: WorkspacePackageManagerCacheTarget[]
   repos: WorkspaceSpaceRepoSummary[]
   worktrees: WorkspaceSpaceWorktree[]
 }

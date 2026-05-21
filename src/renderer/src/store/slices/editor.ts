@@ -2491,6 +2491,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // 'session' for Resolved locally) and for all Resolved locally lifecycle.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
+      const hadStatusEntry = Object.prototype.hasOwnProperty.call(s.gitStatusByWorktree, worktreeId)
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }
@@ -2549,7 +2550,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
 
       const nextOpenFiles = reconcileOpenFilesForStatus(s.openFiles, worktreeId, nextEntries)
-      const statusUnchanged = areGitStatusEntriesEqual(prevEntries, nextEntries)
+      const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
       const trackedUnchanged = areTrackedConflictMapsEqual(
         s.trackedConflictPathsByWorktree[worktreeId] ?? {},
         currentTracked

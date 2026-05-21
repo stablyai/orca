@@ -136,7 +136,7 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const bundleLayoutVersion = 'dock-title-app-filename-v2'
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v3'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -193,7 +193,9 @@ function prepareMacDevElectronApp() {
 
   rmSync(distDir, { recursive: true, force: true })
   mkdirSync(distDir, { recursive: true })
-  cpSync(sourceAppPath, appPath, { recursive: true })
+  // Why: Electron.framework uses relative symlinks for its bundle resources;
+  // resolving them to pnpm-store absolutes breaks Chromium's bundle lookup.
+  cpSync(sourceAppPath, appPath, { recursive: true, verbatimSymlinks: true })
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
   setPlistValue(plistPath, 'CFBundleName', title)
