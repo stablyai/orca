@@ -7,7 +7,7 @@ import {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
-import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 
 /**
@@ -141,7 +141,9 @@ export function getSetupConfig(
 ): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
-  const sourcePolicy = normalizeHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy)
+  const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(localSetup)
+  })
 
   if (sourcePolicy === 'local-only') {
     return localSetup ? { source: 'local', command: localSetup } : null

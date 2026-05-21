@@ -121,7 +121,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
 
   const repoSettings = page.locator(`[data-settings-section="repo-${repoId}"]`)
   await expect(repoSettings).toBeVisible({ timeout: 10_000 })
-  await expect(repoSettings.getByText('Local Settings Commands').first()).toBeVisible()
+  await expect(repoSettings.getByText('Setup Script').first()).toBeVisible()
   return repoSettings
 }
 
@@ -131,29 +131,19 @@ async function openImportedSetupSettingsFromToast(page: Page, repoId: string): P
   // Why: in hidden Electron CI windows, the Sonner action can be laid out just
   // outside Playwright's viewport even though the action is mounted and wired.
   await viewInSettings.evaluate((button) => (button as HTMLButtonElement).click())
-  const localCommands = page.locator(`[id="repo-${repoId}-local-commands"]`)
-  await expect(localCommands).toBeVisible({ timeout: 10_000 })
-  await expect(localCommands.getByText('Local Settings Commands').first()).toBeVisible()
-  return localCommands
+  const setupCommand = page.locator(`[id="repo-${repoId}-local-commands"]`)
+  await expect(setupCommand).toBeVisible({ timeout: 10_000 })
+  const repoSettings = page.locator(`[data-settings-section="repo-${repoId}"]`)
+  await expect(repoSettings.getByText('Setup Script').first()).toBeVisible()
+  return repoSettings
 }
 
-async function expectSettingsInputValue(container: Locator, value: string): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        container
-          .locator('input')
-          .evaluateAll(
-            (inputs, expectedValue) =>
-              inputs.some((input) => (input as HTMLInputElement).value === expectedValue),
-            value
-          ),
-      {
-        timeout: 10_000,
-        message: `Settings input value "${value}" was not visible`
-      }
-    )
-    .toBe(true)
+async function expectSettingsCommandValue(
+  container: Locator,
+  name: 'Setup Script' | 'Archive Script',
+  value: string
+): Promise<void> {
+  await expect(container.getByRole('textbox', { name })).toHaveValue(value, { timeout: 10_000 })
 }
 
 test.describe('Setup script import prompt', () => {
@@ -178,10 +168,16 @@ test.describe('Setup script import prompt', () => {
     ).toBeVisible()
 
     const localCommands = await openImportedSetupSettingsFromToast(orcaPage, repoId)
-    await expectSettingsInputValue(localCommands, 'corepack enable')
-    await expectSettingsInputValue(localCommands, 'bun install')
-    await expectSettingsInputValue(localCommands, 'bun run db:migrate')
-    await expectSettingsInputValue(localCommands, 'docker compose down --remove-orphans')
+    await expectSettingsCommandValue(
+      localCommands,
+      'Setup Script',
+      'corepack enable\nbun install\nbun run db:migrate'
+    )
+    await expectSettingsCommandValue(
+      localCommands,
+      'Archive Script',
+      'docker compose down --remove-orphans'
+    )
   })
 
   test('imports cmux setup commands through the prompt UI', async ({ orcaPage }, testInfo) => {
@@ -197,7 +193,7 @@ test.describe('Setup script import prompt', () => {
     await expect(orcaPage.getByText('Setup script imported')).toBeVisible()
 
     const repoSettings = await openRepoSettings(orcaPage, repoId)
-    await expectSettingsInputValue(repoSettings, './scripts/setup.sh')
-    await expect(repoSettings.getByText('No local archive commands configured.')).toBeVisible()
+    await expectSettingsCommandValue(repoSettings, 'Setup Script', './scripts/setup.sh')
+    await expectSettingsCommandValue(repoSettings, 'Archive Script', '')
   })
 })

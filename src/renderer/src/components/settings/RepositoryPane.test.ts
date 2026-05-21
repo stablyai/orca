@@ -16,10 +16,12 @@ describe('RepositoryPane search entries', () => {
   it('keeps renamed hook sections reachable through settings search', () => {
     const entries = getRepositoryPaneSearchEntries(repo)
 
+    expect(matchesSettingsSearch('setup script', entries)).toBe(true)
+    expect(matchesSettingsSearch('archive script', entries)).toBe(true)
     expect(matchesSettingsSearch('setup command', entries)).toBe(true)
     expect(matchesSettingsSearch('archive command', entries)).toBe(true)
     expect(matchesSettingsSearch('advanced', entries)).toBe(true)
     expect(matchesSettingsSearch('command source', entries)).toBe(true)
-    expect(matchesSettingsSearch('local settings commands', entries)).toBe(true)
+    expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
   })
 })

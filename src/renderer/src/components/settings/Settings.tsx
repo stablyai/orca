@@ -1313,7 +1313,7 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       key={repo.id}
                       id={repoSectionId}
-                      title={repo.displayName}
+                      title={`Repo Settings > ${repo.displayName}`}
                       description={repo.path}
                       searchEntries={getRepositoryPaneSearchEntries(repo)}
                     >
@@ -1322,6 +1322,7 @@ function Settings(): React.JSX.Element {
                           repo={repo}
                           yamlHooks={repoHooksState?.hooks ?? null}
                           hasHooksFile={repoHooksState?.hasHooks ?? false}
+                          hooksInspectionReady={Boolean(repoHooksState)}
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                           updateRepo={updateRepo}
                           removeRepo={removeRepo}

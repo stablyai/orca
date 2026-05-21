@@ -550,9 +550,9 @@ async function readRemoteEffectiveHooks(
   try {
     const result = await fsProvider.readFile(joinWorktreeRelativePath(hooksRootPath, 'orca.yaml'))
     const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
-    return getEffectiveHooksFromConfig(repo, yamlHooks, true)
+    return getEffectiveHooksFromConfig(repo, yamlHooks)
   } catch {
-    return getEffectiveHooksFromConfig(repo, null, false)
+    return getEffectiveHooksFromConfig(repo, null)
   }
 }
 

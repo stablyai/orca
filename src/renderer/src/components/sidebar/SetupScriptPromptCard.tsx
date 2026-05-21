@@ -14,7 +14,7 @@ import {
   type HookCheckResult
 } from '@/runtime/runtime-hooks-client'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
-import { normalizeHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, RepoHookSettings } from '../../../../shared/types'
 import type { SetupScriptImportCandidate } from '../../../../shared/setup-script-imports'
@@ -34,7 +34,9 @@ function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boo
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
   const sharedSetup = hooksResult.hooks?.scripts?.setup?.trim()
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
-  const sourcePolicy = normalizeHookCommandSourcePolicy(rawPolicy)
+  const sourcePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
+    hasLocalScript: Boolean(localSetup)
+  })
 
   if (sourcePolicy === 'local-only') {
     return Boolean(localSetup)
@@ -42,12 +44,6 @@ function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boo
 
   if (sourcePolicy === 'run-both') {
     return Boolean(sharedSetup || localSetup)
-  }
-
-  // Why: local setup commands saved before commandSourcePolicy existed still
-  // run when there is no tracked hook file; the prompt should respect that.
-  if (rawPolicy === undefined && !hooksResult.hasHooks) {
-    return Boolean(localSetup)
   }
 
   return Boolean(sharedSetup)

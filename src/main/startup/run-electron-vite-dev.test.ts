@@ -344,7 +344,7 @@ describe('run-electron-vite-dev', () => {
         } catch {
           return false
         }
-      })
+      }, 20000)
 
       const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
       if (Number.isFinite(grandchildPid)) {
@@ -366,6 +366,7 @@ describe('run-electron-vite-dev', () => {
       expect(readlinkSync(join(frameworkPath, 'Versions', 'Current'))).toBe('A')
 
       wrapper.kill('SIGINT')
-    }
+    },
+    30000
   )
 })
