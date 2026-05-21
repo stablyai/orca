@@ -351,7 +351,13 @@ export type RuntimeTerminalClose = {
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
-export type RuntimeTerminalWaitBlockedReason = 'codex-update-prompt' | 'codex-trust-workspace'
+export type RuntimeTerminalWaitBlockedReason =
+  | 'codex-update-prompt'
+  | 'codex-trust-workspace'
+  | 'codex-cwd-prompt'
+  | 'codex-model-migration-prompt'
+  | 'codex-hooks-review-prompt'
+  | 'codex-interactive-prompt'
 
 export type RuntimeTerminalWait = {
   handle: string

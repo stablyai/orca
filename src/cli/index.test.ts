@@ -1381,6 +1381,47 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValueOnce({
+      id: 'req_terminal_wait',
+      ok: true,
+      result: {
+        wait: {
+          handle: 'term_worker',
+          condition: 'tui-idle',
+          satisfied: false,
+          status: 'running',
+          exitCode: null,
+          blockedReason: 'codex-cwd-prompt'
+        }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['terminal', 'wait', '--terminal', 'term_worker', '--for', 'tui-idle'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.wait',
+      {
+        terminal: 'term_worker',
+        for: 'tui-idle',
+        timeoutMs: undefined
+      },
+      {
+        timeoutMs: 300000
+      }
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('blockedReason: codex-cwd-prompt')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('does not force remote Codex terminal creates through a local renderer path', async () => {
     queueFixtures(
       callMock,

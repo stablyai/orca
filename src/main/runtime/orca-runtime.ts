@@ -6951,7 +6951,17 @@ export class OrcaRuntimeService {
     // when no selector was provided. The new background-spawn branch hard-
     // requires a resolvable selector, so route the no-selector case through
     // the renderer IPC path to preserve that behavior.
-    if (opts.focus !== true && opts.rendererBacked !== true && worktreeSelector) {
+    const rendererWindow =
+      opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    const shouldCreateInBackground =
+      worktreeSelector !== undefined &&
+      ((opts.focus !== true && opts.rendererBacked !== true) ||
+        // Why: `orca serve` exposes the local runtime without a renderer
+        // window. Renderer-backed Codex terminals are preferred for the app,
+        // but headless CLI users still need a usable terminal handle.
+        (opts.rendererBacked === true && rendererWindow === null))
+
+    if (shouldCreateInBackground) {
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
@@ -7021,7 +7031,7 @@ export class OrcaRuntimeService {
     }
 
     this.assertGraphReady()
-    const win = this.getAuthoritativeWindow()
+    const win = rendererWindow ?? this.getAuthoritativeWindow()
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
     // undefined so the renderer uses its current active worktree.
     const worktreeId = worktreeSelector
@@ -10180,34 +10190,99 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
 
 function isCodexReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  if (!normalized.includes('openai codex')) {
+  const readyIndex = findCodexReadyPromptIndex(normalized)
+  if (readyIndex === null) {
     return false
   }
-  if (detectTerminalWaitBlockedReason(preview) !== null) {
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
     return false
   }
-  return (
-    normalized.includes('model:') &&
-    normalized.includes('directory:') &&
-    normalized.includes('permissions:')
-  )
+  return true
 }
 
 function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
-  if (normalized.includes('update available') && normalized.includes('press enter to continue')) {
-    return 'codex-update-prompt'
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  if (blockedSignal === null) {
+    return null
   }
+  const readyIndex = findCodexReadyPromptIndex(normalized)
+  // Why: retained terminal tails can include stale startup modals. If Codex's
+  // ready header appears after that modal, the latest signal is ready.
+  if (readyIndex !== null && readyIndex > blockedSignal.index) {
+    return null
+  }
+  return blockedSignal.reason
+}
+
+function findCodexReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('openai codex')
+  if (headerIndex === -1) {
+    return null
+  }
+  const readySegment = normalized.slice(headerIndex)
+  // Why: current Codex prints permissions only in YOLO mode. The stable ready
+  // header is OpenAI Codex + model + directory.
+  return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
+}
+
+function findTerminalWaitBlockedSignal(
+  normalized: string
+): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
+  const updateIndex = normalized.lastIndexOf('update available')
+  if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
+    return { reason: 'codex-update-prompt', index: updateIndex }
+  }
+  const cwdIndex = normalized.lastIndexOf('choose working directory to')
+  if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
+    return { reason: 'codex-cwd-prompt', index: cwdIndex }
+  }
+  const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
   if (
-    (normalized.includes('do you trust') ||
-      normalized.includes('trust this') ||
-      normalized.includes('trusted workspace')) &&
-    (normalized.includes('workspace') ||
-      normalized.includes('folder') ||
-      normalized.includes('directory') ||
-      normalized.includes('repo'))
+    modelMigrationIndex !== -1 &&
+    normalized.includes('press enter to continue', modelMigrationIndex)
   ) {
-    return 'codex-trust-workspace'
+    return { reason: 'codex-model-migration-prompt', index: modelMigrationIndex }
+  }
+  const hooksIndex = normalized.lastIndexOf('hooks need review')
+  if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
+    return { reason: 'codex-hooks-review-prompt', index: hooksIndex }
+  }
+  const trustIndex = Math.max(
+    normalized.lastIndexOf('do you trust'),
+    normalized.lastIndexOf('trust this'),
+    normalized.lastIndexOf('trusted workspace')
+  )
+  const trustSegment = trustIndex === -1 ? '' : normalized.slice(trustIndex)
+  if (
+    trustIndex !== -1 &&
+    (trustSegment.includes('workspace') ||
+      trustSegment.includes('folder') ||
+      trustSegment.includes('directory') ||
+      trustSegment.includes('repo'))
+  ) {
+    return { reason: 'codex-trust-workspace', index: trustIndex }
+  }
+  const interactivePromptIndex = Math.max(
+    normalized.lastIndexOf('press enter to confirm'),
+    normalized.lastIndexOf('press enter to continue'),
+    normalized.lastIndexOf('press enter to view'),
+    normalized.lastIndexOf('press enter to insert'),
+    normalized.lastIndexOf('press t to trust')
+  )
+  const interactivePromptContext =
+    interactivePromptIndex === -1
+      ? ''
+      : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
+  const hasCodexInteractiveContext =
+    interactivePromptContext.includes('codex') ||
+    interactivePromptContext.includes('permission') ||
+    interactivePromptContext.includes('sandbox') ||
+    interactivePromptContext.includes('trust') ||
+    interactivePromptContext.includes('hook')
+  if (interactivePromptIndex !== -1 && hasCodexInteractiveContext) {
+    return { reason: 'codex-interactive-prompt', index: interactivePromptIndex }
   }
   return null
 }

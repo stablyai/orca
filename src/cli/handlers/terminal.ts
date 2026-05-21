@@ -102,6 +102,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, formatTerminalWait)
+    if (result.result.wait.satisfied === false) {
+      // Why: callers commonly chain `terminal wait && terminal send`; a
+      // structured blocked result is still an unsatisfied wait condition.
+      process.exitCode = 1
+    }
   },
   'terminal stop': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ stopped: number }>('terminal.stop', {
