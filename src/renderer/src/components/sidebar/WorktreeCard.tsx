@@ -11,8 +11,10 @@ import {
   ChevronDown,
   GitMerge,
   LoaderCircle,
+  Moon,
   Server,
   ServerOff,
+  Trash2,
   Workflow
 } from 'lucide-react'
 import CacheTimer from './CacheTimer'
@@ -42,6 +44,10 @@ import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCa
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
+import { runWorktreeDelete } from './delete-worktree-flow'
+import { runSleepWorktree } from './sleep-worktree-flow'
+import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -154,6 +160,26 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
+  const [isMacOptionPressed, setIsMacOptionPressed] = useState(false)
+
+  useEffect(() => {
+    const isMac = navigator.userAgent.includes('Mac')
+    if (!isMac) {
+      return
+    }
+    const handleKeyChange = (event: KeyboardEvent): void => {
+      setIsMacOptionPressed(event.altKey)
+    }
+    const handleWindowBlur = (): void => setIsMacOptionPressed(false)
+    window.addEventListener('keydown', handleKeyChange, true)
+    window.addEventListener('keyup', handleKeyChange, true)
+    window.addEventListener('blur', handleWindowBlur)
+    return () => {
+      window.removeEventListener('keydown', handleKeyChange, true)
+      window.removeEventListener('keyup', handleKeyChange, true)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [])
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -232,6 +258,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
         }
     : null
   const isDeleting = deleteState?.isDeleting ?? false
+  const hasActiveActivity = useAppStore((s) =>
+    hasActiveWorkspaceActivity(
+      worktree.id,
+      s.tabsByWorktree,
+      s.ptyIdsByTabId,
+      s.browserTabsByWorktree
+    )
+  )
 
   const showPR = cardProps.includes('pr')
   const showIssue = cardProps.includes('issue')
@@ -367,6 +401,30 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree.id, worktree.isUnread, updateWorktreeMeta]
   )
+  const quickActionKind = getWorkspaceQuickActionKind({
+    hasActiveActivity,
+    isDeletable: !worktree.isMainWorktree && !isFolder,
+    isInactive: !hasActiveActivity,
+    isMacOptionPressed
+  })
+  const handleWorkspaceQuickAction = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (quickActionKind === 'sleep') {
+        void runSleepWorktree(worktree.id)
+      } else if (quickActionKind === 'delete') {
+        runWorktreeDelete(worktree.id)
+      }
+    },
+    [quickActionKind, worktree.id]
+  )
+  const quickActionLabel =
+    quickActionKind === 'sleep'
+      ? 'Sleep workspace'
+      : quickActionKind === 'delete'
+        ? 'Delete workspace'
+        : ''
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
   const childWorkspaceLabel = `${lineageChildCount} child ${
@@ -546,7 +604,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         {/* Header row: Title */}
         <div className="flex items-center justify-between min-w-0 gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {repo?.connectionId && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -625,6 +683,38 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </Tooltip>
             )}
           </div>
+
+          {quickActionKind && !isDeleting && (
+            <div className="ml-auto flex shrink-0 items-center justify-center pr-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-workspace-board-preserve-open=""
+                    onPointerDown={stopQuickActionPointerPropagation}
+                    onClick={handleWorkspaceQuickAction}
+                    className={cn(
+                      'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
+                      'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+                      quickActionKind === 'delete'
+                        ? 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
+                        : 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
+                    )}
+                    aria-label={quickActionLabel}
+                  >
+                    {quickActionKind === 'delete' ? (
+                      <Trash2 className="size-3.5" />
+                    ) : (
+                      <Moon className="size-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {quickActionKind === 'delete' ? 'Delete workspace' : 'Sleep workspace'}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
         </div>
 
         {/* Why: the left metadata lane clips before the right metadata badges,
