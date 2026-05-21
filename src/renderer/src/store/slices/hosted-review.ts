@@ -6,19 +6,18 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
-import type { GlobalSettings } from '../../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
+import {
+  getHostedReviewCacheKey,
+  linkedReviewHintKey,
+  type LinkedReviewHints
+} from './hosted-review-cache-identity'
+
+export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
 type CacheEntry<T> = { data: T | null; fetchedAt: number; linkedReviewHintKey?: string }
 type FetchOptions = { force?: boolean; repoId?: string; staleWhileRevalidate?: boolean }
-type LinkedReviewHints = {
-  linkedGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-}
 
 const CACHE_TTL_MS = 60_000
 
@@ -37,22 +36,6 @@ function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
 
-// Why: a branch-keyed lookup can describe a different PR than the persisted
-// linked review number. Track that distinction without changing the cache key.
-function linkedReviewHintKey(options?: LinkedReviewHints): string {
-  const hints = [
-    ['github', options?.linkedGitHubPR ?? null],
-    ['gitlab', options?.linkedGitLabMR ?? null],
-    ['bitbucket', options?.linkedBitbucketPR ?? null],
-    ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
-    ['gitea', options?.linkedGiteaPR ?? null]
-  ] as const
-  return hints
-    .filter(([, number]) => number !== null)
-    .map(([provider, number]) => `${provider}:${number}`)
-    .join('|')
-}
-
 function shouldRefetchForLinkedHint(
   cached: CacheEntry<HostedReviewInfo> | undefined,
   hintKey: string
@@ -62,17 +45,6 @@ function shouldRefetchForLinkedHint(
 
 function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
   return nextHintKey === '' || inflightHintKey === nextHintKey
-}
-
-export function getHostedReviewCacheKey(
-  repoPath: string,
-  branch: string,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
-  repoId?: string | null
-): string {
-  const target = getActiveRuntimeTarget(settings)
-  const scope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-  return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 
 export type HostedReviewSlice = {
@@ -87,13 +59,7 @@ export type HostedReviewSlice = {
   fetchHostedReviewForBranch: (
     repoPath: string,
     branch: string,
-    options?: FetchOptions & {
-      linkedGitHubPR?: number | null
-      linkedGitLabMR?: number | null
-      linkedBitbucketPR?: number | null
-      linkedAzureDevOpsPR?: number | null
-      linkedGiteaPR?: number | null
-    }
+    options?: FetchOptions & LinkedReviewHints
   ) => Promise<HostedReviewInfo | null>
 }
 

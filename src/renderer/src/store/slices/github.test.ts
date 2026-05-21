@@ -11,6 +11,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -781,6 +782,108 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       status: 'error',
       reason: 'manual',
       message: 'network unavailable'
+    })
+  })
+
+  it('updates hosted review cache from GitHub PR refresh events', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/test'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: {
+            provider: 'github',
+            number: 12,
+            title: 'Old PR status',
+            state: 'open',
+            url: 'https://github.com/acme/orca/pull/12',
+            status: 'pending',
+            updatedAt: '2026-03-28T00:00:00Z',
+            mergeable: 'UNKNOWN'
+          },
+          fetchedAt: 1,
+          linkedReviewHintKey: 'github:12'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: {
+        kind: 'found',
+        pr: makePR({
+          number: 12,
+          title: 'Fresh PR status',
+          checksStatus: 'success',
+          mergeable: 'MERGEABLE'
+        }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toMatchObject({
+      data: expect.objectContaining({ title: 'Fresh PR status', checksStatus: 'success' }),
+      fetchedAt: 2
+    })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
+      data: expect.objectContaining({
+        provider: 'github',
+        title: 'Fresh PR status',
+        status: 'success',
+        mergeable: 'MERGEABLE'
+      }),
+      fetchedAt: 2,
+      linkedReviewHintKey: 'github:12'
+    })
+  })
+
+  it('does not clear non-GitHub hosted review cache on a GitHub no-PR refresh', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/gitlab'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const gitlabReview = {
+      provider: 'gitlab' as const,
+      number: 5,
+      title: 'GitLab MR',
+      state: 'open' as const,
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      status: 'success' as const,
+      updatedAt: '2026-03-28T00:00:00Z',
+      mergeable: 'MERGEABLE' as const
+    }
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: gitlabReview,
+          fetchedAt: 1,
+          linkedReviewHintKey: 'gitlab:5'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+      data: gitlabReview,
+      fetchedAt: 1,
+      linkedReviewHintKey: 'gitlab:5'
     })
   })
 })

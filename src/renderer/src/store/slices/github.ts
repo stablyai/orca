@@ -30,6 +30,8 @@ import type {
 import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -504,6 +506,12 @@ function buildPRRefreshCandidate(
     cachedPRState: state.prCache[cacheKey]?.data?.state ?? null,
     cachedChecksStatus: state.prCache[cacheKey]?.data?.checksStatus ?? null
   }
+}
+
+function shouldClearHostedReviewForNoGitHubPR(
+  entry: AppState['hostedReviewCache'][string] | undefined
+): boolean {
+  return entry === undefined || entry.data === null || entry.data.provider === 'github'
 }
 
 /**
@@ -1793,6 +1801,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const nextSequences = { ...s.prRefreshSequences }
       const nextStates = { ...s.prRefreshStates }
       let nextPRCache = s.prCache
+      let nextHostedReviewCache = s.hostedReviewCache ?? {}
       let changed = false
 
       for (const alias of event.aliases) {
@@ -1856,6 +1865,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             ...nextPRCache,
             [alias.cacheKey]: { data, fetchedAt: event.outcome.fetchedAt }
           }
+          const hostedReviewCacheKey = getHostedReviewCacheKey(
+            alias.repoPath,
+            alias.branch,
+            s.settings,
+            alias.repoId
+          )
+          const hostedReviewEntry = nextHostedReviewCache[hostedReviewCacheKey]
+          if (data || shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
+            nextHostedReviewCache = {
+              ...nextHostedReviewCache,
+              [hostedReviewCacheKey]: {
+                data: data ? hostedReviewInfoFromGitHubPRInfo(data) : null,
+                fetchedAt: event.outcome.fetchedAt,
+                linkedReviewHintKey: data
+                  ? linkedReviewHintKey({ linkedGitHubPR: data.number })
+                  : hostedReviewEntry?.linkedReviewHintKey
+              }
+            }
+          }
           continue
         }
 
@@ -1873,7 +1901,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         ? {
             prRefreshSequences: nextSequences,
             prRefreshStates: nextStates,
-            prCache: nextPRCache
+            prCache: nextPRCache,
+            hostedReviewCache: nextHostedReviewCache
           }
         : {}
     })

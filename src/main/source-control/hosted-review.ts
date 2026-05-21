@@ -1,5 +1,6 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import type { MRInfo, PRInfo } from '../../shared/types'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranch,
@@ -22,18 +23,7 @@ import { getPRForBranch, getRepoSlug } from '../github/client'
 import { getMergeRequest, getMergeRequestForBranch, getProjectSlug } from '../gitlab/client'
 
 function mapGitHubReview(pr: PRInfo): HostedReviewInfo {
-  return {
-    provider: 'github',
-    number: pr.number,
-    title: pr.title,
-    state: pr.state,
-    url: pr.url,
-    status: pr.checksStatus,
-    updatedAt: pr.updatedAt,
-    mergeable: pr.mergeable,
-    ...(pr.headSha ? { headSha: pr.headSha } : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
-  }
+  return hostedReviewInfoFromGitHubPRInfo(pr)
 }
 
 function mapGitLabReviewState(state: MRInfo['state']): HostedReviewInfo['state'] {
