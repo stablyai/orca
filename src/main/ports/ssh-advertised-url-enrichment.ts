@@ -1,0 +1,73 @@
+// Maps the local AdvertisedUrlWatcher cache onto SSH port shapes.
+//
+// SSH PTY data already flows through `runtime.onPtyData`, so the watcher
+// captures URLs from remote dev servers running inside SSH-hosted terminals.
+// What the SSH side lacks is the link between a connection's port scan and
+// the worktreeIds the watcher keyed those URLs under.
+
+import type { DetectedPort, PortForwardEntry } from '../../shared/ssh-types'
+import type { Store } from '../persistence'
+import { splitWorktreeId } from '../../shared/worktree-id'
+import {
+  advertisedUrlWatcher,
+  type AdvertisedUrl,
+  type AdvertisedUrlWatcher
+} from './advertised-url-watcher'
+
+/** Collect every worktreeId attached to a given SSH connection. The watcher
+ *  is keyed per worktree, but SSH port scans are per connection, so callers
+ *  need the union to find the best advertised URL across the connection. */
+export function getWorktreeIdsForConnection(
+  store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+  connectionId: string
+): string[] {
+  const matchingRepoIds = new Set(
+    store
+      .getRepos()
+      .filter((repo) => repo.connectionId === connectionId)
+      .map((repo) => repo.id)
+  )
+  if (matchingRepoIds.size === 0) {
+    return []
+  }
+  return Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) => {
+    const parsed = splitWorktreeId(worktreeId)
+    return parsed ? matchingRepoIds.has(parsed.repoId) : false
+  })
+}
+
+type EnrichmentTarget = { advertisedUrl?: string; advertisedProtocol?: 'http' | 'https' }
+
+function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: AdvertisedUrl): T {
+  // Spread to keep callers' inputs immutable — important for the broadcast
+  // path which sends the same array to multiple subscribers.
+  return { ...target, advertisedUrl: found.origin, advertisedProtocol: found.protocol }
+}
+
+export function enrichSshDetectedPorts(
+  ports: readonly DetectedPort[],
+  worktreeIds: readonly string[],
+  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest'> = advertisedUrlWatcher
+): DetectedPort[] {
+  if (worktreeIds.length === 0 || ports.length === 0) {
+    return [...ports]
+  }
+  return ports.map((port) => {
+    const found = watcher.lookupBest(worktreeIds, port.port)
+    return found ? applyAdvertisedUrl(port, found) : port
+  })
+}
+
+export function enrichSshForwardEntries(
+  entries: readonly PortForwardEntry[],
+  worktreeIds: readonly string[],
+  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest'> = advertisedUrlWatcher
+): PortForwardEntry[] {
+  if (worktreeIds.length === 0 || entries.length === 0) {
+    return [...entries]
+  }
+  return entries.map((entry) => {
+    const found = watcher.lookupBest(worktreeIds, entry.remotePort)
+    return found ? applyAdvertisedUrl(entry, found) : entry
+  })
+}

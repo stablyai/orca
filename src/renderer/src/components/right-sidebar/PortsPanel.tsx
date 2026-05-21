@@ -128,6 +128,32 @@ function normalizeHost(host: string | undefined): string {
   return host
 }
 
+/** Extract a custom DNS hostname from an advertised URL for reuse with a
+ *  local SSH forward port. Returns null for loopback and IP literals — those
+ *  printed-from-remote values don't help the local browser, and callers
+ *  should fall back to 127.0.0.1 + local port. A DNS hostname only resolves
+ *  locally if the user has /etc/hosts (or equivalent) mapping; we trust that
+ *  rather than probing DNS here. */
+function customHostFromAdvertised(advertisedUrl: string | undefined): string | null {
+  if (!advertisedUrl) {
+    return null
+  }
+  try {
+    const url = new URL(advertisedUrl)
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    if (LOOPBACK_HOSTS.has(hostname)) {
+      return null
+    }
+    // IPv4 or IPv6 literals — not portable to the local box.
+    if (/^[0-9.]+$/.test(hostname) || hostname.includes(':')) {
+      return null
+    }
+    return url.hostname
+  } catch {
+    return null
+  }
+}
+
 type PortForwardDialogState =
   | { mode: 'closed' }
   | {
@@ -694,10 +720,19 @@ function SshPortsPanel(): React.JSX.Element {
         toast.error('No workspace selected for the browser.')
         return
       }
-      // Why: the protocol hint comes from the remote port (the actual service),
-      // not the local port which may be an arbitrary remap.
-      const protocol = HTTPS_PORTS.has(entry.remotePort) ? 'https' : 'http'
-      createBrowserTab(activeWorktree.id, `${protocol}://127.0.0.1:${entry.localPort}`, {
+      // Why: prefer the dev server's printed protocol over the port-number
+      // heuristic — Vite on 3001 with HTTPS is a real scenario we cannot
+      // detect from `entry.remotePort` alone.
+      const protocol =
+        entry.advertisedProtocol ?? (HTTPS_PORTS.has(entry.remotePort) ? 'https' : 'http')
+      // Why: when the dev server advertised a custom hostname (e.g.
+      // `local.getmontecarlo.com`), reuse that host but with the local
+      // forward port. The user is expected to have a /etc/hosts mapping
+      // (or equivalent DNS) for the custom name to resolve locally; if
+      // they don't, no URL Orca picks here will work for a non-loopback
+      // custom host.
+      const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
+      createBrowserTab(activeWorktree.id, `${protocol}://${host}:${entry.localPort}`, {
         activate: true
       })
     },
@@ -903,6 +938,8 @@ function ForwardedPortRow({
     [handleRemove]
   )
 
+  const advertisedHost = customHostFromAdvertised(entry.advertisedUrl)
+
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">
@@ -919,13 +956,22 @@ function ForwardedPortRow({
             :{entry.localPort} → :{entry.remotePort}
           </span>
         </div>
+        {advertisedHost && (
+          <div className="text-[11px] text-muted-foreground/70 truncate">
+            opens {entry.advertisedProtocol ?? 'http'}://{advertisedHost}:{entry.localPort}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
-          title="Open in Orca Browser"
+          title={
+            advertisedHost
+              ? `Open ${entry.advertisedProtocol ?? 'http'}://${advertisedHost}:${entry.localPort} in Orca Browser`
+              : 'Open in Orca Browser'
+          }
         >
           <ExternalLink size={13} />
         </button>
@@ -969,12 +1015,20 @@ function DetectedPortRow({
   port: DetectedPort & { targetId: string }
   onForward: () => void
 }): React.JSX.Element {
+  const advertisedHost = customHostFromAdvertised(port.advertisedUrl)
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">
-        <span className="text-xs text-foreground">:{port.port}</span>
-        {port.processName && (
-          <span className="text-xs text-muted-foreground ml-1.5">{port.processName}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-foreground">:{port.port}</span>
+          {port.processName && (
+            <span className="text-xs text-muted-foreground truncate">{port.processName}</span>
+          )}
+        </div>
+        {advertisedHost && (
+          <div className="text-[11px] text-muted-foreground/70 truncate">
+            advertised as {port.advertisedProtocol ?? 'http'}://{advertisedHost}:{port.port}
+          </div>
         )}
       </div>
       <button

@@ -210,6 +210,29 @@ describe('AdvertisedUrlWatcher.ingest', () => {
   })
 })
 
+describe('AdvertisedUrlWatcher.lookupBest', () => {
+  it('returns undefined when no worktree has the port cached', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
+    expect(watcher.lookupBest(['repo::/other'], 3001)).toBeUndefined()
+  })
+
+  it('returns the only entry when one worktree has it', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
+    expect(watcher.lookupBest([WORKTREE], 3001)?.host).toBe('a.example.com')
+  })
+
+  it('picks the best entry across worktrees by hostKind', () => {
+    const watcher = bindFresh()
+    watcher.bindPty('pty-2', 'repo::/wt2')
+    watcher.ingest(PTY, 'A: http://localhost:3001/\n')
+    watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
+    const best = watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)
+    expect(best?.host).toBe('custom.example.com')
+  })
+})
+
 describe('AdvertisedUrlWatcher.lookup PID validation', () => {
   it('records the listener PID on first lookup that supplies one', () => {
     const watcher = bindFresh()

@@ -1,5 +1,7 @@
-/* eslint-disable no-control-regex -- Why: ANSI/OSC stripping must match raw
- * control sequences in PTY output, same as src/main/runtime/orca-runtime.ts. */
+/* eslint-disable no-control-regex, max-lines -- Why: ANSI/OSC stripping must match raw
+ * control sequences in PTY output, same as src/main/runtime/orca-runtime.ts;
+ * URL parsing, host classification, cache lifecycle, and cross-worktree lookup
+ * are tightly coupled and kept in one file to keep the rules in lockstep. */
 // Watches PTY output for HTTP(S) URLs that dev servers (Vite, Next, etc.)
 // print on startup. Maintains a per-{worktreeId, port} cache so the workspace
 // ports panel can show the tool-advertised origin instead of the kernel bind
@@ -355,6 +357,27 @@ export class AdvertisedUrlWatcher {
    *  produced by a no-longer-running process. */
   invalidate(worktreeId: string, port: number): void {
     this.cache.delete(cacheKey(worktreeId, port))
+  }
+
+  /** Find the best advertised URL for `port` across multiple worktrees. SSH
+   *  connections host several worktrees but the remote-side port scanner
+   *  returns ports for the whole connection, so we need to scan all the
+   *  worktrees attached to that connection. Returns the highest-scoring
+   *  entry by hostKind (custom DNS > loopback > private IP > public IP),
+   *  with HTTPS and recency as tie-breakers — same rule as `shouldReplace`
+   *  uses on insert. */
+  lookupBest(worktreeIds: readonly string[], port: number): AdvertisedUrl | undefined {
+    let best: AdvertisedUrl | undefined
+    for (const worktreeId of worktreeIds) {
+      const candidate = this.cache.get(cacheKey(worktreeId, port))
+      if (!candidate) {
+        continue
+      }
+      if (!best || shouldReplace(best, candidate)) {
+        best = candidate
+      }
+    }
+    return best
   }
 
   clear(): void {

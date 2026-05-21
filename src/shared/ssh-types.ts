@@ -80,6 +80,13 @@ export type PortForwardEntry = {
   remoteHost: string
   remotePort: number
   label?: string
+  /** Origin captured from terminal output for this remote port (e.g. a Vite
+   *  banner printed inside an SSH-hosted PTY). The renderer rewrites the port
+   *  to the local forward and trusts the user has DNS for the custom host. */
+  advertisedUrl?: string
+  /** Protocol parsed from the advertised URL — used to upgrade HTTP guesses
+   *  to HTTPS even when the advertised host can't be reused locally. */
+  advertisedProtocol?: 'http' | 'https'
 }
 
 /** A listening port detected on the remote host via /proc/net/tcp scanning.
@@ -90,4 +97,9 @@ export type DetectedPort = {
   host: string
   pid?: number
   processName?: string
+  /** Origin captured from terminal output for this remote port. Populated by
+   *  the local main process; the relay-side scanner does not set this. */
+  advertisedUrl?: string
+  /** Protocol parsed from the advertised URL. */
+  advertisedProtocol?: 'http' | 'https'
 }
