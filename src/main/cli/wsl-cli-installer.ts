@@ -339,14 +339,26 @@ export class WslCliInstaller {
 }
 
 async function runWslCommand(distro: string, command: string): Promise<string> {
-  const { stdout } = (await execFileAsync('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
-    encoding: 'utf8',
-    timeout: 5000
-  })) as { stdout: string }
+  const { stdout } = (await execFileAsync(
+    'wsl.exe',
+    ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
+    {
+      encoding: 'utf8',
+      timeout: 10000
+    }
+  )) as { stdout: string }
   return stdout
 }
 
+function buildEncodedWslBashCommand(command: string): string {
+  // Why: raw multiline heredocs can be flattened while crossing wsl.exe's
+  // Windows command-line boundary. Send one shell-safe line and decode inside WSL.
+  const encoded = Buffer.from(command, 'utf8').toString('base64')
+  return `set -o pipefail; printf %s ${quoteShell(encoded)} | base64 -d | bash`
+}
+
 export const _internals = {
+  buildEncodedWslBashCommand,
   buildWslBridgeScript,
   buildWslLauncher
 }

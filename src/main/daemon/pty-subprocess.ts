@@ -19,6 +19,7 @@ import {
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
+import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -237,6 +238,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    if (
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
+      isHostCodexHomeForWsl(env.CODEX_HOME)
+    ) {
+      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
+      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+      delete env.CODEX_HOME
+    }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
