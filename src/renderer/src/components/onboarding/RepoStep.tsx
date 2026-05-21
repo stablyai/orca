@@ -1,4 +1,11 @@
-import { ArrowRight, FolderOpen, GitBranch, Server } from 'lucide-react'
+import { ArrowRight, FolderOpen, GitBranch, Loader2, Server } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+
+type BaseRefPrompt = {
+  repoId: string
+  repoName: string
+}
 
 type RepoStepProps = {
   cloneUrl: string
@@ -15,6 +22,11 @@ type RepoStepProps = {
   runtimeActive: boolean
   busyLabel: string | null
   error: string | null
+  baseRefPrompt: BaseRefPrompt | null
+  selectedBaseRef: string | null
+  onSelectBaseRef: (ref: string) => void
+  onContinueWithBaseRef: () => void
+  onCancelBaseRefPrompt: () => void
 }
 
 export function RepoStep({
@@ -31,9 +43,75 @@ export function RepoStep({
   workspaceDir,
   runtimeActive,
   busyLabel,
-  error
+  error,
+  baseRefPrompt,
+  selectedBaseRef,
+  onSelectBaseRef,
+  onContinueWithBaseRef,
+  onCancelBaseRefPrompt
 }: RepoStepProps) {
   const disabled = Boolean(busyLabel)
+  if (baseRefPrompt) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg border border-border bg-muted/30 p-5">
+          <div className="flex items-start gap-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+              <GitBranch className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-base font-semibold text-foreground">Choose a base branch</div>
+              <div className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+                Orca could not infer which branch to create workspaces from for{' '}
+                <span className="font-medium text-foreground">{baseRefPrompt.repoName}</span>. Pick
+                the branch new workspaces should start from.
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <BaseRefPicker
+              repoId={baseRefPrompt.repoId}
+              currentBaseRef={selectedBaseRef ?? undefined}
+              onSelect={onSelectBaseRef}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancelBaseRefPrompt}
+              disabled={disabled}
+            >
+              Choose another project
+            </Button>
+            <Button
+              type="button"
+              onClick={onContinueWithBaseRef}
+              disabled={!selectedBaseRef || disabled}
+              className="min-w-28"
+            >
+              {disabled ? <Loader2 className="size-4 animate-spin" /> : null}
+              Continue
+            </Button>
+          </div>
+        </div>
+
+        {busyLabel && (
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm text-foreground">
+            {busyLabel}
+          </div>
+        )}
+        {error && (
+          <div className="rounded-lg border border-destructive/35 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {runtimeActive ? (

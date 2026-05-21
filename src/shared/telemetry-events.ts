@@ -575,6 +575,12 @@ const onboardingStep4PathFailedSchema = z
     cohort: cohortSchema
   })
   .strict()
+const onboardingBaseRefPickerShownSchema = z
+  .object({ path: onboardingPathSchema, cohort: cohortSchema })
+  .strict()
+const onboardingBaseRefPickerCompletedSchema = z
+  .object({ path: onboardingPathSchema, cohort: cohortSchema })
+  .strict()
 const onboardingTaskSourcesSnapshotSchema = z
   .object({
     github_status: onboardingTaskSourcesGithubStatusSchema,
@@ -827,6 +833,8 @@ export const eventSchemas = {
   onboarding_step_skipped: onboardingStepSkippedSchema,
   onboarding_step4_path_clicked: onboardingStep4PathClickedSchema,
   onboarding_step4_path_failed: onboardingStep4PathFailedSchema,
+  onboarding_base_ref_picker_shown: onboardingBaseRefPickerShownSchema,
+  onboarding_base_ref_picker_completed: onboardingBaseRefPickerCompletedSchema,
   onboarding_task_sources_snapshot: onboardingTaskSourcesSnapshotSchema,
   onboarding_completed: onboardingCompletedSchema,
   onboarding_dismissed: onboardingDismissedSchema,
@@ -937,6 +945,8 @@ type _OnboardingCohortRoster =
   | 'onboarding_step_skipped'
   | 'onboarding_step4_path_clicked'
   | 'onboarding_step4_path_failed'
+  | 'onboarding_base_ref_picker_shown'
+  | 'onboarding_base_ref_picker_completed'
   | 'onboarding_task_sources_snapshot'
   | 'onboarding_completed'
   | 'onboarding_dismissed'

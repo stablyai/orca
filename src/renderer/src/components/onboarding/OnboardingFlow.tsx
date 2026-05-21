@@ -59,7 +59,7 @@ export default function OnboardingFlow({
   onSettingsDetourStart
 }: OnboardingFlowProps): React.JSX.Element {
   const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
-  const { currentStep, stepIndex, busyLabel } = flow
+  const { baseRefPrompt, continueWithBaseRef, currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
   const shouldShowSetupAction =
     currentStep.id === 'notifications' &&
@@ -83,6 +83,10 @@ export default function OnboardingFlow({
       }
       event.preventDefault()
       if (currentStep.id === 'repo') {
+        if (baseRefPrompt) {
+          void continueWithBaseRef()
+          return
+        }
         void flowOpenFolder()
       } else {
         void flowNext('keyboard')
@@ -90,7 +94,7 @@ export default function OnboardingFlow({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flowNext, flowOpenFolder])
+  }, [baseRefPrompt, continueWithBaseRef, currentStep.id, flowNext, flowOpenFolder])
 
   return (
     <div className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
@@ -213,6 +217,11 @@ export default function OnboardingFlow({
               runtimeActive={Boolean(flow.settings?.activeRuntimeEnvironmentId?.trim())}
               busyLabel={flow.busyLabel}
               error={flow.error}
+              baseRefPrompt={baseRefPrompt}
+              selectedBaseRef={flow.selectedBaseRef}
+              onSelectBaseRef={flow.setSelectedBaseRef}
+              onContinueWithBaseRef={() => void continueWithBaseRef()}
+              onCancelBaseRefPrompt={flow.cancelBaseRefPrompt}
             />
           )}
         </div>

@@ -22,6 +22,7 @@ import {
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 export { STEPS } from './use-onboarding-flow-types'
@@ -33,6 +34,12 @@ type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
 type TaskSourcesGithubStatus = TaskSourcesSnapshotProps['github_status']
 type TaskSourcesLinearStatus = TaskSourcesSnapshotProps['linear_status']
 type TaskSourcesExitAction = TaskSourcesSnapshotProps['exit_action']
+type OnboardingRepoPath = 'open_folder' | 'clone_url'
+type OnboardingBaseRefPrompt = {
+  repoId: string
+  repoName: string
+  path: OnboardingRepoPath
+}
 
 function getGitHubTaskSourceStatus(
   status: ReturnType<typeof useAppStore.getState>['preflightStatus'],
@@ -73,6 +80,7 @@ export function useOnboardingFlow(
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const updateRepo = useAppStore((s) => s.updateRepo)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -114,6 +122,8 @@ export function useOnboardingFlow(
   const [cloneDestination, setCloneDestination] = useState('')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [baseRefPrompt, setBaseRefPrompt] = useState<OnboardingBaseRefPrompt | null>(null)
+  const [selectedBaseRef, setSelectedBaseRef] = useState<string | null>(null)
 
   // Why: settings load async; the lazy useState initializers above run before
   // settings hydrates. Re-sync once when settings transitions to non-null,
@@ -316,10 +326,13 @@ export function useOnboardingFlow(
     setError
   })
 
-  const completeRepo = useCallback(
-    async (repoId: string, isGit: boolean, path: 'open_folder' | 'clone_url') => {
-      await fetchRepos()
-      await fetchWorktrees(repoId)
+  const finishRepo = useCallback(
+    async (
+      repoId: string,
+      isGit: boolean,
+      path: OnboardingRepoPath,
+      initialBaseBranch?: string
+    ) => {
       const worktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
       if (worktree) {
         // Why: onboarding asks for a default agent immediately before this step.
@@ -353,12 +366,89 @@ export function useOnboardingFlow(
         openModal('new-workspace-composer', {
           initialRepoId: repoId,
           prefilledName: 'onboarding',
+          ...(initialBaseBranch ? { initialBaseBranch } : {}),
           telemetrySource: 'onboarding'
         })
       }
     },
-    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal, settings]
+    [closeWith, consumeStepDurationMs, openModal, settings]
   )
+
+  const completeRepo = useCallback(
+    async (repoId: string, isGit: boolean, path: OnboardingRepoPath) => {
+      await fetchRepos()
+      await fetchWorktrees(repoId)
+
+      if (isGit) {
+        const repo = useAppStore.getState().repos.find((candidate) => candidate.id === repoId)
+        if (!repo?.worktreeBaseRef) {
+          let defaultBaseRef: string | null = null
+          try {
+            const result = await getRuntimeRepoBaseRefDefault(settings, repoId)
+            defaultBaseRef = result.defaultBaseRef
+          } catch {
+            defaultBaseRef = null
+          }
+          if (!defaultBaseRef) {
+            // Why: unresolved base refs are a recoverable onboarding state.
+            // Keep users in the wizard to choose a base instead of letting the
+            // workspace composer throw `base_ref_missing` after submit.
+            setBaseRefPrompt({
+              repoId,
+              repoName: repo?.displayName ?? 'this project',
+              path
+            })
+            setSelectedBaseRef(null)
+            track('onboarding_base_ref_picker_shown', { path })
+            return
+          }
+        }
+      }
+
+      await finishRepo(repoId, isGit, path)
+    },
+    [fetchRepos, fetchWorktrees, finishRepo, settings]
+  )
+
+  // Why: React's busy state commits after the current event; Cmd/Ctrl+Enter
+  // repeat or a double-click can otherwise re-enter completion before disable.
+  const baseRefContinueInFlightRef = useRef(false)
+  const continueWithBaseRef = useCallback(async () => {
+    if (baseRefContinueInFlightRef.current || !baseRefPrompt || !selectedBaseRef) {
+      return
+    }
+    baseRefContinueInFlightRef.current = true
+    setError(null)
+    setBusyLabel('Saving base branch...')
+    try {
+      await updateRepo(baseRefPrompt.repoId, { worktreeBaseRef: selectedBaseRef })
+      await fetchRepos()
+      await fetchWorktrees(baseRefPrompt.repoId)
+      const prompt = baseRefPrompt
+      const ref = selectedBaseRef
+      const persistedBaseRef = useAppStore
+        .getState()
+        .repos.find((candidate) => candidate.id === prompt.repoId)?.worktreeBaseRef
+      setBaseRefPrompt(null)
+      setSelectedBaseRef(null)
+      track('onboarding_base_ref_picker_completed', { path: prompt.path })
+      // Why: once the repo default is persisted, workspace creation should
+      // behave like a default-base create; only pass an explicit base as a
+      // fallback if the store did not reflect the persisted choice.
+      await finishRepo(prompt.repoId, true, prompt.path, persistedBaseRef === ref ? undefined : ref)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyLabel(null)
+      baseRefContinueInFlightRef.current = false
+    }
+  }, [baseRefPrompt, fetchRepos, fetchWorktrees, finishRepo, selectedBaseRef, updateRepo])
+
+  const cancelBaseRefPrompt = useCallback(() => {
+    setBaseRefPrompt(null)
+    setSelectedBaseRef(null)
+    setError(null)
+  }, [])
 
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
@@ -472,6 +562,7 @@ export function useOnboardingFlow(
         return
       }
       setError(null)
+      cancelBaseRefPrompt()
       if (settings?.activeRuntimeEnvironmentId?.trim()) {
         const path = serverPath.trim()
         if (!path) {
@@ -519,7 +610,14 @@ export function useOnboardingFlow(
         setBusyLabel(null)
       }
     },
-    [addRepoPath, busyLabel, completeRepo, serverPath, settings?.activeRuntimeEnvironmentId]
+    [
+      addRepoPath,
+      busyLabel,
+      cancelBaseRefPrompt,
+      completeRepo,
+      serverPath,
+      settings?.activeRuntimeEnvironmentId
+    ]
   )
 
   const clone = useCallback(async () => {
@@ -532,6 +630,7 @@ export function useOnboardingFlow(
       return
     }
     setError(null)
+    cancelBaseRefPrompt()
     track('onboarding_step4_path_clicked', { path: 'clone_url' })
     const target = getActiveRuntimeTarget(settings)
     const destination =
@@ -567,7 +666,7 @@ export function useOnboardingFlow(
     } finally {
       setBusyLabel(null)
     }
-  }, [busyLabel, cloneDestination, cloneUrl, completeRepo, settings])
+  }, [busyLabel, cancelBaseRefPrompt, cloneDestination, cloneUrl, completeRepo, settings])
 
   const skipToRepo = useCallback(async () => {
     if (busyLabel) {
@@ -711,6 +810,11 @@ export function useOnboardingFlow(
     setCloneDestination,
     busyLabel,
     error,
+    baseRefPrompt,
+    selectedBaseRef,
+    setSelectedBaseRef,
+    continueWithBaseRef,
+    cancelBaseRefPrompt,
     detectedSet,
     isDetectingAgents,
     next,
