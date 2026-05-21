@@ -511,7 +511,30 @@ function buildPRRefreshCandidate(
 function shouldClearHostedReviewForNoGitHubPR(
   entry: AppState['hostedReviewCache'][string] | undefined
 ): boolean {
-  return entry === undefined || entry.data === null || entry.data.provider === 'github'
+  // Why: a GitHub-only miss should not create or refresh provider-neutral
+  // branch misses that suppress discovery for GitLab/other hosted reviews.
+  if (!entry) {
+    return false
+  }
+  if (entry.data?.provider === 'github') {
+    return true
+  }
+  return entry.data === null && isGitHubLinkedReviewHintKey(entry.linkedReviewHintKey)
+}
+
+function isGitHubLinkedReviewHintKey(hintKey: string | undefined): boolean {
+  return hintKey?.split('|').some((key) => key.startsWith('github:')) ?? false
+}
+
+function linkedReviewHintKeyForNoGitHubPR(
+  entry: AppState['hostedReviewCache'][string] | undefined
+): string | undefined {
+  if (entry?.data?.provider === 'github') {
+    return isGitHubLinkedReviewHintKey(entry.linkedReviewHintKey)
+      ? entry.linkedReviewHintKey
+      : linkedReviewHintKey({ linkedGitHubPR: entry.data.number })
+  }
+  return entry?.linkedReviewHintKey
 }
 
 /**
@@ -1798,6 +1821,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   applyGitHubPRRefreshEvent: (event) => {
     set((s) => {
+      // Why: local main-process refresh events are keyed only by repo/branch;
+      // applying them while a runtime is active can leak local PR state into SSH.
+      if (getActiveRuntimeTarget(s.settings).kind === 'environment') {
+        return {}
+      }
       const nextSequences = { ...s.prRefreshSequences }
       const nextStates = { ...s.prRefreshStates }
       let nextPRCache = s.prCache
@@ -1880,7 +1908,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 fetchedAt: event.outcome.fetchedAt,
                 linkedReviewHintKey: data
                   ? linkedReviewHintKey({ linkedGitHubPR: data.number })
-                  : hostedReviewEntry?.linkedReviewHintKey
+                  : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry)
               }
             }
           }

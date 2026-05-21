@@ -4,8 +4,10 @@ GitHub slice's cross-cutting invariants verifiable in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice, prChecksCacheSuffix, workItemsCacheKey } from './github'
+import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import type { GitHubWorkItem, PRInfo } from '../../../../shared/types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -26,6 +28,11 @@ const mockApi = {
     prComments: vi.fn().mockResolvedValue([]),
     listWorkItems: vi.fn(),
     getProjectViewTable: vi.fn()
+  },
+  hostedReview: {
+    forBranch: vi.fn().mockResolvedValue(null),
+    getCreationEligibility: vi.fn(),
+    create: vi.fn()
   },
   runtimeEnvironments: {
     call: runtimeEnvironmentTransportCall
@@ -52,7 +59,8 @@ function createTestStore() {
   return create<AppState>()(
     (...a) =>
       ({
-        ...createGitHubSlice(...a)
+        ...createGitHubSlice(...a),
+        ...createHostedReviewSlice(...a)
       }) as AppState
   )
 }
@@ -641,6 +649,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     mockApi.gh.prForBranch.mockResolvedValue(null)
     mockApi.gh.refreshPRNow.mockReset()
     mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
+    mockApi.hostedReview.forBranch.mockResolvedValue(null)
   })
 
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
@@ -839,6 +848,213 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         status: 'success',
         mergeable: 'MERGEABLE'
       }),
+      fetchedAt: 2,
+      linkedReviewHintKey: 'github:12'
+    })
+  })
+
+  it('does not apply local GitHub PR refresh events while a runtime is active', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/runtime'
+    const cacheKey = `${repoId}::${branch}`
+    const settings = { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+    const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, settings, repoId)
+
+    store.setState({ settings } as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, title: 'Local PR status' }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toBeUndefined()
+    expect(store.getState().prRefreshSequences[cacheKey]).toBeUndefined()
+    expect(store.getState().hostedReviewCache[runtimeHostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('does not create hosted review cache entries from GitHub no-PR refreshes', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/missing'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('does not refresh provider-neutral null hosted review cache on a GitHub no-PR refresh', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/neutral'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: null,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+      data: null,
+      fetchedAt: 1
+    })
+  })
+
+  it('clears GitHub-scoped null hosted review cache on a GitHub no-PR refresh', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/github-null'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: null,
+          fetchedAt: 1,
+          linkedReviewHintKey: 'github:12'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+      data: null,
+      fetchedAt: 2,
+      linkedReviewHintKey: 'github:12'
+    })
+  })
+
+  it('does not reuse a GitHub-scoped null hosted review cache for neutral discovery', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/github-null-then-gitlab'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const gitlabReview: HostedReviewInfo = {
+      provider: 'gitlab',
+      number: 5,
+      title: 'GitLab MR',
+      state: 'open',
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      status: 'success',
+      updatedAt: '2026-03-28T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    }
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: null,
+          fetchedAt: 1,
+          linkedReviewHintKey: 'github:12'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(gitlabReview)
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch(repoPath, branch, { repoId })
+    ).resolves.toEqual(gitlabReview)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
+      branch,
+      linkedAzureDevOpsPR: null,
+      linkedBitbucketPR: null,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedGiteaPR: null,
+      repoId,
+      repoPath
+    })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+      data: gitlabReview,
+      fetchedAt: expect.any(Number),
+      linkedReviewHintKey: ''
+    })
+  })
+
+  it('keeps cleared GitHub hosted review data scoped to GitHub PR discovery', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/github-data'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: {
+            provider: 'github',
+            number: 12,
+            title: 'Old GitHub PR',
+            state: 'open',
+            url: 'https://github.com/acme/orca/pull/12',
+            status: 'pending',
+            updatedAt: '2026-03-28T00:00:00Z',
+            mergeable: 'UNKNOWN'
+          },
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+      data: null,
       fetchedAt: 2,
       linkedReviewHintKey: 'github:12'
     })

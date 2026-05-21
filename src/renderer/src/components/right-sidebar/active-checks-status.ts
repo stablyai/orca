@@ -1,5 +1,5 @@
 import type { AppState } from '../../store/types'
-import { findWorktreeById } from '../../store/slices/worktree-helpers'
+import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type { CheckStatus } from '../../../../shared/types'
 
 type ActiveChecksStatusState = Pick<
@@ -13,13 +13,13 @@ function branchDisplayName(branch: string): string {
 
 export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
   const activeWorktree = state.activeWorktreeId
-    ? findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+    ? (getWorktreeMapFromState(state).get(state.activeWorktreeId) ?? null)
     : null
   if (!activeWorktree) {
     return null
   }
 
-  const activeRepo = state.repos.find((repo) => repo.id === activeWorktree.repoId)
+  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
   if (!activeRepo) {
     return null
   }

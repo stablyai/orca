@@ -43,8 +43,33 @@ function shouldRefetchForLinkedHint(
   return cached !== undefined && hintKey !== '' && (cached.linkedReviewHintKey ?? '') !== hintKey
 }
 
+function shouldRefetchScopedNullForNoHint(
+  cached: CacheEntry<HostedReviewInfo> | undefined,
+  hintKey: string
+): boolean {
+  // Why: a provider-scoped miss (for example `github:12`) does not prove the
+  // branch has no GitLab/other hosted review discoverable by a neutral lookup.
+  return cached?.data === null && hintKey === '' && (cached.linkedReviewHintKey ?? '') !== ''
+}
+
 function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
-  return nextHintKey === '' || inflightHintKey === nextHintKey
+  return inflightHintKey === nextHintKey
+}
+
+function hasNewerHostedReviewCacheEntry(
+  cache: HostedReviewSlice['hostedReviewCache'],
+  cacheKey: string,
+  requestStartedAt: number,
+  requestStartedEntry: CacheEntry<HostedReviewInfo> | undefined
+): boolean {
+  // Why: GitHub refresh events can update this shared cache while a branch
+  // lookup is in flight; older lookups must not resurrect stale results.
+  const entry = cache[cacheKey]
+  return (
+    entry !== undefined &&
+    (entry.fetchedAt > requestStartedAt ||
+      (entry.fetchedAt === requestStartedAt && entry !== requestStartedEntry))
+  )
 }
 
 export type HostedReviewSlice = {
@@ -156,7 +181,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const cached = get().hostedReviewCache[cacheKey]
     const hintKey = linkedReviewHintKey(options)
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
-    if (!options?.force && !linkedRefetch && isFresh(cached)) {
+    const scopedNullRefetch = shouldRefetchScopedNullForNoHint(cached, hintKey)
+    if (!options?.force && !linkedRefetch && !scopedNullRefetch && isFresh(cached)) {
       return cached.data
     }
 
@@ -166,6 +192,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       canReuseInflightHint(inflightRequest.linkedReviewHintKey, hintKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      const requestStartedAt = Date.now()
+      const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
       const request = (async () => {
         try {
@@ -192,23 +220,47 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 )
               : await window.api.hostedReview.forBranch({ repoPath, ...args })
           if (requestGenerations.get(cacheKey) === generation) {
-            set((state) => ({
-              hostedReviewCache: {
-                ...state.hostedReviewCache,
-                [cacheKey]: { data: review, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+            set((state) => {
+              if (
+                hasNewerHostedReviewCacheEntry(
+                  state.hostedReviewCache,
+                  cacheKey,
+                  requestStartedAt,
+                  requestStartedEntry
+                )
+              ) {
+                return {}
               }
-            }))
+              return {
+                hostedReviewCache: {
+                  ...state.hostedReviewCache,
+                  [cacheKey]: { data: review, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+                }
+              }
+            })
           }
           return review
         } catch (error) {
           console.error('Failed to fetch hosted review:', error)
           if (requestGenerations.get(cacheKey) === generation) {
-            set((state) => ({
-              hostedReviewCache: {
-                ...state.hostedReviewCache,
-                [cacheKey]: { data: null, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+            set((state) => {
+              if (
+                hasNewerHostedReviewCacheEntry(
+                  state.hostedReviewCache,
+                  cacheKey,
+                  requestStartedAt,
+                  requestStartedEntry
+                )
+              ) {
+                return {}
               }
-            }))
+              return {
+                hostedReviewCache: {
+                  ...state.hostedReviewCache,
+                  [cacheKey]: { data: null, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+                }
+              }
+            })
           }
           return null
         } finally {
@@ -231,6 +283,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (
       !options?.force &&
       !linkedRefetch &&
+      !scopedNullRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null

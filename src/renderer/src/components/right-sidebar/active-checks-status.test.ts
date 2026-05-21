@@ -16,7 +16,7 @@ function makePR(status: PRInfo['checksStatus']): PRInfo {
 }
 
 describe('getActiveChecksStatus', () => {
-  it('reads the repo-id scoped PR cache entry for the active worktree', () => {
+  it('prefers repo-id scoped status over stale path-scoped status for the active worktree', () => {
     const state = {
       activeWorktreeId: 'wt-1',
       repos: [{ id: 'repo-1', path: '/repo' }],
@@ -31,7 +31,7 @@ describe('getActiveChecksStatus', () => {
       },
       prCache: {
         'repo-1::feature/test': { data: makePR('success'), fetchedAt: 2 },
-        '/repo::feature/test': { data: makePR('failure'), fetchedAt: 1 }
+        '/repo::feature/test': { data: makePR('failure'), fetchedAt: 999 }
       }
     } as unknown as Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo' | 'prCache'>
 
