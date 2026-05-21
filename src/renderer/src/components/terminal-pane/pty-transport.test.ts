@@ -189,6 +189,30 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).not.toHaveBeenCalledWith(bufferedPayload)
   })
 
+  it('clears before replaying eager-buffered output so hidden automation terminals do not open blank', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+
+    const bufferedPayload = '\x1b[?1049hAutomation agent is running'
+    registerEagerPtyBuffer('pty-automation', vi.fn())
+    onData?.({
+      id: 'pty-automation',
+      data: bufferedPayload
+    })
+
+    const transport = createIpcPtyTransport()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-automation',
+      callbacks: {
+        onReplayData
+      }
+    })
+
+    const clear = '\x1b[2J\x1b[3J\x1b[H'
+    expect(onReplayData.mock.calls.map(([data]) => data)).toEqual([clear, bufferedPayload])
+  })
+
   it('routes the attach-time clear sequence through onReplayData for non-alternate-screen sessions', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
 

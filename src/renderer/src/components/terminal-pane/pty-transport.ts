@@ -418,6 +418,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
 
+      // Why: hidden automation PTYs may have already rendered their TUI into
+      // the eager buffer. Clear stale pane contents before replaying that
+      // buffer; clearing afterward erases the only visible frame and opens a
+      // blank terminal until the TUI happens to repaint.
+      if (!options.isAlternateScreen) {
+        const clear = '\x1b[2J\x1b[3J\x1b[H'
+        if (storedCallbacks.onReplayData) {
+          storedCallbacks.onReplayData(clear)
+        } else {
+          storedCallbacks.onData?.(clear)
+        }
+      }
+
       // Why: replay buffered data through the real handler so title/bell/agent
       // tracking (including OSC 9999 agent status) processes the output —
       // otherwise restored tabs keep a default title.
@@ -460,21 +473,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           }
         }
         bufferHandle.dispose()
-      }
-
-      // Why: clear the display before writing the snapshot so restored
-      // content doesn't layer on top of stale output. Skip the clear for
-      // alternate-screen sessions — the snapshot already fills the screen
-      // and clearing would erase it.
-      // Why onReplayData: treat this clear as replay-path too so any data
-      // that immediately follows from the renderer sits under the same guard.
-      if (!options.isAlternateScreen) {
-        const clear = '\x1b[2J\x1b[3J\x1b[H'
-        if (storedCallbacks.onReplayData) {
-          storedCallbacks.onReplayData(clear)
-        } else {
-          storedCallbacks.onData?.(clear)
-        }
       }
 
       if (options.cols && options.rows) {
