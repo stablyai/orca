@@ -455,6 +455,35 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
+    // Why: repos that fetch with --tags can end up with a local tag named 'main',
+    // making `git worktree add ... main` fail with "fatal: Ambiguous object name".
+    // Qualifying as refs/heads/main tells git exactly which object to use.
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse --verify refs/heads/main succeeds
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    await addWorktree('/repo', '/repo-feature', 'feature/disambig', 'main')
+
+    expect(gitExecFileAsyncMock.mock.calls[0]).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
+      { cwd: '/repo' }
+    ])
+    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+      [
+        'worktree',
+        'add',
+        '--no-track',
+        '-b',
+        'feature/disambig',
+        '/repo-feature',
+        'refs/heads/main'
+      ],
+      { cwd: '/repo' }
+    ])
+  })
+
   it('uses the remote name from the base ref instead of hardcoding origin', async () => {
     const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock

@@ -234,7 +234,22 @@ export async function addWorktree(
   // below for the terminal ergonomics.
   args.push('--no-track', '-b', branch, worktreePath)
   if (baseBranch) {
-    args.push(baseBranch)
+    // Why: a bare name like 'main' is ambiguous when a same-named tag exists
+    // (e.g. fetched from a fork). Qualifying it as refs/heads/<name> tells git
+    // unambiguously which object to use, avoiding "fatal: Ambiguous object name".
+    // Remote refs (contain '/') and already-qualified refs are passed through.
+    let effectiveBase = baseBranch
+    if (!baseBranch.includes('/') && !baseBranch.startsWith('refs/')) {
+      try {
+        await gitExecFileAsync(['rev-parse', '--verify', '--quiet', `refs/heads/${baseBranch}`], {
+          cwd: repoPath
+        })
+        effectiveBase = `refs/heads/${baseBranch}`
+      } catch {
+        // Not found at refs/heads/ — keep the original name.
+      }
+    }
+    args.push(effectiveBase)
   }
   await gitExecFileAsync(args, { cwd: repoPath })
 

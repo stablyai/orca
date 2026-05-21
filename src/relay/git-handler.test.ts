@@ -679,8 +679,35 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[2]?.[1]).toBe('/relay/wt')
     })
 
+    it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
+      // Why: repos that fetch with --tags can end up with a local tag named
+      // 'main', making `git worktree add ... main` fail with "fatal: Ambiguous
+      // object name". Qualifying as refs/heads/main tells git exactly which
+      // object to use. Only applies when rev-parse confirms refs/heads/ exists.
+      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse --verify refs/heads/main succeeds
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
+
+      await localDispatcher.callRequest('git.addWorktree', {
+        repoPath: '/relay/repo',
+        branchName: 'feature/disambig',
+        targetDir: '/relay/wt',
+        base: 'main'
+      })
+
+      expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
+        ['worktree', 'add', '--no-track', '-b', 'feature/disambig', '/relay/wt', 'refs/heads/main'],
+        ['config', '--get', 'push.autoSetupRemote'],
+        ['config', '--local', 'push.autoSetupRemote', 'true']
+      ])
+    })
+
     it('preserves an existing push.autoSetupRemote value (does not overwrite user-set false)', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse --verify refs/heads/main (no branch)
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockResolvedValueOnce({ stdout: 'false\n', stderr: '' }) // --get returns value
 
@@ -693,6 +720,7 @@ describe('GitHandler', () => {
 
       // No --local set: --get succeeded so we preserve the user's value.
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
         ['worktree', 'add', '--no-track', '-b', 'feature/preserve', '/relay/wt', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
@@ -704,6 +732,7 @@ describe('GitHandler', () => {
       // to `--local set true` and overwrite that. Mirrors the local addWorktree
       // parity case in src/main/git/worktree.test.ts.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse --verify refs/heads/main (no branch)
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --get success, empty value
 
@@ -715,6 +744,7 @@ describe('GitHandler', () => {
       })
 
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
         ['worktree', 'add', '--no-track', '-b', 'feature/empty', '/relay/wt', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
@@ -726,6 +756,7 @@ describe('GitHandler', () => {
       // through to `--local set true`, which would silently overwrite
       // whatever value the user actually has.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse --verify refs/heads/main (no branch)
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockRejectedValueOnce(Object.assign(new Error('parse error'), { code: 3 })) // --get non-unset
 
@@ -741,6 +772,7 @@ describe('GitHandler', () => {
       ).resolves.toBeUndefined()
 
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
         ['worktree', 'add', '--no-track', '-b', 'feature/corrupt', '/relay/wt', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
@@ -753,6 +785,7 @@ describe('GitHandler', () => {
 
     it('warns but resolves when --local set fails (write-failure is warn-only)', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse --verify refs/heads/main (no branch)
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
       gitMock.mockRejectedValueOnce(new Error('config locked')) // --local set fails
@@ -781,6 +814,7 @@ describe('GitHandler', () => {
       // ordering invariant: config calls happen only after worktree add
       // succeeds.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse --verify refs/heads/main (no branch)
       gitMock.mockRejectedValueOnce(new Error('worktree add failed'))
 
       await expect(
@@ -793,6 +827,7 @@ describe('GitHandler', () => {
       ).rejects.toThrow('worktree add failed')
 
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/main'],
         ['worktree', 'add', '--no-track', '-b', 'feature/fail', '/relay/wt', 'main']
       ])
     })

@@ -29,9 +29,22 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   // (state machine, common-dir scope, old-git fallback) in the comments
   // around src/main/git/worktree.ts addWorktree — those invariants apply
   // identically here.
+  // Why: a bare name like 'main' is ambiguous when a same-named tag exists
+  // (e.g. fetched from a fork). Qualify it as refs/heads/<name> to avoid
+  // "fatal: Ambiguous object name". Mirrors local addWorktree in worktree.ts.
+  let effectiveBase = base
+  if (base && !base.includes('/') && !base.startsWith('refs/')) {
+    try {
+      await git(['rev-parse', '--verify', '--quiet', `refs/heads/${base}`], repoPath)
+      effectiveBase = `refs/heads/${base}`
+    } catch {
+      // Not found at refs/heads/ — keep the original name.
+    }
+  }
+
   const args = ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
-  if (base) {
-    args.push(base)
+  if (effectiveBase) {
+    args.push(effectiveBase)
   }
 
   await git(args, repoPath)
