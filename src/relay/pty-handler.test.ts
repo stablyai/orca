@@ -136,10 +136,13 @@ describe('PtyHandler', () => {
 
   it('does not expire an unlimited grace timer', () => {
     const onExpire = vi.fn()
+    handler.startGraceTimer(onExpire, 100)
+
+    expect(handler.graceTimerActive).toBe(true)
     handler.startGraceTimer(onExpire, 0)
 
     expect(handler.graceTimerActive).toBe(false)
-    vi.advanceTimersByTime(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000)
+    vi.advanceTimersByTime(100)
     expect(onExpire).not.toHaveBeenCalled()
   })
 

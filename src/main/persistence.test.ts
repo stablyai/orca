@@ -301,6 +301,69 @@ describe('Store', () => {
     expect(repos[0].gitUsername).toBe('testuser')
   })
 
+  it('normalizes legacy remote workspace sync fields on SSH targets', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      sshTargets: [
+        {
+          id: 'ssh-disabled-legacy-grace',
+          label: 'Disabled legacy grace',
+          host: 'disabled.example.com',
+          port: 22,
+          username: 'dev',
+          remoteWorkspaceSyncEnabled: false,
+          remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-enabled-legacy-grace',
+          label: 'Enabled legacy grace',
+          host: 'enabled.example.com',
+          port: 22,
+          username: 'dev',
+          remoteWorkspaceSyncEnabled: true,
+          remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-new-grace-period-wins',
+          label: 'New grace period',
+          host: 'new.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: 120,
+          remoteWorkspaceSyncEnabled: true,
+          remoteWorkspaceSyncGracePeriodSeconds: 0
+        }
+      ]
+    })
+
+    const store = await createStore()
+    const targets = store.getSshTargets()
+
+    expect(targets[0]).not.toHaveProperty('relayGracePeriodSeconds')
+    expect(targets[1].relayGracePeriodSeconds).toBe(0)
+    expect(targets[2].relayGracePeriodSeconds).toBe(120)
+    for (const target of targets) {
+      expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
+      expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
+    }
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    expect(persisted.sshTargets?.[0]).not.toHaveProperty('relayGracePeriodSeconds')
+    expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
+    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(120)
+    for (const target of persisted.sshTargets ?? []) {
+      expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
+      expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
+    }
+  })
+
   it('drops malformed migration-unsupported PTY entries on load', async () => {
     const repo = makeRepo()
     writeDataFile({

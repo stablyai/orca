@@ -240,10 +240,36 @@ function normalizeAutomationSessionReuse(automation: Automation): Automation {
   }
 }
 
+type LegacySshTarget = SshTarget & {
+  remoteWorkspaceSyncEnabled?: unknown
+  remoteWorkspaceSyncGracePeriodSeconds?: unknown
+}
+
 // Why: old persisted targets predate configHost. Default to label-based lookup
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
 function normalizeSshTarget(t: SshTarget): SshTarget {
-  return { ...t, configHost: t.configHost ?? t.label ?? t.host }
+  const target = { ...(t as LegacySshTarget) }
+  const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
+  const currentGracePeriodSeconds = target.relayGracePeriodSeconds
+  const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
+  // Why: remote workspace sync now follows the SSH relay lifecycle, so the
+  // retired per-target sync opt-out and grace-period fields stop at disk load.
+  delete target.remoteWorkspaceSyncEnabled
+  delete target.remoteWorkspaceSyncGracePeriodSeconds
+  delete target.relayGracePeriodSeconds
+  const relayGracePeriodSeconds =
+    currentGracePeriodSeconds ??
+    (legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
+      ? legacyGracePeriodSeconds
+      : undefined)
+  const normalized: SshTarget = {
+    ...target,
+    configHost: target.configHost ?? target.label ?? target.host
+  }
+  if (relayGracePeriodSeconds !== undefined) {
+    normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  return normalized
 }
 
 // Why: shared by load-time merge and the IPC update handler so the same

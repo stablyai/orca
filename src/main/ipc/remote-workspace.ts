@@ -152,6 +152,17 @@ function normalizeConnectedClients(
     .filter((entry): entry is RemoteWorkspaceConnectedClient => entry !== null)
 }
 
+function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((targetId) => typeof targetId !== 'string' || targetId.length === 0)
+  ) {
+    return null
+  }
+  return new Set(value)
+}
+
 function targetForWorktree(store: Store, worktreeId: string): string | null {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return store.getRepo(repoId)?.connectionId ?? null
@@ -260,17 +271,18 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session: WorkspaceSessionState; hydratedTargetIds?: string[] }) => {
-      const hydratedTargetIds = Array.isArray(args.hydratedTargetIds)
-        ? new Set(args.hydratedTargetIds)
-        : null
+    async (_event, args: { session: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+      const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
+      if (!hydratedTargetIds) {
+        // Why: an omitted hydration set used to broadcast one session to every
+        // SSH target, overwriting unrelated remote workspace snapshots.
+        return []
+      }
       const targets =
         getSshConnectionStore()
           ?.listTargets()
           .filter(
-            (target) =>
-              getActiveMultiplexer(target.id) &&
-              (!hydratedTargetIds || hydratedTargetIds.has(target.id))
+            (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
       const results: { targetId: string; result: RemoteWorkspacePatchResult }[] = []
