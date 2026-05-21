@@ -19,6 +19,8 @@ import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { initObservability, shutdownObservability } from './observability'
+import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
 import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
@@ -518,6 +520,25 @@ function recordProcessGoneCrash(
     return
   }
   recentCrashKeys.set(key, now)
+  const span = startSpan('electron.process_gone', {
+    attributes: {
+      'crash.source': source,
+      'crash.process_type': processType,
+      'crash.reason': reason,
+      ...(exitCode !== null ? { 'crash.exit_code': exitCode } : {}),
+      'app.version': app.getVersion(),
+      platform: process.platform,
+      osRelease: os.release(),
+      arch: process.arch,
+      electronVersion: process.versions.electron,
+      chromeVersion: process.versions.chrome,
+      details,
+      breadcrumbs: getCrashBreadcrumbSnapshot()
+    }
+  })
+  // Why: renderer/child crashes belong in the local trace lane so the
+  // diagnostic bundle has the same process-gone signal as the startup prompt.
+  span.fail(`${source} process gone: ${processType} ${reason} (${exitCode ?? 'unknown'})`)
   void crashReports
     .record({
       source,
@@ -827,6 +848,13 @@ app.whenReady().then(async () => {
   // the Store reference, seeds common props, and resets per-session burst
   // caps. Actual transport initialization is still gated by both flags.
   initTelemetry(store)
+  // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
+  // composition root — independent of product telemetry — and must
+  // initialize before any IPC handler / runtime span is created so the
+  // tracer's active sink is populated at the moment the first span fires.
+  // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
+  // / CI internally; those gates do not need to be re-checked here.
+  initObservability()
   // Why: cohort-classifier reads the repo count synchronously at every emit
   // for cohort-extended events. The Store has been sync-loaded above, and
   // this init runs before any IPC handler is registered and before any
@@ -1184,6 +1212,7 @@ app.on('will-quit', (e) => {
     // quit chain.
     Promise.allSettled([disconnectDaemon(), rpcStopAndClear, watcherShutdown])
       .then(() => shutdownTelemetry())
+      .then(() => shutdownObservability())
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })

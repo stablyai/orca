@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import {
-  Cable,
+  Plug,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -27,6 +27,7 @@ import {
   getWorkspacePortGroups,
   type WorkspacePortGroup
 } from '@/lib/workspace-port-groups'
+import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
@@ -53,7 +54,7 @@ function PortAction({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="size-6 text-muted-foreground hover:text-foreground"
+          className="size-5 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/35"
           aria-label={label}
           onClick={onClick}
           disabled={disabled}
@@ -109,7 +110,7 @@ function PortRow({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       void window.api.ui.writeClipboardText(addressForPort(port))
-      toast.success(`Copied :${port.port}`)
+      toast.success(`Copied ${port.port}`)
     },
     [port]
   )
@@ -130,7 +131,7 @@ function PortRow({
           toast.error(result.reason)
           return
         }
-        toast.success(`Stopped process on :${port.port}`)
+        toast.success(`Stopped process on ${port.port}`)
         setWorkspacePortScanRefreshing(true)
         try {
           const scan = await scanWorkspacePortsForTarget(runtimeTarget)
@@ -148,28 +149,37 @@ function PortRow({
   )
 
   return (
-    <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50">
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="font-mono text-[12px] font-semibold text-foreground">:{port.port}</span>
-          <span className="truncate text-[11px] text-muted-foreground">{processLabel}</span>
+    <div className="group/port grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50">
+      <span className="select-text font-mono text-[12px] font-semibold tabular-nums text-foreground">
+        {port.port}
+      </span>
+      <div className="min-w-0 space-y-0.5">
+        <div className="relative flex h-5 min-w-0 items-center">
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <span className="block min-w-0 select-text truncate text-[11px] text-muted-foreground">
+                {processLabel}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {processLabel}
+            </TooltipContent>
+          </Tooltip>
+          <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
+            <PortAction label="Open in Orca Browser" onClick={handleOpen} disabled={!canOpen}>
+              <ExternalLink className="size-3" />
+            </PortAction>
+            <PortAction label={`Copy ${addressForPort(port)}`} onClick={handleCopy}>
+              <Copy className="size-3" />
+            </PortAction>
+            <PortAction label="Stop Process" disabled={!canStop} onClick={handleStop}>
+              <Trash2 className="size-3" />
+            </PortAction>
+          </div>
         </div>
-        <div className="truncate text-[10px] text-muted-foreground/70">
+        <div className="select-text truncate text-[10px] text-muted-foreground/70">
           {external ? port.kind : addressForPort(port)}
         </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        <PortAction label="Open in Orca Browser" onClick={handleOpen} disabled={!canOpen}>
-          <ExternalLink className="size-3" />
-        </PortAction>
-        <PortAction label={`Copy ${addressForPort(port)}`} onClick={handleCopy}>
-          <Copy className="size-3" />
-        </PortAction>
-        {canStop && (
-          <PortAction label="Stop Process" onClick={handleStop}>
-            <Trash2 className="size-3" />
-          </PortAction>
-        )}
       </div>
     </div>
   )
@@ -227,7 +237,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
               ) : (
-                <Cable className="size-3 text-muted-foreground" />
+                <Plug className="size-3 text-muted-foreground" />
               )}
               {!iconOnly && (
                 <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
@@ -257,72 +267,74 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         className="w-[24rem] max-w-[calc(100vw-2rem)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <Cable className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">Ports</span>
+        <SelectedTextCopyMenu>
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
+              <Plug className="size-3 shrink-0 text-muted-foreground" />
+              <span className="truncate">Ports</span>
+            </div>
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {workspacePortCount} workspace · {externalPorts.length} external
+            </span>
           </div>
-          <span className="text-[11px] tabular-nums text-muted-foreground">
-            {workspacePortCount} workspace · {externalPorts.length} external
-          </span>
-        </div>
 
-        {scan?.unavailableReason ? (
-          <div className="px-3 py-3 text-xs text-muted-foreground">
-            Port scan unavailable on {scan.platform}: {scan.unavailableReason}
-          </div>
-        ) : (
-          <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
-            {workspaceGroups.length > 0 ? (
-              workspaceGroups.map((group) => (
-                <WorkspaceGroupRows
-                  key={group.worktreeId}
-                  group={group}
-                  activeWorktreeId={activeWorktreeId}
-                />
-              ))
-            ) : (
-              <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                {refreshing ? 'Scanning for workspace ports...' : 'No workspace ports detected'}
-              </div>
-            )}
-
-            <section className="border-t border-border/60">
-              <button
-                type="button"
-                className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                aria-expanded={externalOpen}
-                onClick={() => setExternalOpen((value) => !value)}
-              >
-                {externalOpen ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
-                <span>External Ports</span>
-                <span className="ml-auto font-mono text-[10px]">{externalPorts.length}</span>
-              </button>
-              {externalOpen && (
-                <div className="px-1 pb-1">
-                  {externalPorts.length > 0 ? (
-                    externalPorts.map((port) => (
-                      <PortRow
-                        key={port.id}
-                        port={port}
-                        activeWorktreeId={activeWorktreeId}
-                        external
-                      />
-                    ))
-                  ) : (
-                    <div className="px-2 py-2 text-xs text-muted-foreground">
-                      No external ports detected
-                    </div>
-                  )}
+          {scan?.unavailableReason ? (
+            <div className="px-3 py-3 text-xs text-muted-foreground">
+              Port scan unavailable on {scan.platform}: {scan.unavailableReason}
+            </div>
+          ) : (
+            <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
+              {workspaceGroups.length > 0 ? (
+                workspaceGroups.map((group) => (
+                  <WorkspaceGroupRows
+                    key={group.worktreeId}
+                    group={group}
+                    activeWorktreeId={activeWorktreeId}
+                  />
+                ))
+              ) : (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                  {refreshing ? 'Scanning for workspace ports...' : 'No workspace ports detected'}
                 </div>
               )}
-            </section>
-          </div>
-        )}
+
+              <section className="border-t border-border/60">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  aria-expanded={externalOpen}
+                  onClick={() => setExternalOpen((value) => !value)}
+                >
+                  {externalOpen ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                  <span>External Ports</span>
+                  <span className="ml-auto font-mono text-[10px]">{externalPorts.length}</span>
+                </button>
+                {externalOpen && (
+                  <div className="px-1 pb-1">
+                    {externalPorts.length > 0 ? (
+                      externalPorts.map((port) => (
+                        <PortRow
+                          key={port.id}
+                          port={port}
+                          activeWorktreeId={activeWorktreeId}
+                          external
+                        />
+                      ))
+                    ) : (
+                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                        No external ports detected
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+        </SelectedTextCopyMenu>
       </PopoverContent>
     </Popover>
   )

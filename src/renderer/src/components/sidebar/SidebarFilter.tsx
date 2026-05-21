@@ -19,6 +19,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -88,9 +89,10 @@ const SidebarFilter = React.memo(function SidebarFilter({
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
-  const hasAnyFilter = showSleepingWorkspaces || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
+  const hasAnyFilter = hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter
   const activeFilterCount =
-    (showSleepingWorkspaces ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
@@ -106,7 +108,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
-    setShowSleepingWorkspaces(false)
+    setShowSleepingWorkspaces(DEFAULT_SHOW_SLEEPING_WORKSPACES)
     setHideDefaultBranchWorkspace(false)
     setFilterRepoIds([])
   }, [setShowSleepingWorkspaces, setHideDefaultBranchWorkspace, setFilterRepoIds])
@@ -161,9 +163,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
       >
         <FilterToggleRow
           icon={<Moon className="size-3.5" />}
-          label="Show sleeping"
-          checked={showSleepingWorkspaces}
-          onChange={setShowSleepingWorkspaces}
+          label="Hide sleeping"
+          checked={!showSleepingWorkspaces}
+          onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
         />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}

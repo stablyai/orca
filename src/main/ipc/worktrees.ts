@@ -21,6 +21,7 @@ import {
   removeWorktree
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
+import { withWorktreeSpan } from '../observability/instrumentation'
 import { getDefaultRemote } from '../git/repo'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
@@ -375,51 +376,61 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:create',
     async (_event, args: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
-      const repo = store.getRepo(args.repoId)
-      if (!repo) {
-        throw new Error(`Repo not found: ${args.repoId}`)
-      }
-      if (isFolderRepo(repo)) {
-        throw new Error('Folder mode does not support creating worktrees.')
-      }
+      // Why span here: worktree creation chains a clone-or-checkout, an
+      // install hook, and several git invocations. Wrapping the IPC entry
+      // gives every child git span a parent to attach to, so a failure in
+      // step 3 of 5 still shows up in the trace tree alongside steps 1–2.
+      // The branch name and remote URL are intentionally not added as
+      // attributes — branch names can carry user-content (e.g. an issue
+      // title) and the redactor would have to learn yet another rule;
+      // the repo ID is the safer correlator for the bundle.
+      return withWorktreeSpan({ stage: 'create' }, async () => {
+        const repo = store.getRepo(args.repoId)
+        if (!repo) {
+          throw new Error(`Repo not found: ${args.repoId}`)
+        }
+        if (isFolderRepo(repo)) {
+          throw new Error('Folder mode does not support creating worktrees.')
+        }
 
-      const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
-      const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+        const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
+        const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
 
-      let result: CreateWorktreeResult
-      try {
-        // Why: only wrap the helpers themselves. The pre-validation throws
-        // above (`Repo not found`, `Folder mode does not support creating
-        // worktrees`) signal IPC-shape bugs, not the user-visible
-        // git/filesystem failures the funnel cares about — bucketing them
-        // into `unknown` would pollute the failure taxonomy.
-        result = repo.connectionId
-          ? await createRemoteWorktree(args, repo, store, mainWindow)
-          : await createLocalWorktree(args, repo, store, mainWindow, runtime)
-      } catch (error) {
-        track('workspace_create_failed', {
+        let result: CreateWorktreeResult
+        try {
+          // Why: only wrap the helpers themselves. The pre-validation throws
+          // above (`Repo not found`, `Folder mode does not support creating
+          // worktrees`) signal IPC-shape bugs, not the user-visible
+          // git/filesystem failures the funnel cares about — bucketing them
+          // into `unknown` would pollute the failure taxonomy.
+          result = repo.connectionId
+            ? await createRemoteWorktree(args, repo, store, mainWindow)
+            : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+        } catch (error) {
+          track('workspace_create_failed', {
+            source,
+            error_class: classifyWorkspaceCreateError(error),
+            ...getCohortAtEmit()
+          })
+          throw error
+        }
+
+        // Why: emit `workspace_created` only after the underlying create has
+        // resolved (the helpers throw on failure, so reaching this line means
+        // git-add succeeded — we deliberately do not also emit a separate
+        // `workspace_initialized`, see telemetry-plan.md§Deferred events).
+        // `from_existing_branch` is true iff the caller specified a non-empty
+        // baseBranch; an unspecified baseBranch means "branch from default
+        // HEAD", which is the not-from-existing-branch case. We never send
+        // the branch name itself.
+        track('workspace_created', {
           source,
-          error_class: classifyWorkspaceCreateError(error),
+          from_existing_branch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
           ...getCohortAtEmit()
         })
-        throw error
-      }
 
-      // Why: emit `workspace_created` only after the underlying create has
-      // resolved (the helpers throw on failure, so reaching this line means
-      // git-add succeeded — we deliberately do not also emit a separate
-      // `workspace_initialized`, see telemetry-plan.md§Deferred events).
-      // `from_existing_branch` is true iff the caller specified a non-empty
-      // baseBranch; an unspecified baseBranch means "branch from default
-      // HEAD", which is the not-from-existing-branch case. We never send
-      // the branch name itself.
-      track('workspace_created', {
-        source,
-        from_existing_branch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
-        ...getCohortAtEmit()
+        return result
       })
-
-      return result
     }
   )
 
@@ -605,10 +616,14 @@ export function registerWorktreeHandlers(
         worktreePath,
         registeredWorktrees
       ).path
-      const removedPushTarget = store.getWorktreeMeta(args.worktreeId)?.pushTarget
+      const removedMeta = store.getWorktreeMeta(args.worktreeId)
+      const removedPushTarget = removedMeta?.pushTarget
+      const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
       if (repo.connectionId) {
-        await provider!.removeWorktree(canonicalWorktreePath, args.force)
+        await (deleteBranch
+          ? provider!.removeWorktree(canonicalWorktreePath, args.force)
+          : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
         await cleanupUnusedWorktreePushTargetRemoteSsh(
           provider!,
           repo.path,
@@ -676,7 +691,11 @@ export function registerWorktreeHandlers(
       }
 
       try {
-        await removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+        await (deleteBranch
+          ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+          : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
+              deleteBranch
+            }))
       } catch (error) {
         // If git no longer tracks this worktree, clean up the directory and metadata
         if (isOrphanedWorktreeError(error)) {

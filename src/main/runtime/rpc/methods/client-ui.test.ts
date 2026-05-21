@@ -44,11 +44,16 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('ui.set', { showActiveOnly: true, filterRepoIds: ['repo-1'] })
+      makeRequest('ui.set', {
+        showActiveOnly: true,
+        hideSleepingWorkspaces: true,
+        filterRepoIds: ['repo-1']
+      })
     )
 
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       showActiveOnly: true,
+      hideSleepingWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })

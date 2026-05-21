@@ -779,6 +779,19 @@ type PartialWorkItemsResult = {
   issuesError?: ClassifiedError
 }
 
+function assertSshRepoHasResolvedGitHubSource(args: {
+  connectionId?: string | null
+  issueOwnerRepo: OwnerRepo | null
+  prOwnerRepo: OwnerRepo | null
+}): void {
+  if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
+    return
+  }
+  // Why: SSH repo paths are remote-only, so gh cannot use cwd to infer repo
+  // context. Without a resolved owner/repo, running gh would query local state.
+  throw new Error('GitHub work items require a GitHub remote for SSH repositories')
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -787,7 +800,9 @@ async function listRecentWorkItems(
   connectionId?: string | null
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  if (issueOwnerRepo || prOwnerRepo) {
+  const requiresExplicitRepo = Boolean(connectionId)
+  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
+  if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
     // PR half — the UI renders partial results plus a banner for the failing
     // side, matching the parent design doc's partial-failure rule (§2).
@@ -802,19 +817,21 @@ async function listRecentWorkItems(
             ],
             ghOptions
           )
-        : ghExecFileAsync(
-            [
-              'issue',
-              'list',
-              '--limit',
-              String(limit),
-              '--state',
-              'open',
-              '--json',
-              'number,title,state,url,labels,updatedAt,author'
-            ],
-            ghOptions
-          ),
+        : requiresExplicitRepo
+          ? Promise.resolve({ stdout: '[]' })
+          : ghExecFileAsync(
+              [
+                'issue',
+                'list',
+                '--limit',
+                String(limit),
+                '--state',
+                'open',
+                '--json',
+                'number,title,state,url,labels,updatedAt,author'
+              ],
+              ghOptions
+            ),
       prOwnerRepo
         ? ghExecFileAsync(
             [
@@ -825,19 +842,21 @@ async function listRecentWorkItems(
             ],
             ghOptions
           )
-        : ghExecFileAsync(
-            [
-              'pr',
-              'list',
-              '--limit',
-              String(limit),
-              '--state',
-              'open',
-              '--json',
-              WORK_ITEM_PR_LIST_JSON_FIELDS
-            ],
-            ghOptions
-          )
+        : requiresExplicitRepo
+          ? Promise.resolve({ stdout: '[]' })
+          : ghExecFileAsync(
+              [
+                'pr',
+                'list',
+                '--limit',
+                String(limit),
+                '--state',
+                'open',
+                '--json',
+                WORK_ITEM_PR_LIST_JSON_FIELDS
+              ],
+              ghOptions
+            )
     ])
 
     let issues: MainWorkItem[] = []
@@ -946,6 +965,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const requiresExplicitRepo = Boolean(connectionId)
+  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
     query.state === 'merged' ||
     query.draft ||
@@ -959,6 +980,9 @@ async function listQueriedWorkItems(
   // failures retain the prior swallow-and-log behavior per parent doc §6.
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
     if (!issueScope) {
+      return { items: [] }
+    }
+    if (requiresExplicitRepo && !issueOwnerRepo) {
       return { items: [] }
     }
     const args = buildWorkItemListArgs({
@@ -981,6 +1005,9 @@ async function listQueriedWorkItems(
 
   const prFetch = (async (): Promise<MainWorkItem[]> => {
     if (!prScope) {
+      return []
+    }
+    if (requiresExplicitRepo && !prOwnerRepo) {
       return []
     }
     const args = buildWorkItemListArgs({
@@ -1700,6 +1727,46 @@ async function getPRByNumber(
   }
 }
 
+async function lookupPRByNumber(args: {
+  candidates: OwnerRepo[]
+  number: number
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+}): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
+  for (const candidate of args.candidates) {
+    try {
+      const linkedData = await getPRByNumber(candidate, args.number, args.ghOptions)
+      if (!linkedData) {
+        continue
+      }
+      return { data: linkedData, dataRepo: candidate }
+    } catch (err) {
+      if (shouldStopAfterExactLookupError(err)) {
+        throw err
+      }
+      // Candidate probing is best-effort; another repo may own the PR.
+    }
+  }
+
+  if (args.candidates.length > 0) {
+    return { data: null, dataRepo: null }
+  }
+
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
+      args.ghOptions
+    )
+    return { data: JSON.parse(stdout), dataRepo: null }
+  } catch (err) {
+    if (isNoPullRequestError(err)) {
+      // Why: stale cached fallback numbers should not turn every poll into an
+      // error when the PR was deleted or belonged to a different repo.
+      return { data: null, dataRepo: null }
+    }
+    throw err
+  }
+}
+
 function isNotFoundGhError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   return classifyGhError(stderr).type === 'not_found'
@@ -1719,14 +1786,23 @@ function shouldStopAfterExactLookupError(err: unknown): boolean {
  * "create from PR" worktrees whose local branch differs from the PR head ref,
  * and prevents a coalesced linked-PR refresh from fanning out an unrelated
  * branch lookup result to sibling aliases.
+ * `fallbackPRNumber` is weaker: branch lookup still wins, and exact lookup is
+ * used only after branch lookup misses.
  */
 export async function getPRForBranch(
   repoPath: string,
   branch: string,
   linkedPRNumber?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  fallbackPRNumber?: number | null
 ): Promise<PRInfo | null> {
-  const outcome = await getPRForBranchOutcome(repoPath, branch, linkedPRNumber, connectionId)
+  const outcome = await getPRForBranchOutcome(
+    repoPath,
+    branch,
+    linkedPRNumber,
+    connectionId,
+    fallbackPRNumber
+  )
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
@@ -1734,11 +1810,14 @@ export async function getPRForBranchOutcome(
   repoPath: string,
   branch: string,
   linkedPRNumber?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  fallbackPRNumber?: number | null
 ): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
-  if (!branchName && typeof linkedPRNumber !== 'number') {
+  // Why: detached HEAD cannot use branch lookup, but an exact linked/fallback
+  // PR number remains safe to query and keeps review state visible.
+  if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
   const context = githubRepoContext(repoPath, connectionId)
@@ -1751,39 +1830,13 @@ export async function getPRForBranchOutcome(
     let dataRepo: OwnerRepo | null = null
 
     if (typeof linkedPRNumber === 'number') {
-      for (const candidate of candidates) {
-        try {
-          const linkedData = await getPRByNumber(candidate, linkedPRNumber, ghOptions)
-          if (!linkedData) {
-            continue
-          }
-          data = linkedData
-          dataRepo = candidate
-          break
-        } catch (err) {
-          if (shouldStopAfterExactLookupError(err)) {
-            throw err
-          }
-          // Candidate probing is best-effort; another repo may own the PR.
-        }
-      }
-
-      if (!data && candidates.length === 0) {
-        const args = ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
-        try {
-          const { stdout } = await ghExecFileAsync(args, ghOptions)
-          data = JSON.parse(stdout)
-        } catch (err) {
-          if (!isNoPullRequestError(err)) {
-            return prRefreshUpstreamError(err)
-          }
-          // Why: a stale linkedPRNumber (PR deleted, wrong repo, ...) makes
-          // `gh pr view <number>` reject. Treat that as the no-PR case so
-          // callers see the historical `null` semantics instead of a thrown
-          // error every poll cycle.
-          data = null
-        }
-      }
+      const exactLookup = await lookupPRByNumber({
+        candidates,
+        number: linkedPRNumber,
+        ghOptions
+      })
+      data = exactLookup.data
+      dataRepo = exactLookup.dataRepo
     } else if (branchName) {
       // During a rebase the worktree is in detached HEAD and branch is empty.
       // An empty --head filter causes gh to return an arbitrary PR.
@@ -1824,6 +1877,15 @@ export async function getPRForBranchOutcome(
           }
         }
       }
+    }
+    if (!data && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber === 'number') {
+      const fallbackLookup = await lookupPRByNumber({
+        candidates,
+        number: fallbackPRNumber,
+        ghOptions
+      })
+      data = fallbackLookup.data
+      dataRepo = fallbackLookup.dataRepo
     }
     if (!data) {
       return { kind: 'no-pr', fetchedAt: Date.now() }

@@ -10,6 +10,11 @@ import { readFile } from 'fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
+import type { GitUpstreamStatus } from '../shared/types'
+import {
+  getEffectiveGitUpstreamStatus,
+  splitRemoteBranchName
+} from '../shared/git-effective-upstream'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -54,12 +59,7 @@ export async function getStatusOp(
   conflictOperation: string
   head?: string
   branch?: string
-  upstreamStatus?: {
-    hasUpstream: boolean
-    upstreamName?: string
-    ahead: number
-    behind: number
-  }
+  upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
 }> {
   const worktreePath = params.worktreePath as string
@@ -68,14 +68,7 @@ export async function getStatusOp(
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
-  let upstreamStatus:
-    | {
-        hasUpstream: boolean
-        upstreamName?: string
-        ahead: number
-        behind: number
-      }
-    | undefined
+  let upstreamStatus: GitUpstreamStatus | undefined
   let ignoredPaths: string[] = []
 
   try {
@@ -105,6 +98,14 @@ export async function getStatusOp(
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus
     ignoredPaths = parsed.ignoredPaths
+    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
+      try {
+        upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
+      } catch {
+        // Why: status polling should keep returning working-tree entries even
+        // if the richer upstream probe hits a transient SSH/git ref error.
+      }
+    }
 
     for (const uLine of parsed.unmergedLines) {
       const entry = parseUnmergedEntry(worktreePath, uLine)
@@ -124,6 +125,26 @@ export async function getStatusOp(
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {})
   }
+}
+
+function getShortBranchName(branch: string | undefined): string | null {
+  const prefix = 'refs/heads/'
+  return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function shouldProbeEffectiveUpstreamStatus(
+  branch: string | undefined,
+  upstreamName: string | undefined
+): boolean {
+  const branchName = getShortBranchName(branch)
+  if (!branchName) {
+    return false
+  }
+  if (!upstreamName) {
+    return true
+  }
+  const parsed = splitRemoteBranchName(upstreamName)
+  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }
 
 function parseCheckIgnoreOutput(stdout: string): string[] {

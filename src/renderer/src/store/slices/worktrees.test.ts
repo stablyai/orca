@@ -40,6 +40,7 @@ globalThis.window = { api: mockApi }
 
 import { createWorktreeSlice } from './worktrees'
 import { getHostedReviewCacheKey } from './hosted-review'
+import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
@@ -415,6 +416,27 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(8)
   })
 
+  it('updates worktree records when only GitLab link metadata changes', async () => {
+    const store = createTestStore()
+    const initial = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature'
+    })
+    const refreshed = { ...initial, linkedGitLabIssue: 321 }
+    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    store.setState({
+      worktreesByRepo: { repo1: [initial] },
+      sortEpoch: 7
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
+    expect(store.getState().sortEpoch).toBe(8)
+  })
+
   it('refreshes remote lineage when the worktree payload is otherwise unchanged', async () => {
     const store = createTestStore()
     const worktree = makeWorktree({
@@ -752,6 +774,34 @@ describe('createWorktree base status merge', () => {
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review'
+    })
+  })
+
+  it('stamps manualOrder on create while Manual sort is active', async () => {
+    const store = createTestStore()
+    store.setState({ sortBy: 'manual' } as Partial<AppState>)
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      manualOrder: 123_456
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    try {
+      await store.getState().createWorktree('repo1', 'feature')
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        manualOrder: 123_456
+      })
+    )
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      manualOrder: 123_456
     })
   })
 
@@ -1441,6 +1491,18 @@ describe('worktree remote runtime mutations', () => {
     })
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
     const cacheKey = getHostedReviewCacheKey('/repo1', 'pr-branch', undefined, 'repo1')
+    const prCacheKey = getGitHubPRCacheKey('/repo1', 'repo1', 'pr-branch')
+    const legacyRepoPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', 'repo1', 'pr-branch')
+    const legacyPathPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', undefined, 'pr-branch')
+    const prData = {
+      number: 456,
+      title: 'Linked PR',
+      state: 'open' as const,
+      url: 'https://github.com/acme/repo/pull/456',
+      checksStatus: 'success' as const,
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      mergeable: 'MERGEABLE' as const
+    }
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -1461,6 +1523,20 @@ describe('worktree remote runtime mutations', () => {
           fetchedAt: Date.now()
         }
       },
+      prCache: {
+        [prCacheKey]: {
+          data: prData,
+          fetchedAt: Date.now()
+        },
+        [legacyRepoPRCacheKey]: {
+          data: { ...prData, title: 'Legacy repo-scoped PR' },
+          fetchedAt: Date.now()
+        },
+        [legacyPathPRCacheKey]: {
+          data: { ...prData, title: 'Legacy path-scoped PR' },
+          fetchedAt: Date.now()
+        }
+      },
       fetchHostedReviewForBranch
     } as Partial<AppState>)
 
@@ -1468,6 +1544,9 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
     expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
+    expect(store.getState().prCache[prCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[legacyRepoPRCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[legacyPathPRCacheKey]).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {
       repoId: 'repo1',
       linkedGitHubPR: null,

@@ -1,5 +1,6 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import type { MRInfo, PRInfo } from '../../shared/types'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranch,
@@ -22,18 +23,7 @@ import { getPRForBranch, getRepoSlug } from '../github/client'
 import { getMergeRequest, getMergeRequestForBranch, getProjectSlug } from '../gitlab/client'
 
 function mapGitHubReview(pr: PRInfo): HostedReviewInfo {
-  return {
-    provider: 'github',
-    number: pr.number,
-    title: pr.title,
-    state: pr.state,
-    url: pr.url,
-    status: pr.checksStatus,
-    updatedAt: pr.updatedAt,
-    mergeable: pr.mergeable,
-    ...(pr.headSha ? { headSha: pr.headSha } : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
-  }
+  return hostedReviewInfoFromGitHubPRInfo(pr)
 }
 
 function mapGitLabReviewState(state: MRInfo['state']): HostedReviewInfo['state'] {
@@ -105,15 +95,19 @@ export async function getHostedReviewForBranch(input: {
   connectionId?: string | null
   branch: string
   linkedGitHubPR?: number | null
+  fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
+  // Why: detached HEAD cannot use branch lookup, but provider-specific exact
+  // ids can still resolve the review without probing an empty branch name.
   if (
     !branchName &&
     input.linkedGitHubPR == null &&
+    input.fallbackGitHubPR == null &&
     input.linkedGitLabMR == null &&
     input.linkedBitbucketPR == null &&
     input.linkedAzureDevOpsPR == null &&
@@ -135,12 +129,22 @@ export async function getHostedReviewForBranch(input: {
 
   const githubRepo = await getRepoSlug(input.repoPath, input.connectionId)
   if (githubRepo) {
-    const pr = await getPRForBranch(
-      input.repoPath,
-      branchName,
-      input.linkedGitHubPR ?? null,
-      input.connectionId
-    )
+    const fallbackGitHubPR = input.linkedGitHubPR == null ? (input.fallbackGitHubPR ?? null) : null
+    const pr =
+      fallbackGitHubPR !== null
+        ? await getPRForBranch(
+            input.repoPath,
+            branchName,
+            input.linkedGitHubPR ?? null,
+            input.connectionId,
+            fallbackGitHubPR
+          )
+        : await getPRForBranch(
+            input.repoPath,
+            branchName,
+            input.linkedGitHubPR ?? null,
+            input.connectionId
+          )
     return pr ? mapGitHubReview(pr) : null
   }
 

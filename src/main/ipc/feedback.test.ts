@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fetchMock = vi.fn()
+const { fetchMock, handlers } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>()
+}))
 
 vi.mock('electron', () => ({
   app: { getVersion: () => '1.2.3-test' },
-  ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
+  ipcMain: {
+    handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
+      handlers.set(channel, handler)
+    }),
+    removeHandler: vi.fn((channel: string) => handlers.delete(channel))
+  },
   net: { fetch: (...args: unknown[]) => fetchMock(...args) }
 }))
 
-import { submitFeedback } from './feedback'
+import { registerFeedbackHandlers, submitFeedback } from './feedback'
 
 function okResponse(): Response {
   return { ok: true, status: 200 } as unknown as Response
@@ -21,6 +29,7 @@ function postedBody(): Record<string, unknown> {
 
 describe('submitFeedback', () => {
   beforeEach(() => {
+    handlers.clear()
     fetchMock.mockReset()
     fetchMock.mockResolvedValue(okResponse())
   })
@@ -68,9 +77,27 @@ describe('submitFeedback', () => {
     })
   })
 
-  it('marks crash submissions so the backend can route them separately', async () => {
+  it('preserves crash submissions for the crash report lane', async () => {
     await submitFeedback({
       feedback: '[Crash Report]',
+      submissionType: 'crash',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: null
+    } as Parameters<typeof submitFeedback>[0])
+
+    expect(postedBody()).toMatchObject({
+      feedback: '[Crash Report]',
+      submissionType: 'crash',
+      githubLogin: 'trusted-user',
+      githubEmail: null
+    })
+  })
+
+  it('forces renderer IPC submissions onto the feedback lane', async () => {
+    registerFeedbackHandlers()
+    await handlers.get('feedback:submit')?.(null, {
+      feedback: 'not a crash report',
       submissionType: 'crash',
       submitAnonymously: false,
       githubLogin: 'trusted-user',
@@ -78,8 +105,8 @@ describe('submitFeedback', () => {
     })
 
     expect(postedBody()).toMatchObject({
-      feedback: '[Crash Report]',
-      submissionType: 'crash',
+      feedback: 'not a crash report',
+      submissionType: 'feedback',
       githubLogin: 'trusted-user',
       githubEmail: null
     })

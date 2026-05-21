@@ -28,6 +28,7 @@ export type HostedReviewForBranchArgs = {
   repoId?: string
   branch: string
   linkedGitHubPR?: number | null
+  fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
@@ -118,6 +119,7 @@ export type HostedReviewCreationEligibilityArgs = {
   ahead?: number
   behind?: number
   linkedGitHubPR?: number | null
+  fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null

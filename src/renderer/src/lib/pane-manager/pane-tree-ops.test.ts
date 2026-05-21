@@ -166,6 +166,24 @@ describe('safeFit', () => {
     expect(activeBuffer.viewportY).toBe(42)
   })
 
+  it('does not throw when xterm rejects scroll restoration during layout', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    vi.mocked(pane.terminal.scrollToLine).mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+
+    expect(() => safeFit(pane)).not.toThrow()
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
+
   it('still refits when a split-scroll lock is active and the grid changed', () => {
     const pane = createPane({
       proposedCols: 100,

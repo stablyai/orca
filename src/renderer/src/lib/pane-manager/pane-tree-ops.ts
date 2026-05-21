@@ -73,7 +73,12 @@ export function safeFit(pane: ManagedPane): void {
     // Container may not have dimensions yet
   } finally {
     if (shouldRestoreScroll && scrollState) {
-      restoreScrollStateAfterLayout(pane.terminal, scrollState)
+      try {
+        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+      } catch {
+        // Why: xterm can temporarily expose a terminal whose renderer has not
+        // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
+      }
     }
   }
 }

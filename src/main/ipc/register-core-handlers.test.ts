@@ -18,6 +18,7 @@ const {
   registerComputerUsePermissionHandlersMock,
   registerSettingsHandlersMock,
   registerTelemetryHandlersMock,
+  registerDiagnosticsHandlersMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
@@ -62,6 +63,7 @@ const {
   registerComputerUsePermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
+  registerDiagnosticsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
@@ -176,6 +178,10 @@ vi.mock('./telemetry', () => ({
   registerTelemetryHandlers: registerTelemetryHandlersMock
 }))
 
+vi.mock('./diagnostics', () => ({
+  registerDiagnosticsHandlers: registerDiagnosticsHandlersMock
+}))
+
 vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
@@ -277,6 +283,7 @@ describe('registerCoreHandlers', () => {
     registerComputerUsePermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerTelemetryHandlersMock.mockReset()
+    registerDiagnosticsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()

@@ -8,11 +8,17 @@ type StreamDataClient = {
 type PendingStreamDataBatch = {
   timer: ReturnType<typeof setTimeout> | null
   queue: { sessionId: string; data: string }[]
+  queuedChars: number
 }
 
 // Why: match main-process PTY IPC batching to avoid adding latency while
 // removing daemon socket writes and JSON framing during bursty output.
 const STREAM_DATA_BATCH_INTERVAL_MS = 8
+
+type EnqueueOptions = {
+  flushImmediately?: boolean
+  flushMaxChars?: number
+}
 
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
@@ -22,7 +28,7 @@ export class DaemonStreamDataBatcher {
     this.getClient = getClient
   }
 
-  enqueue(clientId: string, sessionId: string, data: string): void {
+  enqueue(clientId: string, sessionId: string, data: string, options: EnqueueOptions = {}): void {
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
@@ -30,7 +36,7 @@ export class DaemonStreamDataBatcher {
 
     let batch = this.pendingByClient.get(clientId)
     if (!batch) {
-      batch = { timer: null, queue: [] }
+      batch = { timer: null, queue: [], queuedChars: 0 }
       this.pendingByClient.set(clientId, batch)
     }
 
@@ -40,7 +46,15 @@ export class DaemonStreamDataBatcher {
     } else {
       batch.queue.push({ sessionId, data })
     }
+    batch.queuedChars += data.length
 
+    if (
+      options.flushImmediately === true &&
+      batch.queuedChars <= (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
+    ) {
+      this.flush(clientId)
+      return
+    }
     if (!batch.timer) {
       batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
     }

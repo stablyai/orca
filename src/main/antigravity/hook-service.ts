@@ -25,7 +25,8 @@ const ANTIGRAVITY_EVENTS = [
   { eventName: 'PreInvocation', schema: 'direct' },
   { eventName: 'PostInvocation', schema: 'direct' },
   { eventName: 'Stop', schema: 'direct' },
-  { eventName: 'PreToolUse', schema: 'tool' },
+  // Why: Antigravity requires PreToolUse hooks to make permission decisions.
+  // Orca's hook is observational, so installing there can block user tools.
   { eventName: 'PostToolUse', schema: 'tool' }
 ] as const
 

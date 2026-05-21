@@ -16,7 +16,6 @@ export type FeedbackSubmitArgs = {
   submitAnonymously?: boolean
   githubLogin: string | null
   githubEmail: string | null
-  submissionType?: FeedbackSubmissionType
 }
 
 type FeedbackSubmitBody = {
@@ -34,12 +33,16 @@ export type FeedbackSubmitResult =
   | { ok: true }
   | { ok: false; status: number | null; error: string }
 
+type InternalFeedbackSubmitArgs = FeedbackSubmitArgs & {
+  submissionType?: FeedbackSubmissionType
+}
+
 // Why: the Slack notification and any follow-up investigation need to know
 // which Orca build and which OS the feedback came from. The main process is
 // the only place with trusted access to these values (app.getVersion and the
 // node os module), so we enrich the payload here rather than trusting the
 // renderer.
-function buildSubmitBody(args: FeedbackSubmitArgs): FeedbackSubmitBody {
+function buildSubmitBody(args: InternalFeedbackSubmitArgs): FeedbackSubmitBody {
   const identity = args.submitAnonymously
     ? { githubLogin: null, githubEmail: null }
     : { githubLogin: args.githubLogin, githubEmail: args.githubEmail }
@@ -65,7 +68,9 @@ async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Resp
   })
 }
 
-export async function submitFeedback(args: FeedbackSubmitArgs): Promise<FeedbackSubmitResult> {
+export async function submitFeedback(
+  args: InternalFeedbackSubmitArgs
+): Promise<FeedbackSubmitResult> {
   const body = buildSubmitBody(args)
   try {
     const res = await postFeedback(FEEDBACK_API_URL, body)
@@ -103,5 +108,9 @@ export async function submitFeedback(args: FeedbackSubmitArgs): Promise<Feedback
 
 export function registerFeedbackHandlers(): void {
   ipcMain.removeHandler('feedback:submit')
-  ipcMain.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) => submitFeedback(args))
+  ipcMain.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) =>
+    // Why: crash submissions are main-only. A compromised renderer can invoke
+    // this channel directly, so force the public feedback lane at the boundary.
+    submitFeedback({ ...args, submissionType: 'feedback' })
+  )
 }

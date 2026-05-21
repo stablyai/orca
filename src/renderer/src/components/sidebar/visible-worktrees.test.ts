@@ -90,7 +90,7 @@ type FilterState = Parameters<typeof sidebarHasActiveFilters>[0]
 
 function filterState(overrides: Partial<FilterState> = {}): FilterState {
   return {
-    showSleepingWorkspaces: false,
+    showSleepingWorkspaces: true,
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
     ...overrides
@@ -382,8 +382,8 @@ describe('sidebarHasActiveFilters', () => {
     expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
   })
 
-  it('returns true when only showSleepingWorkspaces is active', () => {
-    expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: true }))).toBe(true)
+  it('returns true when sleeping workspaces are hidden', () => {
+    expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: false }))).toBe(true)
   })
 
   it('returns true when only filterRepoIds is non-empty', () => {
@@ -416,12 +416,11 @@ describe('computeClearFilterActions', () => {
     // in the common case where hide was never on.
     const actions = computeClearFilterActions(
       filterState({
-        showSleepingWorkspaces: true,
         filterRepoIds: ['repo1']
       })
     )
     expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
-    expect(actions.resetShowSleepingWorkspaces).toBe(true)
+    expect(actions.resetShowSleepingWorkspaces).toBe(false)
     expect(actions.resetFilterRepoIds).toBe(true)
   })
 
@@ -429,7 +428,7 @@ describe('computeClearFilterActions', () => {
     expect(
       computeClearFilterActions(
         filterState({
-          showSleepingWorkspaces: true,
+          showSleepingWorkspaces: false,
           filterRepoIds: ['repo1', 'repo2'],
           hideDefaultBranchWorkspace: true
         })

@@ -293,5 +293,46 @@ setWorktreeNavActivator(activateAndRevealWorktree)
 // (not open*Page) so back/forward does not mutate previousViewBefore* or
 // append duplicate history. See navigateToIndex for the replay branch.
 setWorktreeNavViewActivator((entry) => {
-  useAppStore.getState().setActiveView(entry)
+  if (entry === 'automations') {
+    useAppStore.getState().setActiveView(entry)
+    return
+  }
+  if (entry === 'tasks') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        openGitHubWorkItem: undefined,
+        openGitHubInitialTab: undefined,
+        openLinearIssue: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'github') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'github',
+        preselectedRepoId: entry.workItem.repoId,
+        openGitHubWorkItem: entry.workItem,
+        openGitHubInitialTab: entry.initialTab,
+        openLinearIssue: undefined
+      }
+    }))
+    return
+  }
+  useAppStore.setState((state) => ({
+    activeView: 'tasks',
+    githubTaskDrawerWorkItem: null,
+    taskPageData: {
+      ...state.taskPageData,
+      taskSource: 'linear',
+      openGitHubWorkItem: undefined,
+      openGitHubInitialTab: undefined,
+      openLinearIssue: entry.issue
+    }
+  }))
 })

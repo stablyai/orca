@@ -6,7 +6,7 @@ import type {
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
 
-export type SortBy = 'name' | 'smart' | 'recent' | 'repo'
+export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
 
 // Why: a newly-created worktree's lastActivityAt is stamped at the moment
 // createLocalWorktree finishes git + setup-runner prep (often several seconds
@@ -95,6 +95,14 @@ export function buildWorktreeComparator(
         const cmp = ra.localeCompare(rb)
         return cmp !== 0 ? cmp : a.displayName.localeCompare(b.displayName)
       }
+      case 'manual':
+        // Why fallback to sortOrder: existing users have a persisted smart-sort
+        // snapshot but no manualOrder yet, so Manual starts from a familiar
+        // restored order instead of alphabetizing every legacy workspace.
+        return (
+          (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) ||
+          a.displayName.localeCompare(b.displayName)
+        )
       default: {
         const _exhaustive: never = sortBy
         return _exhaustive

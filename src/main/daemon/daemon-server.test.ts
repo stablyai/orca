@@ -1,19 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect } from 'net'
+import { connect, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, readFileSync } from 'fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
-import { PROTOCOL_VERSION } from './types'
+import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
 }
 
-function createMockSubprocess(): SubprocessHandle {
+function createMockSubprocess(): SubprocessHandle & {
+  _simulateData: (data: string) => void
+} {
+  let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 55555,
@@ -22,14 +25,29 @@ function createMockSubprocess(): SubprocessHandle {
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     forceKill: vi.fn(),
     signal: vi.fn(),
-    onData(_cb) {
-      /* stored for future tests */
+    onData(cb) {
+      onDataCb = cb
     },
     onExit(cb) {
       onExitCb = cb
     },
-    dispose: vi.fn()
+    dispose: vi.fn(),
+    _simulateData(data: string) {
+      onDataCb?.(data)
+    }
   }
+}
+
+type DaemonServerPrivate = {
+  clients: Map<
+    string,
+    {
+      clientId: string
+      controlSocket: Socket
+      streamSocket: Socket | null
+    }
+  >
+  routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
 }
 
 describe('DaemonServer', () => {
@@ -205,6 +223,62 @@ describe('DaemonServer', () => {
         sessionId: 'missing-session',
         payload: { code: -1 }
       })
+    })
+
+    it('bypasses daemon stream batching for output after input', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const controlSocket = { destroy: vi.fn() } as unknown as Socket
+        const streamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          write: vi.fn()
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket,
+          streamSocket
+        })
+
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })
+
+        subprocess!._simulateData('background')
+        expect(streamSocket.write).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(8)
+        expect(streamSocket.write).toHaveBeenCalledTimes(1)
+        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"background"')
+
+        streamSocket.write.mockClear()
+        await daemon.routeRequest('client-1', {
+          id: 'req-2',
+          type: 'write',
+          payload: { sessionId: 'test-session', data: 'x' }
+        })
+
+        expect(subprocess!.write).toHaveBeenCalledWith('x')
+        subprocess!._simulateData('echo')
+        expect(streamSocket.write).toHaveBeenCalledTimes(1)
+        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
+        vi.advanceTimersByTime(8)
+        expect(streamSocket.write).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 

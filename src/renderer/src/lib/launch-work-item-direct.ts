@@ -10,7 +10,8 @@ import {
   CLIENT_PLATFORM,
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
-  getWorkspaceSeedName
+  getWorkspaceSeedName,
+  isGitLabIssueUrl
 } from '@/lib/new-workspace'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -28,7 +29,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 export type LaunchableWorkItem = {
   title: string
   url: string
-  type: 'issue' | 'pr'
+  type: 'issue' | 'pr' | 'mr'
   number: number | null
   repoId?: string
   /** Content to paste into the agent's input. Defaults to the URL when omitted. */
@@ -261,7 +262,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       item.type === 'pr' && item.number ? item.number : undefined,
       resolvedPushTarget,
       undefined,
-      item.linearIdentifier
+      item.linearIdentifier,
+      undefined,
+      undefined,
+      item.type === 'mr' && item.number ? item.number : undefined,
+      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path

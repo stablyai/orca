@@ -109,6 +109,7 @@ type SettingsNavTarget =
   | 'shortcuts'
   | 'stats'
   | 'ssh'
+  | 'privacy'
   | 'experimental'
   | 'agents'
   | 'orchestration'

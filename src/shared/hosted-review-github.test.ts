@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { hostedReviewSummaryFromGitHubPRInfo } from './hosted-review-github'
+import {
+  hostedReviewInfoFromGitHubPRInfo,
+  hostedReviewSummaryFromGitHubPRInfo
+} from './hosted-review-github'
 import type { PRInfo } from './types'
 
 const pr: PRInfo = {
@@ -94,5 +97,19 @@ describe('hostedReviewSummaryFromGitHubPRInfo', () => {
         comments: []
       }).threadSummary
     ).toEqual({ unresolvedCount: 0, dataCompleteness: 'partial' })
+  })
+
+  it('maps PRInfo into sidebar hosted review metadata', () => {
+    const review = hostedReviewInfoFromGitHubPRInfo(pr)
+
+    expect(review).toMatchObject({
+      provider: 'github',
+      number: 12,
+      title: 'Add queue badges',
+      state: 'open',
+      status: 'pending',
+      mergeable: 'MERGEABLE',
+      headSha: 'abc123'
+    })
   })
 })

@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
+import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -316,6 +317,23 @@ function FileExplorerInner(): React.JSX.Element {
     },
     [activeWorktreeId, collapseDirSubtree]
   )
+  const seedFileSearchIncludePattern = useAppStore((s) => s.seedFileSearchIncludePattern)
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const handleFindInFolder = useCallback(
+    (node: (typeof flatRows)[number]) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      seedFileSearchIncludePattern(
+        activeWorktreeId,
+        folderRelativePathToIncludeGlob(node.relativePath)
+      )
+      setRightSidebarTab('search')
+      setRightSidebarOpen(true)
+    },
+    [activeWorktreeId, seedFileSearchIncludePattern, setRightSidebarTab, setRightSidebarOpen]
+  )
 
   if (!worktreePath) {
     return (
@@ -337,7 +355,14 @@ function FileExplorerInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+      <div
+        ref={explorerShellRef}
+        data-orca-explorer-shell
+        data-selected-folder-relative-path={
+          selectedNode?.isDirectory ? selectedNode.relativePath : undefined
+        }
+        className="flex h-full min-h-0 flex-col"
+      >
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
@@ -424,6 +449,7 @@ function FileExplorerInner(): React.JSX.Element {
               onDuplicate={handleDuplicate}
               onRequestDelete={requestDelete}
               onCollapseFolderSubtree={handleCollapseFolderSubtree}
+              onFindInFolder={handleFindInFolder}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
               onDragSourceChange={setDragSourcePath}

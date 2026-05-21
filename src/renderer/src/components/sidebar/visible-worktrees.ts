@@ -3,6 +3,7 @@ import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -35,7 +36,7 @@ export type SidebarFilterState = {
  */
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
-    state.showSleepingWorkspaces ||
+    state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
     state.filterRepoIds.length > 0 ||
     state.hideDefaultBranchWorkspace
   )
@@ -61,7 +62,7 @@ export type ClearFilterActions = {
  */
 export function computeClearFilterActions(state: SidebarFilterState): ClearFilterActions {
   return {
-    resetShowSleepingWorkspaces: state.showSleepingWorkspaces,
+    resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
     resetFilterRepoIds: state.filterRepoIds.length > 0,
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace
   }

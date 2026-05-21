@@ -433,17 +433,44 @@ describe('getStatus', () => {
     })
   })
 
-  it('reports no upstream from porcelain v2 status without an extra git call', async () => {
+  it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
-    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+      })
+      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
+      .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
+      .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+  })
+
+  it('uses same-name origin branch status for legacy base-tracking worktrees', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout:
+          '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/main\n# branch.ab +1 -0\n'
+      })
+      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
+      .mockResolvedValueOnce({ stdout: 'origin/main\n' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n' })
+      .mockResolvedValueOnce({ stdout: '3\t1\n' })
+
+    const result = await getStatus('/repo')
+
+    expect(result.upstreamStatus).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature/prompts',
+      ahead: 3,
+      behind: 1
+    })
   })
 
   it('omits --ignored and ignoredPaths when includeIgnored is not requested', async () => {

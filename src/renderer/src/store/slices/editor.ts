@@ -461,6 +461,7 @@ export type EditorSlice = {
     updates: Partial<EditorSlice['fileSearchStateByWorktree'][string]>
   ) => void
   seedFileSearchQuery: (worktreeId: string, query: string) => void
+  seedFileSearchIncludePattern: (worktreeId: string, includePattern: string) => void
   consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
@@ -823,6 +824,13 @@ function extractPublishFailureDetail(message: string): string | null {
     return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
   }
   return null
+}
+
+function isNonFastForwardRemoteError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
+  )
 }
 
 export function resolveRemoteOperationErrorMessage(
@@ -2491,6 +2499,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // 'session' for Resolved locally) and for all Resolved locally lifecycle.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
+      const hadStatusEntry = Object.prototype.hasOwnProperty.call(s.gitStatusByWorktree, worktreeId)
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }
@@ -2549,7 +2558,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
 
       const nextOpenFiles = reconcileOpenFilesForStatus(s.openFiles, worktreeId, nextEntries)
-      const statusUnchanged = areGitStatusEntriesEqual(prevEntries, nextEntries)
+      const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
       const trackedUnchanged = areTrackedConflictMapsEqual(
         s.trackedConflictPathsByWorktree[worktreeId] ?? {},
         currentTracked
@@ -2694,16 +2703,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // as fire-and-forget so it doesn't block the mutation but updates the
     // store as soon as the IPC resolves.
     get().beginRemoteOperation(publish ? 'publish' : 'push')
+    let shouldRefreshAfterRejectedPush = false
     try {
       await pushRuntimeGit(
         { settings: get().settings, worktreeId, worktreePath, connectionId },
         { publish, pushTarget, forceWithLease: options.forceWithLease }
       )
     } catch (error) {
+      shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
       get().endRemoteOperation()
+      if (shouldRefreshAfterRejectedPush) {
+        const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
+        // Why: the rejected push proved the publish branch moved. Fetch first
+        // so legacy base-tracking worktrees can discover origin/<branch>, then
+        // refresh ahead/behind so Pull/Sync become actionable immediately.
+        void fetchRuntimeGit(context)
+          .catch(() => undefined)
+          .then(() => get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId))
+      }
     }
     void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
@@ -2906,6 +2926,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           [worktreeId]: {
             ...current,
             query,
+            results: null,
+            loading: false,
+            collapsedFiles: new Set(),
+            seedRequestId: (current.seedRequestId ?? 0) + 1
+          }
+        }
+      }
+    }),
+  seedFileSearchIncludePattern: (worktreeId, includePattern) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId] || {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includePattern: '',
+        excludePattern: '',
+        results: null,
+        loading: false,
+        collapsedFiles: new Set()
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: {
+            ...current,
+            includePattern,
             results: null,
             loading: false,
             collapsedFiles: new Set(),

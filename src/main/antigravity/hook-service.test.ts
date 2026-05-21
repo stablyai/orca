@@ -46,9 +46,9 @@ describe('AntigravityHookService', () => {
       >
     }
     expect(Object.keys(config['orca-status']).sort()).toEqual(
-      ['PostInvocation', 'PostToolUse', 'PreInvocation', 'PreToolUse', 'Stop'].sort()
+      ['PostInvocation', 'PostToolUse', 'PreInvocation', 'Stop'].sort()
     )
-    expect(config['orca-status'].PreToolUse[0].matcher).toBe('*')
+    expect(config['orca-status'].PreToolUse).toBeUndefined()
     expect(config['orca-status'].PostToolUse[0].matcher).toBe('*')
     expect(config['orca-status'].PreInvocation[0].command).toContain('antigravity-hook')
     expect(config['orca-status'].PreInvocation[0].command).toContain(
@@ -130,7 +130,8 @@ describe('AntigravityHookService', () => {
       'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
     }
     expect(config['orca-status'].OldEvent).toBeUndefined()
-    const commands = config['orca-status'].PreToolUse.flatMap((definition) =>
+    expect(config['orca-status'].PreToolUse).toBeUndefined()
+    const commands = config['orca-status'].PostToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
     expect(commands).toHaveLength(1)

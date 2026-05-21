@@ -16,6 +16,7 @@ import {
   ListCollapse,
   Loader2,
   Pencil,
+  Search,
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -227,6 +228,7 @@ type FileExplorerRowProps = {
   onDuplicate: (node: TreeNode) => void
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
+  onFindInFolder: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -237,6 +239,10 @@ type FileExplorerRowProps = {
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
   return node.isDirectory && isExpanded
+}
+
+export function shouldShowFindInFolderAction(node: TreeNode): boolean {
+  return node.isDirectory
 }
 
 export function FileExplorerRow({
@@ -261,6 +267,7 @@ export function FileExplorerRow({
   onDuplicate,
   onRequestDelete,
   onCollapseFolderSubtree,
+  onFindInFolder,
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
@@ -437,6 +444,13 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={onCollapseFolderSubtree}>
             <ListCollapse />
             Collapse Folder
+          </ContextMenuItem>
+        )}
+        {shouldShowFindInFolderAction(node) && (
+          <ContextMenuItem onSelect={onFindInFolder}>
+            <Search />
+            Find in Folder
+            <ContextMenuShortcut>{isMac ? '⇧⌘F' : 'Ctrl+Shift+F'}</ContextMenuShortcut>
           </ContextMenuItem>
         )}
         <ContextMenuItem

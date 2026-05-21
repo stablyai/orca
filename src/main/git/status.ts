@@ -13,9 +13,14 @@ import type {
   GitDiffResult,
   GitFileStatus,
   GitStatusEntry,
-  GitStatusResult
+  GitStatusResult,
+  GitUpstreamStatus
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import {
+  getEffectiveGitUpstreamStatus,
+  splitRemoteBranchName
+} from '../../shared/git-effective-upstream'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
@@ -39,6 +44,7 @@ export async function getStatus(
   let branch: string | undefined
   let upstreamName: string | undefined
   let upstreamAheadBehind: { ahead: number; behind: number } | null = null
+  let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
@@ -148,6 +154,18 @@ export async function getStatus(
       }
     }
     statusSucceeded = true
+
+    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+      try {
+        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
+          gitExecFileAsync(args, { cwd: worktreePath })
+        )
+      } catch {
+        // Why: git status polling should not fail just because the richer
+        // upstream probe hit a transient ref/read error; the explicit
+        // upstream-status path will surface those failures when invoked.
+      }
+    }
   } catch {
     // Not a git repo or git not available
   }
@@ -160,17 +178,39 @@ export async function getStatus(
     ...(options.includeIgnored ? { ignoredPaths } : {}),
     ...(statusSucceeded
       ? {
-          upstreamStatus: upstreamName
-            ? {
-                hasUpstream: true,
-                upstreamName,
-                ahead: upstreamAheadBehind?.ahead ?? 0,
-                behind: upstreamAheadBehind?.behind ?? 0
-              }
-            : { hasUpstream: false, ahead: 0, behind: 0 }
+          upstreamStatus:
+            effectiveUpstreamStatus ??
+            (upstreamName
+              ? {
+                  hasUpstream: true,
+                  upstreamName,
+                  ahead: upstreamAheadBehind?.ahead ?? 0,
+                  behind: upstreamAheadBehind?.behind ?? 0
+                }
+              : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
   }
+}
+
+function getShortBranchName(branch: string | undefined): string | null {
+  const prefix = 'refs/heads/'
+  return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function shouldProbeEffectiveUpstreamStatus(
+  branch: string | undefined,
+  upstreamName: string | undefined
+): boolean {
+  const branchName = getShortBranchName(branch)
+  if (!branchName) {
+    return false
+  }
+  if (!upstreamName) {
+    return true
+  }
+  const parsed = splitRemoteBranchName(upstreamName)
+  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }
 
 function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {

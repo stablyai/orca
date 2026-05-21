@@ -155,15 +155,42 @@ describe('git remote operations', () => {
   })
 
   it("runs pull with the user's configured strategy", async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPull('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['pull'], { cwd: '/repo' })
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['pull'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('pulls the same-name origin branch for legacy base-tracking worktrees', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/main\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPull('/repo')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature'], { cwd: '/repo' }],
+      [['pull', 'origin', 'feature'], { cwd: '/repo' }]
+    ])
   })
 
   it('normalizes pull authentication errors to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('Authentication failed'))
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(new Error('Authentication failed'))
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Authentication failed. Check your remote credentials.'
@@ -171,15 +198,18 @@ describe('git remote operations', () => {
   })
 
   it('normalizes pull dirty-worktree aborts to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      new Error(
-        'Command failed: git pull\n' +
-          'error: Your local changes to the following files would be overwritten by merge:\n' +
-          '\tsrc/app.ts\n' +
-          'Please commit your changes or stash them before you merge.\n' +
-          'Aborting'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(
+        new Error(
+          'Command failed: git pull\n' +
+            'error: Your local changes to the following files would be overwritten by merge:\n' +
+            '\tsrc/app.ts\n' +
+            'Please commit your changes or stash them before you merge.\n' +
+            'Aborting'
+        )
       )
-    )
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
@@ -187,15 +217,18 @@ describe('git remote operations', () => {
   })
 
   it('normalizes pull untracked-file aborts to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      new Error(
-        'Command failed: git pull\n' +
-          'error: The following untracked working tree files would be overwritten by merge:\n' +
-          '\tsrc/new.ts\n' +
-          'Please move or remove them before you merge.\n' +
-          'Aborting'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(
+        new Error(
+          'Command failed: git pull\n' +
+            'error: The following untracked working tree files would be overwritten by merge:\n' +
+            '\tsrc/new.ts\n' +
+            'Please move or remove them before you merge.\n' +
+            'Aborting'
+        )
       )
-    )
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Pull would overwrite untracked files. Move, remove, or add them before pulling.'

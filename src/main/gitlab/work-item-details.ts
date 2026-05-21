@@ -167,15 +167,23 @@ export async function getWorkItemDetails(
     type === 'issue'
       ? await getIssueProjectRef(repoPath, knownHosts)
       : await getProjectRef(repoPath, knownHosts)
-  if (!projectRef) {
-    return null
-  }
+
   await acquire()
   try {
-    if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid)
+    if (projectRef) {
+      if (type === 'issue') {
+        return await fetchIssueDetails(repoPath, projectRef, iid)
+      }
+      return await fetchMRDetails(repoPath, projectRef, iid)
     }
-    return await fetchMRDetails(repoPath, projectRef, iid)
+    // Fallback — let glab infer project from cwd. This path is taken when
+    // the repo's remote host is not in getGlabKnownHosts() (e.g. a fresh
+    // self-hosted instance), but glab itself can still resolve it from the
+    // local git config.
+    if (type === 'issue') {
+      return await fetchIssueDetailsFallback(repoPath, iid)
+    }
+    return await fetchMRDetailsFallback(repoPath, iid)
   } catch {
     return null
   } finally {
@@ -215,6 +223,29 @@ async function fetchIssueDetails(
   }
 }
 
+async function fetchIssueDetailsFallback(
+  repoPath: string,
+  iid: number
+): Promise<GitLabWorkItemDetails | null> {
+  const { stdout } = await glabExecFileAsync(['issue', 'view', String(iid), '--output', 'json'], {
+    cwd: repoPath
+  })
+  const issueRaw = JSON.parse(stdout) as GitLabRawIssue
+  const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
+    const full = mapIssueToWorkItem(issueRaw, 'unknown')
+    const { repoId: _repoId, ...rest } = full
+    return rest
+  })()
+  return {
+    item,
+    body: issueRaw.description ?? '',
+    comments: [],
+    assignees: (issueRaw.assignees ?? [])
+      .map((a) => a?.username)
+      .filter((u): u is string => typeof u === 'string')
+  }
+}
+
 async function fetchMRDetails(
   repoPath: string,
   projectRef: ProjectRef,
@@ -248,5 +279,25 @@ async function fetchMRDetails(
     headSha: mrRaw.sha,
     baseSha: mrRaw.diff_refs?.base_sha,
     ...(pipelineJobs !== undefined ? { pipelineJobs } : {})
+  }
+}
+
+async function fetchMRDetailsFallback(
+  repoPath: string,
+  iid: number
+): Promise<GitLabWorkItemDetails | null> {
+  const { stdout } = await glabExecFileAsync(['mr', 'view', String(iid), '--output', 'json'], {
+    cwd: repoPath
+  })
+  const mrRaw = JSON.parse(stdout) as GitLabRawMR
+  const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
+    const full = mapMRToWorkItem(mrRaw, 'unknown')
+    const { repoId: _repoId, ...rest } = full
+    return rest
+  })()
+  return {
+    item,
+    body: mrRaw.description ?? '',
+    comments: []
   }
 }

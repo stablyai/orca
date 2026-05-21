@@ -100,4 +100,31 @@ describe('crash-reporting shared helpers', () => {
     expect(text).not.toContain('Route:')
     expect(text).not.toContain('URL:')
   })
+
+  it('caps formatted reports to the crash endpoint limit', () => {
+    const report: CrashReportRecord = {
+      id: 'crash-oversized',
+      createdAt: '2026-05-16T01:00:00.000Z',
+      status: 'pending',
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: 5,
+      appVersion: '1.0.0',
+      platform: 'darwin',
+      osRelease: '25.0.0',
+      arch: 'arm64',
+      electronVersion: '41.0.0',
+      chromeVersion: '141.0.0',
+      details: Object.fromEntries(
+        Array.from({ length: 400 }, (_, index) => [`detail_${index}`, 'x'.repeat(240)])
+      ),
+      breadcrumbs: []
+    }
+
+    const text = formatCrashReportText(report)
+
+    expect(text.length).toBeLessThanOrEqual(64_000)
+    expect(text).toContain('[Crash report truncated to fit feedback endpoint limits.]')
+  })
 })

@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clipboard,
   FolderKanban,
@@ -58,6 +59,8 @@ type LinearIssueWorkspaceProps = {
   onUse: (issue: LinearIssue) => void
   onOpenIssue: (issue: LinearIssue) => void
   onClose: () => void
+  variant?: 'sheet' | 'page'
+  backLabel?: string
 }
 
 async function copyTextToClipboard(text: string, label: string): Promise<void> {
@@ -376,7 +379,9 @@ export default function LinearIssueWorkspace({
   issue,
   onUse,
   onOpenIssue,
-  onClose
+  onClose,
+  variant = 'sheet',
+  backLabel = 'Back'
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
@@ -545,6 +550,263 @@ export default function LinearIssueWorkspace({
     ]
   }, [displayed])
 
+  const content = displayed ? (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <header className="flex h-[61px] flex-none items-center justify-between gap-4 border-b border-border/60 px-5">
+        <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+          {variant === 'page' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-2 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
+          ) : null}
+          <LinearIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate font-medium text-foreground">
+            {displayed.workspaceName ?? 'Linear'}
+          </span>
+          <ChevronRight className="size-3.5 shrink-0" />
+          <span className="shrink-0">Issues</span>
+          <ChevronRight className="size-3.5 shrink-0" />
+          <span className="shrink-0 font-mono">{displayed.identifier}</span>
+          <span className="min-w-0 truncate font-medium text-foreground">{displayed.title}</span>
+          {issueLoading ? <LoaderCircle className="size-3.5 shrink-0 animate-spin" /> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="hidden px-2 text-sm text-muted-foreground md:inline">2 / 17</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
+                aria-label="Copy Linear URL"
+              >
+                <Link className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              Copy URL
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
+                aria-label="Copy issue identifier"
+              >
+                <Clipboard className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              Copy identifier
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onUse(displayed)}
+                aria-label="Start workspace from issue"
+              >
+                <ArrowRight className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              Start workspace
+            </TooltipContent>
+          </Tooltip>
+          {variant === 'sheet' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onClose}
+                  aria-label="Close Linear issue preview"
+                >
+                  <X className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Close
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+        <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
+          <main className="min-w-0">
+            <h1 className="max-w-[820px] text-[28px] font-semibold leading-tight text-foreground">
+              {displayed.title}
+            </h1>
+
+            <section className="mt-7 max-w-[820px] text-[15px] leading-7 text-foreground">
+              {displayed.description?.trim() ? (
+                <CommentMarkdown
+                  content={displayed.description}
+                  className="text-[15px] leading-7"
+                />
+              ) : (
+                <p className="text-sm italic text-muted-foreground">No description provided.</p>
+              )}
+            </section>
+
+            <LinearIssueSubIssueButton issue={displayed} onOpenIssue={onOpenIssue} />
+
+            <section className="mt-12 border-t border-border/60 pt-9">
+              <div className="mb-8 flex items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold text-foreground">Activity</h2>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <LinearIssueAvatar
+                    avatarUrl={displayed.assignee?.avatarUrl}
+                    name={displayed.assignee?.displayName}
+                    className="size-6"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-7 flex items-center gap-3 text-sm text-muted-foreground">
+                <LinearIssueAvatar
+                  avatarUrl={displayed.assignee?.avatarUrl}
+                  name={displayed.assignee?.displayName}
+                  className="size-5"
+                />
+                <span>
+                  {displayed.assignee?.displayName ?? 'Someone'} updated the issue ·{' '}
+                  {formatLinearIssueRelativeTime(displayed.updatedAt)}
+                </span>
+              </div>
+
+              {commentsError ? (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <span>{commentsError}</span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void loadComments(displayed, requestIdRef.current)}
+                    disabled={commentsLoading}
+                    className="gap-1"
+                  >
+                    {commentsLoading ? (
+                      <LoaderCircle className="size-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3" />
+                    )}
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+
+              {commentsLoading && comments.length === 0 ? (
+                <div className="mb-5 flex items-center justify-center py-8">
+                  <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : comments.length > 0 ? (
+                <div className="mb-6 flex flex-col gap-5">
+                  {comments.map((comment) => (
+                    <article key={comment.id} className="flex gap-3">
+                      <LinearIssueAvatar
+                        avatarUrl={comment.user?.avatarUrl}
+                        name={comment.user?.displayName}
+                        className="size-7"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex min-w-0 items-center gap-2 text-sm">
+                          <span className="truncate font-semibold text-foreground">
+                            {comment.user?.displayName ?? 'Unknown'}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {formatLinearIssueRelativeTime(comment.createdAt)}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
+                          <CommentMarkdown
+                            content={comment.body}
+                            className="text-[14px] leading-7"
+                          />
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+
+              <LinearIssueCommentFooter
+                issueId={displayed.id}
+                workspaceId={displayed.workspaceId}
+                onCommentAdded={handleCommentAdded}
+                variant="linear-page"
+              />
+            </section>
+          </main>
+
+          <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+            {editState ? (
+              <LinearIssueEditSection
+                issue={displayed}
+                editState={editState}
+                onEditStateChange={handleEditStateChange}
+                layout="properties"
+              />
+            ) : null}
+            <LinearIssueSidebarProjectCard
+              issue={displayed}
+              onProjectChanged={handleProjectChanged}
+            />
+            <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
+              <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
+                <span>Actions</span>
+                <ChevronDown className="size-3.5" />
+              </div>
+              <div className="space-y-1 p-3">
+                {actionItems.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Tooltip key={item.label}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={item.action}
+                          className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" sideOffset={6}>
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  if (variant === 'page') {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+        {content}
+      </div>
+    )
+  }
+
   return (
     <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -564,243 +826,7 @@ export default function LinearIssueWorkspace({
           </SheetDescription>
         </VisuallyHidden.Root>
 
-        {displayed ? (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-            <header className="flex h-[61px] flex-none items-center justify-between gap-4 border-b border-border/60 px-5">
-              <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-                <LinearIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate font-medium text-foreground">
-                  {displayed.workspaceName ?? 'Linear'}
-                </span>
-                <ChevronRight className="size-3.5 shrink-0" />
-                <span className="shrink-0">Issues</span>
-                <ChevronRight className="size-3.5 shrink-0" />
-                <span className="shrink-0 font-mono">{displayed.identifier}</span>
-                <span className="min-w-0 truncate font-medium text-foreground">
-                  {displayed.title}
-                </span>
-                {issueLoading ? <LoaderCircle className="size-3.5 shrink-0 animate-spin" /> : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="hidden px-2 text-sm text-muted-foreground md:inline">2 / 17</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
-                      aria-label="Copy Linear URL"
-                    >
-                      <Link className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Copy URL
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
-                      aria-label="Copy issue identifier"
-                    >
-                      <Clipboard className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Copy identifier
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onUse(displayed)}
-                      aria-label="Start workspace from issue"
-                    >
-                      <ArrowRight className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Start workspace
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={onClose}
-                      aria-label="Close Linear issue preview"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Close
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </header>
-
-            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-              <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
-                <main className="min-w-0">
-                  <h1 className="max-w-[820px] text-[28px] font-semibold leading-tight text-foreground">
-                    {displayed.title}
-                  </h1>
-
-                  <section className="mt-7 max-w-[820px] text-[15px] leading-7 text-foreground">
-                    {displayed.description?.trim() ? (
-                      <CommentMarkdown
-                        content={displayed.description}
-                        className="text-[15px] leading-7"
-                      />
-                    ) : (
-                      <p className="text-sm italic text-muted-foreground">
-                        No description provided.
-                      </p>
-                    )}
-                  </section>
-
-                  <LinearIssueSubIssueButton issue={displayed} onOpenIssue={onOpenIssue} />
-
-                  <section className="mt-12 border-t border-border/60 pt-9">
-                    <div className="mb-8 flex items-center justify-between gap-3">
-                      <h2 className="text-xl font-semibold text-foreground">Activity</h2>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <LinearIssueAvatar
-                          avatarUrl={displayed.assignee?.avatarUrl}
-                          name={displayed.assignee?.displayName}
-                          className="size-6"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mb-7 flex items-center gap-3 text-sm text-muted-foreground">
-                      <LinearIssueAvatar
-                        avatarUrl={displayed.assignee?.avatarUrl}
-                        name={displayed.assignee?.displayName}
-                        className="size-5"
-                      />
-                      <span>
-                        {displayed.assignee?.displayName ?? 'Someone'} updated the issue ·{' '}
-                        {formatLinearIssueRelativeTime(displayed.updatedAt)}
-                      </span>
-                    </div>
-
-                    {commentsError ? (
-                      <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        <span>{commentsError}</span>
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => void loadComments(displayed, requestIdRef.current)}
-                          disabled={commentsLoading}
-                          className="gap-1"
-                        >
-                          {commentsLoading ? (
-                            <LoaderCircle className="size-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="size-3" />
-                          )}
-                          Retry
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {commentsLoading && comments.length === 0 ? (
-                      <div className="mb-5 flex items-center justify-center py-8">
-                        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : comments.length > 0 ? (
-                      <div className="mb-6 flex flex-col gap-5">
-                        {comments.map((comment) => (
-                          <article key={comment.id} className="flex gap-3">
-                            <LinearIssueAvatar
-                              avatarUrl={comment.user?.avatarUrl}
-                              name={comment.user?.displayName}
-                              className="size-7"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="mb-1 flex min-w-0 items-center gap-2 text-sm">
-                                <span className="truncate font-semibold text-foreground">
-                                  {comment.user?.displayName ?? 'Unknown'}
-                                </span>
-                                <span className="shrink-0 text-muted-foreground">
-                                  {formatLinearIssueRelativeTime(comment.createdAt)}
-                                </span>
-                              </div>
-                              <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
-                                <CommentMarkdown
-                                  content={comment.body}
-                                  className="text-[14px] leading-7"
-                                />
-                              </div>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <LinearIssueCommentFooter
-                      issueId={displayed.id}
-                      workspaceId={displayed.workspaceId}
-                      onCommentAdded={handleCommentAdded}
-                      variant="linear-page"
-                    />
-                  </section>
-                </main>
-
-                <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-                  {editState ? (
-                    <LinearIssueEditSection
-                      issue={displayed}
-                      editState={editState}
-                      onEditStateChange={handleEditStateChange}
-                      layout="properties"
-                    />
-                  ) : null}
-                  <LinearIssueSidebarProjectCard
-                    issue={displayed}
-                    onProjectChanged={handleProjectChanged}
-                  />
-                  <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
-                    <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-                      <span>Actions</span>
-                      <ChevronDown className="size-3.5" />
-                    </div>
-                    <div className="space-y-1 p-3">
-                      {actionItems.map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <Tooltip key={item.label}>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={item.action}
-                                className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              >
-                                <Icon className="size-4 shrink-0" />
-                                <span className="truncate">{item.label}</span>
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" sideOffset={6}>
-                              {item.label}
-                            </TooltipContent>
-                          </Tooltip>
-                        )
-                      })}
-                    </div>
-                  </section>
-                </aside>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {content}
       </SheetContent>
     </Sheet>
   )

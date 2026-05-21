@@ -51,6 +51,11 @@ function createEditorTabsStore(): StoreApi<AppState> {
   })) as unknown as StoreApi<AppState>
 }
 
+async function flushAsyncRemoteRefresh(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function ownedEditorFileId(
   filePath: string,
   worktreeId: string,
@@ -208,6 +213,51 @@ describe('createEditorSlice file search seed state', () => {
       wholeWord: true,
       useRegex: true,
       includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('seeds file search include pattern with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: '',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search query and options while replacing stale scoped results', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'old/**',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'src/**',
       excludePattern: 'dist/**',
       results: null,
       loading: false,
@@ -1079,6 +1129,18 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('records clean git status checks with an explicit empty entry list', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-clean', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitStatusByWorktree).toHaveProperty('wt-clean')
+    expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
+  })
+
   it('clears ignored path cache when status refresh omits ignored paths', () => {
     const store = createEditorStore()
 
@@ -1434,7 +1496,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('preserves actionable publish errors and avoids refresh on failure', async () => {
+  it('preserves actionable publish errors and refreshes upstream after rejection', async () => {
     const store = createEditorStore()
     const publishError = new Error(
       'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
@@ -1448,8 +1510,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1467,8 +1538,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1519,8 +1599,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1536,8 +1625,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 

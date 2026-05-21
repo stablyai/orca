@@ -20,7 +20,6 @@ import {
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
-  glabApiWithHeaders,
   glabExecFileAsync,
   release,
   resolveIssueSource,
@@ -32,6 +31,25 @@ import type { IssueListState } from './issues'
 // so call sites don't forget the slash escapes for nested groups.
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
+}
+
+function projectRefToGlabRepo(projectRef: ProjectRef): string {
+  // Why: `glab mr list` otherwise infers from cwd and can ignore an
+  // upstream/origin preference. A full URL also works for self-hosted hosts.
+  return `https://${projectRef.host}/${projectRef.path}`
+}
+
+function mrListStateFlags(state: MRListState): string[] {
+  switch (state) {
+    case 'opened':
+      return []
+    case 'merged':
+      return ['--merged']
+    case 'closed':
+      return ['--closed']
+    case 'all':
+      return ['--all']
+  }
 }
 
 /**
@@ -161,9 +179,8 @@ export async function getMergeRequestForBranch(
 }
 
 /**
- * List merge requests for a project with strict pagination. Returns
- * total counts pulled from X-Total / X-Total-Pages response headers so
- * callers can render "Page X of Y" UIs.
+ * List merge requests for a project. Uses glab CLI pagination because
+ * it handles self-hosted auth and project selection consistently.
  */
 export async function listMergeRequests(
   repoPath: string,
@@ -173,46 +190,77 @@ export async function listMergeRequests(
   preference?: IssueSourcePreference
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts()
-  // Why: MRs sit on `origin` in the fork model (the user's fork is where
-  // they push branches and submit MRs). Mirror github's `getOwnerRepo`
-  // call site by going through the upstream/origin preference resolver
-  // so cross-fork workflows reuse the same plumbing.
   const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
-  if (!projectRef) {
-    return {
-      items: [],
-      page,
-      perPage,
-      totalCount: 0,
-      totalPages: 0,
-      error: {
-        type: 'not_found',
-        message: 'No GitLab project found for this repository.'
-      }
-    }
-  }
-  // Why: 'all' is exposed as the picker filter but GitLab's API expects
-  // no state param to mean "any state". Drop the param when 'all'.
-  const stateParam = state === 'all' ? '' : `&state=${state}`
-  const path =
-    `projects/${encodedProject(projectRef.path)}/merge_requests?` +
-    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}`
-  const repoId = projectRef.path
 
   await acquire()
   try {
-    const { body, headers } = await glabApiWithHeaders([path], { cwd: repoPath })
-    const data = JSON.parse(body) as Parameters<typeof mapMRToWorkItem>[0][]
+    if (projectRef) {
+      // Why: use `glab mr list` (CLI) instead of the REST API directly.
+      // The CLI respects the user's glab auth configuration; `--repo`
+      // keeps upstream/origin preference resolution explicit.
+      const stateFlag = mrListStateFlags(state)
+      const { stdout } = await glabExecFileAsync(
+        [
+          'mr',
+          'list',
+          '--output',
+          'json',
+          '--per-page',
+          String(perPage),
+          '--page',
+          String(page),
+          '--order',
+          'updated_at',
+          '--sort',
+          'desc',
+          '--repo',
+          projectRefToGlabRepo(projectRef),
+          ...stateFlag
+        ],
+        { cwd: repoPath }
+      )
+      const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
+      return {
+        items: data.map((d) => mapMRToWorkItem(d, projectRef.path)),
+        page,
+        perPage,
+        // Why: the CLI doesn't return x-total headers, so totals are
+        // approximate. For the Tasks UI this is acceptable — pagination
+        // still works via page+per_page.
+        totalCount: data.length,
+        totalPages: data.length < perPage ? page : page + 1
+      }
+    }
+    // Fallback — let glab infer project from cwd. This path is taken when
+    // the repo's remote host is not in getGlabKnownHosts() (e.g. a fresh
+    // self-hosted instance), but glab itself can still resolve it from the
+    // local git config.
+    const stateFlag = mrListStateFlags(state)
+    const { stdout } = await glabExecFileAsync(
+      [
+        'mr',
+        'list',
+        '--output',
+        'json',
+        '--per-page',
+        String(perPage),
+        '--page',
+        String(page),
+        '--order',
+        'updated_at',
+        '--sort',
+        'desc',
+        ...stateFlag
+      ],
+      { cwd: repoPath }
+    )
+    const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
     return {
-      items: data.map((d) => mapMRToWorkItem(d, repoId)),
+      items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
       page,
       perPage,
-      totalCount: parseHeaderInt(headers['x-total'], 0),
-      // Why: when 'all' state is requested or the per_page is large,
-      // GitLab may not include x-total-pages; fall back to ceil(total/perPage).
-      totalPages:
-        parseHeaderInt(headers['x-total-pages'], 0) ||
-        Math.max(1, Math.ceil(parseHeaderInt(headers['x-total'], 0) / perPage))
+      totalCount: data.length,
+      totalPages: data.length < perPage ? page : page + 1
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
@@ -227,14 +275,6 @@ export async function listMergeRequests(
   } finally {
     release()
   }
-}
-
-function parseHeaderInt(value: string | undefined, fallback: number): number {
-  if (!value) {
-    return fallback
-  }
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 /**
@@ -357,7 +397,7 @@ export async function listWorkItems(
   }
 }
 
-async function fetchIssuesAsWorkItems(
+export async function fetchIssuesAsWorkItems(
   repoPath: string,
   projectRef: ProjectRef,
   state: IssueListState,

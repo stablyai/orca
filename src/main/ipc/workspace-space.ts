@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
+  WorkspacePackageManagerCacheCleanupRequest,
+  WorkspacePackageManagerCacheCleanupResult,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
@@ -8,6 +10,7 @@ import {
   analyzeWorkspaceSpace,
   WorkspaceSpaceScanCancelledError
 } from '../workspace-space-analysis'
+import { runPackageManagerCacheCleanup } from '../workspace-package-manager-cache-cleanup'
 
 const PROGRESS_EMIT_INTERVAL_MS = 100
 
@@ -22,6 +25,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
   let inFlightScan: InFlightWorkspaceSpaceScan | null = null
   ipcMain.removeHandler('workspaceSpace:cancel')
   ipcMain.removeHandler('workspaceSpace:analyze')
+  ipcMain.removeHandler('workspaceSpace:cleanupPackageManagerCache')
   ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
     if (!inFlightScan) {
       const controller = new AbortController()
@@ -104,4 +108,12 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     }
     return true
   })
+
+  ipcMain.handle(
+    'workspaceSpace:cleanupPackageManagerCache',
+    async (
+      _event,
+      request: WorkspacePackageManagerCacheCleanupRequest
+    ): Promise<WorkspacePackageManagerCacheCleanupResult> => runPackageManagerCacheCleanup(request)
+  )
 }

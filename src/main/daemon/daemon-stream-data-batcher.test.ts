@@ -1,0 +1,74 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { Socket } from 'net'
+import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+
+function createBatcher() {
+  const streamSocket = {
+    destroyed: false,
+    write: vi.fn()
+  } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+  const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket }))
+  return { batcher, streamSocket }
+}
+
+describe('DaemonStreamDataBatcher', () => {
+  it('coalesces background output before writing daemon stream events', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher()
+
+      batcher.enqueue('client-1', 'session-1', 'a')
+      batcher.enqueue('client-1', 'session-1', 'b')
+
+      expect(streamSocket.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(7)
+      expect(streamSocket.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"ab"')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes small interactive output immediately', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher()
+
+      batcher.enqueue('client-1', 'session-1', '\x1b[20;2Hredraw', {
+        flushImmediately: true,
+        flushMaxChars: 1024
+      })
+
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('\\u001b[20;2Hredraw')
+      vi.advanceTimersByTime(8)
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps large pending output batched even when an interactive redraw follows', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher()
+      const pending = 'x'.repeat(1020)
+
+      batcher.enqueue('client-1', 'session-1', pending)
+      batcher.enqueue('client-1', 'session-1', 'redraw', {
+        flushImmediately: true,
+        flushMaxChars: 1024
+      })
+
+      expect(streamSocket.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(`${pending}redraw`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

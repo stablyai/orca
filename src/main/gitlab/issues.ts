@@ -82,7 +82,8 @@ export async function listIssues(
   repoPath: string,
   limit = 20,
   preference?: IssueSourcePreference,
-  state: IssueListState = 'opened'
+  state: IssueListState = 'opened',
+  assignee?: string
 ): Promise<IssueListResult> {
   const knownHosts = await getGlabKnownHosts()
   const { source: projectRef } = await resolveIssueSource(repoPath, preference, knownHosts)
@@ -90,10 +91,11 @@ export async function listIssues(
   try {
     if (projectRef) {
       const stateParam = state === 'all' ? '' : `&state=${state}`
+      const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
       const { stdout } = await glabExecFileAsync(
         [
           'api',
-          `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}`
+          `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
         ],
         { cwd: repoPath }
       )
@@ -105,12 +107,25 @@ export async function listIssues(
         items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
       }
     }
-    // Fallback — let glab infer project from cwd. The CLI flag for
-    // state varies per glab version (--opened, --closed, --all);
-    // pass through only when targeting a specific state.
-    const stateFlag = state === 'closed' ? ['--closed'] : state === 'all' ? ['--all'] : ['--opened']
+    // Fallback — let glab infer project from cwd. glab issue list defaults
+    // to opened; only pass --closed / --all when explicitly requested.
+    const stateFlag = state === 'closed' ? ['--closed'] : state === 'all' ? ['--all'] : []
+    const assigneeFlag = assignee ? ['--assignee', assignee] : []
     const { stdout } = await glabExecFileAsync(
-      ['issue', 'list', '--output', 'json', '--per-page', String(limit), ...stateFlag],
+      [
+        'issue',
+        'list',
+        '--output',
+        'json',
+        '--per-page',
+        String(limit),
+        '--order',
+        'updated_at',
+        '--sort',
+        'desc',
+        ...stateFlag,
+        ...assigneeFlag
+      ],
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as unknown[]

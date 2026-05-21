@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getWorkspaceSeedName } from './new-workspace'
+import { getWorkspaceSeedName, isGitLabIssueUrl } from './new-workspace'
 
 describe('getWorkspaceSeedName', () => {
   it('prefers an explicit name', () => {
@@ -111,5 +111,16 @@ describe('getWorkspaceSeedName', () => {
         fallbackName: 'Nautilus'
       })
     ).toBe('my-workspace')
+  })
+})
+
+describe('isGitLabIssueUrl', () => {
+  it('detects canonical and self-hosted GitLab issue URLs', () => {
+    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/issues/123')).toBe(true)
+    expect(isGitLabIssueUrl('https://gitlab.example.com/group/project/-/issues/123')).toBe(true)
+  })
+
+  it('does not classify GitHub issue URLs as GitLab issues', () => {
+    expect(isGitLabIssueUrl('https://github.com/group/project/issues/123')).toBe(false)
   })
 })

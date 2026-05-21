@@ -318,7 +318,7 @@ describe('analyzeWorkspaceSpace', () => {
       omittedTopLevelItemCount: 0,
       omittedTopLevelSizeBytes: 0
     })
-    const readDir = vi.fn()
+    const readDir = vi.fn().mockResolvedValue([])
     const stat = vi.fn()
     getSshFilesystemProviderMock.mockReturnValue({ scanWorkspaceSpace, readDir, stat })
 
@@ -328,7 +328,7 @@ describe('analyzeWorkspaceSpace', () => {
       '/remote/feature',
       expect.objectContaining({ signal: undefined })
     )
-    expect(readDir).not.toHaveBeenCalled()
+    expect(readDir).toHaveBeenCalledWith('/remote/feature')
     expect(stat).not.toHaveBeenCalled()
     expect(result.worktrees[0]?.sizeBytes).toBe(4096)
   })

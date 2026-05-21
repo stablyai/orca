@@ -23,6 +23,7 @@ describe('getUpstreamStatus', () => {
 
   it('returns upstream and ahead/behind counts when tracking is configured', async () => {
     gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'main\n' })
       .mockResolvedValueOnce({ stdout: 'origin/main\n' })
       .mockResolvedValueOnce({ stdout: '2\t3\n' })
       .mockResolvedValueOnce({ stdout: '+ abc123 remote work\n' })
@@ -40,6 +41,7 @@ describe('getUpstreamStatus', () => {
 
   it('marks diverged upstream commits as patch-equivalent after a rebase', async () => {
     gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockResolvedValueOnce({ stdout: 'origin/feature\n' })
       .mockResolvedValueOnce({ stdout: '14\t3\n' })
       .mockResolvedValueOnce({
@@ -59,8 +61,42 @@ describe('getUpstreamStatus', () => {
     })
   })
 
+  it('keeps configured local-branch upstreams', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockResolvedValueOnce({ stdout: '1\t0\n' })
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: true,
+      upstreamName: 'main',
+      ahead: 1,
+      behind: 0
+    })
+  })
+
+  it('returns hasUpstream=false when upstream output is empty', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockResolvedValueOnce({ stdout: '\n' })
+      .mockRejectedValueOnce(new Error('missing remote branch'))
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0
+    })
+  })
+
   it('returns hasUpstream=false when upstream is missing', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: no upstream configured'))
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
+      .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
 
@@ -72,7 +108,10 @@ describe('getUpstreamStatus', () => {
   })
 
   it('returns hasUpstream=false when the configured tracking ref is missing', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(missingTrackingRefError)
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockRejectedValueOnce(missingTrackingRefError)
+      .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
 
@@ -80,6 +119,25 @@ describe('getUpstreamStatus', () => {
       hasUpstream: false,
       ahead: 0,
       behind: 0
+    })
+  })
+
+  it('uses the same-name origin branch when a legacy worktree tracks origin/main', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockResolvedValueOnce({ stdout: 'origin/main\n' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n' })
+      .mockResolvedValueOnce({ stdout: '3\t1\n' })
+      .mockResolvedValueOnce({ stdout: '+ def456 remote work\n' })
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 3,
+      behind: 1,
+      behindCommitsArePatchEquivalent: false
     })
   })
 })

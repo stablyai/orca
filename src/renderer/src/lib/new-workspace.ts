@@ -57,6 +57,16 @@ export type LinkedWorkItemSummary = {
   linearIdentifier?: string
 }
 
+export function isGitLabIssueUrl(url: string): boolean {
+  // Why: self-hosted GitLab issue URLs may not contain "gitlab"; the
+  // provider-stable signal is the `/-/issues/` path segment.
+  try {
+    return new URL(url).pathname.includes('/-/issues/')
+  } catch {
+    return /\/-\/issues\//i.test(url)
+  }
+}
+
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
 // we still want the composer to send a useful default prompt whenever the user
 // attaches a linked work item without typing anything else. "Complete <url>"

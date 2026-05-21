@@ -107,6 +107,40 @@ export type SearchOptionsLike = Pick<
   'caseSensitive' | 'wholeWord' | 'useRegex' | 'includePattern' | 'excludePattern'
 >
 
+export function splitSearchGlobPatterns(patterns: string): string[] {
+  const out: string[] = []
+  let current = ''
+  let escaping = false
+  for (const ch of patterns) {
+    if (escaping) {
+      current += `\\${ch}`
+      escaping = false
+      continue
+    }
+    if (ch === '\\') {
+      escaping = true
+      continue
+    }
+    if (ch === ',') {
+      const trimmed = current.trim()
+      if (trimmed) {
+        out.push(trimmed)
+      }
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  if (escaping) {
+    current += '\\'
+  }
+  const trimmed = current.trim()
+  if (trimmed) {
+    out.push(trimmed)
+  }
+  return out
+}
+
 /**
  * Build the rg argv used by both callers. The returned array is the COMPLETE
  * argv (flags + `--` + query + target); the caller spawns rg with it as-is.
@@ -138,18 +172,12 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     args.push('--fixed-strings')
   }
   if (opts.includePattern) {
-    for (const pat of opts.includePattern
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
       args.push('--glob', pat)
     }
   }
   if (opts.excludePattern) {
-    for (const pat of opts.excludePattern
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
       args.push('--glob', `!${pat}`)
     }
   }
@@ -299,19 +327,13 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
 
   let hasPathspecs = false
   if (opts.includePattern) {
-    for (const pat of opts.includePattern
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
       gitArgs.push(toGitGlobPathspec(pat))
       hasPathspecs = true
     }
   }
   if (opts.excludePattern) {
-    for (const pat of opts.excludePattern
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
       gitArgs.push(toGitGlobPathspec(pat, true))
       hasPathspecs = true
     }

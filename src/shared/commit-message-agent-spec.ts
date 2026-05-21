@@ -256,7 +256,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     buildArgs: ({ model, thinkingLevel }) => [
       'exec',
       // Why: commit-message generation needs text only, not a persisted agent
-      // session or workspace writes. Match T3 Code's safe git-text mode.
+      // session or workspace writes. Match the safe git-text mode used by
+      // local-first coding agents.
       '--ephemeral',
       '--skip-git-repo-check',
       '-s',

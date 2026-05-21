@@ -242,6 +242,7 @@ export async function getHostedReviewCreationEligibility(
     repoPath: args.repoPath,
     branch,
     linkedGitHubPR: args.linkedGitHubPR ?? null,
+    fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
     linkedGitLabMR: args.linkedGitLabMR ?? null,
     linkedBitbucketPR: args.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,

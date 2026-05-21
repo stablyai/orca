@@ -16,9 +16,9 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
       </div>
       <FilterToggleRow
         icon={<Moon className="size-3.5" />}
-        label="Show sleeping"
-        checked={showSleepingWorkspaces}
-        onChange={setShowSleepingWorkspaces}
+        label="Hide sleeping"
+        checked={!showSleepingWorkspaces}
+        onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
       />
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}

@@ -327,7 +327,7 @@ export function setupGuestShortcutForwarding(args: {
     if (input.code === 'KeyB' && input.shift) {
       renderer.send('ui:newBrowserTab')
     } else if (input.code === 'KeyT' && !input.shift) {
-      // Why: Cmd/Ctrl+T always opens a new terminal in the central pane,
+      // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
       // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
       // dedicated shortcut for new browser tabs.
       renderer.send('ui:newTerminalTab')

@@ -56,6 +56,8 @@ import type {
 } from '../shared/mobile-markdown-document'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type {
+  WorkspacePackageManagerCacheCleanupRequest,
+  WorkspacePackageManagerCacheCleanupResult,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
@@ -143,6 +145,7 @@ import {
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
+import type { CrashReportSubmitArgs, CrashReportSubmitResult } from '../shared/crash-reporting'
 
 type NativeDropResolution =
   | { target: 'editor' }
@@ -366,10 +369,10 @@ const api = {
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
       ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
-    pickFloatingMarkdownDocument: (
-      args?: FloatingTerminalCwdRequest
-    ): Promise<MarkdownDocument | null> =>
-      ipcRenderer.invoke('app:pickFloatingMarkdownDocument', args),
+    getFloatingMarkdownDirectory: (): Promise<string> =>
+      ipcRenderer.invoke('app:getFloatingMarkdownDirectory'),
+    pickFloatingMarkdownDocument: (): Promise<MarkdownDocument | null> =>
+      ipcRenderer.invoke('app:pickFloatingMarkdownDocument'),
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },
@@ -561,6 +564,10 @@ const api = {
     analyze: (): Promise<WorkspaceSpaceAnalyzeResult> =>
       ipcRenderer.invoke('workspaceSpace:analyze'),
     cancel: (): Promise<boolean> => ipcRenderer.invoke('workspaceSpace:cancel'),
+    cleanupPackageManagerCache: (
+      request: WorkspacePackageManagerCacheCleanupRequest
+    ): Promise<WorkspacePackageManagerCacheCleanupResult> =>
+      ipcRenderer.invoke('workspaceSpace:cleanupPackageManagerCache', request),
     onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -747,16 +754,12 @@ const api = {
 
   crashReports: {
     getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
+    getLatestReport: () => ipcRenderer.invoke('crashReports:getLatestReport'),
     dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
+    submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
+      ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
-      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
-    submit: (args: {
-      reportId?: string
-      notes?: string
-      submitAnonymously?: boolean
-      githubLogin: string | null
-      githubEmail: string | null
-    }) => ipcRenderer.invoke('crashReports:submit', args)
+      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args)
   },
 
   export: {
@@ -779,6 +782,7 @@ const api = {
       repoId?: string
       branch: string
       linkedPRNumber?: number | null
+      fallbackPRNumber?: number | null
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
@@ -1205,6 +1209,27 @@ const api = {
     ipcRenderer.invoke('telemetry:acknowledgeBanner'),
   telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
     ipcRenderer.invoke('telemetry:getConsentState'),
+
+  // Why: diagnostics is the renderer-facing surface for the error-tracking
+  // lane (telemetry-error-tracking.md §User controls). All five channels
+  // are gated by main-side handlers that strictly type-narrow their inputs
+  // (renderer is untrusted by design); the bridges here are deliberately
+  // loose for the same reason the telemetry bridges are.
+  diagnostics: {
+    getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
+    openTraceFolder: (): Promise<void> => ipcRenderer.invoke('diagnostics:openTraceFolder'),
+    clearTraces: (): Promise<void> => ipcRenderer.invoke('diagnostics:clearTraces'),
+    collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
+      ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
+    openBundlePreview: (bundleSubmissionId: string): Promise<void> =>
+      ipcRenderer.invoke('diagnostics:openBundlePreview', bundleSubmissionId),
+    discardBundlePreview: (bundleSubmissionId: string): Promise<void> =>
+      ipcRenderer.invoke('diagnostics:discardBundlePreview', bundleSubmissionId),
+    uploadBundle: (bundleSubmissionId: string): Promise<unknown> =>
+      ipcRenderer.invoke('diagnostics:uploadBundle', bundleSubmissionId),
+    deleteBundle: (ticketId: string): Promise<void> =>
+      ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
+  },
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),

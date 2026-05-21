@@ -3,7 +3,7 @@ GitLab IPC handlers co-located keeps the repo-path validation pattern
 reviewable as one surface. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
-import type { GitLabIssueUpdate, Repo } from '../../shared/types'
+import type { GitLabIssueUpdate, GitLabWorkItem, MRListState, Repo } from '../../shared/types'
 import type { Store } from '../persistence'
 import {
   addIssueComment,
@@ -42,6 +42,29 @@ function assertRegisteredRepo(repoPath: string, store: Store): Repo {
   return repo
 }
 
+function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback
+  }
+  return Math.min(Math.max(1, Math.trunc(value)), max)
+}
+
+function normalizeMRListState(value: unknown): MRListState {
+  return value === 'merged' || value === 'closed' || value === 'all' ? value : 'opened'
+}
+
+type GitLabIssueListState = 'opened' | 'closed' | 'all'
+
+function normalizeIssueListState(value: unknown): GitLabIssueListState {
+  return value === 'closed' || value === 'all' ? value : 'opened'
+}
+
+function normalizeIssueAssignee(value: unknown): '@me' | undefined {
+  // Why: the renderer only exposes "Assigned to me"; accepting arbitrary
+  // values here would turn this IPC boundary into a generic glab flag surface.
+  return value === '@me' ? '@me' : undefined
+}
+
 export function registerGitLabHandlers(store: Store): void {
   ipcMain.handle('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
@@ -77,12 +100,11 @@ export function registerGitLabHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listMergeRequests(
-        repo.path,
-        args.state ?? 'opened',
-        args.page ?? 1,
-        args.perPage ?? 20
-      )
+      const state = normalizeMRListState(args.state)
+      const page = normalizePositiveInteger(args.page, 1, 10_000)
+      const perPage = normalizePositiveInteger(args.perPage, 20, 100)
+      const result = await listMergeRequests(repo.path, state, page, perPage)
+      return result
     }
   )
 
@@ -93,13 +115,36 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:listIssues',
-    async (_event, args: { repoPath: string; limit?: number }) => {
+    async (
+      _event,
+      args: {
+        repoPath: string
+        state?: 'opened' | 'closed' | 'all'
+        assignee?: string
+        limit?: number
+      }
+    ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      const result = await listIssues(repo.path, args.limit ?? 20)
-      // Why: parallel to gh:listIssues which returns just items[]. The
-      // structured envelope is preserved for callers that need the
-      // classified error; bare-items consumers get the same shape.
-      return result.items
+      const limit = normalizePositiveInteger(args.limit, 20, 100)
+      const state = normalizeIssueListState(args.state)
+      const assignee = normalizeIssueAssignee(args.assignee)
+      const result = await listIssues(repo.path, limit, undefined, state, assignee)
+      // Why: Tasks page expects GitLabWorkItem[] so it can share row
+      // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
+      // doesn't need a separate code path.
+      const workItems: GitLabWorkItem[] = result.items.map((issue) => ({
+        id: `gitlab-issue-${repo.id}-${issue.number}`,
+        type: 'issue' as const,
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        url: issue.url,
+        labels: issue.labels,
+        updatedAt: issue.updatedAt ?? '',
+        author: issue.author ?? null,
+        repoId: repo.id
+      }))
+      return { items: workItems, ...(result.error ? { error: result.error } : {}) }
     }
   )
 
@@ -152,7 +197,12 @@ export function registerGitLabHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.state ?? 'opened', args.page ?? 1, args.perPage ?? 20)
+      return listWorkItems(
+        repo.path,
+        normalizeMRListState(args.state),
+        normalizePositiveInteger(args.page, 1, 10_000),
+        normalizePositiveInteger(args.perPage, 20, 100)
+      )
     }
   )
 

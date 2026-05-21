@@ -53,32 +53,33 @@ describe('gitlab client — combined listWorkItems', () => {
   })
 
   it('merges MRs + issues and sorts by updatedAt desc', async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({
-      body: JSON.stringify([
-        {
-          id: 100,
-          iid: 1,
-          title: 'older mr',
-          state: 'opened',
-          updated_at: '2026-05-05T00:00:00Z',
-          source_project_id: 5,
-          target_project_id: 5
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'mr') {
+        return {
+          stdout: JSON.stringify([
+            {
+              id: 100,
+              iid: 1,
+              title: 'older mr',
+              state: 'opened',
+              updated_at: '2026-05-05T00:00:00Z',
+              source_project_id: 5,
+              target_project_id: 5
+            }
+          ])
         }
-      ]),
-      headers: { 'x-total': '1', 'x-total-pages': '1' }
-    })
-    // Why: listIssues calls glabExecFileAsync (not glabApiWithHeaders) —
-    // it reads the issues list endpoint via the regular `glab api` path.
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify([
-        {
-          id: 200,
-          iid: 5,
-          title: 'newer issue',
-          state: 'opened',
-          updated_at: '2026-05-08T00:00:00Z'
-        }
-      ])
+      }
+      return {
+        stdout: JSON.stringify([
+          {
+            id: 200,
+            iid: 5,
+            title: 'newer issue',
+            state: 'opened',
+            updated_at: '2026-05-08T00:00:00Z'
+          }
+        ])
+      }
     })
 
     const result = await listWorkItems('/repo', 'opened', 1, 20)
@@ -88,34 +89,39 @@ describe('gitlab client — combined listWorkItems', () => {
   })
 
   it("skips the issues fetch when state === 'merged'", async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({
-      body: '[]',
-      headers: { 'x-total': '0', 'x-total-pages': '0' }
-    })
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     await listWorkItems('/repo', 'merged', 1, 20)
     // Why: the merged-state filter doesn't apply to issues (issues
     // don't have a merged lifecycle), so the IPC must not even spawn
     // the issues read. Verifies the listIssues path was not taken.
-    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('passes the closed state through to the issues fetch', async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+    glabExecFileAsyncMock.mockImplementation(async () => {
+      return { stdout: '[]' }
+    })
 
     await listWorkItems('/repo', 'closed', 1, 20)
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(issuesCallPath[1]).toContain('state=closed')
+    const issuesCalls = glabExecFileAsyncMock.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'api'
+    )
+    expect(issuesCalls).toHaveLength(1)
+    expect((issuesCalls[0][0] as string[])[1]).toContain('state=closed')
   })
 
   it("omits the state param when 'all'", async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+    glabExecFileAsyncMock.mockImplementation(async () => {
+      return { stdout: '[]' }
+    })
 
     await listWorkItems('/repo', 'all', 1, 20)
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(issuesCallPath[1]).not.toContain('state=')
+    const issuesCalls = glabExecFileAsyncMock.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'api'
+    )
+    expect(issuesCalls).toHaveLength(1)
+    expect((issuesCalls[0][0] as string[])[1]).not.toContain('state=')
   })
 
   it('returns a not_found error envelope when project ref is unresolved', async () => {
@@ -124,12 +130,11 @@ describe('gitlab client — combined listWorkItems', () => {
     const result = await listWorkItems('/repo', 'opened')
     expect(result.error?.type).toBe('not_found')
     expect(result.items).toEqual([])
-    expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('surfaces the MR error envelope into the combined result', async () => {
-    glabApiWithHeadersMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
+    glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     const result = await listWorkItems('/repo', 'opened', 1, 20)
@@ -137,7 +142,7 @@ describe('gitlab client — combined listWorkItems', () => {
   })
 
   it('still returns issues when MRs error out', async () => {
-    glabApiWithHeadersMock.mockRejectedValueOnce(new Error('HTTP 500'))
+    glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 500'))
     glabExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify([
         { id: 200, iid: 9, title: 'live issue', state: 'opened', updated_at: '2026-05-08' }

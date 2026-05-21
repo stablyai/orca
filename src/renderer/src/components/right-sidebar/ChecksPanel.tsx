@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/slices/github'
+import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,10 @@ import {
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { buildResolveConflictsPrompt, pickDefaultSourceControlAgent } from './SourceControl'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-prompt'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review'
@@ -38,6 +43,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const repo = useRepoById(activeWorktree?.repoId ?? null)
+  const settings = useAppStore((s) => s.settings)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -52,6 +58,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
 
   // Why: the sidebar stays mounted when closed (for performance). Gate
   // polling on visibility so we don't fetch checks/comments in the background
@@ -73,6 +80,8 @@ export default function ChecksPanel(): React.JSX.Element {
   const [conflictDetailsRefreshing, setConflictDetailsRefreshing] = useState(false)
   const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
+  const [isResolvingConflictsWithAI, setIsResolvingConflictsWithAI] = useState(false)
+  const [isFixingChecksWithAI, setIsFixingChecksWithAI] = useState(false)
   const [hostedReviewCreation, setHostedReviewCreation] =
     useState<HostedReviewCreationEligibility | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -112,8 +121,11 @@ export default function ChecksPanel(): React.JSX.Element {
   // Find active worktree and repo
   const branch = activeWorktree ? activeWorktree.branch.replace(/^refs\/heads\//, '') : ''
   const isFolder = repo ? isFolderRepo(repo) : false
-  const prCacheKey = repo && branch ? `${repo.id}::${branch}` : ''
-  const refreshContextKey = `${activeWorktreeId ?? ''}::${repo?.id ?? ''}::${branch}`
+  const prCacheKey =
+    repo && branch
+      ? getGitHubPRCacheKey(repo.path, repo.id, branch, settings, repo.connectionId)
+      : ''
+  const refreshContextKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}`
   if (refreshContextKey !== refreshContextKeyRef.current) {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
@@ -138,9 +150,25 @@ export default function ChecksPanel(): React.JSX.Element {
     prCacheKey ? s.prCache[prCacheKey]?.fetchedAt : undefined
   )
   const checksCacheKey =
-    repo && prNumber ? `${repo.id}::${prChecksCacheSuffix(prNumber, pr?.prRepo)}` : ''
+    repo && prNumber
+      ? getGitHubRepoCacheKey(
+          repo.path,
+          repo.id,
+          prChecksCacheSuffix(prNumber, pr?.prRepo),
+          settings,
+          repo.connectionId
+        )
+      : ''
   const commentsCacheKey =
-    repo && prNumber ? `${repo.id}::${prCommentsCacheSuffix(prNumber, pr?.prRepo)}` : ''
+    repo && prNumber
+      ? getGitHubRepoCacheKey(
+          repo.path,
+          repo.id,
+          prCommentsCacheSuffix(prNumber, pr?.prRepo),
+          settings,
+          repo.connectionId
+        )
+      : ''
   const checksFetchedAt = useAppStore((s) =>
     checksCacheKey ? s.checksCache[checksCacheKey]?.fetchedAt : undefined
   )
@@ -149,13 +177,16 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   // Fetch PR data when the active worktree/branch changes.
-  // Why: pass linkedPR so worktrees created from a PR (whose new local branch
-  // differs from the PR's head ref) resolve via the number-based fallback.
+  // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
+  // number from metadata or the visible cache whenever we have one.
   const linkedPR = activeWorktree?.linkedPR ?? null
+  const fallbackGitHubPRNumber = linkedPR == null ? (pr?.number ?? null) : null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
   const activeWorktreePath = activeWorktree?.path ?? null
   const stateRequestKey =
-    repo && branch ? checksPanelAsyncResultKey(repo.id, branch, prNumber, pr?.prRepo) : ''
+    repo && branch
+      ? checksPanelAsyncResultKey(prCacheKey, branch, prNumber, pr?.prRepo, pr?.headSha)
+      : ''
   asyncResultKeyRef.current = stateRequestKey
 
   const isCurrentAsyncResult = useCallback(
@@ -186,7 +217,12 @@ export default function ChecksPanel(): React.JSX.Element {
       hasUpstream: remoteStatus?.hasUpstream,
       ahead: remoteStatus?.ahead,
       behind: remoteStatus?.behind,
-      linkedGitHubPR: linkedPR
+      linkedGitHubPR: linkedPR,
+      fallbackGitHubPR: fallbackGitHubPRNumber,
+      linkedGitLabMR,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
     })
       .then((result) => {
         if (!stale) {
@@ -209,6 +245,8 @@ export default function ChecksPanel(): React.JSX.Element {
     isFolder,
     isPanelVisible,
     linkedPR,
+    fallbackGitHubPRNumber,
+    linkedGitLabMR,
     remoteStatus?.ahead,
     remoteStatus?.behind,
     remoteStatus?.hasUpstream,
@@ -229,7 +267,7 @@ export default function ChecksPanel(): React.JSX.Element {
       return
     }
 
-    const refreshKey = `${repo.path}::${branch}::${pr.number}`
+    const refreshKey = `${prCacheKey}::${branch}::${pr.number}`
     if (conflictSummaryRefreshKeyRef.current === refreshKey) {
       return
     }
@@ -243,7 +281,8 @@ export default function ChecksPanel(): React.JSX.Element {
     void fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
-      linkedPRNumber: linkedPR
+      linkedPRNumber: linkedPR,
+      fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
     }).finally(() => {
       // Why: fetchPRForBranch updates the PR cache before resolving, which
       // can rerun this effect. Only the current refresh key may clear the
@@ -252,7 +291,17 @@ export default function ChecksPanel(): React.JSX.Element {
         setConflictDetailsRefreshing(false)
       }
     })
-  }, [repo, isFolder, branch, pr, activeWorktreeId, linkedPR, fetchPRForBranch])
+  }, [
+    repo,
+    isFolder,
+    branch,
+    pr,
+    prCacheKey,
+    activeWorktreeId,
+    linkedPR,
+    fallbackGitHubPRNumber,
+    fetchPRForBranch
+  ])
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(
@@ -266,7 +315,13 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       setChecksLoading(true)
       try {
-        const requestKey = checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
+        const requestKey = checksPanelAsyncResultKey(
+          prCacheKey,
+          branch,
+          targetPRNumber,
+          pr?.prRepo,
+          pr?.headSha
+        )
         const result = await fetchPRChecks(
           repo.path,
           targetPRNumber,
@@ -294,7 +349,7 @@ export default function ChecksPanel(): React.JSX.Element {
       } catch (err) {
         if (
           !isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, pr?.prRepo, pr?.headSha)
           )
         ) {
           return
@@ -304,14 +359,23 @@ export default function ChecksPanel(): React.JSX.Element {
       } finally {
         if (
           isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, pr?.prRepo, pr?.headSha)
           )
         ) {
           setChecksLoading(false)
         }
       }
     },
-    [repo, prNumber, branch, pr?.headSha, pr?.prRepo, fetchPRChecks, isCurrentAsyncResult]
+    [
+      repo,
+      prNumber,
+      branch,
+      pr?.headSha,
+      pr?.prRepo,
+      prCacheKey,
+      fetchPRChecks,
+      isCurrentAsyncResult
+    ]
   )
 
   // Fetch checks on mount + poll with exponential backoff
@@ -366,7 +430,13 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       setCommentsLoading(true)
       try {
-        const requestKey = checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
+        const requestKey = checksPanelAsyncResultKey(
+          prCacheKey,
+          branch,
+          targetPRNumber,
+          targetPRRepo,
+          pr?.headSha
+        )
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
@@ -379,7 +449,7 @@ export default function ChecksPanel(): React.JSX.Element {
       } catch (err) {
         if (
           !isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, targetPRRepo, pr?.headSha)
           )
         ) {
           return
@@ -389,14 +459,23 @@ export default function ChecksPanel(): React.JSX.Element {
       } finally {
         if (
           isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, targetPRRepo, pr?.headSha)
           )
         ) {
           setCommentsLoading(false)
         }
       }
     },
-    [repo, prNumber, pr?.prRepo, fetchPRComments, branch, isCurrentAsyncResult]
+    [
+      repo,
+      prNumber,
+      pr?.headSha,
+      pr?.prRepo,
+      prCacheKey,
+      fetchPRComments,
+      branch,
+      isCurrentAsyncResult
+    ]
   )
 
   useEffect(() => {
@@ -425,14 +504,20 @@ export default function ChecksPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [repo, prNumber, pr?.prRepo, isPanelVisible, fetchPRComments])
+  }, [repo, prNumber, pr?.prRepo, prCacheKey, isPanelVisible, fetchPRComments])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
       return
     }
-    const initialRequestKey = checksPanelAsyncResultKey(repo.id, branch, prNumber, pr?.prRepo)
-    const refreshRequestKey = `${activeWorktreeId ?? ''}::${repo.id}::${branch}::${Date.now()}::${Math.random()}`
+    const initialRequestKey = checksPanelAsyncResultKey(
+      prCacheKey,
+      branch,
+      prNumber,
+      pr?.prRepo,
+      pr?.headSha
+    )
+    const refreshRequestKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}::${Date.now()}::${Math.random()}`
     refreshRequestKeyRef.current = refreshRequestKey
     const isCurrentRequest = (): boolean => refreshRequestKeyRef.current === refreshRequestKey
     setIsRefreshing(true)
@@ -440,7 +525,8 @@ export default function ChecksPanel(): React.JSX.Element {
       const refreshedPR = await fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
-        linkedPRNumber: linkedPR
+        linkedPRNumber: linkedPR,
+        fallbackPRNumber: fallbackGitHubPRNumber
       })
       if (!isCurrentRequest()) {
         return
@@ -449,7 +535,8 @@ export default function ChecksPanel(): React.JSX.Element {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
-        linkedGitHubPR: refreshedPR?.number ?? linkedPR,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
         linkedGitLabMR
       })
       if (!isCurrentRequest()) {
@@ -457,10 +544,11 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       if (refreshedPR) {
         const prRequestKey = checksPanelAsyncResultKey(
-          repo.id,
+          prCacheKey,
           branch,
           refreshedPR.number,
-          refreshedPR.prRepo
+          refreshedPR.prRepo,
+          refreshedPR.headSha
         )
         if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentRequest()) {
           return
@@ -548,8 +636,11 @@ export default function ChecksPanel(): React.JSX.Element {
     branch,
     activeWorktreeId,
     prNumber,
+    pr?.headSha,
     pr?.prRepo,
+    prCacheKey,
     linkedPR,
+    fallbackGitHubPRNumber,
     linkedGitLabMR,
     fetchPRForBranch,
     fetchPRChecks,
@@ -659,14 +750,15 @@ export default function ChecksPanel(): React.JSX.Element {
         await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
-          linkedPRNumber: linkedPR
+          linkedPRNumber: linkedPR,
+          fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
         })
       }
     } finally {
       setTitleSaving(false)
       setEditingTitle(false)
     }
-  }, [repo, pr, titleDraft, branch, linkedPR, fetchPRForBranch])
+  }, [repo, pr, titleDraft, branch, linkedPR, fallbackGitHubPRNumber, fetchPRForBranch])
 
   const handleTitleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -702,23 +794,132 @@ export default function ChecksPanel(): React.JSX.Element {
     [repo, prNumber, pr?.prRepo, resolveReviewThread]
   )
 
+  // Why: PR conflict files come from GitHub (paths only, no per-file conflict
+  // kind), so we hand them to the same prompt builder used by Source Control
+  // with conflictKind left undefined. The agent picks up the rest from
+  // `git status` once it lands in the worktree.
+  const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
+    if (isResolvingConflictsWithAI || !activeWorktreeId || !pr) {
+      return
+    }
+    const conflictFiles = pr.conflictSummary?.files ?? []
+    setIsResolvingConflictsWithAI(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId)
+      if (connectionId === undefined) {
+        toast.error('Unable to resolve the workspace connection.')
+        return
+      }
+      const store = useAppStore.getState()
+      const detectedAgents =
+        typeof connectionId === 'string'
+          ? await store.ensureRemoteDetectedAgents(connectionId)
+          : await store.ensureDetectedAgents()
+      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      if (!agent) {
+        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        return
+      }
+      const prompt = buildResolveConflictsPrompt({
+        conflictOperation: 'merge',
+        entries: conflictFiles.map((path) => ({ path })),
+        worktreePath: activeWorktreePath ?? null
+      })
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId: activeWorktreeId,
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'conflict_resolution'
+      })
+      if (!result) {
+        toast.error('Could not build the agent launch command.')
+        return
+      }
+      focusTerminalTabSurface(result.tabId)
+      toast.success('Started an AI agent for the conflicts.')
+    } finally {
+      setIsResolvingConflictsWithAI(false)
+    }
+  }, [activeWorktreeId, activeWorktreePath, isResolvingConflictsWithAI, pr])
+
+  const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
+    if (isFixingChecksWithAI || !activeWorktreeId || !pr) {
+      return
+    }
+    const broken = getBrokenChecks(checks)
+    if (broken.length === 0) {
+      toast.message('No broken checks to fix.')
+      return
+    }
+    setIsFixingChecksWithAI(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId)
+      if (connectionId === undefined) {
+        toast.error('Unable to resolve the workspace connection.')
+        return
+      }
+      const store = useAppStore.getState()
+      const detectedAgents =
+        typeof connectionId === 'string'
+          ? await store.ensureRemoteDetectedAgents(connectionId)
+          : await store.ensureDetectedAgents()
+      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      if (!agent) {
+        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        return
+      }
+      const prompt = buildFixBrokenChecksPrompt({
+        prNumber: pr.number,
+        prTitle: pr.title,
+        prUrl: pr.url,
+        checks
+      })
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId: activeWorktreeId,
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'task_page'
+      })
+      if (!result) {
+        toast.error('Could not build the agent launch command.')
+        return
+      }
+      focusTerminalTabSurface(result.tabId)
+      toast.success('Started an AI agent for the broken checks.')
+    } finally {
+      setIsFixingChecksWithAI(false)
+    }
+  }, [activeWorktreeId, checks, isFixingChecksWithAI, pr])
+
   // Refresh PR (passed to PRActions)
   const handleRefreshPR = useCallback(async () => {
     if (repo && branch) {
       const refreshedPR = await fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
-        linkedPRNumber: linkedPR
+        linkedPRNumber: linkedPR,
+        fallbackPRNumber: fallbackGitHubPRNumber
       })
       await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
-        linkedGitHubPR: refreshedPR?.number ?? linkedPR,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
         linkedGitLabMR
       })
     }
-  }, [repo, branch, linkedPR, linkedGitLabMR, fetchPRForBranch, fetchHostedReviewForBranch])
+  }, [
+    repo,
+    branch,
+    linkedPR,
+    fallbackGitHubPRNumber,
+    linkedGitLabMR,
+    fetchPRForBranch,
+    fetchHostedReviewForBranch
+  ])
 
   // Open PR in browser
   const handleOpenPR = useCallback(() => {
@@ -763,10 +964,19 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!repo || !branch) {
         return
       }
-      const initialRequestKey = checksPanelAsyncResultKey(repo.id, branch, prNumber, pr?.prRepo)
+      const initialRequestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr?.prRepo,
+        pr?.headSha
+      )
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
+        if (activeWorktreeId) {
+          await updateWorktreeMeta(activeWorktreeId, { linkedPR: result.number })
+        }
         const refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
@@ -781,10 +991,11 @@ export default function ChecksPanel(): React.JSX.Element {
         })
         if (refreshedPR) {
           const requestKey = checksPanelAsyncResultKey(
-            repo.id,
+            prCacheKey,
             branch,
             refreshedPR.number,
-            refreshedPR.prRepo
+            refreshedPR.prRepo,
+            refreshedPR.headSha
           )
           if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentAsyncResult(requestKey)) {
             return
@@ -829,11 +1040,15 @@ export default function ChecksPanel(): React.JSX.Element {
       fetchPRForBranch,
       isCurrentAsyncResult,
       linkedGitLabMR,
+      prCacheKey,
       prNumber,
+      pr?.headSha,
       pr?.prRepo,
       repo,
       setRightSidebarOpen,
-      setRightSidebarTab
+      setRightSidebarTab,
+      activeWorktreeId,
+      updateWorktreeMeta
     ]
   )
 
@@ -1118,16 +1333,27 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
       </div>
 
-      <ConflictingFilesSection pr={pr} />
+      <ConflictingFilesSection
+        pr={pr}
+        isResolvingWithAI={isResolvingConflictsWithAI}
+        onResolveWithAI={() => void handleResolveConflictsWithAI()}
+      />
       <MergeConflictNotice
         pr={pr}
         isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
+        isResolvingWithAI={isResolvingConflictsWithAI}
+        onResolveWithAI={() => void handleResolveConflictsWithAI()}
       />
       {/* Why: when the PR has merge conflicts and no checks have been fetched,
           showing "No checks configured" is misleading — checks may exist but
           simply cannot run until conflicts are resolved. Hide the empty state. */}
       {!(pr.mergeable === 'CONFLICTING' && checks.length === 0 && !checksLoading) && (
-        <ChecksList checks={checks} checksLoading={checksLoading} />
+        <ChecksList
+          checks={checks}
+          checksLoading={checksLoading}
+          isFixingWithAI={isFixingChecksWithAI}
+          onFixWithAI={() => void handleFixChecksWithAI()}
+        />
       )}
       <PRCommentsList
         comments={comments}

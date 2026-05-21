@@ -1388,7 +1388,7 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  Delete inactive workspaces ({oldWorkspaceCount})
+                  Review inactive workspaces ({oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"

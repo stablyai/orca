@@ -54,6 +54,8 @@ describe('startup UI hydration fallback', () => {
     expect(hydratePersistedUI.mock.calls[0][0].sidebarWidth).toBe(280)
     expect(hydratePersistedUI.mock.calls[0][0].groupBy).toBe('workspace-status')
     expect(hydratePersistedUI.mock.calls[0][0].sortBy).toBe('name')
+    expect(hydratePersistedUI.mock.calls[0][0].hideSleepingWorkspaces).toBe(false)
+    expect(hydratePersistedUI.mock.calls[0][0].showSleepingWorkspaces).toBe(true)
   })
 
   it('does not mark UI hydrated after the startup effect has been cancelled', () => {

@@ -6,6 +6,7 @@ const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
+  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
@@ -22,6 +23,7 @@ const HostedReviewCreationEligibility = z.object({
   ahead: z.number().int().nonnegative().optional(),
   behind: z.number().int().nonnegative().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
+  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
@@ -43,22 +45,28 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'hostedReview.forBranch',
     params: HostedReviewForBranch,
-    handler: async (params, { runtime }) =>
-      runtime.getHostedReviewForBranch({
+    handler: async (params, { runtime }) => {
+      const fallbackGitHubPR =
+        params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
+      return runtime.getHostedReviewForBranch({
         repoSelector: params.repo,
         branch: params.branch,
         linkedGitHubPR: params.linkedGitHubPR ?? null,
+        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: params.linkedGiteaPR ?? null
       })
+    }
   }),
   defineMethod({
     name: 'hostedReview.getCreationEligibility',
     params: HostedReviewCreationEligibility,
-    handler: async (params, { runtime }) =>
-      runtime.getHostedReviewCreationEligibility({
+    handler: async (params, { runtime }) => {
+      const fallbackGitHubPR =
+        params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
+      return runtime.getHostedReviewCreationEligibility({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,
         branch: params.branch,
@@ -68,11 +76,13 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         ahead: params.ahead,
         behind: params.behind,
         linkedGitHubPR: params.linkedGitHubPR ?? null,
+        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: params.linkedGiteaPR ?? null
       })
+    }
   }),
   defineMethod({
     name: 'hostedReview.create',

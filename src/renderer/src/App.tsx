@@ -56,6 +56,10 @@ import {
   FloatingTerminalToggleButton
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  isFloatingWorkspacePanelFocused,
+  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
+} from '@/lib/floating-workspace-terminal-actions'
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -92,6 +96,10 @@ import {
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
+import {
+  folderRelativePathToIncludeGlob,
+  selectedExplorerFolderRelativePath
+} from './components/right-sidebar/file-search-include-pattern'
 import { shouldShowWorktreeHistoryControls } from './lib/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
@@ -100,6 +108,7 @@ import {
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -262,6 +271,7 @@ function App(): React.JSX.Element {
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
       seedFileSearchQuery: s.seedFileSearchQuery,
+      seedFileSearchIncludePattern: s.seedFileSearchIncludePattern,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -279,6 +289,9 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const floatingUnifiedTabCount = useAppStore(
+    (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
@@ -873,6 +886,7 @@ function App(): React.JSX.Element {
         groupBy,
         sortBy,
         showActiveOnly: false,
+        hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         filterRepoIds,
@@ -1024,6 +1038,24 @@ function App(): React.JSX.Element {
       }
 
       if (mod && isSearchShortcut && canRevealRightSidebar) {
+        // Why: when focus is inside the file explorer and a folder is selected,
+        // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
+        // with that folder instead of treating the chord as a text-search seed.
+        const selectedFolderRelativePath =
+          document.activeElement instanceof Element
+            ? selectedExplorerFolderRelativePath(document.activeElement)
+            : null
+        if (selectedFolderRelativePath !== null && activeWorktreeId) {
+          e.preventDefault()
+          actions.seedFileSearchIncludePattern(
+            activeWorktreeId,
+            folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+          )
+          actions.setRightSidebarTab('search')
+          actions.setRightSidebarOpen(true)
+          return
+        }
+
         const selectedText = getSelectedTextForFileSearch()
         if (selectedText) {
           e.preventDefault()
@@ -1068,6 +1100,28 @@ function App(): React.JSX.Element {
       }
 
       if (!mod) {
+        return
+      }
+
+      if (isFloatingWorkspacePanelFocused()) {
+        return
+      }
+
+      // Why: after the last floating tab is closed, the empty overlay has no
+      // pane-level handler; Cmd/Ctrl+W should minimize only that landing state.
+      if (
+        !e.altKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === 'w' &&
+        shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
+          activeView,
+          activeWorktreeId,
+          floatingTerminalOpen,
+          floatingUnifiedTabCount
+        })
+      ) {
+        e.preventDefault()
+        setFloatingTerminalOpenWithFocus(false)
         return
       }
 
@@ -1129,7 +1183,14 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeView, activeWorktreeId, actions])
+  }, [
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalOpen,
+    floatingUnifiedTabCount,
+    setFloatingTerminalOpenWithFocus
+  ])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current

@@ -94,7 +94,13 @@ describe('registerGitHubHandlers', () => {
       branch: 'feature/test'
     })
 
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/workspace/repo', 'feature/test', null, null)
+    expect(getPRForBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/test',
+      null,
+      null,
+      null
+    )
   })
 
   it('rejects unknown repository paths', async () => {

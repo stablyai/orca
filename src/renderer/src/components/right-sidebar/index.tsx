@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { ActivityBarPosition } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -27,6 +25,7 @@ import {
   TopActivityOverflowMenu,
   type ActivityBarItem
 } from './activity-bar-buttons'
+import { getActiveChecksStatus } from './active-checks-status'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -38,33 +37,10 @@ const MIN_NON_SIDEBAR_AREA = 320
 const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
-function branchDisplayName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
-
-function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): CheckStatus | null {
-  const activeWorktree = state.activeWorktreeId
-    ? findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
-    : null
-  if (!activeWorktree) {
-    return null
-  }
-
-  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
-  if (!activeRepo) {
-    return null
-  }
-
-  const branch = branchDisplayName(activeWorktree.branch)
-  if (!branch) {
-    return null
-  }
-
-  const prCacheKey = `${activeRepo.path}::${branch}`
-  return state.prCache[prCacheKey]?.data?.checksStatus ?? null
-}
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+const isWindows =
+  !isMac && typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 const mod = isMac ? '\u2318' : 'Ctrl+'
 
 const ACTIVITY_ITEMS: ActivityBarItem[] = [
@@ -222,17 +198,63 @@ function RightSidebarInner(): React.JSX.Element {
         {activityBarPosition === 'top' ? (
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
-            <div className="flex items-center border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+            <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+              {!isWindows && (
+                <TooltipProvider delayDuration={400}>
+                  <ContextMenuTrigger asChild>
+                    <div
+                      ref={topActivityStripRef}
+                      className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-hidden pl-2 right-sidebar-header-no-drag"
+                    >
+                      {/* Why: the top strip shares a narrow titlebar with the close
+                          button and Windows controls. Overflow goes behind More
+                          instead of creating a horizontally scrollable toolbar. */}
+                      <div className="flex min-w-0 shrink">
+                        {topActivityLayout.visibleItems.map((item) => (
+                          <ActivityBarButton
+                            key={item.id}
+                            item={item}
+                            active={effectiveTab === item.id}
+                            onClick={() => setRightSidebarTab(item.id)}
+                            layout="top"
+                            statusIndicator={item.id === 'checks' ? checksStatus : null}
+                          />
+                        ))}
+                      </div>
+                      {topActivityLayout.overflowItems.length > 0 && (
+                        <TopActivityOverflowMenu
+                          items={topActivityLayout.overflowItems}
+                          activeTab={effectiveTab}
+                          onSelect={setRightSidebarTab}
+                          checksStatus={checksStatus}
+                        />
+                      )}
+                    </div>
+                  </ContextMenuTrigger>
+                  <div className="flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                    {closeButton}
+                  </div>
+                </TooltipProvider>
+              )}
+              {isWindows && (
+                <TooltipProvider delayDuration={400}>
+                  <div className="ml-auto flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                    {closeButton}
+                  </div>
+                </TooltipProvider>
+              )}
+            </div>
+            {isWindows && (
               <TooltipProvider delayDuration={400}>
                 <ContextMenuTrigger asChild>
                   <div
                     ref={topActivityStripRef}
-                    className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-hidden right-sidebar-header-no-drag"
+                    className="right-sidebar-activity-strip flex h-10 min-h-10 items-center border-b border-border px-2 right-sidebar-header-no-drag"
                   >
-                    {/* Why: the top strip shares a narrow titlebar with the close
-                        button and Windows controls. Overflow goes behind More
-                        instead of creating a horizontally scrollable toolbar. */}
-                    <div className="flex min-w-0 shrink">
+                    {/* Why: Windows has fixed native-style controls in the titlebar
+                        area; keep sidebar navigation in the sidebar body so the
+                        titlebar stays visually native instead of crowded. */}
+                    <div className="flex min-w-0 flex-1 shrink">
                       {topActivityLayout.visibleItems.map((item) => (
                         <ActivityBarButton
                           key={item.id}
@@ -254,11 +276,8 @@ function RightSidebarInner(): React.JSX.Element {
                     )}
                   </div>
                 </ContextMenuTrigger>
-                <div className="flex shrink-0 items-center right-sidebar-header-no-drag">
-                  {closeButton}
-                </div>
               </TooltipProvider>
-            </div>
+            )}
             <ActivityBarPositionMenu
               currentPosition={activityBarPosition}
               onChangePosition={setActivityBarPosition}

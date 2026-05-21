@@ -86,6 +86,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
+      getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
       pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
     },
@@ -108,9 +109,34 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ui: createWebUiApi(),
     crashReports: {
       getLatestPending: () => Promise.resolve(null),
+      getLatestReport: () => Promise.resolve(null),
       dismiss: () => Promise.resolve(null),
-      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' }),
-      submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
+      submit: () =>
+        Promise.resolve({
+          ok: false,
+          status: null,
+          error: 'Unavailable on web.'
+        }),
+      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' })
+    },
+    diagnostics: {
+      getStatus: () =>
+        Promise.resolve({
+          localFileEnabled: false,
+          otlpEnabled: false,
+          bundleEnabled: false,
+          otlpStatus: 'Unavailable on web',
+          traceFilePath: '',
+          traceFamilySize: 0
+        }),
+      openTraceFolder: () => Promise.resolve(),
+      clearTraces: () => Promise.resolve(),
+      collectBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      openBundlePreview: () =>
+        Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      discardBundlePreview: () => Promise.resolve(),
+      uploadBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      deleteBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.'))
     },
     session: {
       get: () => Promise.resolve(getStoredWorkspaceSession()),
@@ -349,11 +375,14 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
+        linkedLinearIssue: args.linkedLinearIssue,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
-        createdWithAgent: args.createdWithAgent
+        createdWithAgent: args.createdWithAgent,
+        workspaceStatus: args.workspaceStatus,
+        manualOrder: args.manualOrder
       })
     },
     resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
@@ -695,7 +724,8 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
         repo: candidate.repoId || candidate.repoPath,
         repoPath: candidate.repoPath,
         branch: candidate.branch,
-        linkedPRNumber: candidate.linkedPRNumber ?? null
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }

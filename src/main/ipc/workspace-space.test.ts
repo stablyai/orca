@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
@@ -9,6 +9,7 @@ import type { Store } from '../persistence'
 const {
   handlers,
   analyzeWorkspaceSpaceMock,
+  runPackageManagerCacheCleanupMock,
   removeHandlerMock,
   handleMock,
   WorkspaceSpaceScanCancelledErrorMock
@@ -17,6 +18,7 @@ const {
   return {
     handlers,
     analyzeWorkspaceSpaceMock: vi.fn(),
+    runPackageManagerCacheCleanupMock: vi.fn(),
     removeHandlerMock: vi.fn(),
     handleMock: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
       handlers.set(channel, handler)
@@ -37,6 +39,10 @@ vi.mock('../workspace-space-analysis', () => ({
   analyzeWorkspaceSpace: analyzeWorkspaceSpaceMock
 }))
 
+vi.mock('../workspace-package-manager-cache-cleanup', () => ({
+  runPackageManagerCacheCleanup: runPackageManagerCacheCleanupMock
+}))
+
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
 
 function createAnalysis(scannedAt: number): WorkspaceSpaceAnalysis {
@@ -47,6 +53,7 @@ function createAnalysis(scannedAt: number): WorkspaceSpaceAnalysis {
     worktreeCount: 0,
     scannedWorktreeCount: 0,
     unavailableWorktreeCount: 0,
+    packageManagerCaches: [],
     repos: [],
     worktrees: []
   }
@@ -66,6 +73,11 @@ function createEvent() {
 }
 
 describe('registerWorkspaceSpaceHandlers', () => {
+  beforeEach(() => {
+    analyzeWorkspaceSpaceMock.mockReset()
+    runPackageManagerCacheCleanupMock.mockReset()
+  })
+
   it('shares an in-flight analysis request', async () => {
     const store = {} as Store
     let resolveFirstScan: (analysis: WorkspaceSpaceAnalysis) => void = () => {}
@@ -160,5 +172,47 @@ describe('registerWorkspaceSpaceHandlers', () => {
     const analyzeHandler = handlers.get('workspaceSpace:analyze')
 
     await expect(analyzeHandler!(createEvent())).resolves.toEqual({ ok: false, cancelled: true })
+  })
+
+  it('runs package-manager cache cleanup only through the explicit cleanup handler', async () => {
+    const store = {} as Store
+    const cleanupResult = {
+      ok: true,
+      action: {
+        id: 'npm-cache-verify',
+        packageManager: 'npm',
+        safety: 'safe',
+        binary: 'npm',
+        args: ['cache', 'verify'],
+        command: 'npm cache verify',
+        label: 'Verify npm cache',
+        description: 'Verifies cache integrity and garbage-collects unneeded npm cache data.'
+      },
+      stdout: 'verified\n',
+      stderr: '',
+      cachePath: '/home/alice/.npm',
+      cacheSizeBeforeBytes: 4096,
+      cacheSizeAfterBytes: 1024,
+      reclaimedBytes: 3072
+    }
+    runPackageManagerCacheCleanupMock.mockResolvedValueOnce(cleanupResult)
+
+    registerWorkspaceSpaceHandlers(store)
+    const analyzeHandler = handlers.get('workspaceSpace:analyze')
+    const cleanupHandler = handlers.get('workspaceSpace:cleanupPackageManagerCache')
+    analyzeWorkspaceSpaceMock.mockResolvedValueOnce(createAnalysis(1))
+
+    await expect(analyzeHandler!(createEvent())).resolves.toEqual(createAnalyzeResult(1))
+    expect(runPackageManagerCacheCleanupMock).not.toHaveBeenCalled()
+
+    const request = {
+      targetId: 'local:npm:%2Frepo',
+      actionId: 'npm-cache-verify',
+      packageManager: 'npm',
+      connectionId: null,
+      cwd: '/repo'
+    }
+    await expect(cleanupHandler!(createEvent(), request)).resolves.toEqual(cleanupResult)
+    expect(runPackageManagerCacheCleanupMock).toHaveBeenCalledWith(request)
   })
 })

@@ -19,6 +19,7 @@ import {
   Braces,
   Check,
   ChevronDown,
+  ChevronLeft,
   CircleDashed,
   CircleDot,
   Copy,
@@ -218,6 +219,8 @@ type GitHubItemDialogProps = {
   repoPath: string | null
   repoId?: string | null
   initialTab?: ItemDialogTab
+  variant?: 'sheet' | 'page'
+  backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
@@ -4872,6 +4875,8 @@ export default function GitHubItemDialog({
   repoPath,
   repoId,
   initialTab,
+  variant = 'sheet',
+  backLabel = 'Back',
   projectOrigin,
   onUse,
   onReviewRequestsChange,
@@ -5248,6 +5253,298 @@ export default function GitHubItemDialog({
     [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
   )
 
+  const content = workItem ? (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+        <div className="flex items-start gap-3">
+          {variant === 'page' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
+          ) : null}
+          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+            <Icon className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <WorkItemStateBadge item={{ ...workItem, state: localState }} />
+              <span className="font-mono">#{workItem.number}</span>
+              <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+            </div>
+            <h2 className="text-[15px] font-semibold leading-snug text-foreground">
+              {workItem.title}
+            </h2>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              <span>{workItem.author ?? 'unknown'}</span>
+              <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
+              {workItem.branchName && (
+                <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {workItem.branchName}
+                </span>
+              )}
+            </div>
+            {workItem.type === 'issue' && (
+              <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+            )}
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            {workItem.type === 'pr' && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onUse(workItem)}
+                className="gap-1.5 whitespace-nowrap"
+                aria-label="Start workspace from PR"
+              >
+                Start workspace from PR
+                <ArrowRight className="size-3.5" />
+              </Button>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => void handleCopyWorkItemLink()}
+                  aria-label="Copy GitHub link"
+                >
+                  {linkCopied ? (
+                    <Check className="size-4 text-emerald-500" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {linkCopied ? 'Copied' : 'Copy GitHub link'}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => window.api.shell.openUrl(workItem.url)}
+                  aria-label="Open on GitHub"
+                >
+                  <ExternalLink className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Open on GitHub
+              </TooltipContent>
+            </Tooltip>
+            {variant === 'sheet' ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={onClose}
+                    aria-label="Close preview"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Close · Esc
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {(repoPath || projectOrigin) && (
+        <GHEditSection
+          item={workItem}
+          repoPath={repoPath}
+          repoId={effectiveRepoId}
+          projectOrigin={projectOrigin}
+          localState={localState}
+          localLabels={localLabels}
+          onStateChange={setLocalState}
+          onLabelsChange={setLocalLabels}
+          onMutated={() => {
+            // Why: drop the cached details for this item so the next
+            // open issues a fresh fetch instead of painting pre-edit
+            // state. We invalidate by (repoPath, type, number) match
+            // because a single mutation can affect entries across all
+            // issueSourcePreference values for the same number.
+            if (repoPath) {
+              invalidateWorkItemDetailsCacheByMatch({
+                repoPath,
+                repoId: effectiveRepoId ?? undefined,
+                type: workItem.type,
+                number: workItem.number
+              })
+            }
+          }}
+          assignees={details?.assignees ?? []}
+          onUse={onUse}
+        />
+      )}
+
+      <div className="min-h-0 flex-1">
+        {error ? (
+          <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as ItemDialogTab)}
+            className="flex h-full min-h-0 flex-col gap-0"
+          >
+            <TabsList
+              variant="line"
+              className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
+            >
+              <TabsTrigger value="conversation" className="px-2">
+                <MessageSquare className="size-3.5" />
+                Conversation
+              </TabsTrigger>
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsTrigger value="checks" className="px-2">
+                    <ListChecks className="size-3.5" />
+                    Checks
+                    {checks.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        {checks.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="files" className="px-2">
+                    <FileText className="size-3.5" />
+                    Files
+                    {files.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
+                    )}
+                  </TabsTrigger>
+                </>
+              )}
+            </TabsList>
+
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              <TabsContent value="conversation" className="mt-0">
+                <ConversationTab
+                  item={displayWorkItem ?? workItem}
+                  repoPath={repoPath}
+                  repoId={effectiveRepoId}
+                  body={body}
+                  comments={comments}
+                  files={files}
+                  headSha={details?.headSha}
+                  baseSha={details?.baseSha}
+                  loading={loading}
+                  detailsLoaded={detailsLoaded}
+                  checks={checks}
+                  participants={details?.participants ?? []}
+                  localState={localState}
+                  onStateChange={setLocalState}
+                  projectOrigin={projectOrigin}
+                  onMutated={() => {
+                    if (repoPath) {
+                      invalidateWorkItemDetailsCacheByMatch({
+                        repoPath,
+                        repoId: effectiveRepoId ?? undefined,
+                        type: workItem.type,
+                        number: workItem.number
+                      })
+                    }
+                  }}
+                  onChecksUpdated={(nextChecks) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRChecks(detailsCacheKey, nextChecks)
+                    }
+                  }}
+                  onBodyUpdated={(nextBody) => {
+                    if (detailsCacheKey) {
+                      patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                    }
+                  }}
+                  onCommentAdded={appendOptimisticComment}
+                  onReviewersRequested={(nextReviewRequests) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
+                    }
+                    onReviewRequestsChange?.(
+                      { id: workItem.id, repoId: workItem.repoId },
+                      nextReviewRequests
+                    )
+                  }}
+                />
+              </TabsContent>
+
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsContent value="checks" className="mt-0">
+                    <ChecksTab
+                      item={workItem}
+                      repoPath={repoPath}
+                      repoId={effectiveRepoId}
+                      headSha={details?.headSha}
+                      checks={checks}
+                      loading={loading || !detailsLoaded}
+                      variant="page"
+                      onChecksUpdated={(nextChecks) => {
+                        if (detailsCacheKey) {
+                          patchCachedPRChecks(detailsCacheKey, nextChecks)
+                        }
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="files" className="mt-0">
+                    {loading && files.length === 0 ? (
+                      <div className="flex items-center justify-center py-10">
+                        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : files.length === 0 ? (
+                      <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+                        No files changed.
+                      </div>
+                    ) : (
+                      <PRFilesCombinedDiffViewer
+                        files={files}
+                        comments={comments}
+                        repoPath={repoPath ?? ''}
+                        repoId={effectiveRepoId ?? ''}
+                        prNumber={workItem.number}
+                        prUrl={workItem.url}
+                        headSha={details?.headSha}
+                        baseSha={details?.baseSha}
+                        pendingViewedPaths={pendingViewedPaths}
+                        onCommentAdded={appendOptimisticComment}
+                        onViewedChange={handlePRFileViewedChange}
+                      />
+                    )}
+                  </TabsContent>
+                </>
+              )}
+            </div>
+          </Tabs>
+        )}
+      </div>
+    </div>
+  ) : null
+
+  if (variant === 'page') {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+        {content}
+      </div>
+    )
+  }
+
   return (
     <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -5289,276 +5586,7 @@ export default function GitHubItemDialog({
           </SheetDescription>
         </VisuallyHidden.Root>
 
-        {workItem && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
-                  <Icon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                    <WorkItemStateBadge item={{ ...workItem, state: localState }} />
-                    <span className="font-mono">#{workItem.number}</span>
-                    <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
-                  </div>
-                  <h2 className="text-[15px] font-semibold leading-snug text-foreground">
-                    {workItem.title}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                    <span>{workItem.author ?? 'unknown'}</span>
-                    <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
-                    {workItem.branchName && (
-                      <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {workItem.branchName}
-                      </span>
-                    )}
-                  </div>
-                  {workItem.type === 'issue' && (
-                    <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center justify-end gap-1">
-                  {workItem.type === 'pr' && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => onUse(workItem)}
-                      className="gap-1.5 whitespace-nowrap"
-                      aria-label="Start workspace from PR"
-                    >
-                      Start workspace from PR
-                      <ArrowRight className="size-3.5" />
-                    </Button>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => void handleCopyWorkItemLink()}
-                        aria-label="Copy GitHub link"
-                      >
-                        {linkCopied ? (
-                          <Check className="size-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {linkCopied ? 'Copied' : 'Copy GitHub link'}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => window.api.shell.openUrl(workItem.url)}
-                        aria-label="Open on GitHub"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Open on GitHub
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={onClose}
-                        aria-label="Close preview"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Close · Esc
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-            </div>
-
-            {(repoPath || projectOrigin) && (
-              <GHEditSection
-                item={workItem}
-                repoPath={repoPath}
-                repoId={effectiveRepoId}
-                projectOrigin={projectOrigin}
-                localState={localState}
-                localLabels={localLabels}
-                onStateChange={setLocalState}
-                onLabelsChange={setLocalLabels}
-                onMutated={() => {
-                  // Why: drop the cached details for this item so the next
-                  // open issues a fresh fetch instead of painting pre-edit
-                  // state. We invalidate by (repoPath, type, number) match
-                  // because a single mutation can affect entries across all
-                  // issueSourcePreference values for the same number.
-                  if (repoPath) {
-                    invalidateWorkItemDetailsCacheByMatch({
-                      repoPath,
-                      repoId: effectiveRepoId ?? undefined,
-                      type: workItem.type,
-                      number: workItem.number
-                    })
-                  }
-                }}
-                assignees={details?.assignees ?? []}
-                onUse={onUse}
-              />
-            )}
-
-            <div className="min-h-0 flex-1">
-              {error ? (
-                <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
-              ) : (
-                <Tabs
-                  value={tab}
-                  onValueChange={(value) => setTab(value as ItemDialogTab)}
-                  className="flex h-full min-h-0 flex-col gap-0"
-                >
-                  <TabsList
-                    variant="line"
-                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
-                  >
-                    <TabsTrigger value="conversation" className="px-2">
-                      <MessageSquare className="size-3.5" />
-                      Conversation
-                    </TabsTrigger>
-                    {workItem.type === 'pr' && (
-                      <>
-                        <TabsTrigger value="checks" className="px-2">
-                          <ListChecks className="size-3.5" />
-                          Checks
-                          {checks.length > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              {checks.length}
-                            </span>
-                          )}
-                        </TabsTrigger>
-                        <TabsTrigger value="files" className="px-2">
-                          <FileText className="size-3.5" />
-                          Files
-                          {files.length > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              {files.length}
-                            </span>
-                          )}
-                        </TabsTrigger>
-                      </>
-                    )}
-                  </TabsList>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-                    <TabsContent value="conversation" className="mt-0">
-                      <ConversationTab
-                        item={displayWorkItem ?? workItem}
-                        repoPath={repoPath}
-                        repoId={effectiveRepoId}
-                        body={body}
-                        comments={comments}
-                        files={files}
-                        headSha={details?.headSha}
-                        baseSha={details?.baseSha}
-                        loading={loading}
-                        detailsLoaded={detailsLoaded}
-                        checks={checks}
-                        participants={details?.participants ?? []}
-                        localState={localState}
-                        onStateChange={setLocalState}
-                        projectOrigin={projectOrigin}
-                        onMutated={() => {
-                          if (repoPath) {
-                            invalidateWorkItemDetailsCacheByMatch({
-                              repoPath,
-                              repoId: effectiveRepoId ?? undefined,
-                              type: workItem.type,
-                              number: workItem.number
-                            })
-                          }
-                        }}
-                        onChecksUpdated={(nextChecks) => {
-                          if (detailsCacheKey) {
-                            patchCachedPRChecks(detailsCacheKey, nextChecks)
-                          }
-                        }}
-                        onBodyUpdated={(nextBody) => {
-                          if (detailsCacheKey) {
-                            patchCachedWorkItemBody(detailsCacheKey, nextBody)
-                          }
-                        }}
-                        onCommentAdded={appendOptimisticComment}
-                        onReviewersRequested={(nextReviewRequests) => {
-                          if (detailsCacheKey) {
-                            patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
-                          }
-                          onReviewRequestsChange?.(
-                            { id: workItem.id, repoId: workItem.repoId },
-                            nextReviewRequests
-                          )
-                        }}
-                      />
-                    </TabsContent>
-
-                    {workItem.type === 'pr' && (
-                      <>
-                        <TabsContent value="checks" className="mt-0">
-                          <ChecksTab
-                            item={workItem}
-                            repoPath={repoPath}
-                            repoId={effectiveRepoId}
-                            headSha={details?.headSha}
-                            checks={checks}
-                            loading={loading || !detailsLoaded}
-                            variant="page"
-                            onChecksUpdated={(nextChecks) => {
-                              if (detailsCacheKey) {
-                                patchCachedPRChecks(detailsCacheKey, nextChecks)
-                              }
-                            }}
-                          />
-                        </TabsContent>
-
-                        <TabsContent value="files" className="mt-0">
-                          {loading && files.length === 0 ? (
-                            <div className="flex items-center justify-center py-10">
-                              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                            </div>
-                          ) : files.length === 0 ? (
-                            <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                              No files changed.
-                            </div>
-                          ) : (
-                            <PRFilesCombinedDiffViewer
-                              files={files}
-                              comments={comments}
-                              repoPath={repoPath ?? ''}
-                              repoId={effectiveRepoId ?? ''}
-                              prNumber={workItem.number}
-                              prUrl={workItem.url}
-                              headSha={details?.headSha}
-                              baseSha={details?.baseSha}
-                              pendingViewedPaths={pendingViewedPaths}
-                              onCommentAdded={appendOptimisticComment}
-                              onViewedChange={handlePRFileViewedChange}
-                            />
-                          )}
-                        </TabsContent>
-                      </>
-                    )}
-                  </div>
-                </Tabs>
-              )}
-            </div>
-          </div>
-        )}
+        {content}
       </SheetContent>
     </Sheet>
   )

@@ -94,6 +94,7 @@ export function mapGitLabIssueInfo(data: {
   web_url?: string
   url?: string
   labels?: { name: string }[] | string[]
+  updated_at?: string
   description?: string | null
   author?: { username?: string | null; avatar_url?: string | null } | null
 }): GitLabIssueInfo {
@@ -107,6 +108,7 @@ export function mapGitLabIssueInfo(data: {
     state: data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed',
     url: data.web_url ?? data.url ?? '',
     labels,
+    ...(data.updated_at ? { updatedAt: data.updated_at } : {}),
     // Why: same description / author optional plumbing as mapMRInfo —
     // list payloads strip these so callers can tell "absent" from "blank".
     ...(typeof data.description === 'string' ? { description: data.description } : {}),

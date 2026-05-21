@@ -189,9 +189,13 @@ export type IGitProvider = {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string }
+    options?: { base?: string; checkoutExistingBranch?: boolean }
   ): Promise<void>
-  removeWorktree(worktreePath: string, force?: boolean): Promise<void>
+  removeWorktree(
+    worktreePath: string,
+    force?: boolean,
+    options?: { deleteBranch?: boolean }
+  ): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>

@@ -46,7 +46,8 @@ const SlugAssignableUsers = SlugRepo.extend({
 
 const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
-  linkedPRNumber: z.number().int().positive().nullable().optional()
+  linkedPRNumber: z.number().int().positive().nullable().optional(),
+  fallbackPRNumber: z.number().int().positive().nullable().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -313,7 +314,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.prForBranch',
     params: PrForBranch,
     handler: async (params, { runtime }) =>
-      runtime.getRepoPRForBranch(params.repo, params.branch, params.linkedPRNumber)
+      runtime.getRepoPRForBranch(
+        params.repo,
+        params.branch,
+        params.linkedPRNumber,
+        params.fallbackPRNumber
+      )
   }),
   defineMethod({
     name: 'github.issue',

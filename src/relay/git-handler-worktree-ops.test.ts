@@ -51,6 +51,35 @@ describe('removeWorktreeOp', () => {
     ])
   })
 
+  it('preserves the branch when removing an SSH worktree for an existing local branch', async () => {
+    const calls: string[] = []
+    const git = vi.fn<GitExec>(async (args, cwd) => {
+      calls.push(`${cwd}$ ${args.join(' ')}`)
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await removeWorktreeOp(git, { worktreePath: '/repo-feature', deleteBranch: false })
+
+    expect(calls).toEqual([
+      '/repo-feature$ rev-parse --git-common-dir',
+      '/repo$ worktree list --porcelain',
+      '/repo$ worktree remove /repo-feature',
+      '/repo$ worktree prune'
+    ])
+  })
+
   it('keeps the branch when another SSH worktree still uses it', async () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, _cwd) => {

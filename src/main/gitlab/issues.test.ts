@@ -108,6 +108,33 @@ describe('gitlab issue operations', () => {
     expect(result.error?.type).toBe('permission_denied')
   })
 
+  it('falls back to glab issue list with updated ordering for unresolved self-hosted repos', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce(null)
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await expect(listIssues('/repo-root', 5, undefined, 'opened', '@me')).resolves.toEqual({
+      items: []
+    })
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'issue',
+        'list',
+        '--output',
+        'json',
+        '--per-page',
+        '5',
+        '--order',
+        'updated_at',
+        '--sort',
+        'desc',
+        '--assignee',
+        '@me'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('creates an issue and returns its iid + web_url', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockResolvedValueOnce({

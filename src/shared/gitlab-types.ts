@@ -104,6 +104,9 @@ export type GitLabIssueInfo = {
   state: GitLabIssueState
   url: string
   labels: string[]
+  /** ISO 8601 timestamp from the list endpoint. Optional because single-
+   *  issue fetches may not include it. */
+  updatedAt?: string
   /** Full markdown description as authored on the issue. Optional because
    *  list endpoints omit it; populated on single-issue fetch (`getIssue`). */
   description?: string

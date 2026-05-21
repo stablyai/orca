@@ -1,12 +1,16 @@
 import type { GitUpstreamStatus } from '../../shared/types'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../../shared/git-upstream-status'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import { getEffectiveGitUpstreamStatus } from '../../shared/git-effective-upstream'
 import { gitExecFileAsync } from './runner'
 
-async function getBehindCommitsArePatchEquivalent(worktreePath: string): Promise<boolean> {
+async function getBehindCommitsArePatchEquivalent(
+  worktreePath: string,
+  upstreamName: string
+): Promise<boolean> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['log', '--oneline', '--cherry-mark', '--right-only', 'HEAD...@{u}', '--'],
+      ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
       { cwd: worktreePath }
     )
     return upstreamOnlyCommitsArePatchEquivalent(stdout)
@@ -19,47 +23,10 @@ async function getBehindCommitsArePatchEquivalent(worktreePath: string): Promise
 
 export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
   try {
-    const { stdout: upstreamStdout } = await gitExecFileAsync(
-      ['rev-parse', '--abbrev-ref', 'HEAD@{u}'],
-      {
-        cwd: worktreePath
-      }
+    return await getEffectiveGitUpstreamStatus(
+      (args) => gitExecFileAsync(args, { cwd: worktreePath }),
+      (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
     )
-    const upstreamName = upstreamStdout.trim()
-    if (!upstreamName) {
-      return { hasUpstream: false, ahead: 0, behind: 0 }
-    }
-
-    const { stdout: countsStdout } = await gitExecFileAsync(
-      ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-      {
-        cwd: worktreePath
-      }
-    )
-
-    const tokens = countsStdout.trim().split(/\s+/)
-    if (tokens.length !== 2) {
-      // Why: 'rev-list --left-right --count HEAD...@{u}' must emit exactly two
-      // tokens; anything else (empty stdout, truncation, unexpected locale) is a
-      // real failure and must not be silently reported as "in sync" 0/0.
-      throw new Error(`Unexpected git rev-list output: ${JSON.stringify(countsStdout)}`)
-    }
-    const ahead = Number.parseInt(tokens[0]!, 10)
-    const behind = Number.parseInt(tokens[1]!, 10)
-    if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
-      throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(countsStdout)}`)
-    }
-
-    const behindCommitsArePatchEquivalent =
-      ahead > 0 && behind > 0 ? await getBehindCommitsArePatchEquivalent(worktreePath) : undefined
-
-    return {
-      hasUpstream: true,
-      upstreamName,
-      ahead,
-      behind,
-      ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
-    }
   } catch (error) {
     // Why: we only swallow clearly-no-upstream signals — that's an expected
     // state, not a failure. Other errors (auth, corruption, "not a git

@@ -1,5 +1,5 @@
 import type { PRCheckDetail, PRComment, PRInfo } from './types'
-import type { HostedReviewQueueSummary } from './hosted-review'
+import type { HostedReviewInfo, HostedReviewQueueSummary } from './hosted-review'
 
 export type HostedReviewFromGitHubPRInfoArgs = {
   pr: PRInfo
@@ -84,5 +84,20 @@ export function hostedReviewSummaryFromGitHubPRInfo(
     requestedReviewerLogins: args.requestedReviewerLogins,
     lastViewedAt: args.lastViewedAt,
     draft: args.pr.state === 'draft'
+  }
+}
+
+export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
+  return {
+    provider: 'github',
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    url: pr.url,
+    status: pr.checksStatus,
+    updatedAt: pr.updatedAt,
+    mergeable: pr.mergeable,
+    ...(pr.headSha ? { headSha: pr.headSha } : {}),
+    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
   }
 }

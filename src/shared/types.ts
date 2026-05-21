@@ -167,6 +167,8 @@ export type Worktree = {
   isUnread: boolean
   isPinned: boolean
   sortOrder: number
+  /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
+  manualOrder?: number
   lastActivityAt: number
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to
@@ -215,6 +217,8 @@ export type WorktreeMeta = {
   isUnread: boolean
   isPinned: boolean
   sortOrder: number
+  /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
+  manualOrder?: number
   lastActivityAt: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
@@ -225,6 +229,8 @@ export type WorktreeMeta = {
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
+  /** True when Orca checked out a pre-existing local branch that delete must not prune. */
+  preserveBranchOnDelete?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
   /** User-assigned workspace board status for manual sidebar organization. */
@@ -637,10 +643,12 @@ export type GitHubPRRefreshAlias = {
   repoPath: string
   branch: string
   worktreeId?: string
+  connectionId?: string | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   linkedPRNumber?: number | null
+  fallbackPRNumber?: number | null
   repoKind: RepoKind
   repoId: string
   isBare?: boolean
@@ -666,6 +674,7 @@ type GitHubPRRefreshEventBase = {
   sequence: number
   reason: GitHubPRRefreshReason
   aliases: GitHubPRRefreshAlias[]
+  requestStartedAt?: number
 }
 
 export type GitHubPRRefreshEvent =
@@ -1244,8 +1253,11 @@ export type CreateWorktreeArgs = {
   linkedIssue?: number
   linkedPR?: number
   linkedLinearIssue?: string
+  linkedGitLabMR?: number
+  linkedGitLabIssue?: number
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
+  manualOrder?: number
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
@@ -1614,14 +1626,14 @@ export type GlobalSettings = {
    *  landed, the floating workspace defaulted off and many profiles persisted
    *  that inherited false. Once migrated, an explicit off choice sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
-  /** Where new Floating Workspace tabs start. Empty means Orca's app-owned
+  /** Where new Floating Workspace terminal tabs start. Empty or '~' means
+   *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
   floatingTerminalCwd: string
   /** Picker-approved Floating Workspace directories that may be reauthorized
    *  across restarts. Renderer-provided text alone must not populate this. */
   floatingTerminalTrustedCwds?: string[]
-  /** One-shot migration from the old implicit '~' default to the app-owned
-   *  floating workspace. Explicit future '~' choices are preserved. */
+  /** One-shot migration marker for legacy floating workspace cwd trust grants. */
   floatingTerminalCwdMigratedToAppWorkspace?: boolean
   /** Where the Floating Workspace toggle is shown. Defaults to the floating
    *  button for discoverability. */
@@ -1850,6 +1862,8 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
+  requireDisplayConfirmation?: boolean
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
@@ -1870,7 +1884,13 @@ export type NotificationDispatchRequest = {
 export type NotificationDispatchResult = {
   delivered: boolean
   /** Present when delivered is false. Tells the caller why delivery was skipped. */
-  reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
+  reason?:
+    | 'disabled'
+    | 'source-disabled'
+    | 'suppressed-focus'
+    | 'cooldown'
+    | 'not-supported'
+    | 'not-displayed'
 }
 
 export type NotificationSoundResult = {
@@ -1976,12 +1996,14 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
-  sortBy: 'name' | 'smart' | 'recent' | 'repo'
+  sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
-  /** Off by default: sleeping/inactive workspaces stay hidden until shown. */
+  /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
+  hideSleepingWorkspaces?: boolean
+  /** Deprecated legacy positive-form setting. Ignored on hydration. */
   showSleepingWorkspaces?: boolean
-  /** Legacy name for the same setting used by a short-lived build. */
+  /** Deprecated legacy name used by a short-lived build. Ignored on hydration. */
   showInactiveWorkspaces?: boolean
   /** Hide the repo's original checked-out branch from workspace navigation
    *  (sidebar and Cmd+J jump palette). Folder-mode repos are unaffected —

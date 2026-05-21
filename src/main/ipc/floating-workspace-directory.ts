@@ -82,7 +82,9 @@ export async function resolveFloatingTerminalCwd(
 ): Promise<string> {
   const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
   if (!configuredPath) {
-    return ensureDefaultFloatingWorkspacePath()
+    return args?.requireTrusted === true
+      ? ensureDefaultFloatingWorkspacePath()
+      : resolveFloatingWorkspaceInput('~')
   }
 
   const cwd = resolveFloatingWorkspaceInput(configuredPath)
@@ -127,6 +129,9 @@ export async function sanitizeFloatingWorkspaceDirectorySetting(
   const trimmed = dirPath.trim()
   if (!trimmed) {
     return ''
+  }
+  if (trimmed === '~') {
+    return '~'
   }
   const resolvedDir = resolveFloatingWorkspaceInput(trimmed)
   const canonicalDir = await canonicalizeAccessibleDirectory(resolvedDir)

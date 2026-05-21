@@ -124,6 +124,29 @@ branch refs/heads/main
     expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
   })
 
+  it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
+
+    const calls = getGitCalls()
+    expect(calls).toEqual(
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git worktree prune'])
+    )
+    expect(calls).not.toContain('git branch -D feature/test')
+  })
+
   it('skips branch deletion when another worktree still points at the branch', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
