@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
@@ -53,6 +53,34 @@ type NotificationsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+type SystemNotificationSettingsCopy = {
+  buttonLabel: string
+  failureTitle: string
+  failureDescription: string
+}
+
+function getSystemNotificationSettingsCopy(
+  platform: NodeJS.Platform
+): SystemNotificationSettingsCopy | null {
+  if (platform === 'darwin') {
+    return {
+      buttonLabel: 'macOS Settings',
+      failureTitle: 'macOS did not show the notification',
+      failureDescription: 'Enable Allow notifications for Orca in System Settings.'
+    }
+  }
+
+  if (platform === 'win32') {
+    return {
+      buttonLabel: 'Windows Settings',
+      failureTitle: 'Windows did not show the notification',
+      failureDescription: 'Enable notifications for Orca in Windows Settings.'
+    }
+  }
+
+  return null
+}
+
 export async function sendNotificationSettingsTestNotification(
   notificationSettings: GlobalSettings['notifications'],
   volumeDraft: number
@@ -81,20 +109,42 @@ export async function sendNotificationSettingsTestNotification(
       toast.error('Custom notification sound could not be played')
       return
     }
+    const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
+    if (permissionStatus.platform === 'darwin' && settingsCopy) {
+      // Why: Electron's native 'show' event can fire even when macOS silently
+      // drops the banner because the per-app Allow notifications switch is off.
+      toast.message('Test notification requested', {
+        description: 'If no macOS banner appeared, enable Allow notifications for Orca.',
+        action: {
+          label: 'Open Settings',
+          onClick: () => {
+            void window.api.notifications.openSystemSettings()
+          }
+        }
+      })
+      return
+    }
     toast.success('Test notification sent')
     return
   }
 
   if (result.reason === 'not-displayed') {
-    toast.error('macOS did not show the notification', {
-      description: 'Enable Allow notifications for Orca in System Settings.',
-      action: {
-        label: 'Open Settings',
-        onClick: () => {
-          void window.api.notifications.openSystemSettings()
+    const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
+    if (settingsCopy) {
+      toast.error(settingsCopy.failureTitle, {
+        description: settingsCopy.failureDescription,
+        action: {
+          label: 'Open Settings',
+          onClick: () => {
+            void window.api.notifications.openSystemSettings()
+          }
         }
-      }
-    })
+      })
+    } else {
+      toast.error('System did not show the notification', {
+        description: 'Check your desktop notification settings for Orca.'
+      })
+    }
     return
   }
 
@@ -112,6 +162,8 @@ export function NotificationsPane({
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
   const [isPickingSound, setIsPickingSound] = useState(false)
+  const [permissionStatus, setPermissionStatus] =
+    useState<NotificationPermissionStatusResult | null>(null)
 
   const updateNotificationSettings = (updates: Partial<GlobalSettings['notifications']>): void => {
     updateSettings({
@@ -130,6 +182,25 @@ export function NotificationsPane({
     notificationSettingsRef.current = notificationSettings
     setVolumeDraft(notificationSettings.customSoundVolume)
   }, [notificationSettings])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.notifications
+      .getPermissionStatus()
+      .then((status) => {
+        if (!cancelled) {
+          setPermissionStatus(status)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPermissionStatus(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {
@@ -158,6 +229,9 @@ export function NotificationsPane({
   }
 
   const selectedSoundPath = notificationSettings.customSoundPath
+  const systemSettingsCopy = permissionStatus
+    ? getSystemNotificationSettingsCopy(permissionStatus.platform)
+    : null
 
   return (
     <div className="space-y-1">
@@ -298,15 +372,18 @@ export function NotificationsPane({
           <BellRing className="size-3.5" />
           Send Test Notification
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void handleOpenSystemSettings()}
-          className="gap-2"
-        >
-          <ExternalLink className="size-3.5" />
-          macOS Settings
-        </Button>
+        {systemSettingsCopy ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!notificationSettings.enabled}
+            onClick={() => void handleOpenSystemSettings()}
+            className="gap-2"
+          >
+            <ExternalLink className="size-3.5" />
+            {systemSettingsCopy.buttonLabel}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

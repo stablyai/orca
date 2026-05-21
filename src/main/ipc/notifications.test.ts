@@ -203,6 +203,30 @@ describe('registerNotificationHandlers', () => {
     }
   })
 
+  it('opens Windows notification settings', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith('ms-settings:notifications')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
   it('suppresses notifications when disabled in settings', () => {
     registerNotificationHandlers({
       getSettings: () => ({

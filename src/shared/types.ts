@@ -1855,7 +1855,7 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
-  /** Why: the Settings test button must not report success unless macOS actually shows it. */
+  /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
