@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, LayoutList, Plus, Rows3, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -8,15 +8,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 
 type WorkspaceKanbanSettingsMenuProps = {
-  opacityPercent: number
+  compact: boolean
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onOpacityChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onCompactChange: (compact: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -26,9 +28,9 @@ type WorkspaceKanbanSettingsMenuProps = {
 }
 
 export default function WorkspaceKanbanSettingsMenu({
-  opacityPercent,
+  compact,
   workspaceStatuses,
-  onOpacityChange,
+  onCompactChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -38,14 +40,27 @@ export default function WorkspaceKanbanSettingsMenu({
 }: WorkspaceKanbanSettingsMenuProps): React.JSX.Element {
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label="Workspace board settings">
-          <Settings2 className="size-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Workspace board settings"
+              className="text-muted-foreground"
+            >
+              <Settings className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          Board settings
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent
         align="end"
         sideOffset={8}
+        collisionPadding={8}
         className="max-h-[min(80vh,720px)] w-80 overflow-y-auto p-2 scrollbar-sleek"
         onInteractOutside={(event) => {
           const target = event.target
@@ -57,21 +72,37 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
-        <DropdownMenuLabel>Board opacity</DropdownMenuLabel>
+        <DropdownMenuLabel>Card density</DropdownMenuLabel>
         <div className="px-2 pb-2">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Pane opacity</span>
-            <span>{opacityPercent}%</span>
-          </div>
-          <input
-            type="range"
-            min={20}
-            max={100}
-            value={opacityPercent}
-            onChange={onOpacityChange}
-            className="h-5 w-full accent-foreground"
-            aria-label="Workspace board opacity"
-          />
+          <ToggleGroup
+            type="single"
+            value={compact ? 'compact' : 'detailed'}
+            onValueChange={(value) => {
+              if (value) {
+                onCompactChange(value === 'compact')
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="h-7 w-full justify-stretch"
+          >
+            <ToggleGroupItem
+              value="detailed"
+              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+              aria-label="Detailed workspace cards"
+            >
+              <LayoutList className="size-3.5" />
+              Detailed
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="compact"
+              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+              aria-label="Compact workspace cards"
+            >
+              <Rows3 className="size-3.5" />
+              Compact
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Statuses</DropdownMenuLabel>

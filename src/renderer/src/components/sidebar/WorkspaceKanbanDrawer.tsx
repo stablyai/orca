@@ -48,8 +48,6 @@ export default function WorkspaceKanbanDrawer({
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
-  const workspaceBoardOpacity = useAppStore((s) => s.workspaceBoardOpacity)
-  const setWorkspaceBoardOpacity = useAppStore((s) => s.setWorkspaceBoardOpacity)
   const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
   const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
@@ -219,13 +217,6 @@ export default function WorkspaceKanbanDrawer({
     onOpenChange(false)
   }, [onOpenChange])
 
-  const handleOpacityChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setWorkspaceBoardOpacity(Number(event.target.value) / 100)
-    },
-    [setWorkspaceBoardOpacity]
-  )
-
   const handleRenameStatus = useCallback(
     (statusId: string, label: string) => {
       const trimmed = label.trim()
@@ -341,7 +332,6 @@ export default function WorkspaceKanbanDrawer({
     return () => document.removeEventListener('pointerdown', clearSelectionOutsideBoard, true)
   }, [clearSelection, open, selectedWorktreeIds.size])
 
-  const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
@@ -361,8 +351,7 @@ export default function WorkspaceKanbanDrawer({
             left: drawerLeftCss,
             top: 36,
             height: 'calc(100% - 36px)',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`,
-            opacity: workspaceBoardOpacity
+            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
           } as React.CSSProperties
         }
         data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
@@ -397,10 +386,8 @@ export default function WorkspaceKanbanDrawer({
         <WorkspaceKanbanDrawerHeader
           selectedCount={selectedWorktrees.length}
           compact={workspaceBoardCompact}
-          opacityPercent={opacityPercent}
           workspaceStatuses={workspaceStatuses}
           onCompactChange={setWorkspaceBoardCompact}
-          onOpacityChange={handleOpacityChange}
           onRenameStatus={handleRenameStatus}
           onChangeStatusColor={handleChangeStatusColor}
           onChangeStatusIcon={handleChangeStatusIcon}
