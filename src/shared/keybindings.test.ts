@@ -78,6 +78,23 @@ describe('keybindings', () => {
     })
   })
 
+  it('reports customized renderer conflicts with native menu accelerators', () => {
+    expect(findKeybindingConflicts('darwin')).toEqual([])
+
+    const conflicts = findKeybindingConflicts('darwin', {
+      'worktree.palette': ['Mod+Shift+E']
+    })
+
+    expect(conflicts).toContainEqual({
+      binding: 'Mod+Shift+E',
+      actionIds: expect.arrayContaining([
+        'file.exportPdf',
+        'sidebar.explorer.toggle',
+        'worktree.palette'
+      ])
+    })
+  })
+
   it('matches shortcuts from the same defaults regardless of caller context', () => {
     const ctrlP = {
       key: 'p',

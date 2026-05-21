@@ -1251,10 +1251,18 @@ export function findKeybindingConflicts(
   )
   for (const definition of KEYBINDING_DEFINITIONS) {
     for (const binding of getEffectiveKeybindingsForAction(definition.id, platform, overrides)) {
-      const conflictKey = `${definition.conflictGroup ?? definition.scope}\u0000${binding}`
-      const current = owners.get(conflictKey) ?? []
-      current.push(definition.id)
-      owners.set(conflictKey, current)
+      const groups = new Set([definition.conflictGroup ?? definition.scope])
+      if (definition.conflictGroup) {
+        // Why: native menu accelerators can still consume global chords, so custom
+        // renderer bindings must be checked against both the menu bucket and scope.
+        groups.add(definition.scope)
+      }
+      for (const group of groups) {
+        const conflictKey = `${group}\u0000${binding}`
+        const current = owners.get(conflictKey) ?? []
+        current.push(definition.id)
+        owners.set(conflictKey, current)
+      }
     }
   }
 
