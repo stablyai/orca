@@ -14,6 +14,14 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
   })
 
+  it('recognizes the OpenClaude foreground process', () => {
+    expect(recognizeAgentProcess('/usr/local/bin/openclaude')).toEqual({
+      agent: 'openclaude',
+      processName: 'openclaude'
+    })
+    expect(isRecognizedAgentType('openclaude')).toBe(true)
+  })
+
   it('matches expected agents from platform-specific foreground process paths', () => {
     expect(
       isExpectedAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\claude.exe`, 'claude')

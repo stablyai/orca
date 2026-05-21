@@ -23,6 +23,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
   },
   {
+    id: 'openclaude',
+    label: 'OpenClaude',
+    cmd: 'openclaude',
+    faviconDomain: 'github.com',
+    homepageUrl: 'https://github.com/Gitlawb/openclaude'
+  },
+  {
     id: 'codex',
     label: 'Codex',
     cmd: 'codex',

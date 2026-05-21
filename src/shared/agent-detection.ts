@@ -23,6 +23,7 @@ const GEMINI_PERMISSION = '\u270B' // ✋
 // explicit launch/session facts Orca owns, not this inference path.
 export const AGENT_NAMES = [
   'claude',
+  'openclaude',
   'codex',
   'copilot',
   'cursor',
@@ -369,6 +370,9 @@ export function getAgentLabel(title: string): string | null {
   // heuristic so mixed-agent hovercards stay truthful.
   if (lower.includes('codex')) {
     return 'Codex'
+  }
+  if (lower.includes('openclaude')) {
+    return 'OpenClaude'
   }
   if (lower.includes('copilot')) {
     return 'GitHub Copilot'

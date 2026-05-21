@@ -389,6 +389,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('OpenClaude running')).toBe('OpenClaude')
     expect(getAgentLabel('Antigravity running')).toBe('Antigravity')
     expect(getAgentLabel('agy working')).toBe('Antigravity')
     expect(getAgentLabel('Grok running')).toBe('Grok')
@@ -697,6 +698,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('claude')).toBe('Claude')
   })
 
+  it("maps 'openclaude' to 'OpenClaude'", () => {
+    expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
+  })
+
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
   })
@@ -741,6 +746,7 @@ describe('agentTypeToIconAgent', () => {
 
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
+    expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
   })
