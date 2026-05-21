@@ -2,9 +2,9 @@
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
-import hostedGitInfo from 'hosted-git-info'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
+import { buildHostedRemoteFileUrl } from './hosted-remote-url'
 
 const GH_LOGIN_TIMEOUT_MS = 2500
 
@@ -672,9 +672,6 @@ function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefi
 /**
  * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a specific file
  * and line in the repo. Returns null when the remote isn't a recognized host.
- *
- * Why hosted-git-info: it handles SSH, HTTPS, and shorthand remote URLs
- * across multiple providers, so we don't have to maintain our own URL parser.
  */
 export function getRemoteFileUrl(
   repoPath: string,
@@ -686,22 +683,11 @@ export function getRemoteFileUrl(
     return null
   }
 
-  const info = hostedGitInfo.fromUrl(remoteUrl)
-  if (!info) {
-    return null
-  }
-
   const defaultBaseRef = getDefaultBaseRef(repoPath)
   if (!defaultBaseRef) {
     return null
   }
   const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
-  const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
-  if (!browseUrl) {
-    return null
-  }
 
-  // Why: hosted-git-info lowercases the fragment, but GitHub convention
-  // uses uppercase L for line links (e.g. #L42). Append manually.
-  return `${browseUrl}#L${line}`
+  return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
 }

@@ -1,10 +1,8 @@
-import GithubSlugger from 'github-slugger'
-import { decodeHTML } from 'entities'
-import { toString } from 'mdast-util-to-string'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
+import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 
 export type MarkdownTocLevel = 1 | 2 | 3
 
@@ -15,12 +13,43 @@ export type MarkdownTocItem = {
   title: string
 }
 
+const htmlEntitiesForToc = new Map([
+  ['amp', '&'],
+  ['apos', "'"],
+  ['gt', '>'],
+  ['lt', '<'],
+  ['nbsp', ' '],
+  ['quot', '"']
+])
+
 function isMarkdownTocLevel(value: number): value is MarkdownTocLevel {
   return value === 1 || value === 2 || value === 3
 }
 
+// Scoped local fork of the tiny entities@6.0.1 surface Orca used here.
+// Why: TOC labels only need common/numeric entity decoding before inline
+// Markdown stripping, not the full entity database.
+function decodeTocHtmlEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi, (match, entity: string) => {
+    const normalized = entity.toLowerCase()
+    if (normalized.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16)
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match
+    }
+    if (normalized.startsWith('#')) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10)
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match
+    }
+    return htmlEntitiesForToc.get(normalized) ?? match
+  })
+}
+
 export function stripInlineMarkdownForToc(text: string): string {
-  return decodeHTML(text)
+  return decodeTocHtmlEntities(text)
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\[\[[^|\]]+\|([^\]]+)\]\]/g, '$1')
@@ -48,18 +77,33 @@ function appendTocItem(stack: MarkdownTocItem[], item: MarkdownTocItem): void {
 }
 
 type MarkdownAstNode = {
+  alt?: string
   children?: MarkdownAstNode[]
   depth?: number
   type?: string
+  value?: string
+}
+
+// Scoped local fork of mdast-util-to-string@4.0.0 for heading nodes.
+// Why: TOC generation only needs text/alt/child concatenation from parsed
+// Markdown headings, so a local walker keeps the dependency boundary smaller.
+function markdownAstNodeToText(node: MarkdownAstNode): string {
+  if (typeof node.value === 'string') {
+    return node.value
+  }
+  if (typeof node.alt === 'string') {
+    return node.alt
+  }
+  return (node.children ?? []).map(markdownAstNodeToText).join('')
 }
 
 export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[] {
-  const slugger = new GithubSlugger()
+  const slugger = new MarkdownHeadingSlugger()
   const root: MarkdownTocItem = { id: 'toc-root', level: 1, title: '', children: [] }
   const stack: MarkdownTocItem[] = [root]
 
-  // Why: the TOC must produce the same heading text/ids as react-markdown plus
-  // rehype-slug; parsing Markdown avoids drift on setext, GFM, and entities.
+  // Why: parsing Markdown keeps the TOC aligned with rendered setext/GFM/entity
+  // headings without carrying separate mdast stringifier/entity packages.
   const tree = unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -72,7 +116,7 @@ export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[
       typeof node.depth === 'number' &&
       isMarkdownTocLevel(node.depth)
     ) {
-      const title = toString(node).replace(/\s+/g, ' ').trim()
+      const title = markdownAstNodeToText(node).replace(/\s+/g, ' ').trim()
       if (title) {
         appendTocItem(stack, {
           children: [],

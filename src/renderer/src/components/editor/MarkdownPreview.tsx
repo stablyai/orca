@@ -11,8 +11,6 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
-import rehypeSlug from 'rehype-slug'
-import GithubSlugger from 'github-slugger'
 import { extractFrontMatter } from './markdown-frontmatter'
 import {
   Check,
@@ -82,6 +80,7 @@ import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButto
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
+import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 
 type MarkdownPreviewProps = {
   content: string
@@ -243,11 +242,12 @@ function getMarkdownPreviewNodeText(node: React.ReactNode): string {
   return ''
 }
 
-// Why: use the same GithubSlugger that rehype-slug uses internally so
-// heading IDs match standard GitHub/VS Code anchor links. The custom
-// slugger previously stripped punctuation differently, breaking links
-// like `#a--b` for headings containing `A & B`.
-function createMarkdownPreviewHeadingId(headingText: string, slugger: GithubSlugger): string {
+// Why: heading IDs must match the editor TOC/link handling, including duplicate
+// suffixes and punctuation removal, without carrying another renderer plugin.
+function createMarkdownPreviewHeadingId(
+  headingText: string,
+  slugger: MarkdownHeadingSlugger
+): string {
   return slugger.slug(headingText)
 }
 
@@ -471,7 +471,7 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  const sluggerRef = useRef(new GithubSlugger())
+  const sluggerRef = useRef(new MarkdownHeadingSlugger())
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(false)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
@@ -884,7 +884,6 @@ export default function MarkdownPreview({
   )
 
   const components: Components = useMemo(() => {
-    sluggerRef.current.reset()
     const slugger = sluggerRef.current
     return {
       a: ({ href, children, className, ...props }) => {
@@ -1324,6 +1323,11 @@ export default function MarkdownPreview({
     wrapAnnotatedBlock
   ])
 
+  // Why: react-markdown can reuse component overrides across state-only
+  // rerenders; reset per render so duplicate heading suffixes do not accumulate
+  // when content is unchanged.
+  sluggerRef.current.reset()
+
   return (
     <div className="markdown-preview-shell">
       <div
@@ -1494,7 +1498,6 @@ export default function MarkdownPreview({
             rehypePlugins={[
               rehypeRaw,
               [rehypeSanitize, markdownPreviewSanitizeSchema],
-              rehypeSlug,
               rehypeHighlight,
               rehypeKatex
             ]}

@@ -1,0 +1,116 @@
+// Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
+// Why: source links only need GitHub/GitLab/Bitbucket remote parsing and file
+// URL construction, so we keep that small surface local and tested.
+type HostedRemoteProvider = 'github' | 'gitlab' | 'bitbucket'
+
+type HostedRemote = {
+  host: string
+  path: string
+  provider: HostedRemoteProvider
+}
+
+const shorthandHosts: Record<string, { host: string; provider: HostedRemoteProvider }> = {
+  bitbucket: { host: 'bitbucket.org', provider: 'bitbucket' },
+  github: { host: 'github.com', provider: 'github' },
+  gitlab: { host: 'gitlab.com', provider: 'gitlab' }
+}
+
+function providerForHost(host: string): HostedRemoteProvider | null {
+  const normalized = host.toLowerCase()
+  if (normalized === 'github.com') {
+    return 'github'
+  }
+  if (normalized === 'gitlab.com') {
+    return 'gitlab'
+  }
+  if (normalized === 'bitbucket.org') {
+    return 'bitbucket'
+  }
+  return null
+}
+
+function trimGitSuffix(path: string): string {
+  return path.replace(/\.git$/i, '')
+}
+
+function decodeRemotePathPart(pathPart: string): string {
+  try {
+    return decodeURIComponent(pathPart)
+  } catch {
+    return pathPart
+  }
+}
+
+function cleanRemotePath(path: string): string | null {
+  const normalized = trimGitSuffix(path.replace(/^\/+/, '').replace(/\/+$/, ''))
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length < 2) {
+    return null
+  }
+  return parts.map(decodeRemotePathPart).join('/')
+}
+
+export function parseHostedRemote(remoteUrl: string): HostedRemote | null {
+  const trimmed = remoteUrl.trim().replace(/^git\+/, '')
+  const shorthand = trimmed.match(/^([a-z]+):([^/].+)$/i)
+  if (shorthand) {
+    const host = shorthandHosts[shorthand[1].toLowerCase()]
+    const path = cleanRemotePath(shorthand[2])
+    return host && path ? { ...host, path } : null
+  }
+
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+)$/)
+    if (scpLike) {
+      const provider = providerForHost(scpLike[1])
+      const path = cleanRemotePath(scpLike[2])
+      return provider && path ? { host: scpLike[1].toLowerCase(), path, provider } : null
+    }
+  }
+
+  try {
+    const url = new URL(trimmed)
+    if (!['git:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
+      return null
+    }
+    const provider = providerForHost(url.hostname)
+    const path = cleanRemotePath(url.pathname)
+    return provider && path ? { host: url.hostname.toLowerCase(), path, provider } : null
+  } catch {
+    return null
+  }
+}
+
+function encodeRemotePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
+function encodeRelativePath(path: string): string {
+  return path.replaceAll('\\', '/').split('/').filter(Boolean).map(encodeURIComponent).join('/')
+}
+
+export function buildHostedRemoteFileUrl(
+  remoteUrl: string,
+  relativePath: string,
+  branch: string,
+  line: number
+): string | null {
+  const remote = parseHostedRemote(remoteUrl)
+  if (!remote) {
+    return null
+  }
+
+  const encodedRepoPath = encodeRemotePath(remote.path)
+  const encodedBranch = encodeURIComponent(branch)
+  const encodedFilePath = encodeRelativePath(relativePath)
+  const filePathSuffix = encodedFilePath ? `/${encodedFilePath}` : ''
+  const baseUrl = `https://${remote.host}/${encodedRepoPath}`
+
+  if (remote.provider === 'github') {
+    return `${baseUrl}/blob/${encodedBranch}${filePathSuffix}#L${line}`
+  }
+  if (remote.provider === 'gitlab') {
+    return `${baseUrl}/tree/${encodedBranch}${filePathSuffix}#L${line}`
+  }
+  return `${baseUrl}/src/${encodedBranch}${filePathSuffix}#L${line}`
+}

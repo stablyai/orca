@@ -4,7 +4,6 @@
    small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IGitProvider } from './types'
-import hostedGitInfo from 'hosted-git-info'
 import type {
   GitStatusResult,
   GitDiffResult,
@@ -16,6 +15,7 @@ import type {
   GitWorktreeInfo
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
@@ -274,9 +274,8 @@ export class SshGitProvider implements IGitProvider {
     return true
   }
 
-  // Why: the local getRemoteFileUrl uses hosted-git-info which requires the
-  // remote URL from .git/config. For SSH connections we must fetch the remote
-  // URL from the relay, then apply the same hosted-git-info logic locally.
+  // Why: SSH worktrees need the remote URL from the relay-side .git/config
+  // before local code can map it to a hosted source link.
   async getRemoteFileUrl(
     worktreePath: string,
     relativePath: string,
@@ -290,11 +289,6 @@ export class SshGitProvider implements IGitProvider {
       return null
     }
     if (!remoteUrl) {
-      return null
-    }
-
-    const info = hostedGitInfo.fromUrl(remoteUrl)
-    if (!info) {
       return null
     }
 
@@ -312,13 +306,6 @@ export class SshGitProvider implements IGitProvider {
       // Fall back to 'main'
     }
 
-    const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
-    if (!browseUrl) {
-      return null
-    }
-
-    // Why: hosted-git-info lowercases the fragment, but GitHub convention
-    // uses uppercase L for line links (e.g. #L42). Append manually.
-    return `${browseUrl}#L${line}`
+    return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
   }
 }
