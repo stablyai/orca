@@ -6,11 +6,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+vi.mock('sonner', () => ({
+  toast: {
+    warning: vi.fn()
+  }
+}))
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -774,6 +781,30 @@ describe('createWorktree base status merge', () => {
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review'
+    })
+  })
+
+  it('warns when the local base ref cannot refresh because its worktree is dirty', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'skipped_dirty_worktree',
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        ownerWorktreePath: '/repo'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed', {
+      description: expect.stringContaining('uncommitted changes')
     })
   })
 

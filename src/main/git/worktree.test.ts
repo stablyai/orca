@@ -258,7 +258,7 @@ describe('addWorktree', () => {
 
     await expect(
       addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({})
 
     expect(warnSpy).toHaveBeenCalledWith(
       'addWorktree: failed to set push.autoSetupRemote for /repo-feature',
@@ -279,7 +279,7 @@ describe('addWorktree', () => {
 
     await expect(
       addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({})
 
     expect(warnSpy).toHaveBeenCalledWith(
       'addWorktree: failed to set push.autoSetupRemote for /repo-feature',
@@ -481,7 +481,14 @@ describe('addWorktree', () => {
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
-    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_dirty_worktree',
+      baseRef: 'origin/main',
+      localBranch: 'main',
+      ownerWorktreePath: '/repo'
+    })
 
     // No reset --hard or update-ref — just merge-base, worktree list, status, worktree add, config --get, config --local set
     expect(gitExecFileAsyncMock.mock.calls).toHaveLength(7)

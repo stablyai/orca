@@ -2,6 +2,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  LocalBaseRefRefreshResult,
   Worktree,
   WorkspaceVisibleTabType,
   WorktreeLineage,
@@ -19,11 +20,22 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rp
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
+import { toast } from 'sonner'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: the runtime RPC default is intentionally bounded for CLI calls, but the
 // UI must hydrate the same large repo lists the desktop IPC path sees.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
+function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
+  if (result?.status !== 'skipped_dirty_worktree') {
+    return
+  }
+
+  toast.warning(`Local ${result.localBranch} was not refreshed`, {
+    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because the worktree where it is checked out has uncommitted changes. AI tools using git diff ${result.localBranch}...HEAD may see stale results.`
+  })
+}
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
@@ -730,6 +742,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               sortEpoch: s.sortEpoch + 1
             }
           })
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

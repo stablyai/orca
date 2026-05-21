@@ -71,22 +71,24 @@ export function GitPane({
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: 'Refresh Local Base Ref',
-      description: 'Optionally fast-forward local main or master when creating worktrees.',
+      description:
+        'Safely fast-forward local main or master so AI tools and diffs use a fresh base.',
       keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
     }) ? (
       <SearchableSetting
         key="refresh-base-ref"
         title="Refresh Local Base Ref"
-        description="Optionally fast-forward local main or master when creating worktrees."
+        description="Safely fast-forward local main or master so AI tools and diffs use a fresh base."
         keywords={['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']}
         className="flex items-center justify-between gap-4 px-1 py-2"
       >
         <div className="space-y-0.5">
           <Label>Refresh Local Base Ref</Label>
           <p className="text-xs text-muted-foreground">
-            When enabled, Orca updates your local <code>main</code> or <code>master</code> before
-            creating a worktree. This helps AI tools and diffs compare your branch against the
-            latest base branch. Orca only does this when it is safe.
+            Turn this on if you or AI tools use commands like <code>git diff main...HEAD</code>.
+            Orca first refreshes the remote base, then safely fast-forwards the matching local{' '}
+            <code>main</code> or <code>master</code> so those commands do not compare against stale
+            history. Orca skips the update if the local branch is dirty or diverged.
           </p>
         </div>
         <button

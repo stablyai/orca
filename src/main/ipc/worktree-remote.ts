@@ -21,6 +21,7 @@ import type {
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
+import type { AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
@@ -1156,44 +1157,43 @@ export async function createLocalWorktree(
   }
 
   const existingBranchOption = { checkoutExistingBranch }
-  if (sparseDirectories.length > 0) {
-    await (checkoutExistingBranch
-      ? addSparseWorktree(
-          repo.path,
-          worktreePath,
-          branchName,
-          sparseDirectories,
-          baseBranch,
-          settings.refreshLocalBaseRefOnWorktreeCreate,
-          existingBranchOption
-        )
-      : addSparseWorktree(
-          repo.path,
-          worktreePath,
-          branchName,
-          sparseDirectories,
-          baseBranch,
-          settings.refreshLocalBaseRefOnWorktreeCreate
-        ))
-  } else {
-    await (checkoutExistingBranch
-      ? addWorktree(
-          repo.path,
-          worktreePath,
-          branchName,
-          baseBranch,
-          settings.refreshLocalBaseRefOnWorktreeCreate,
-          false,
-          existingBranchOption
-        )
-      : addWorktree(
-          repo.path,
-          worktreePath,
-          branchName,
-          baseBranch,
-          settings.refreshLocalBaseRefOnWorktreeCreate
-        ))
-  }
+  const addResult: AddWorktreeResult =
+    (await (sparseDirectories.length > 0
+      ? checkoutExistingBranch
+        ? addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            existingBranchOption
+          )
+        : addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate
+          )
+      : checkoutExistingBranch
+        ? addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            false,
+            existingBranchOption
+          )
+        : addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate
+          ))) ?? {}
 
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
@@ -1314,6 +1314,7 @@ export async function createLocalWorktree(
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup ? { setup } : {})
+    ...(setup ? { setup } : {}),
+    ...(addResult.localBaseRefRefresh ? { localBaseRefRefresh: addResult.localBaseRefRefresh } : {})
   }
 }
