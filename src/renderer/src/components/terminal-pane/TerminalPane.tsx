@@ -315,8 +315,14 @@ export default function TerminalPane({
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
+  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
+  const unreadTerminalPanes = useAppStore((store) => store.unreadTerminalPanes)
+  const terminalAttentionEnabled = useAppStore(
+    (store) => store.settings?.experimentalTerminalAttention === true
+  )
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
@@ -701,8 +707,10 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     markTerminalTabUnread,
+    markTerminalPaneUnread,
     clearWorktreeUnread,
     clearTerminalTabUnread,
+    clearTerminalPaneUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -904,8 +912,10 @@ export default function TerminalPane({
         updateTabPtyId,
         markWorktreeUnread,
         markTerminalTabUnread,
+        markTerminalPaneUnread,
         clearWorktreeUnread,
         clearTerminalTabUnread,
+        clearTerminalPaneUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -921,8 +931,10 @@ export default function TerminalPane({
       dispatchNotification,
       markWorktreeUnread,
       markTerminalTabUnread,
+      markTerminalPaneUnread,
       clearWorktreeUnread,
       clearTerminalTabUnread,
+      clearTerminalPaneUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -1164,7 +1176,7 @@ export default function TerminalPane({
   }, [isActive, worktreeId, keybindings])
 
   // Why: a click inside the terminal container is a deliberate interaction
-  // with the pane — dismiss the bell indicator for this tab and worktree
+  // with the pane — dismiss the attention indicator for this tab and worktree
   // (ghostty "show until interact" semantics). onData already covers
   // keystrokes; pointerdown covers the mouse path, including right-click
   // and middle-click paste, which also count as engagement with the pane.
@@ -1184,15 +1196,36 @@ export default function TerminalPane({
     if (!container) {
       return
     }
-    const onPointerDown = (): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       clearTerminalTabUnread(tabId)
       clearWorktreeUnread(worktreeId)
+      const paneElement =
+        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
+      const leafId = paneElement?.getAttribute('data-leaf-id')
+      if (leafId) {
+        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
+      }
     }
     container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => {
       container.removeEventListener('pointerdown', onPointerDown, { capture: true })
     }
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
+
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    for (const pane of manager.getPanes()) {
+      const paneKey = makePaneKey(tabId, pane.leafId)
+      if (terminalAttentionEnabled && unreadTerminalPanes[paneKey]) {
+        pane.container.setAttribute('data-terminal-attention', '')
+      } else {
+        pane.container.removeAttribute('data-terminal-attention')
+      }
+    }
+  }, [tabId, paneCount, terminalAttentionEnabled, unreadTerminalPanes])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.

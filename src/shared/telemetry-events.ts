@@ -237,6 +237,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalMobile',
   'experimentalPet',
   'experimentalActivity',
+  'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]

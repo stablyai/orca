@@ -1466,11 +1466,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   markWorktreeUnread: (worktreeId) => {
-    // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). Interaction with a pane inside the worktree
-    // dismisses the dot via clearWorktreeUnread. Worktree activation via
-    // setActiveWorktree also clears isUnread as a side-effect; that path
-    // predates this PR and is unaffected here.
+    // Why: terminal attention should remain visible until the user engages
+    // with the worktree. Interaction with a pane inside the worktree dismisses
+    // the dot via clearWorktreeUnread. Worktree activation via setActiveWorktree
+    // also clears isUnread as a side-effect; that path predates this PR and is
+    // unaffected here.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {

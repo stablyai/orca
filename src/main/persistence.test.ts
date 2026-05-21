@@ -247,6 +247,7 @@ describe('Store', () => {
     expect(settings.openInApplications).toEqual([])
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
+    expect(settings.experimentalTerminalAttention).toBe(false)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
@@ -750,6 +751,7 @@ describe('Store', () => {
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
+    expect(store.getSettings().experimentalTerminalAttention).toBe(false)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)

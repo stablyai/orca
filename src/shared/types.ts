@@ -1902,6 +1902,10 @@ export type GlobalSettings = {
   /** One-shot migration guard for defaulting the Agents view off for all
    *  users. Once set, later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
+  /** Experimental: persistent terminal pane attention ring for terminal bell
+   *  and agent-completion events. Opt-in while the signal/noise balance is
+   *  being tested. */
+  experimentalTerminalAttention: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the

@@ -8,6 +8,7 @@ import {
 } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
@@ -31,6 +32,7 @@ type StoreState = {
   activeWorktreeId: string | null
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<
     string,
@@ -49,6 +51,7 @@ type StoreState = {
   settings: {
     promptCacheTimerEnabled?: boolean
     activeRuntimeEnvironmentId?: string | null
+    experimentalTerminalAttention?: boolean
     notifications?: {
       enabled?: boolean
       agentTaskComplete?: boolean
@@ -73,6 +76,8 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  markTerminalTabUnread: ReturnType<typeof vi.fn>
+  markTerminalPaneUnread: ReturnType<typeof vi.fn>
 }
 
 type ConnectCallbacks = {
@@ -308,8 +313,10 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     updateTabPtyId: vi.fn(),
     markWorktreeUnread: vi.fn(),
     markTerminalTabUnread: vi.fn(),
+    markTerminalPaneUnread: vi.fn(),
     clearWorktreeUnread: vi.fn(),
     clearTerminalTabUnread: vi.fn(),
+    clearTerminalPaneUnread: vi.fn(),
     dispatchNotification: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
@@ -392,6 +399,14 @@ describe('connectPanePty', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: 'tab-pty' }
+        }
+      },
       unreadTerminalTabs: {},
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
@@ -399,7 +414,7 @@ describe('connectPanePty', () => {
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       sshConnectionStates: new Map(),
       cacheTimerByKey: {},
-      settings: { promptCacheTimerEnabled: true },
+      settings: { promptCacheTimerEnabled: true, experimentalTerminalAttention: true },
       codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
@@ -420,7 +435,9 @@ describe('connectPanePty', () => {
         }
       }),
       removeAgentStatus: vi.fn(),
-      dropAgentStatus: vi.fn()
+      dropAgentStatus: vi.fn(),
+      markTerminalTabUnread: vi.fn(),
+      markTerminalPaneUnread: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -3257,10 +3274,9 @@ describe('connectPanePty', () => {
 
   // Why: BEL (0x07) is the attention signal. connectPanePty wires an
   // onBell handler that raises the worktree unread dot, the tab-level
-  // bell indicator, and an OS notification. Under the ghostty
-  // show-until-interact model, the unread flags clear when the user
-  // actually interacts with the pane — keystroke via xterm onData or
-  // pointerdown on the container (see TerminalPane.tsx). This test
+  // indicator, the pane marker, and an OS notification. The unread flags
+  // clear when the user actually interacts with the pane — keystroke via
+  // xterm onData or pointerdown on the container (see TerminalPane.tsx). This test
   // locks in the mark wiring; separate tests below cover the clear path.
   it('wires onBell to raise worktree unread, tab unread, and OS notification', async () => {
     const { connectPanePty } = await import('./pty-connection')
@@ -3283,6 +3299,7 @@ describe('connectPanePty', () => {
 
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
     expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
     expect(deps.dispatchNotification).not.toHaveBeenCalled()
     vi.advanceTimersByTime(250)
     expect(deps.dispatchNotification).toHaveBeenCalledWith(
@@ -3291,6 +3308,33 @@ describe('connectPanePty', () => {
         paneKey: makePaneKey('tab-1', LEAF_1)
       })
     )
+  })
+
+  it('does not raise pane attention on bell when the experimental setting is disabled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState.settings = {
+      ...mockStoreState.settings,
+      experimentalTerminalAttention: false
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    if (!bellHandler) {
+      throw new Error('Expected onBell to be registered')
+    }
+
+    bellHandler()
+
+    expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
   it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
@@ -3929,6 +3973,7 @@ describe('connectPanePty', () => {
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
     expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
@@ -4154,11 +4199,11 @@ describe('connectPanePty', () => {
   })
 
   // Why: the working→idle transition fires an 'agent-task-complete' OS
-  // notification (user-toggleable in Settings). When the user has switched
-  // away, the notification dispatch boundary also raises the workspace unread
-  // bell so the Dock badge and sidebar agree with the system notification.
-  // Double-firing with a concurrent BEL is collapsed by the per-worktree
-  // dedupe in main/ipc/notifications.ts.
+  // notification (user-toggleable in Settings) and raises the same visual
+  // attention marker as BEL so agents that don't emit BEL still leave a
+  // findable terminal highlight. Double-firing with a concurrent BEL is
+  // idempotent in the unread stores and collapsed by the per-worktree dedupe
+  // in main/ipc/notifications.ts.
   //
   // This test deliberately wires the real useNotificationDispatch hook into
   // connectPanePty instead of a vi.fn() stub. A stub would let the producer
@@ -4166,7 +4211,7 @@ describe('connectPanePty', () => {
   // routing through the real hook to window.api.notifications.dispatch means
   // removing the producer breaks the IPC assertion, which is the user-facing
   // contract.
-  it('dispatches agent-task-complete on working→idle and marks a switched-away worktree unread', async () => {
+  it('dispatches agent-task-complete on working→idle and raises tab/worktree unread', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
@@ -4220,9 +4265,8 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     idleHandler('* Claude done')
 
-    expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
     expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(250)
@@ -4234,6 +4278,8 @@ describe('connectPanePty', () => {
       paneKey
     })
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
