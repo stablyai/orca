@@ -148,11 +148,18 @@ export function getPRGroupKey(
 ): PRGroupKey {
   const repo = repoMap.get(worktree.repoId)
   const branch = branchName(worktree.branch)
-  const cacheKey = repo && branch ? `${repo.path}::${branch}` : ''
-  const prEntry =
-    cacheKey && prCache
-      ? (prCache[cacheKey] as { data?: { state?: string } } | undefined)
-      : undefined
+  const repoScopedCacheKey = repo && branch ? `${repo.id}::${branch}` : ''
+  const legacyPathScopedCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
+  // Why: PR refreshes now write repo-id scoped entries; legacy path entries may
+  // still exist from persisted cache, but must not override fresher repo data.
+  const prEntry = prCache
+    ? ((repoScopedCacheKey
+        ? (prCache[repoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined) ??
+      (legacyPathScopedCacheKey
+        ? (prCache[legacyPathScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined))
+    : undefined
   const pr = prEntry?.data
 
   if (!pr) {

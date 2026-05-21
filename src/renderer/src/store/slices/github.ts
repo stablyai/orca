@@ -1780,6 +1780,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!candidate) {
       return
     }
+    if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+      void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+        force: bypassesGitHubPRRefreshFreshness(reason),
+        repoId: candidate.repoId,
+        linkedPRNumber: candidate.linkedPRNumber ?? null
+      })
+      return
+    }
     const enqueue = window.api.gh.enqueuePRRefresh
     if (enqueue) {
       void enqueue({ candidate, reason, priority })
@@ -1807,6 +1815,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return worktree ? buildPRRefreshCandidate(state, worktree) : null
       })
       .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
+    if (getActiveRuntimeTarget(state.settings).kind === 'environment') {
+      for (const candidate of candidates) {
+        void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+          repoId: candidate.repoId,
+          linkedPRNumber: candidate.linkedPRNumber ?? null
+        })
+      }
+      return
+    }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
     if (reportVisible) {
       void reportVisible({ candidates, generation }).catch((err) => {
@@ -2227,7 +2244,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
-        void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
+        if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+          void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+            force: true,
+            repoId: candidate.repoId,
+            linkedPRNumber: candidate.linkedPRNumber ?? null
+          })
+        } else {
+          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
+        }
       }
     }
 

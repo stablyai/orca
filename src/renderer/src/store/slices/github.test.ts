@@ -1271,6 +1271,53 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       priority: 80
     })
   })
+
+  it('fetches PR through the runtime when activating a runtime workspace', async () => {
+    resetRemoteRuntimeMocks()
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 12 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/runtime'
+    const worktreeId = 'wt-runtime'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'pr-status',
+      worktreeCardProperties: ['pr'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/runtime',
+            branch,
+            displayName: 'runtime',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedPR: 12
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: { repo: 'repo-1', branch, linkedPRNumber: 12 },
+      timeoutMs: 30_000
+    })
+  })
 })
 
 describe('createGitHubSlice.refreshAllGitHub', () => {
