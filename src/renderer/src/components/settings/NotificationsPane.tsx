@@ -1,11 +1,11 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Slider } from '../ui/slider'
-import { BellRing, Bot, ExternalLink, FileAudio, Siren, Volume2, X } from 'lucide-react'
+import { BellRing, Bot, FileAudio, Siren, Volume2, X } from 'lucide-react'
 import type { SettingsSearchEntry } from './settings-search'
 import { basename } from '@/lib/path'
 
@@ -54,7 +54,6 @@ type NotificationsPaneProps = {
 }
 
 type SystemNotificationSettingsCopy = {
-  buttonLabel: string
   failureTitle: string
   failureDescription: string
 }
@@ -64,7 +63,6 @@ function getSystemNotificationSettingsCopy(
 ): SystemNotificationSettingsCopy | null {
   if (platform === 'darwin') {
     return {
-      buttonLabel: 'macOS Settings',
       failureTitle: 'macOS did not show the notification',
       failureDescription: 'Enable Allow notifications for Orca in System Settings.'
     }
@@ -72,7 +70,6 @@ function getSystemNotificationSettingsCopy(
 
   if (platform === 'win32') {
     return {
-      buttonLabel: 'Windows Settings',
       failureTitle: 'Windows did not show the notification',
       failureDescription: 'Enable notifications for Orca in Windows Settings.'
     }
@@ -162,8 +159,6 @@ export function NotificationsPane({
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
   const [isPickingSound, setIsPickingSound] = useState(false)
-  const [permissionStatus, setPermissionStatus] =
-    useState<NotificationPermissionStatusResult | null>(null)
 
   const updateNotificationSettings = (updates: Partial<GlobalSettings['notifications']>): void => {
     updateSettings({
@@ -183,25 +178,6 @@ export function NotificationsPane({
     setVolumeDraft(notificationSettings.customSoundVolume)
   }, [notificationSettings])
 
-  useEffect(() => {
-    let cancelled = false
-    void window.api.notifications
-      .getPermissionStatus()
-      .then((status) => {
-        if (!cancelled) {
-          setPermissionStatus(status)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPermissionStatus(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {
       updateNotificationSettings({ customSoundVolume: value })
@@ -210,10 +186,6 @@ export function NotificationsPane({
 
   const handleSendTestNotification = async (): Promise<void> => {
     await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
-  }
-
-  const handleOpenSystemSettings = async (): Promise<void> => {
-    await window.api.notifications.openSystemSettings()
   }
 
   const handleChooseSound = async (): Promise<void> => {
@@ -229,9 +201,6 @@ export function NotificationsPane({
   }
 
   const selectedSoundPath = notificationSettings.customSoundPath
-  const systemSettingsCopy = permissionStatus
-    ? getSystemNotificationSettingsCopy(permissionStatus.platform)
-    : null
 
   return (
     <div className="space-y-1">
@@ -372,18 +341,6 @@ export function NotificationsPane({
           <BellRing className="size-3.5" />
           Send Test Notification
         </Button>
-        {systemSettingsCopy ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!notificationSettings.enabled}
-            onClick={() => void handleOpenSystemSettings()}
-            className="gap-2"
-          >
-            <ExternalLink className="size-3.5" />
-            {systemSettingsCopy.buttonLabel}
-          </Button>
-        ) : null}
       </div>
     </div>
   )
