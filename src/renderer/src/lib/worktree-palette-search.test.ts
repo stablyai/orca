@@ -212,8 +212,8 @@ describe('worktree-palette-search', () => {
     expect(results[0].matchedField).toBe('port')
     expect(results[0].supportingText).toEqual({
       label: 'Port',
-      text: ':3000 vite',
-      matchRange: { start: 1, end: 5 }
+      text: '3000 · vite',
+      matchRange: { start: 0, end: 4 }
     })
   })
 })

@@ -989,8 +989,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           </div>
                           {entry.match.supportingText && (
-                            <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                              <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
+                            <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                              <span className="inline-flex h-[18px] shrink-0 items-center rounded border border-border bg-foreground/[0.04] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                                 {entry.match.supportingText.label}
                               </span>
                               <span className="truncate">

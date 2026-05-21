@@ -188,15 +188,15 @@ export function searchWorktrees(
       const portText = String(port.port)
       const portIndex = portText.indexOf(numericQuery)
       if (portIndex !== -1) {
-        const label = `:${portText}${port.processName ? ` ${port.processName}` : ''}`
+        const label = port.processName ? `${portText} · ${port.processName}` : portText
         results.push(
           makeResult(worktree.id, 'port', {
             supportingText: {
               label: 'Port',
               text: label,
               matchRange: {
-                start: 1 + portIndex,
-                end: 1 + portIndex + numericQuery.length
+                start: portIndex,
+                end: portIndex + numericQuery.length
               }
             }
           })
