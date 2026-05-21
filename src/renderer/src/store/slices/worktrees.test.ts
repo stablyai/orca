@@ -755,6 +755,34 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('stamps manualOrder on create while Manual sort is active', async () => {
+    const store = createTestStore()
+    store.setState({ sortBy: 'manual' } as Partial<AppState>)
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      manualOrder: 123_456
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    try {
+      await store.getState().createWorktree('repo1', 'feature')
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        manualOrder: 123_456
+      })
+    )
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      manualOrder: 123_456
+    })
+  })
+
   it('passes branchNameOverride through the local create IPC payload', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

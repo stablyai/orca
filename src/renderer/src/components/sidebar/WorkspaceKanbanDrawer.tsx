@@ -25,7 +25,12 @@ import {
 } from './use-workspace-kanban-outside-dismiss'
 import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
 import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
-import type { WorkspaceStatus } from '../../../../shared/types'
+import {
+  buildManualOrderUpdatesForGroupDrop,
+  shouldWriteManualOrderForGroupDrop,
+  type WorktreeDragGroup
+} from './worktree-manual-order'
+import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 
 type WorkspaceKanbanDrawerProps = {
@@ -54,6 +59,8 @@ export default function WorkspaceKanbanDrawer({
   const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
+  const sortBy = useAppStore((s) => s.sortBy)
+  const setSortBy = useAppStore((s) => s.setSortBy)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -70,15 +77,24 @@ export default function WorkspaceKanbanDrawer({
     return groupWorkspaceKanbanWorktrees({
       worktrees: allWorktrees,
       visibleWorktreeIds: visibleWorktreeIdSet,
-      workspaceStatuses
+      workspaceStatuses,
+      sortBy
     })
-  }, [allWorktrees, visibleWorktreeIdSet, workspaceStatuses])
+  }, [allWorktrees, sortBy, visibleWorktreeIdSet, workspaceStatuses])
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
   const boardWorktrees = useMemo(
     () => workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
+    [worktreesByStatus, workspaceStatuses]
+  )
+  const boardDragGroups = useMemo<WorktreeDragGroup[]>(
+    () =>
+      workspaceStatuses.map((status) => ({
+        key: status.id,
+        worktreeIds: (worktreesByStatus.get(status.id) ?? []).map((worktree) => worktree.id)
+      })),
     [worktreesByStatus, workspaceStatuses]
   )
   const {
@@ -110,21 +126,103 @@ export default function WorkspaceKanbanDrawer({
     },
     [updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
-  const moveWorktreesToStatus = useCallback(
-    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
-      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
-      for (const worktreeId of worktreeIds) {
+  const getSourceStatusKeys = useCallback(
+    (worktreeIds: readonly string[]): WorkspaceStatus[] =>
+      worktreeIds.flatMap((worktreeId) => {
+        const worktree = worktreeById.get(worktreeId)
+        return worktree ? [getWorkspaceStatus(worktree, workspaceStatuses)] : []
+      }),
+    [workspaceStatuses, worktreeById]
+  )
+  const shouldWriteDropManualOrder = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus): boolean =>
+      shouldWriteManualOrderForGroupDrop({
+        sortBy,
+        sourceGroupKeys: getSourceStatusKeys(worktreeIds),
+        targetGroupKey: status
+      }),
+    [getSourceStatusKeys, sortBy]
+  )
+  const dropWorktreesInStatus = useCallback(
+    (args: {
+      worktreeIds: readonly string[]
+      status: WorkspaceStatus
+      dropIndex: number
+      writeManualOrder?: boolean
+    }) => {
+      const updates = new Map<string, Partial<WorktreeMeta>>()
+      const writeManualOrder =
+        args.writeManualOrder ?? shouldWriteDropManualOrder(args.worktreeIds, args.status)
+      const rankByWorktreeId = writeManualOrder
+        ? (() => {
+            const ranks = new Map<string, number>()
+            for (const group of boardDragGroups) {
+              for (const worktreeId of group.worktreeIds) {
+                const worktree = worktreeById.get(worktreeId)
+                if (worktree) {
+                  ranks.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+                }
+              }
+            }
+            return ranks
+          })()
+        : undefined
+      const order = writeManualOrder
+        ? buildManualOrderUpdatesForGroupDrop({
+            groups: boardDragGroups,
+            targetGroupKey: args.status,
+            draggedIds: args.worktreeIds,
+            dropIndex: args.dropIndex,
+            now: Date.now(),
+            rankByWorktreeId
+          })
+        : { changed: false, updates: new Map<string, { manualOrder: number }>() }
+
+      for (const worktreeId of args.worktreeIds) {
         const current = worktreeById.get(worktreeId)
-        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+        if (!current) {
           continue
         }
-        updates.set(worktreeId, { workspaceStatus: status })
+        const next = updates.get(worktreeId) ?? {}
+        if (getWorkspaceStatus(current, workspaceStatuses) !== args.status) {
+          next.workspaceStatus = args.status
+        }
+        updates.set(worktreeId, next)
       }
-      if (updates.size > 0) {
-        void updateWorktreesMeta(updates)
+
+      if (writeManualOrder) {
+        for (const [worktreeId, manualOrder] of order.updates) {
+          const currentUpdate = updates.get(worktreeId)
+          updates.set(
+            worktreeId,
+            currentUpdate ? { ...currentUpdate, ...manualOrder } : manualOrder
+          )
+        }
       }
+
+      for (const [worktreeId, update] of Array.from(updates)) {
+        if (Object.keys(update).length === 0) {
+          updates.delete(worktreeId)
+        }
+      }
+      if (updates.size === 0) {
+        return
+      }
+      // Why: cross-lane drops in a derived sort are usually just status moves.
+      // Only explicit rank gestures should fork the board/sidebar into Manual.
+      if (writeManualOrder && order.changed) {
+        setSortBy('manual')
+      }
+      void updateWorktreesMeta(updates)
     },
-    [updateWorktreesMeta, workspaceStatuses, worktreeById]
+    [
+      boardDragGroups,
+      setSortBy,
+      shouldWriteDropManualOrder,
+      updateWorktreesMeta,
+      workspaceStatuses,
+      worktreeById
+    ]
   )
   const pinWorktree = useCallback(
     (worktreeId: string) => {
@@ -158,9 +256,10 @@ export default function WorkspaceKanbanDrawer({
     boardRef,
     selectedWorktreeIds,
     selectedWorktrees,
-    onMoveWorktreesToStatus: moveWorktreesToStatus,
+    onDropWorktreesInStatus: dropWorktreesInStatus,
     onPinWorktrees: pinWorktrees,
     onDragTargetChange: setDragOverStatus,
+    onShouldShowDropIndicator: shouldWriteDropManualOrder,
     onPinDragTargetChange: setPinDragOver
   })
   const handleDragOver = useCallback((event: React.DragEvent, status: WorkspaceStatus) => {
@@ -202,6 +301,18 @@ export default function WorkspaceKanbanDrawer({
     setPinDragOver(false)
   }, [])
 
+  const dropWorktreesAtEndOfStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      dropWorktreesInStatus({
+        worktreeIds,
+        status,
+        dropIndex: worktreesByStatus.get(status)?.length ?? 0,
+        writeManualOrder: sortBy === 'manual'
+      })
+    },
+    [dropWorktreesInStatus, sortBy, worktreesByStatus]
+  )
+
   const handleDrop = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
       const worktreeIds = readWorkspaceDragDataIds(event.dataTransfer)
@@ -210,9 +321,9 @@ export default function WorkspaceKanbanDrawer({
       }
       event.preventDefault()
       setDragOverStatus(null)
-      moveWorktreesToStatus(worktreeIds, status)
+      dropWorktreesAtEndOfStatus(worktreeIds, status)
     },
-    [moveWorktreesToStatus]
+    [dropWorktreesAtEndOfStatus]
   )
 
   const handleWorktreeActivate = useCallback(() => {
@@ -310,7 +421,7 @@ export default function WorkspaceKanbanDrawer({
     handleDragFinish,
     open,
     {
-      onMoveWorktreesToStatus: moveWorktreesToStatus,
+      onMoveWorktreesToStatus: dropWorktreesAtEndOfStatus,
       onPinWorktrees: pinWorktrees
     }
   )

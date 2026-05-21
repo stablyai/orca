@@ -566,7 +566,8 @@ describe('registerWorktreeHandlers', () => {
       name: 'improve-dashboard',
       linkedIssue: 123,
       linkedPR: 456,
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      manualOrder: 123_456
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -574,14 +575,16 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        manualOrder: 123_456
       })
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        manualOrder: 123_456
       })
     })
   })
@@ -894,7 +897,8 @@ describe('registerWorktreeHandlers', () => {
       linkedIssue: 123,
       linkedPR: 456,
       createdWithAgent: 'codex',
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      manualOrder: 123_456
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -903,7 +907,8 @@ describe('registerWorktreeHandlers', () => {
         linkedIssue: 123,
         linkedPR: 456,
         createdWithAgent: 'codex',
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        manualOrder: 123_456
       })
     )
     expect(result).toEqual({
@@ -911,7 +916,8 @@ describe('registerWorktreeHandlers', () => {
         linkedIssue: 123,
         linkedPR: 456,
         createdWithAgent: 'codex',
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        manualOrder: 123_456
       })
     })
   })

@@ -48,7 +48,12 @@ const SORT_OPTIONS = [
     description: 'Agents that need attention, then most recent activity.'
   },
   { id: 'recent', label: 'Recent', description: null },
-  { id: 'repo', label: 'Repo', description: null }
+  { id: 'repo', label: 'Repo', description: null },
+  {
+    id: 'manual',
+    label: 'Manual',
+    description: 'Drag workspaces to arrange them within each group.'
+  }
 ] as const
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({

@@ -167,6 +167,8 @@ export type Worktree = {
   isUnread: boolean
   isPinned: boolean
   sortOrder: number
+  /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
+  manualOrder?: number
   lastActivityAt: number
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to
@@ -215,6 +217,8 @@ export type WorktreeMeta = {
   isUnread: boolean
   isPinned: boolean
   sortOrder: number
+  /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
+  manualOrder?: number
   lastActivityAt: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
@@ -1246,6 +1250,7 @@ export type CreateWorktreeArgs = {
   linkedLinearIssue?: string
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
+  manualOrder?: number
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
@@ -1984,7 +1989,7 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
-  sortBy: 'name' | 'smart' | 'recent' | 'repo'
+  sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Off by default: sleeping/inactive workspaces stay hidden until shown. */

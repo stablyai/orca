@@ -5,24 +5,7 @@ export const STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
 export const PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
 const STATUS_DROP_GAP_TOLERANCE_PX = 24
-const POINTER_CARD_DRAGGING_ATTR = 'data-workspace-board-card-pointer-dragging'
-const POINTER_DRAG_CARD_ATTR = 'data-workspace-board-card-drag-card'
-const POINTER_DRAG_COUNT_ATTR = 'data-workspace-board-card-drag-count'
-const POINTER_DRAGGING_ATTR = 'data-workspace-board-pointer-dragging'
-const POINTER_DRAG_PREVIEW_ATTR = 'data-workspace-board-card-drag-preview'
-const POINTER_DRAG_STACK_ATTR = 'data-workspace-board-card-drag-stack'
-
-type DragPreviewState = {
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  worktreeIds: readonly string[]
-  sourceCard: HTMLElement
-  preview: HTMLElement | null
-  previewOffsetX: number
-  previewOffsetY: number
-}
+const POINTER_DROP_INDICATOR_ATTR = 'data-workspace-board-card-drop-indicator'
 
 export type WorkspaceKanbanStatusDropRect = {
   status: WorkspaceStatus
@@ -30,6 +13,25 @@ export type WorkspaceKanbanStatusDropRect = {
   top: number
   right: number
   bottom: number
+}
+
+export type WorkspaceKanbanCardDropRect = {
+  top: number
+  bottom: number
+}
+
+export type WorkspaceKanbanLaneDropRect = {
+  left: number
+  top: number
+  width: number
+}
+
+export type WorkspaceKanbanCardDropTarget = {
+  status: WorkspaceStatus | null
+  isPinDrop: boolean
+  dropIndex: number
+  laneRect?: WorkspaceKanbanLaneDropRect
+  cardRects?: readonly WorkspaceKanbanCardDropRect[]
 }
 
 export function resolveWorkspaceStatusDropTargetFromRects(
@@ -57,6 +59,19 @@ export function resolveWorkspaceStatusDropTargetFromRects(
   }
 
   return nearest?.status ?? null
+}
+
+export function resolveWorkspaceCardDropIndexFromRects(
+  rects: readonly WorkspaceKanbanCardDropRect[],
+  y: number
+): number {
+  for (let index = 0; index < rects.length; index++) {
+    const rect = rects[index]!
+    if (y < (rect.top + rect.bottom) / 2) {
+      return index
+    }
+  }
+  return rects.length
 }
 
 function getStatusDropTargetRects(board: HTMLElement): WorkspaceKanbanStatusDropRect[] {
@@ -108,82 +123,124 @@ export function getDropTarget(
   }
 }
 
-export function setDragDocumentStyles(enabled: boolean): void {
-  document.body.style.cursor = enabled ? 'grabbing' : ''
-  document.body.style.userSelect = enabled ? 'none' : ''
-  document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
-}
-
-export function getDraggedCards(
-  board: HTMLElement,
-  worktreeIds: readonly string[],
-  fallbackCard: HTMLElement
-): HTMLElement[] {
-  const ids = new Set(worktreeIds)
-  const cards = Array.from(board.querySelectorAll<HTMLElement>(CARD_SELECTOR)).filter((card) =>
-    ids.has(card.dataset.workspaceBoardCardId ?? '')
+function getLaneForStatus(board: HTMLElement, status: WorkspaceStatus): HTMLElement | null {
+  return (
+    Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).find(
+      (element) => element.dataset.workspaceStatus === status
+    ) ?? null
   )
-  return cards.length > 0 ? cards : [fallbackCard]
 }
 
-export function setDraggedCardsDragging(cards: readonly HTMLElement[], enabled: boolean): void {
-  for (const card of cards) {
-    if (enabled) {
-      card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')
-    } else {
-      card.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
-    }
+export function getCardDropTarget(
+  board: HTMLElement,
+  x: number,
+  y: number
+): WorkspaceKanbanCardDropTarget {
+  const target = getDropTarget(board, x, y)
+  if (!target.status) {
+    return { ...target, dropIndex: 0 }
+  }
+
+  const lane = getLaneForStatus(board, target.status)
+  if (!lane) {
+    return { ...target, dropIndex: 0 }
+  }
+
+  const laneContent = lane.querySelector<HTMLElement>('[data-workspace-board-lane-scroll]')
+  const laneClientRect = (laneContent ?? lane).getBoundingClientRect()
+  const cardRects = Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
+    .filter((card) => card.offsetParent !== null)
+    .map((card) => {
+      const rect = card.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom }
+    })
+  const dropIndex = resolveWorkspaceCardDropIndexFromRects(cardRects, y)
+  return {
+    ...target,
+    dropIndex,
+    laneRect: {
+      left: laneClientRect.left,
+      top: laneClientRect.top,
+      width: laneClientRect.width
+    },
+    cardRects
   }
 }
 
-function removeDuplicatePreviewAttributes(preview: HTMLElement): void {
-  preview.removeAttribute('data-workspace-board-card-id')
-  preview.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
-  preview.removeAttribute('id')
-  preview.removeAttribute('aria-describedby')
-  preview.querySelectorAll<HTMLElement>('[data-workspace-board-card-id]').forEach((element) => {
-    element.removeAttribute('data-workspace-board-card-id')
-  })
-  preview.querySelectorAll<HTMLElement>(`[${POINTER_CARD_DRAGGING_ATTR}]`).forEach((element) => {
-    element.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
-  })
-  preview.querySelectorAll<HTMLElement>('[id],[aria-describedby]').forEach((element) => {
-    element.removeAttribute('id')
-    element.removeAttribute('aria-describedby')
-  })
-}
-
-export function updateDragPreviewPosition(state: DragPreviewState): void {
-  const left = state.currentX - state.previewOffsetX
-  const top = state.currentY - state.previewOffsetY
-  state.preview?.style.setProperty('transform', `translate3d(${left}px, ${top}px, 0)`)
-}
-
-export function createDragPreview(state: DragPreviewState): HTMLElement {
-  const rect = state.sourceCard.getBoundingClientRect()
-  const preview = document.createElement('div')
-  const previewCard = state.sourceCard.cloneNode(true) as HTMLElement
-  state.previewOffsetX = Math.min(Math.max(state.startX - rect.left, 0), rect.width)
-  state.previewOffsetY = Math.min(Math.max(state.startY - rect.top, 0), rect.height)
-  preview.setAttribute(POINTER_DRAG_PREVIEW_ATTR, 'true')
-  preview.setAttribute('aria-hidden', 'true')
-  previewCard.setAttribute(POINTER_DRAG_CARD_ATTR, 'true')
-  removeDuplicatePreviewAttributes(previewCard)
-  preview.appendChild(previewCard)
-  if (state.worktreeIds.length > 1) {
-    const countBadge = document.createElement('span')
-    preview.setAttribute(POINTER_DRAG_STACK_ATTR, 'true')
-    countBadge.setAttribute(POINTER_DRAG_COUNT_ATTR, 'true')
-    countBadge.textContent = String(state.worktreeIds.length)
-    preview.appendChild(countBadge)
+function getOrCreateDropIndicator(): HTMLElement {
+  const existing = document.querySelector<HTMLElement>(`[${POINTER_DROP_INDICATOR_ATTR}]`)
+  if (existing) {
+    return existing
   }
-  preview.style.setProperty('position', 'fixed')
-  preview.style.setProperty('left', '0')
-  preview.style.setProperty('top', '0')
-  preview.style.setProperty('width', `${rect.width}px`)
-  preview.style.setProperty('height', `${rect.height}px`)
-  preview.style.setProperty('pointer-events', 'none')
-  updateDragPreviewPosition({ ...state, preview })
-  document.body.appendChild(preview)
-  return preview
+  const indicator = document.createElement('div')
+  indicator.setAttribute(POINTER_DROP_INDICATOR_ATTR, 'true')
+  indicator.setAttribute('aria-hidden', 'true')
+  indicator.style.setProperty('position', 'fixed')
+  indicator.style.setProperty('left', '0')
+  indicator.style.setProperty('top', '0')
+  indicator.style.setProperty('pointer-events', 'none')
+  document.body.appendChild(indicator)
+  return indicator
+}
+
+export function removeCardDropIndicator(): void {
+  document.querySelector<HTMLElement>(`[${POINTER_DROP_INDICATOR_ATTR}]`)?.remove()
+}
+
+export function updateCardDropIndicator(
+  board: HTMLElement,
+  target: WorkspaceKanbanCardDropTarget
+): void {
+  if (!target.status || target.isPinDrop) {
+    removeCardDropIndicator()
+    return
+  }
+
+  const lane = getLaneForStatus(board, target.status)
+  if (!lane) {
+    removeCardDropIndicator()
+    return
+  }
+
+  const fallbackLaneContent = target.laneRect
+    ? null
+    : lane.querySelector<HTMLElement>('[data-workspace-board-lane-scroll]')
+  const fallbackLaneRect = target.laneRect
+    ? null
+    : (fallbackLaneContent ?? lane).getBoundingClientRect()
+  const laneRect =
+    target.laneRect ??
+    (fallbackLaneRect
+      ? {
+          left: fallbackLaneRect.left,
+          top: fallbackLaneRect.top,
+          width: fallbackLaneRect.width
+        }
+      : { left: 0, top: 0, width: 0 })
+  const cardRects =
+    target.cardRects ??
+    Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
+      .filter((card) => card.offsetParent !== null)
+      .map((card) => {
+        const rect = card.getBoundingClientRect()
+        return { top: rect.top, bottom: rect.bottom }
+      })
+  const boundedDropIndex = Math.max(0, Math.min(cardRects.length, target.dropIndex))
+  const y =
+    cardRects.length === 0
+      ? laneRect.top + 14
+      : boundedDropIndex === 0
+        ? cardRects[0]!.top - 5
+        : boundedDropIndex >= cardRects.length
+          ? cardRects.at(-1)!.bottom + 5
+          : (cardRects[boundedDropIndex - 1]!.bottom + cardRects[boundedDropIndex]!.top) / 2
+  const horizontalInset = 8
+  const indicator = getOrCreateDropIndicator()
+  indicator.dataset.workspaceStatus = target.status
+  indicator.style.setProperty('width', `${Math.max(32, laneRect.width - horizontalInset * 2)}px`)
+  indicator.style.setProperty(
+    'transform',
+    `translate3d(${laneRect.left + horizontalInset}px, ${y}px, 0)`
+  )
+  indicator.style.setProperty('opacity', '1')
 }

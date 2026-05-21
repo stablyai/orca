@@ -58,6 +58,12 @@ type WorktreeCardProps = {
   onActivate?: () => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onCardDragStart?: (
+    event: React.DragEvent<HTMLDivElement>,
+    worktreeId: string,
+    draggedIds: readonly string[]
+  ) => void
+  onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean
 }
 
@@ -82,6 +88,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onCardDragStart,
+  onCardDragEnd,
   nativeDragEnabled = true,
   hideRepoBadge,
   lineageChildCount = 0,
@@ -378,8 +386,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
           ? selectedWorktrees.map((item) => item.id)
           : worktree.id
       writeWorkspaceDragData(event.dataTransfer, dragIds)
+      onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
     },
-    [isDeleting, isMultiSelected, selectedWorktrees, worktree.id]
+    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
   )
 
   const stopQuickActionPointerPropagation = useCallback(
@@ -481,6 +490,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onDoubleClick={handleDoubleClick}
       draggable={nativeDragEnabled && !isDeleting}
       onDragStart={nativeDragEnabled ? handleDragStart : undefined}
+      onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
       aria-busy={isDeleting}
     >
       {isDeleting && (

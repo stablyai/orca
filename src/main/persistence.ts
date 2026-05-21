@@ -178,8 +178,14 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   return getDefaultUIState().groupBy
 }
 
-function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' {
-  if (sortBy === 'smart' || sortBy === 'recent' || sortBy === 'repo' || sortBy === 'name') {
+function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
+  if (
+    sortBy === 'smart' ||
+    sortBy === 'recent' ||
+    sortBy === 'repo' ||
+    sortBy === 'name' ||
+    sortBy === 'manual'
+  ) {
     return sortBy
   }
   return getDefaultUIState().sortBy

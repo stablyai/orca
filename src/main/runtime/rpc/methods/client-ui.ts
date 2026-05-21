@@ -53,7 +53,7 @@ const UiUpdate = z
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
-    sortBy: z.enum(['name', 'smart', 'recent', 'repo']).optional(),
+    sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
     showActiveOnly: z.boolean().optional(),
     showSleepingWorkspaces: z.boolean().optional(),
     showInactiveWorkspaces: z.boolean().optional(),

@@ -44,6 +44,7 @@ const WorktreeCreate = z
     comment: OptionalString,
     displayName: OptionalString,
     workspaceStatus: OptionalString,
+    manualOrder: OptionalFiniteNumber,
     sparseCheckout: z
       .object({
         directories: z.array(z.string()),
@@ -107,6 +108,7 @@ const WorktreeSet = WorktreeSelector.extend({
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
+  manualOrder: OptionalFiniteNumber,
   lastActivityAt: OptionalFiniteNumber,
   createdAt: OptionalFiniteNumber,
   sparseDirectories: z.array(z.string()).optional(),
@@ -199,6 +201,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         comment: params.comment,
         displayName: params.displayName,
         workspaceStatus: params.workspaceStatus,
+        manualOrder: params.manualOrder,
         sparseCheckout: params.sparseCheckout,
         pushTarget: params.pushTarget,
         runHooks: params.runHooks === true,
@@ -229,6 +232,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         isUnread: params.isUnread,
         isPinned: params.isPinned,
         sortOrder: params.sortOrder,
+        manualOrder: params.manualOrder,
         lastActivityAt: params.lastActivityAt,
         createdAt: params.createdAt,
         sparseDirectories: params.sparseDirectories,
