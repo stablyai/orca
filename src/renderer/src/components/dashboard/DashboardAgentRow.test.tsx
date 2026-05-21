@@ -141,4 +141,27 @@ describe('DashboardAgentRow', () => {
     expect(tokenCount(markup, 'group-hover/agent-row:opacity-0')).toBe(2)
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
+
+  it('renders interrupted done rows as a leading state icon without a text badge', () => {
+    const markup = renderRow(
+      makeAgent(
+        { state: 'done', startedAt: 1_000 },
+        {
+          state: 'done',
+          prompt: 'Give me a quick update',
+          updatedAt: 2_000,
+          stateStartedAt: 2_000,
+          stateHistory: [{ state: 'working', prompt: 'Give me a quick update', startedAt: 1_000 }],
+          interrupted: true
+        }
+      )
+    )
+
+    // Why: interrupted now lives in the leading state column. The old
+    // right-side text badge should not come back.
+    expect(markup).toContain('title="Interrupted"')
+    expect(markup).toContain('bg-red-500')
+    expect(markup).not.toContain('lucide-circle-check')
+    expect(markup).not.toContain('>interrupted<')
+  })
 })

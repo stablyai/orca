@@ -176,6 +176,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  // Why: interrupted is a terminal outcome the user needs to scan in the
+  // leading state column; rendering it as right-side text competes with the
+  // timestamp and makes the row read like the old design.
+  const dotState: AgentDotState = agent.entry.interrupted ? 'interrupted' : asDotState(agent.state)
 
   // Why: always show the chevron to keep the row's right edge stable — a
   // conditional control would appear/disappear as agent content grows and
@@ -225,9 +229,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overpowering the prompt text. */}
         <span
           className="inline-flex shrink-0 items-center justify-center"
-          title={agent.entry.interrupted ? 'Interrupted' : agentStateLabel(asDotState(agent.state))}
+          title={agentStateLabel(dotState)}
         >
-          <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
+          <AgentStateDot state={dotState} size={stateDotSize} />
         </span>
         {/* Why: identity (Claude/Codex/Gemini/…) sits inline with the prompt
             so the reader gets "state → who → what they said" left-to-right
@@ -268,21 +272,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        {/* Why: right cluster mirrors the screenshot reference — the status
-            indicator (state dot), identity (agent icon), a muted timestamp,
-            and the dismiss-X all live in one flex group on the right so
-            the eye can find "who/what/when/close" in a single sweep. */}
+        {/* Why: right cluster keeps passive time and dismiss affordance in one
+            place. State belongs in the leading gutter; repeating it here as
+            text makes interrupted rows look like the old badge treatment. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {/* Why: call out cancellations explicitly — a `done` that was
-              interrupted looks visually identical to a clean finish without a
-              label, but the user cares a lot about the difference (their turn
-              didn't complete). The tag sits before the timestamp so it reads
-              as a qualifier on "done 3m ago". */}
-          {agent.entry.interrupted && (
-            <span className="rounded-sm bg-rose-500/15 px-1 py-px text-[9px] font-medium leading-none text-rose-400/90">
-              interrupted
-            </span>
-          )}
           {/* Why: timestamp and dismiss-X share a single slot so passive
               rows show "time ago" and hovered rows swap in the X — no
               reserved-space gap, no competing columns. Grid stacks both
