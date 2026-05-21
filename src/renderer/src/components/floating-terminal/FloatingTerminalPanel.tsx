@@ -1006,7 +1006,7 @@ function FloatingTerminalEmptyState({
         <Button
           type="button"
           variant="ghost"
-          className="mt-3 h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onClose}
         >
           Close
