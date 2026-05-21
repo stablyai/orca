@@ -25,7 +25,8 @@ export function isSidebarPointerDragBlocked(target: EventTarget | null, row: HTM
 }
 
 export function setSidebarPointerDragDocumentStyles(enabled: boolean): void {
-  document.body.style.cursor = enabled ? 'grabbing' : ''
+  // Why: sidebar cards are click-first; the drop line/preview show drag state
+  // without replacing the normal pointer cursor while crossing targets.
   document.body.style.userSelect = enabled ? 'none' : ''
   document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
 }
