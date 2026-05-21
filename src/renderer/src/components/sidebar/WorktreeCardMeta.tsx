@@ -1,9 +1,12 @@
+/* eslint-disable max-lines -- Why: the card metadata hover keeps compact badge rendering,
+   provider-specific action rows, and markdown note preview together so the sidebar
+   card has one metadata contract. */
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { CircleDot, ExternalLink, GitMerge, Pencil, StickyNote } from 'lucide-react'
+import { CircleDot, ExternalLink, GitMerge, PanelRightOpen, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import CommentMarkdown from './CommentMarkdown'
@@ -49,6 +52,9 @@ type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
   onEditIssue: (event: React.MouseEvent) => void
   onEditComment: (event: React.MouseEvent) => void
+  onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenReviewInOrca?: (event: React.MouseEvent) => void
 }
 
 function hasComment(comment: string | null): boolean {
@@ -254,8 +260,20 @@ export function WorktreeCardDetailsHover({
   comment,
   children,
   onEditIssue,
-  onEditComment
+  onEditComment,
+  onOpenGitHubIssueInOrca,
+  onOpenLinearIssueInOrca,
+  onOpenReviewInOrca
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
+  const [open, setOpen] = React.useState(false)
+  const dismissAndRun = React.useCallback(
+    (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
+      setOpen(false)
+      handler?.(event)
+    },
+    []
+  )
+
   if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
     return children
   }
@@ -265,7 +283,7 @@ export function WorktreeCardDetailsHover({
   const issueLabels = issue?.labels ?? []
 
   return (
-    <HoverCard openDelay={250} closeDelay={120}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={250} closeDelay={120}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side="right"
@@ -282,6 +300,14 @@ export function WorktreeCardDetailsHover({
                 label={`Issue #${issue.number}`}
                 actions={
                   <>
+                    {issue.url && onOpenGitHubIssueInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
+                      >
+                        <PanelRightOpen className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {issue.url && (
                       <MetadataActionIcon label="View on GitHub" href={issue.url}>
                         <ExternalLink className="size-3" />
@@ -318,6 +344,14 @@ export function WorktreeCardDetailsHover({
                 label={`Linear ${linearIssue.identifier}`}
                 actions={
                   <>
+                    {linearIssue.url && onOpenLinearIssueInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
+                      >
+                        <PanelRightOpen className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {linearIssue.url && (
                       <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
                         <ExternalLink className="size-3" />
@@ -354,6 +388,14 @@ export function WorktreeCardDetailsHover({
                 label={`${reviewLabel} #${review.number}`}
                 actions={
                   <>
+                    {review.url && onOpenReviewInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenReviewInOrca)}
+                      >
+                        <PanelRightOpen className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {review.url && (
                       <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
                         <ExternalLink className="size-3" />

@@ -24,12 +24,19 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { Worktree, Repo, IssueInfo, LinearIssue } from '../../../../shared/types'
+import type {
+  GitHubWorkItem,
+  Worktree,
+  Repo,
+  IssueInfo,
+  LinearIssue
+} from '../../../../shared/types'
 import { branchDisplayName, CONFLICT_OPERATION_LABELS, FilledBellIcon } from './WorktreeCardHelpers'
 import {
   WorktreeCardDetailsHover,
   WorktreeCardMetaBadges,
-  hasWorktreeCardDetails
+  hasWorktreeCardDetails,
+  type WorktreeCardIssueDisplay
 } from './WorktreeCardMeta'
 import { WorktreeCardPorts } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
@@ -83,6 +90,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onLineageToggle
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
@@ -182,7 +190,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? issueEntry.data
       : undefined
     : null
-  const issueDisplay =
+  const issueDisplay: WorktreeCardIssueDisplay | null =
     issue ??
     (worktree.linkedIssue
       ? {
@@ -391,6 +399,62 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaLinearIssue = showIssue ? linearIssueDisplay : null
   const metaReview = showPR ? prDisplay : null
   const metaComment = showComment ? worktree.comment : null
+  const handleOpenGitHubIssueInOrca = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const issueUrl = metaIssue && 'url' in metaIssue ? metaIssue.url : undefined
+      if (!repo || !metaIssue || !issueUrl) {
+        return
+      }
+      const item: GitHubWorkItem = {
+        id: issueUrl,
+        type: 'issue',
+        number: metaIssue.number,
+        title: metaIssue.title,
+        state: 'state' in metaIssue ? (metaIssue.state ?? 'open') : 'open',
+        url: issueUrl,
+        labels: 'labels' in metaIssue ? (metaIssue.labels ?? []) : [],
+        updatedAt: new Date().toISOString(),
+        author: null,
+        repoId: repo.id
+      }
+      openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
+    },
+    [metaIssue, openTaskPage, repo]
+  )
+  const handleOpenReviewInOrca = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!repo || !metaReview?.url || metaReview.provider !== 'github') {
+        return
+      }
+      const item: GitHubWorkItem = {
+        id: metaReview.url,
+        type: 'pr',
+        number: metaReview.number,
+        title: metaReview.title,
+        state: metaReview.state ?? 'open',
+        url: metaReview.url,
+        labels: [],
+        updatedAt: 'updatedAt' in metaReview ? metaReview.updatedAt : new Date().toISOString(),
+        author: null,
+        headSha: 'headSha' in metaReview ? metaReview.headSha : undefined,
+        repoId: repo.id
+      }
+      openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
+    },
+    [metaReview, openTaskPage, repo]
+  )
+  const handleOpenLinearIssueInOrca = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!linearIssue) {
+        return
+      }
+      openTaskPage({ taskSource: 'linear', openLinearIssue: linearIssue })
+    },
+    [linearIssue, openTaskPage]
+  )
   const hasDetails = hasWorktreeCardDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
@@ -605,6 +669,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 comment={metaComment}
                 onEditIssue={handleEditIssue}
                 onEditComment={handleEditComment}
+                onOpenGitHubIssueInOrca={
+                  metaIssue && 'url' in metaIssue && metaIssue.url
+                    ? handleOpenGitHubIssueInOrca
+                    : undefined
+                }
+                onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
+                onOpenReviewInOrca={
+                  metaReview?.url && metaReview.provider === 'github'
+                    ? handleOpenReviewInOrca
+                    : undefined
+                }
               >
                 <WorktreeCardMetaBadges
                   issue={metaIssue}

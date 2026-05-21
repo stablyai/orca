@@ -1682,6 +1682,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeState = useAppStore((s) => s.taskResumeState)
   const setTaskResumeState = useAppStore((s) => s.setTaskResumeState)
   const pageData = useAppStore((s) => s.taskPageData)
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
@@ -1988,6 +1989,7 @@ export default function TaskPage(): React.JSX.Element {
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
+  const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
 
   const setDialogWorkItem = useCallback(
     (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
@@ -1995,6 +1997,27 @@ export default function TaskPage(): React.JSX.Element {
       setGithubTaskDrawerWorkItem(item)
     },
     [setGithubTaskDrawerWorkItem]
+  )
+
+  useEffect(() => {
+    if (!pageData.openGitHubWorkItem) {
+      setDialogWorkItem(null)
+      return
+    }
+    setGithubMode('items')
+    setDialogWorkItem(pageData.openGitHubWorkItem, pageData.openGitHubInitialTab)
+  }, [pageData.openGitHubInitialTab, pageData.openGitHubWorkItem, setDialogWorkItem])
+
+  const openGitHubDetailPage = useCallback(
+    (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
+      openTaskPage({
+        taskSource: 'github',
+        preselectedRepoId: item.repoId,
+        openGitHubWorkItem: item,
+        openGitHubInitialTab: initialTab
+      })
+    },
+    [openTaskPage]
   )
 
   const patchTaskPageWorkItemRows = useCallback(
@@ -2166,22 +2189,56 @@ export default function TaskPage(): React.JSX.Element {
     []
   )
 
-  const openRelatedLinearIssue = useCallback(
-    (issue: LinearIssue) => {
-      setSelectedLinearIssue(issue, { allowOutsideList: true })
-    },
-    [setSelectedLinearIssue]
-  )
-
-  const closeSelectedLinearIssue = useCallback(() => {
-    setSelectedLinearIssue(null)
-  }, [setSelectedLinearIssue])
-
   const clearSelectedLinearIssue = useCallback(() => {
     setSelectedLinearIssueCanFloat(false)
     setSelectedLinearIssueId(null)
     setSelectedLinearIssueFallback(null)
   }, [])
+
+  useEffect(() => {
+    if (!pageData.openLinearIssue) {
+      clearSelectedLinearIssue()
+      return
+    }
+    setSelectedLinearIssue(pageData.openLinearIssue, { allowOutsideList: true })
+  }, [clearSelectedLinearIssue, pageData.openLinearIssue, setSelectedLinearIssue])
+
+  const openLinearDetailPage = useCallback(
+    (issue: LinearIssue) => {
+      openTaskPage({ taskSource: 'linear', openLinearIssue: issue })
+    },
+    [openTaskPage]
+  )
+
+  const openRelatedLinearIssue = useCallback(
+    (issue: LinearIssue) => {
+      openLinearDetailPage(issue)
+    },
+    [openLinearDetailPage]
+  )
+
+  const closeTaskDetailPage = useCallback(() => {
+    const state = useAppStore.getState()
+    const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+    if (
+      typeof currentEntry === 'object' &&
+      currentEntry.kind === 'task-detail' &&
+      state.worktreeNavHistoryIndex > 0
+    ) {
+      state.goBackWorktree()
+      return
+    }
+    setDialogWorkItem(null)
+    clearSelectedLinearIssue()
+    useAppStore.setState((s) => ({
+      taskPageData: {
+        ...s.taskPageData,
+        openGitHubWorkItem: undefined,
+        openGitHubInitialTab: undefined,
+        openLinearIssue: undefined
+      }
+    }))
+  }, [clearSelectedLinearIssue, setDialogWorkItem])
 
   // Linear tab state
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
@@ -3357,7 +3414,7 @@ export default function TaskPage(): React.JSX.Element {
         updatedAt: new Date().toISOString(),
         author: null
       }
-      setDialogWorkItem(stub)
+      openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
       const fullIssuePromise = target
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
@@ -3387,7 +3444,14 @@ export default function TaskPage(): React.JSX.Element {
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDialogWorkItem])
+  }, [
+    newIssueBody,
+    newIssueSubmitting,
+    newIssueTargetRepo,
+    newIssueTitle,
+    openGitHubDetailPage,
+    setDialogWorkItem
+  ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
     if (!newLinearIssueTargetTeam) {
@@ -3427,7 +3491,7 @@ export default function TaskPage(): React.JSX.Element {
       void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
         .then((full) => {
           if (full) {
-            setSelectedLinearIssue(full)
+            openLinearDetailPage(full)
           }
         })
         .catch(() => {})
@@ -3439,8 +3503,8 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueSubmitting,
     newLinearIssueTargetTeam,
     newLinearIssueTitle,
-    settings,
-    setSelectedLinearIssue
+    openLinearDetailPage,
+    settings
   ])
 
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
@@ -3768,7 +3832,7 @@ export default function TaskPage(): React.JSX.Element {
                               disabled={source.disabled}
                               onClick={() => {
                                 taskSourceManuallyChangedRef.current = true
-                                setTaskSource(source.id)
+                                openTaskPage({ taskSource: source.id })
                                 void updateSettings({ defaultTaskSource: source.id }).catch(() => {
                                   toast.error('Failed to save default task source.')
                                 })
@@ -4318,7 +4382,22 @@ export default function TaskPage(): React.JSX.Element {
             </section>
           </div>
 
-          {taskSource === 'github' && githubMode === 'project' ? (
+          {taskSource === 'github' && dialogWorkItem ? (
+            <GitHubItemDialog
+              workItem={dialogWorkItem}
+              initialTab={dialogInitialTab}
+              repoPath={dialogRepoPath}
+              repoId={dialogWorkItem.repoId}
+              variant="page"
+              backLabel="GitHub list"
+              onUse={(item) => {
+                setDialogWorkItem(null)
+                handleUseWorkItem(item)
+              }}
+              onReviewRequestsChange={handleDialogReviewRequestsChange}
+              onClose={closeTaskDetailPage}
+            />
+          ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
               <ProjectViewWrapper />
             </div>
@@ -4496,11 +4575,11 @@ export default function TaskPage(): React.JSX.Element {
                           key={`${item.repoId}:${item.id}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => setDialogWorkItem(item)}
+                          onClick={() => openGitHubDetailPage(item)}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
-                              setDialogWorkItem(item)
+                              openGitHubDetailPage(item)
                             }
                           }}
                           className={cn(
@@ -4597,7 +4676,7 @@ export default function TaskPage(): React.JSX.Element {
                               <div className="flex min-w-0 items-center">
                                 <PRChecksCell
                                   item={item}
-                                  onOpen={() => setDialogWorkItem(item, 'checks')}
+                                  onOpen={() => openGitHubDetailPage(item, 'checks')}
                                   onLoadChecks={() => ensurePRChecksLoaded(item)}
                                 />
                               </div>
@@ -4864,6 +4943,15 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               </div>
             </div>
+          ) : taskSource === 'linear' && selectedLinearIssue ? (
+            <LinearIssueWorkspace
+              issue={selectedLinearIssue}
+              variant="page"
+              backLabel="Linear list"
+              onUse={handleUseLinearItem}
+              onOpenIssue={openRelatedLinearIssue}
+              onClose={closeTaskDetailPage}
+            />
           ) : !linearStatusChecked ? (
             <div className="mt-4 flex items-center justify-center py-14">
               <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
@@ -5109,14 +5197,14 @@ export default function TaskPage(): React.JSX.Element {
                                   setLinearBoardDraggingIssueId(null)
                                   setLinearBoardDragOverKey(null)
                                 }}
-                                onClick={() => setSelectedLinearIssue(issue)}
+                                onClick={() => openLinearDetailPage(issue)}
                                 onKeyDown={(e) => {
                                   if (e.target !== e.currentTarget) {
                                     return
                                   }
                                   if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault()
-                                    setSelectedLinearIssue(issue)
+                                    openLinearDetailPage(issue)
                                   }
                                 }}
                                 className={cn(
@@ -5240,7 +5328,7 @@ export default function TaskPage(): React.JSX.Element {
                           aria-current={selected ? 'true' : undefined}
                           data-current={selected ? 'true' : undefined}
                           onClick={() => {
-                            setSelectedLinearIssue(issue)
+                            openLinearDetailPage(issue)
                           }}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget) {
@@ -5248,7 +5336,7 @@ export default function TaskPage(): React.JSX.Element {
                             }
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              setSelectedLinearIssue(issue)
+                              openLinearDetailPage(issue)
                             }
                           }}
                           className={cn(
@@ -5403,12 +5491,6 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
-              <LinearIssueWorkspace
-                issue={selectedLinearIssue}
-                onUse={handleUseLinearItem}
-                onOpenIssue={openRelatedLinearIssue}
-                onClose={closeSelectedLinearIssue}
-              />
             </div>
           )}
         </div>
@@ -5693,25 +5775,6 @@ export default function TaskPage(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <GitHubItemDialog
-        workItem={dialogWorkItem}
-        initialTab={dialogInitialTab}
-        repoPath={
-          // Why: the dialog is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the dialog is open.
-          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
-        }
-        repoId={dialogWorkItem?.repoId ?? null}
-        onUse={(item) => {
-          setDialogWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onReviewRequestsChange={handleDialogReviewRequestsChange}
-        onClose={() => setDialogWorkItem(null)}
-      />
 
       <GitLabItemDialog
         item={gitlabDialogItem}

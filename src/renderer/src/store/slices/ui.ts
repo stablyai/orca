@@ -1,11 +1,15 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
+import {
+  findPrevLiveNonTaskStackHistoryIndex,
+  findPrevLiveWorktreeHistoryIndex
+} from './worktree-nav-history'
 import type {
   ChangelogData,
   CustomPet,
   GitHubWorkItem,
+  LinearIssue,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -283,6 +287,9 @@ export type UISlice = {
     preselectedRepoId?: string
     prefilledName?: string
     taskSource?: TaskProvider
+    openGitHubWorkItem?: GitHubWorkItem
+    openGitHubInitialTab?: 'conversation' | 'checks' | 'files'
+    openLinearIssue?: LinearIssue
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -547,7 +554,30 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     // the slice's adjacent-entry dedupe drops re-opens. No isNavigatingHistory
     // guard needed — back-to-Tasks routes through setActiveView('tasks') and
     // never re-enters openTaskPage.
-    get().recordViewVisit('tasks')
+    const detailEntry = data.openGitHubWorkItem
+      ? ({
+          kind: 'task-detail',
+          source: 'github',
+          workItem: data.openGitHubWorkItem,
+          initialTab: data.openGitHubInitialTab
+        } as const)
+      : data.openLinearIssue
+        ? ({
+            kind: 'task-detail',
+            source: 'linear',
+            issue: data.openLinearIssue
+          } as const)
+        : null
+    const currentEntry = get().worktreeNavHistory[get().worktreeNavHistoryIndex]
+    const currentIsTaskStack =
+      currentEntry === 'tasks' ||
+      (typeof currentEntry === 'object' && currentEntry.kind === 'task-detail')
+    if (!detailEntry || !currentIsTaskStack) {
+      get().recordViewVisit('tasks')
+    }
+    if (detailEntry) {
+      get().recordViewVisit(detailEntry)
+    }
     set((state) => ({
       activeView: 'tasks',
       previousViewBeforeTasks:
@@ -643,15 +673,21 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // isNavigatingHistory guard is needed.
       const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
       let nextHistoryIndex = state.worktreeNavHistoryIndex
-      if (currentEntry === 'tasks') {
-        const prev = findPrevLiveWorktreeHistoryIndex(state)
+      if (
+        currentEntry === 'tasks' ||
+        (typeof currentEntry === 'object' && currentEntry.kind === 'task-detail')
+      ) {
+        const prev = findPrevLiveNonTaskStackHistoryIndex(state)
         if (prev !== null) {
           nextHistoryIndex = prev
+        } else if (typeof currentEntry === 'object' && state.worktreeNavHistory[0] === 'tasks') {
+          nextHistoryIndex = 0
         }
       }
       return {
         activeView: state.previousViewBeforeTasks,
         taskPageData: {},
+        githubTaskDrawerWorkItem: null,
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),

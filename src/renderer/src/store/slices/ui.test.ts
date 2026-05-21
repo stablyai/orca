@@ -2,7 +2,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { PersistedUIState, Worktree } from '../../../../shared/types'
+import type { GitHubWorkItem, PersistedUIState, Worktree } from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
@@ -28,6 +28,22 @@ function createUIStore(): StoreApi<AppState> {
 
 function makeWorktree(id: string): Worktree {
   return { id } as unknown as Worktree
+}
+
+function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
+  return {
+    id: 'pr-95',
+    type: 'pr',
+    number: 95,
+    title: 'feat: add file upload command',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/95',
+    labels: [],
+    updatedAt: '2026-05-20T00:00:00.000Z',
+    author: 'octocat',
+    repoId: 'repo-1',
+    ...overrides
+  }
 }
 
 function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUIState {
@@ -569,6 +585,47 @@ describe('createUISlice page navigation history', () => {
     store.getState().openTaskPage()
     expect(store.getState().worktreeNavHistory).toEqual(['a', 'tasks'])
     expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    store.getState().closeTaskPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('rewinds Tasks detail visits on close', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    expect(store.getState().worktreeNavHistory).toEqual([
+      'a',
+      'tasks',
+      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined }
+    ])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(2)
+
+    store.getState().closeTaskPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().taskPageData).toEqual({})
+    expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('skips the whole Tasks detail stack on close', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    store.getState().openTaskPage({ taskSource: 'linear' })
+    expect(store.getState().worktreeNavHistory).toEqual([
+      'a',
+      'tasks',
+      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined },
+      'tasks'
+    ])
 
     store.getState().closeTaskPage()
     expect(store.getState().activeView).toBe('terminal')
