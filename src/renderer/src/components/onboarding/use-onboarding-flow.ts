@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { isCustomTuiAgentId } from '../../../../shared/effective-tui-agent'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
@@ -83,9 +84,14 @@ export function useOnboardingFlow(
 
   const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
   const [stepIndex, setStepIndex] = useState(initialStep)
+  // Why: onboarding is built-in only — a custom agent default seeded from a
+  // previous session (e.g. restored state) is treated as "no preference" here
+  // because the user hasn't seen the custom-presets UI yet.
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
+    settings?.defaultTuiAgent &&
+      settings.defaultTuiAgent !== 'blank' &&
+      !isCustomTuiAgentId(settings.defaultTuiAgent)
+      ? (settings.defaultTuiAgent as TuiAgent)
       : null
   )
   // Why: hydrate theme from saved settings instead of hardcoding 'dark' so users
@@ -131,8 +137,10 @@ export function useOnboardingFlow(
     }
     if (!agentInteractedRef.current) {
       const fromSettings =
-        settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-          ? settings.defaultTuiAgent
+        settings.defaultTuiAgent &&
+        settings.defaultTuiAgent !== 'blank' &&
+        !isCustomTuiAgentId(settings.defaultTuiAgent)
+          ? (settings.defaultTuiAgent as TuiAgent)
           : null
       if (fromSettings !== null) {
         setSelectedAgent(fromSettings)
@@ -150,7 +158,11 @@ export function useOnboardingFlow(
   // agent lived under the `<details>` disclosure in AgentStep. AgentStep is
   // the only call site that has the real answer; main-side detected_count /
   // detection_state are merged in here from the store.
-  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
+  // Why: detection now returns TuiAgentId (issue #2284); onboarding is
+  // built-in only, so we narrow to TuiAgent for the rest of the wizard.
+  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(
+    (detectedAgentIds ?? []).filter((id) => !isCustomTuiAgentId(id)) as TuiAgent[]
+  )
   const isDetectingRef = useRef<boolean>(isDetectingAgents)
   const selectedAgentRef = useRef(selectedAgent)
   // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
@@ -190,7 +202,12 @@ export function useOnboardingFlow(
     []
   )
 
-  const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
+  const detectedSet = useMemo<Set<TuiAgent>>(
+    // Why: onboarding is built-in only (issue #2284 plan §9). Drop custom
+    // ids before exposing the set to AgentStep.
+    () => new Set((detectedAgentIds ?? []).filter((id) => !isCustomTuiAgentId(id)) as TuiAgent[]),
+    [detectedAgentIds]
+  )
   const currentStep = STEPS[stepIndex]
 
   // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
@@ -198,7 +215,10 @@ export function useOnboardingFlow(
   // handler whenever the store flips a flag. Mirrors the
   // `selectedAgentRef` pattern above.
   useEffect(() => {
-    detectedAgentIdsRef.current = detectedAgentIds ?? []
+    // Why: onboarding is built-in only (issue #2284 plan §9); drop custom ids.
+    detectedAgentIdsRef.current = (detectedAgentIds ?? []).filter(
+      (id) => !isCustomTuiAgentId(id)
+    ) as TuiAgent[]
   }, [detectedAgentIds])
   useEffect(() => {
     isDetectingRef.current = isDetectingAgents
@@ -304,7 +324,12 @@ export function useOnboardingFlow(
       if (selectedAgentRef.current !== null) {
         return
       }
-      const preferred = AGENT_CATALOG.find((agent) => ids.includes(agent.id))?.id ?? null
+      // Why: AGENT_CATALOG holds built-ins only, so the matched id is always
+      // a TuiAgent. The cast satisfies TS now that AgentCatalogEntry.id widened.
+      const preferred =
+        (AGENT_CATALOG.find((agent) => ids.includes(agent.id as TuiAgent))?.id as
+          | TuiAgent
+          | undefined) ?? null
       setSelectedAgent(preferred)
     })
   }, [refreshDetectedAgents])

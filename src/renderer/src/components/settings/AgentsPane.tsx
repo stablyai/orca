@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings, TuiAgentId } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { Button } from '../ui/button'
@@ -16,9 +16,9 @@ type AgentsPaneProps = {
 }
 
 type AgentRowProps = {
-  agentId: TuiAgent
+  agentId: TuiAgentId
   label: string
-  homepageUrl: string
+  homepageUrl?: string
   defaultCmd: string
   isDetected: boolean
   isDefault: boolean
@@ -180,16 +180,18 @@ function AgentRow({
             </button>
           )}
 
-          {/* Homepage link */}
-          <a
-            href={homepageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={isDetected ? 'Docs' : 'Install'}
-            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
+          {/* Homepage link (built-ins always carry one; custom presets may omit) */}
+          {homepageUrl ? (
+            <a
+              href={homepageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={isDetected ? 'Docs' : 'Install'}
+              className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          ) : null}
 
           {/* Expand chevron for cmd override */}
           {isDetected && (
@@ -241,11 +243,11 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
 
-  const setDefault = (id: TuiAgent | 'blank' | null): void => {
+  const setDefault = (id: TuiAgentId | 'blank' | null): void => {
     updateSettings({ defaultTuiAgent: id })
   }
 
-  const saveOverride = (id: TuiAgent, value: string): void => {
+  const saveOverride = (id: TuiAgentId, value: string): void => {
     const next = { ...cmdOverrides }
     if (value) {
       next[id] = value

@@ -1,4 +1,4 @@
-import type { StatusBarItem, TuiAgent } from '../../../../shared/types'
+import type { StatusBarItem, TuiAgent, TuiAgentId } from '../../../../shared/types'
 
 // Why: Claude/Codex/Gemini usage bars are surface noise when the underlying
 // CLI isn't installed (e.g. a fresh Ubuntu install showing "Gemini Usage"
@@ -10,7 +10,9 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set(['claude', 'codex', 
 
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
-  detectedAgentIds: TuiAgent[] | null
+  // Why: the detected-agents store widened to TuiAgentId (issue #2284); this
+  // gating cares only about built-in CLIs, so the includes-check stays narrow.
+  detectedAgentIds: TuiAgentId[] | null
 ): boolean {
   if (!CLI_GATED_ITEMS.has(id)) {
     return true

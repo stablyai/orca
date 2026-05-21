@@ -17,15 +17,18 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgentId } from '../../../../shared/types'
 
-type DefaultAgentPreference = TuiAgent | 'blank' | null
+// Why: the combobox accepts both built-in and custom agent ids (issue #2284).
+// Surfaces that exclude customs (automations, commit-message AI) filter the
+// `agents` prop at the call site rather than narrowing here.
+type DefaultAgentPreference = TuiAgentId | 'blank' | null
 
 type AgentComboboxProps = {
   agents: AgentCatalogEntry[]
-  value: TuiAgent | null
-  onValueChange: (agent: TuiAgent | null) => void
-  onValueSelected?: (agent: TuiAgent | null) => void
+  value: TuiAgentId | null
+  onValueChange: (agent: TuiAgentId | null) => void
+  onValueSelected?: (agent: TuiAgentId | null) => void
   onOpenManageAgents?: () => void
   /** Current saved default agent preference. Used to render a subtle "default"
    *  indicator in the list and to tell which right-click menu item is the
@@ -182,7 +185,7 @@ export default function AgentCombobox({
   }, [])
 
   const handleSelect = useCallback(
-    (nextValue: TuiAgent | null) => {
+    (nextValue: TuiAgentId | null) => {
       onValueChange(nextValue)
       setOpen(false)
       setQuery('')

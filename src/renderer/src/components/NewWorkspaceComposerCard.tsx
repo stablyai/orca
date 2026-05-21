@@ -24,7 +24,8 @@ import type {
   GitLabWorkItem,
   LinearIssue,
   SparsePreset,
-  TuiAgent
+  TuiAgent,
+  TuiAgentId
 } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
@@ -42,8 +43,8 @@ type NewWorkspaceComposerCardProps = {
   containerClassName?: string
   composerRef?: React.RefObject<HTMLDivElement | null>
   nameInputRef?: React.RefObject<HTMLInputElement | null>
-  quickAgent: TuiAgent | null
-  onQuickAgentChange: (agent: TuiAgent | null) => void
+  quickAgent: TuiAgentId | null
+  onQuickAgentChange: (agent: TuiAgentId | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
   onRepoChange: (value: string) => void
@@ -260,7 +261,7 @@ export default function NewWorkspaceComposerCard({
       : 'Reconnect'
 
   const handleSetDefaultAgent = React.useCallback(
-    (next: TuiAgent | 'blank' | null) => {
+    (next: TuiAgentId | 'blank' | null) => {
       updateSettings({ defaultTuiAgent: next })
     },
     [updateSettings]
@@ -277,7 +278,11 @@ export default function NewWorkspaceComposerCard({
 
   const visibleQuickAgents = React.useMemo(
     () =>
-      AGENT_CATALOG.filter((agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id)),
+      // Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId
+      // in issue #2284 but the values here are still TuiAgent.
+      AGENT_CATALOG.filter(
+        (agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id as TuiAgent)
+      ),
     [detectedAgentIds]
   )
 

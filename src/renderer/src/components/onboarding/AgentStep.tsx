@@ -15,14 +15,20 @@ type AgentStepProps = {
 }
 
 export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }: AgentStepProps) {
-  const detected = AGENT_CATALOG.filter((agent) => detectedSet.has(agent.id))
-  const rest = AGENT_CATALOG.filter((agent) => !detectedSet.has(agent.id))
+  // Why: AGENT_CATALOG holds built-ins only, so every entry's id is a TuiAgent
+  // even though the shared AgentCatalogEntry type now widens to TuiAgentId
+  // (issue #2284). Cast at this single boundary keeps AgentStep narrowly typed.
+  const builtIns = AGENT_CATALOG as readonly (Omit<(typeof AGENT_CATALOG)[number], 'id'> & {
+    id: TuiAgent
+  })[]
+  const detected = builtIns.filter((agent) => detectedSet.has(agent.id))
+  const rest = builtIns.filter((agent) => !detectedSet.has(agent.id))
   const hasDetected = detected.length > 0
-  const primary = hasDetected ? detected : AGENT_CATALOG.slice(0, 6)
-  const fallbackRest = hasDetected ? rest : AGENT_CATALOG.slice(6)
+  const primary = hasDetected ? detected : builtIns.slice(0, 6)
+  const fallbackRest = hasDetected ? rest : builtIns.slice(6)
   const selectedEntry =
     selectedAgent && !detectedSet.has(selectedAgent)
-      ? AGENT_CATALOG.find((a) => a.id === selectedAgent)
+      ? builtIns.find((a) => a.id === selectedAgent)
       : undefined
   // Why: keep the collapsed bucket open when the selected agent lives there, so
   // the active card is visible without forcing the user to expand the disclosure.
@@ -52,14 +58,16 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
             <span className="font-medium">{selectedEntry.label}</span> isn&apos;t on your PATH yet.
             Orca will set it as your default and you can install it any time.
           </span>
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
-            onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
-          >
-            Install instructions
-            <ExternalLink className="size-3" />
-          </button>
+          {selectedEntry.homepageUrl ? (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
+              onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl as string)}
+            >
+              Install instructions
+              <ExternalLink className="size-3" />
+            </button>
+          ) : null}
         </div>
       )}
       <section className="space-y-3">

@@ -3249,7 +3249,13 @@ function pickDefaultAgent(
   if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
     return defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id))?.id ?? null
+  // Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId in
+  // issue #2284, but the actual values here are still TuiAgent.
+  return (
+    (AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id as TuiAgent))?.id as
+      | TuiAgent
+      | undefined) ?? null
+  )
 }
 
 type CheckDetailsLoadState = {
@@ -3442,7 +3448,16 @@ function ChecksTab({
         typeof connectionId === 'string'
           ? await activeStore.ensureRemoteDetectedAgents(connectionId)
           : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(activeStore.settings?.defaultTuiAgent, detectedAgents)
+      // Why: this launch path is built-in only (issue #2284 plan §9). A
+      // custom default is treated as no preference here.
+      const rawDefault = activeStore.settings?.defaultTuiAgent
+      const builtInDefault =
+        rawDefault && typeof rawDefault === 'string' && rawDefault.startsWith('custom:')
+          ? null
+          : (rawDefault as TuiAgent | 'blank' | null | undefined)
+      // Why: detectedAgents may include custom ids (issue #2284), but this
+      // launch path is built-in only. Cast narrows for the helper.
+      const agent = pickDefaultAgent(builtInDefault, detectedAgents as TuiAgent[])
       if (!agent) {
         toast.error('No AI agents detected. Configure a default agent in Settings.')
         return

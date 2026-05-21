@@ -350,7 +350,13 @@ export function pickDefaultSourceControlAgent(
   if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
     return defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id))?.id ?? null
+  // Why: AGENT_CATALOG holds built-ins only; the .id widened to TuiAgentId
+  // in issue #2284, but the values here are still TuiAgent.
+  return (
+    (AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id as TuiAgent))?.id as
+      | TuiAgent
+      | undefined) ?? null
+  )
 }
 
 function getConflictOperationPromptLabel(conflictOperation: GitConflictOperation): string {
@@ -777,7 +783,15 @@ function SourceControlInner(): React.JSX.Element {
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const effectiveCommitMessageAgentId = useMemo(
-    () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
+    () =>
+      // Why: commit-message AI is built-in only (issue #2284 plan §9). A
+      // `custom:*` default agent is treated as no preference here.
+      resolveCommitMessageAgentChoice(
+        commitMessageAi?.agentId,
+        settings?.defaultTuiAgent && settings.defaultTuiAgent.startsWith('custom:')
+          ? null
+          : (settings?.defaultTuiAgent as TuiAgent | 'blank' | null | undefined)
+      ),
     [commitMessageAi?.agentId, settings?.defaultTuiAgent]
   )
   const filterInputRef = useRef<HTMLInputElement>(null)
@@ -1156,7 +1170,17 @@ function SourceControlInner(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      // Why: source-control "send notes to agent" is built-in only (issue
+      // #2284 plan §9 — commit-message AI / source-control launches stay
+      // built-in). A custom default is treated as no preference here.
+      const rawDefault = store.settings?.defaultTuiAgent
+      const builtInDefault =
+        rawDefault && typeof rawDefault === 'string' && rawDefault.startsWith('custom:')
+          ? null
+          : (rawDefault as TuiAgent | 'blank' | null | undefined)
+      // Why: detectedAgents may include custom ids (issue #2284); narrow for
+      // the built-in-only helper.
+      const agent = pickDefaultSourceControlAgent(builtInDefault, detectedAgents as TuiAgent[])
       if (!agent) {
         toast.error('No AI agents detected. Configure a default agent in Settings.')
         return

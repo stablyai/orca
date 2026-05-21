@@ -78,7 +78,10 @@ describe('preflight RPC methods', () => {
       makeRequest('preflight.detectRemoteAgents', { connectionId: 'ssh-1' })
     )
 
-    expect(detectRemoteAgentsMock).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
+    expect(detectRemoteAgentsMock).toHaveBeenCalledWith({
+      connectionId: 'ssh-1',
+      customAgents: []
+    })
     expect(response).toMatchObject({ ok: true, result: ['claude'] })
   })
 })

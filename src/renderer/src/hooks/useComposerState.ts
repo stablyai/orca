@@ -28,10 +28,12 @@ import type {
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  TuiAgentId,
   WorktreeMeta,
   WorkspaceStatus,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
+import { isCustomTuiAgentId } from '../../../shared/effective-tui-agent'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   ADD_ATTACHMENT_SHORTCUT,
@@ -206,7 +208,7 @@ export type UseComposerStateResult = {
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: TuiAgentId | null) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
 }
@@ -384,10 +386,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: the long-form composer's agent selection is a required TuiAgent (not
   // null/blank), so 'blank' preferences from global settings must collapse to
   // the Claude default here — the blank-terminal affordance only lives in the
-  // quick-create flow.
+  // quick-create flow. Custom agent presets (issue #2284) also collapse to
+  // Claude here; long-form composer is built-in-only in v1.
+  const defaultPref = settings?.defaultTuiAgent
   const fallbackDefaultAgent: TuiAgent =
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
+    defaultPref && defaultPref !== 'blank' && !defaultPref.startsWith('custom:')
+      ? (defaultPref as TuiAgent)
       : 'claude'
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
@@ -407,7 +411,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((s) => s.ensureRemoteDetectedAgents)
   const detectedAgentIds = useMemo<Set<TuiAgent> | null>(
-    () => (detectedAgentList ? new Set(detectedAgentList) : null),
+    () =>
+      // Why: detection now returns TuiAgentId (issue #2284). Composer's
+      // detected-agent set is built-in only; drop customs here.
+      detectedAgentList
+        ? new Set(
+            (detectedAgentList as readonly TuiAgentId[]).filter(
+              (id) => !isCustomTuiAgentId(id)
+            ) as TuiAgent[]
+          )
+        : null,
     [detectedAgentList]
   )
 
@@ -776,9 +789,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && ids.length > 0) {
-        const firstInCatalogOrder = AGENT_CATALOG.find((a) => ids.includes(a.id))
+        // Why: AGENT_CATALOG holds built-ins only; the .id widened to
+        // TuiAgentId in issue #2284 but the values here are TuiAgent.
+        const firstInCatalogOrder = AGENT_CATALOG.find((a) => ids.includes(a.id as TuiAgent))
         if (firstInCatalogOrder) {
-          setTuiAgent(firstInCatalogOrder.id)
+          setTuiAgent(firstInCatalogOrder.id as TuiAgent)
         }
       }
     })
@@ -1835,7 +1850,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   ])
 
   const submitQuick = useCallback(
-    async (agent: TuiAgent | null): Promise<void> => {
+    async (agent: TuiAgentId | null): Promise<void> => {
       const workspaceName = getWorkspaceSeedName({
         explicitName: name,
         prompt: '',
@@ -1910,7 +1925,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           parsedLinkedIssueNumber ?? undefined,
           effectiveLinkedPR ?? undefined,
           pushTarget,
-          agent ?? undefined,
+          // Why: createWorktree records the agent used to seed the worktree;
+          // it's built-in only (issue #2284 plan §9). Custom presets fall
+          // through to `undefined` here so the worktree records no agent
+          // origin.
+          agent && !isCustomTuiAgentId(agent) ? (agent as TuiAgent) : undefined,
           linkedLinearIssue,
           effectiveBranchNameOverride,
           resolvedInitialWorkspaceStatus

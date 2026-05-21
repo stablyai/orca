@@ -2,12 +2,12 @@ import React, { useCallback } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { AGENT_CATALOG, AgentIcon, buildAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { waitForAgentReady } from '@/lib/agent-ready-wait'
-import type { TuiAgent } from '../../../../shared/types'
+import type { CustomTuiAgent, TuiAgentId } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 
 export type QuickLaunchAgentMenuItemsProps = {
@@ -31,17 +31,30 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
-  return AGENT_CATALOG.find((a) => a.id === agent) ?? null
+function getCatalogEntry(
+  agent: TuiAgentId,
+  customAgents: readonly CustomTuiAgent[]
+): { id: TuiAgentId; label: string } | null {
+  const merged = buildAgentCatalog(customAgents)
+  return merged.find((a) => a.id === agent) ?? null
 }
 
 function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = AGENT_CATALOG.filter((entry) => detected.includes(entry.id)).map(
+  defaultAgent: TuiAgentId | 'blank' | null | undefined,
+  detected: TuiAgentId[],
+  customAgents: readonly CustomTuiAgent[]
+): TuiAgentId[] {
+  const builtInOrder = AGENT_CATALOG.filter((entry) => detected.includes(entry.id)).map(
     (entry) => entry.id
   )
+  // Why: custom agent presets (issue #2284) land after built-ins in the picker,
+  // sorted by their user-facing label for predictable ordering.
+  const detectedCustoms = customAgents
+    .filter((agent) => detected.includes(agent.id))
+    .slice()
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map((agent) => agent.id)
+  const inCatalogOrder = [...builtInOrder, ...detectedCustoms]
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }
@@ -97,6 +110,7 @@ function QuickLaunchAgentMenuItemsInner({
   })
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -106,8 +120,8 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
-      const entry = getCatalogEntry(agent)
+    (agent: TuiAgentId) => {
+      const entry = getCatalogEntry(agent, customTuiAgents)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
@@ -162,7 +176,7 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
-  const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []
+  const agents = detectedIds ? orderAgents(defaultAgent, detectedIds, customTuiAgents) : []
 
   return (
     <>
@@ -175,7 +189,7 @@ function QuickLaunchAgentMenuItemsInner({
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
+        const entry = getCatalogEntry(agent, customTuiAgents)
         const label = entry?.label ?? agent
         return (
           <DropdownMenuItem

@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
+import type { PathSource, ShellHydrationFailureReason, TuiAgentId } from '../../../../shared/types'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 
 export type DetectedAgentsSlice = {
-  detectedAgentIds: TuiAgent[] | null
+  detectedAgentIds: TuiAgentId[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean
   /** Telemetry classification of the most recent refreshAgents() run. `null`
@@ -15,27 +15,27 @@ export type DetectedAgentsSlice = {
   pathFailureReason: ShellHydrationFailureReason | null
   /** Runs `preflight.detectAgents` once per session. Subsequent callers reuse
    *  the in-flight promise so every surface sees the same result. */
-  ensureDetectedAgents: () => Promise<TuiAgent[]>
+  ensureDetectedAgents: () => Promise<TuiAgentId[]>
   /** Re-runs `preflight.refreshAgents` (re-reads shell PATH). Concurrent callers
    *  receive the same pending promise; store fields update once on resolve so
    *  every subscribed surface re-renders in the same tick. */
-  refreshDetectedAgents: () => Promise<TuiAgent[]>
+  refreshDetectedAgents: () => Promise<TuiAgentId[]>
 
   // Why: remote worktrees need per-connection agent detection. The local
   // detectedAgentIds field is connection-unaware, so remote state lives in a
   // separate map keyed by SSH connectionId.
-  remoteDetectedAgentIds: Record<string, TuiAgent[] | null>
+  remoteDetectedAgentIds: Record<string, TuiAgentId[] | null>
   isDetectingRemoteAgents: Record<string, boolean>
-  ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
+  ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgentId[]>
   clearRemoteDetectedAgents: (connectionId: string) => void
 }
 
 // Why: these are module-scoped (not in the store) so we can deduplicate
 // concurrent callers without storing a Promise in Zustand state.
-let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
-let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
+let detectPromise: { key: string; promise: Promise<TuiAgentId[]> } | null = null
+let refreshPromise: { key: string; promise: Promise<TuiAgentId[]> } | null = null
 let detectedContextKey: string | null = null
-const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const remoteDetectPromises = new Map<string, Promise<TuiAgentId[]>>()
 
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
   set,
@@ -65,7 +65,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const pending = window.api.preflight
       .detectAgents(context)
       .then((ids) => {
-        const typed = ids as TuiAgent[]
+        const typed = ids as TuiAgentId[]
         set({ detectedAgentIds: typed, isDetectingAgents: false })
         detectedContextKey = contextKey
         return typed
@@ -78,7 +78,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
           detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
           isDetectingAgents: false
         })
-        return [] as TuiAgent[]
+        return [] as TuiAgentId[]
       })
     detectPromise = { key: contextKey, promise: pending }
     return pending
@@ -98,7 +98,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const pending = window.api.preflight
       .refreshAgents(context)
       .then((result) => {
-        const typed = result.agents as TuiAgent[]
+        const typed = result.agents as TuiAgentId[]
         set({
           detectedAgentIds: typed,
           isRefreshingAgents: false,
@@ -148,7 +148,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const pending = window.api.preflight
       .detectRemoteAgents({ connectionId })
       .then((ids) => {
-        const typed = ids as TuiAgent[]
+        const typed = ids as TuiAgentId[]
         set((s) => ({
           remoteDetectedAgentIds: { ...s.remoteDetectedAgentIds, [connectionId]: typed },
           isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
@@ -161,7 +161,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         set((s) => ({
           isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
         }))
-        return [] as TuiAgent[]
+        return [] as TuiAgentId[]
       })
 
     remoteDetectPromises.set(connectionId, pending)

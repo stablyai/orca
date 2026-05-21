@@ -314,9 +314,14 @@ export function AutomationEditorDialog({
                 <AgentCombobox
                   agents={AGENT_CATALOG}
                   value={draft.agentId}
-                  onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
-                  }
+                  onValueChange={(agentId) => {
+                    // Why: automations are built-in only in v1 (issue #2284
+                    // plan §9). AGENT_CATALOG never yields a custom id, but
+                    // the combobox signature widened — guard defensively.
+                    if (agentId && !agentId.startsWith('custom:')) {
+                      onDraftChange((current) => ({ ...current, agentId: agentId as TuiAgent }))
+                    }
+                  }}
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
                   allowNarrowTrigger

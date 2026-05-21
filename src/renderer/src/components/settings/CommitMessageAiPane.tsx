@@ -270,7 +270,16 @@ export function CommitMessageAiPane({
       }),
     [baseAgentCapabilities, discoveryHostKey, modelDiscoveryByAgent]
   )
-  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(
+    config.agentId,
+    // Why: commit-message AI is built-in only (issue #2284 plan §9). A
+    // `custom:*` default is treated as no preference here.
+    settings.defaultTuiAgent &&
+      typeof settings.defaultTuiAgent === 'string' &&
+      settings.defaultTuiAgent.startsWith('custom:')
+      ? null
+      : (settings.defaultTuiAgent as Parameters<typeof resolveCommitMessageAgentChoice>[1])
+  )
   const unsupportedSelectedAgent =
     config.agentId &&
     !isCustomAgentId(config.agentId) &&
@@ -435,7 +444,16 @@ export function CommitMessageAiPane({
     // so Generate works without maintaining a second agent preference. If the
     // user previously persisted 'custom', keep it and let them re-edit the
     // command — no implicit reset to a preset.
-    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+    const seedAgentId = resolveCommitMessageAgentChoice(
+      config.agentId,
+      // Why: commit-message AI is built-in only (issue #2284 plan §9). A
+      // `custom:*` default is treated as no preference here.
+      settings.defaultTuiAgent &&
+        typeof settings.defaultTuiAgent === 'string' &&
+        settings.defaultTuiAgent.startsWith('custom:')
+        ? null
+        : (settings.defaultTuiAgent as Parameters<typeof resolveCommitMessageAgentChoice>[1])
+    )
     if (!seedAgentId) {
       writeConfig({ enabled: true, agentId: null })
       return

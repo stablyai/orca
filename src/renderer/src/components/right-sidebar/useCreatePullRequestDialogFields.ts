@@ -54,9 +54,17 @@ export function useCreatePullRequestDialogFields({
   onBranchChangedByGeneration
 }: UseCreatePullRequestDialogFieldsOptions) {
   const commitMessageAi = settings?.commitMessageAi
+  // Why: PR-fields generation uses the commit-message agent spec, which is
+  // built-in only (issue #2284 plan §9). A custom default is treated as no
+  // preference here.
+  const defaultPref = settings?.defaultTuiAgent
+  const builtInDefault =
+    defaultPref && typeof defaultPref === 'string' && defaultPref.startsWith('custom:')
+      ? null
+      : defaultPref
   const effectiveCommitMessageAgentId = resolveCommitMessageAgentChoice(
     commitMessageAi?.agentId,
-    settings?.defaultTuiAgent
+    builtInDefault as Parameters<typeof resolveCommitMessageAgentChoice>[1]
   )
   const initializedFromEligibilityRef = useRef<string | null>(null)
   const generateInFlightRef = useRef(false)

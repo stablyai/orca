@@ -80,9 +80,11 @@ function pickAgent(
   if (preferred && preferred !== 'blank' && detected.has(preferred)) {
     return preferred
   }
+  // Why: AGENT_CATALOG holds built-ins only; the .id widened to TuiAgentId
+  // in issue #2284 but the values here are TuiAgent.
   for (const entry of AGENT_CATALOG) {
-    if (detected.has(entry.id)) {
-      return entry.id
+    if (detected.has(entry.id as TuiAgent)) {
+      return entry.id as TuiAgent
     }
   }
   return null
@@ -267,7 +269,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const worktreePath = result.worktree.path
 
     const detectedIds = new Set(await detectedAgentsPromise)
-    effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    // Why: this launch path records the agent against the worktree, which is
+    // built-in only (issue #2284 plan §9). A custom default is treated as no
+    // preference here so detection-order fallback picks a built-in.
+    const rawDefault = settings?.defaultTuiAgent
+    const builtInDefault =
+      rawDefault && typeof rawDefault === 'string' && rawDefault.startsWith('custom:')
+        ? null
+        : (rawDefault as TuiAgent | 'blank' | null | undefined)
+    effectiveAgent = pickAgent(builtInDefault, detectedIds as Set<TuiAgent>)
     if (effectiveAgent) {
       // Why: direct task launch creates and starts the workspace in separate
       // steps so agent detection can overlap git worktree creation. Persist

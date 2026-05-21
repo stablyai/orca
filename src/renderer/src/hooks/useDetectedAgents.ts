@@ -1,16 +1,16 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgentId } from '../../../shared/types'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
-  detectedIds: TuiAgent[] | null
+  detectedIds: TuiAgentId[] | null
   isLoading: boolean
   isRefreshing: boolean
   /** Re-runs `preflight.refreshAgents` and updates every subscribed surface in
    *  the same tick. Idempotent while in flight: concurrent callers receive the
    *  same pending promise. */
-  refresh: () => Promise<TuiAgent[]>
+  refresh: () => Promise<TuiAgentId[]>
 }
 
 /**

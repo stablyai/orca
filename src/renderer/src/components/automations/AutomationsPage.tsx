@@ -50,7 +50,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { Worktree } from '../../../../shared/types'
+import type { TuiAgent, Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationRrule,
@@ -84,7 +84,9 @@ import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-temp
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
 
-const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
+// Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId in
+// issue #2284 but values here are TuiAgent.
+const AGENTS = AGENT_CATALOG.map((agent) => agent.id as TuiAgent)
 const DEFAULT_TIME = '09:00'
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 type AutomationPaneTab = 'overview' | 'runs'
@@ -239,9 +241,13 @@ export default function AutomationsPage(): React.JSX.Element {
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const defaultAgent =
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
+  // Why: automations are built-in only (issue #2284 plan §9). A custom
+  // default falls through to the first built-in here.
+  const defaultAgent: TuiAgent =
+    settings?.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank' &&
+    !settings.defaultTuiAgent.startsWith('custom:')
+      ? (settings.defaultTuiAgent as TuiAgent)
       : AGENTS[0]
 
   const [automations, setAutomations] = useState<Automation[]>([])

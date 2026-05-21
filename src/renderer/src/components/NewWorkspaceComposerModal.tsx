@@ -12,6 +12,7 @@ import {
 } from '@/lib/new-workspace-enter-guard'
 import type {
   TuiAgent,
+  TuiAgentId,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
@@ -134,10 +135,10 @@ function QuickTabBody({
   // override rather than an effect that mirrors a prop into state — deriving
   // during render keeps the selection in sync with the detected set without
   // triggering an extra commit.
-  const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
+  const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgentId | null | undefined>(
     undefined
   )
-  const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
+  const preferredQuickAgent = useMemo<TuiAgentId | null>(() => {
     const pref = settings?.defaultTuiAgent
     if (pref === 'blank') {
       // Why: 'blank' is the explicit "no agent" preference — the quick agent
@@ -148,11 +149,16 @@ function QuickTabBody({
       return pref
     }
     const detected = cardProps.detectedAgentIds
-    return AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id))?.id ?? null
+    // Why: detectedAgentIds is the built-in set; AGENT_CATALOG is built-in only,
+    // so this lookup yields a TuiAgent (subset of TuiAgentId).
+    return (
+      AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id as TuiAgent))?.id ??
+      null
+    )
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
   const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
 
-  const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
+  const handleQuickAgentChange = useCallback((agent: TuiAgentId | null) => {
     setQuickAgentOverride(agent)
   }, [])
 
