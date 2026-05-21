@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { TreeNode } from './file-explorer-types'
@@ -31,7 +32,6 @@ type UseFileDeletionParams = {
   refreshDir: (dirPath: string) => Promise<void>
   selectedPath: string | null
   setSelectedPath: Dispatch<SetStateAction<string | null>>
-  isMac: boolean
   isWindows: boolean
 }
 
@@ -47,10 +47,10 @@ export function useFileDeletion({
   refreshDir,
   selectedPath,
   setSelectedPath,
-  isMac,
   isWindows
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
+  const deleteShortcutLabel = useShortcutLabel('fileExplorer.delete')
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -226,9 +226,9 @@ export function useFileDeletion({
 
   return useMemo(
     () => ({
-      deleteShortcutLabel: isMac ? '⌘⌫ / Del' : 'Del',
+      deleteShortcutLabel,
       requestDelete
     }),
-    [isMac, requestDelete]
+    [deleteShortcutLabel, requestDelete]
   )
 }

@@ -1,9 +1,11 @@
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+
 export function isMarkdownPreviewFindShortcut(
-  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
-  isMac: boolean
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
 ): boolean {
-  const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  return mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f'
+  return keybindingMatchesAction('editor.find', event, platform, keybindings)
 }
 
 export function findTextMatchRanges(text: string, query: string): { start: number; end: number }[] {

@@ -92,6 +92,7 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useRepoHeaderDrag } from './repo-header-drag'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import {
@@ -122,6 +123,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { getRepositoryBadgeColorSectionId } from '@/components/settings/repository-settings-targets'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -534,6 +536,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     (s) => s.reportVisibleGitHubPRRefreshCandidates
   )
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const keybindings = useAppStore((s) => s.keybindings)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
@@ -1039,25 +1042,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
 
-      const mod = navigator.userAgent.includes('Mac')
-        ? e.metaKey && !e.ctrlKey
-        : e.ctrlKey && !e.metaKey
-      if (mod && !e.shiftKey && e.key === '0') {
+      const platform = getShortcutPlatform()
+      if (keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings)) {
         scrollRef.current?.focus()
         e.preventDefault()
         return
       }
 
-      if (mod && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
+        ? 'up'
+        : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
+          ? 'down'
+          : null
+      if (direction) {
         markDirectScrollInput()
-        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
+        navigateWorktree(direction)
         e.preventDefault()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeModal, markDirectScrollInput, navigateWorktree])
+  }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree])
 
   // Why: lightweight nested cards do not mount WorktreeCard, so the viewport
   // owns the SSH reconnect prompt for an active lineage child.

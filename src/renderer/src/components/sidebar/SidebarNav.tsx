@@ -13,8 +13,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -23,6 +22,7 @@ export function shouldShowAgentsButton(
 }
 
 const SidebarNav = React.memo(function SidebarNav() {
+  const worktreePaletteShortcut = useShortcutLabel('worktree.palette')
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openActivityPage = useAppStore((s) => s.openActivityPage)
@@ -251,7 +251,7 @@ const SidebarNav = React.memo(function SidebarNav() {
         <Search className="size-4 shrink-0 text-sidebar-foreground/30" strokeWidth={1.75} />
         <span className="flex-1">Search</span>
         <kbd className="hidden rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground group-hover:inline-flex items-center">
-          {isMac ? '⌘J' : 'Ctrl+Shift+J'}
+          {worktreePaletteShortcut}
         </kbd>
       </button>
     </div>

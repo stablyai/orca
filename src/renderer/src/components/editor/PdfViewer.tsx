@@ -9,6 +9,10 @@ import {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
@@ -29,6 +33,8 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [scale, setScale] = useState(1)
+  const keybindings = useAppStore((state) => state.keybindings)
+  const findShortcutLabel = useShortcutLabel('editor.find')
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
@@ -134,28 +140,26 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (!isMod || e.altKey) {
-        return
-      }
-      if (!e.shiftKey && e.key.toLowerCase() === 'f') {
+      const platform = getShortcutPlatform()
+      if (keybindingMatchesAction('editor.find', e, platform, keybindings)) {
         e.preventDefault()
         e.stopPropagation()
         setFindOpen(true)
+        return
       }
-      if (e.key === '=' || e.key === '+') {
+      if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
         e.preventDefault()
         const viewer = pdfViewerRef.current
         if (viewer) {
           viewer.currentScale = Math.min(MAX_SCALE, viewer.currentScale * SCALE_STEP)
         }
-      } else if (e.key === '-') {
+      } else if (keybindingMatchesAction('zoom.out', e, platform, keybindings)) {
         e.preventDefault()
         const viewer = pdfViewerRef.current
         if (viewer) {
           viewer.currentScale = Math.max(MIN_SCALE, viewer.currentScale / SCALE_STEP)
         }
-      } else if (e.key === '0') {
+      } else if (keybindingMatchesAction('zoom.reset', e, platform, keybindings)) {
         e.preventDefault()
         const viewer = pdfViewerRef.current
         if (viewer) {
@@ -165,7 +169,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [])
+  }, [keybindings])
 
   const zoomIn = useCallback(() => {
     const viewer = pdfViewerRef.current
@@ -265,7 +269,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
           type="button"
           className="rounded p-1 hover:bg-accent hover:text-foreground"
           onClick={() => setFindOpen(true)}
-          title="Find in PDF (Cmd+F)"
+          title={`Find in PDF (${findShortcutLabel})`}
         >
           <Search size={14} />
         </button>

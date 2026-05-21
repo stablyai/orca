@@ -5,6 +5,7 @@ import type { TerminalSlice } from './slices/terminals'
 import type { TabsSlice } from './slices/tabs'
 import type { UISlice } from './slices/ui'
 import type { SettingsSlice } from './slices/settings'
+import type { KeybindingsSlice } from './slices/keybindings'
 import type { GitHubSlice } from './slices/github'
 import type { HostedReviewSlice } from './slices/hosted-review'
 import type { LinearSlice } from './slices/linear'
@@ -33,6 +34,7 @@ export type AppState = RepoSlice &
   TabsSlice &
   UISlice &
   SettingsSlice &
+  KeybindingsSlice &
   GitHubSlice &
   HostedReviewSlice &
   LinearSlice &

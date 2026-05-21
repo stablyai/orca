@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA
@@ -28,7 +29,6 @@ import EditorViewToggle, {
 import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { getEditorHeaderCopyState } from './editor-header'
-import { getMarkdownPreviewShortcutLabel } from './markdown-preview-controls'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -40,7 +40,6 @@ const revealLabel = isMac
   : isLinux
     ? 'Open Containing Folder'
     : 'Reveal in File Explorer'
-const markdownPreviewShortcutLabel = getMarkdownPreviewShortcutLabel(isMac)
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -112,6 +111,7 @@ export function EditorPanelHeader({
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
   )
+  const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)

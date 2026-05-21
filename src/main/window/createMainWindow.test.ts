@@ -250,26 +250,36 @@ describe('createMainWindow', () => {
 
     const beforeInputEvent = windowHandlers['before-input-event']
 
+    const primary =
+      process.platform === 'darwin'
+        ? { control: false, meta: true }
+        : { control: true, meta: false }
+
     for (const input of [
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '-' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '_' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Minus' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Subtract' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'Minus' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'NumpadSubtract' }
+      { type: 'keyDown', ...primary, alt: false, key: '-' },
+      { type: 'keyDown', ...primary, alt: false, key: 'Minus' },
+      { type: 'keyDown', ...primary, alt: false, key: 'Subtract' },
+      { type: 'keyDown', ...primary, alt: false, key: '', code: 'Minus' },
+      { type: 'keyDown', ...primary, alt: false, key: '', code: 'NumpadSubtract' }
     ]) {
       const preventDefault = vi.fn()
       beforeInputEvent({ preventDefault } as never, input as never)
       expect(preventDefault).toHaveBeenCalledTimes(1)
     }
 
-    expect(webContents.send).toHaveBeenCalledTimes(6)
+    expect(webContents.send).toHaveBeenCalledTimes(5)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(6, 'terminal:zoom', 'out')
+
+    const undoPreventDefault = vi.fn()
+    beforeInputEvent(
+      { preventDefault: undoPreventDefault } as never,
+      { type: 'keyDown', ...primary, alt: false, shift: true, key: '_' } as never
+    )
+    expect(undoPreventDefault).not.toHaveBeenCalled()
   })
 
   it('routes Electron zoom command events to terminal zoom', () => {
@@ -312,6 +322,51 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledTimes(2)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'in')
+  })
+
+  it('respects custom zoom bindings for Electron zoom command fallbacks', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, {
+      getKeybindings: () => ({
+        'zoom.in': ['Mod+Y'],
+        'zoom.out': []
+      })
+    })
+
+    const onZoomChanged = windowHandlers['zoom-changed']
+    const preventDefault = vi.fn()
+    onZoomChanged({ preventDefault } as never, 'out')
+    onZoomChanged({ preventDefault } as never, 'in')
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalled()
   })
 
   it('does not intercept ctrl/cmd+r in before-input-event', () => {
@@ -441,6 +496,59 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyDown', { shiftKey: true })
     expect(webContents.send).toHaveBeenNthCalledWith(3, 'ui:ctrlTabKeyUp')
+  })
+
+  it('does not hardcode Ctrl+Tab when the recent-tab binding is disabled', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getKeybindings: () => ({ 'tab.previousRecent': [] }) })
+
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'Tab',
+        key: 'Tab',
+        control: true,
+        meta: false,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyDown', expect.anything())
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:switchRecentTab')
   })
 
   it('only intercepts the dictation chord when enabled toggle mode can handle it', () => {

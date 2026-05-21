@@ -6,9 +6,6 @@ export function useContextualCopySetup() {
   const [copyToast, setCopyToast] = useState<{ left: number; top: number } | null>(null)
   const copyToastTimeoutRef = useRef<number | null>(null)
 
-  const isMac = navigator.userAgent.includes('Mac')
-  const copyShortcutLabel = isMac ? '⌥⌘C' : 'Ctrl+Alt+C'
-
   useEffect(() => {
     const toastRef = copyToastTimeoutRef
     return () => {
@@ -22,7 +19,7 @@ export function useContextualCopySetup() {
     (
       editorInstance: editor.IStandaloneCodeEditor,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      monaco: any,
+      _monaco: any,
       filePath: string,
       propsRef: React.MutableRefObject<{
         relativePath: string
@@ -32,15 +29,13 @@ export function useContextualCopySetup() {
     ) => {
       setupContextualCopy({
         editorInstance,
-        monaco,
         filePath,
-        copyShortcutLabel,
         setCopyToast,
         propsRef,
         copyToastTimeoutRef
       })
     },
-    [copyShortcutLabel]
+    []
   )
 
   const toastNode = copyToast ? (

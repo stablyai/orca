@@ -73,7 +73,7 @@ describe('registerAppMenu', () => {
     expect(viewSubmenu).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'Reload' }),
-        expect.objectContaining({ label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R' })
+        expect.objectContaining({ label: 'Force Reload', accelerator: 'CmdOrCtrl+Shift+R' })
       ])
     )
 
@@ -162,7 +162,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+Shift+J'}`
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
@@ -287,8 +287,8 @@ describe('registerAppMenu', () => {
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 
-    const leftLabel = `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`
-    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`
+    const leftLabel = `Toggle Left Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
+    const rightLabel = `Toggle Right Sidebar\t${isMac ? '⌘L' : 'Ctrl+L'}`
 
     appearanceSubmenu
       .find((item) => item.label === leftLabel)

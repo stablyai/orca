@@ -1,3 +1,5 @@
+import { keybindingMatchesAction, type KeybindingOverrides } from './keybindings'
+
 export type WindowShortcutInput = {
   type?: string
   key?: string
@@ -6,6 +8,10 @@ export type WindowShortcutInput = {
   meta?: boolean
   control?: boolean
   shift?: boolean
+  altKey?: boolean
+  metaKey?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
 }
 
 export type WindowShortcutAction =
@@ -16,6 +22,8 @@ export type WindowShortcutAction =
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
   | { type: 'openNewWorkspace' }
+  | { type: 'openTasks' }
+  | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
@@ -27,13 +35,6 @@ function platformPrimaryModifier(
   return platform === 'darwin' ? Boolean(input.meta) : Boolean(input.control)
 }
 
-function platformOppositeModifier(
-  input: Pick<WindowShortcutInput, 'meta' | 'control'>,
-  platform: NodeJS.Platform
-): boolean {
-  return platform === 'darwin' ? Boolean(input.control) : Boolean(input.meta)
-}
-
 export function isWindowShortcutModifierChord(
   input: Pick<WindowShortcutInput, 'meta' | 'control' | 'alt'>,
   platform: NodeJS.Platform
@@ -41,142 +42,86 @@ export function isWindowShortcutModifierChord(
   return platformPrimaryModifier(input, platform) && !input.alt
 }
 
-// Why: worktree history navigation is the first allowlisted chord that
-// intentionally carries Alt, so it needs its own predicate. The shared
-// isWindowShortcutModifierChord helper deliberately rejects Alt because its
-// callers (zoom, sidebar toggles, palette, jump indices) must not steal
-// Alt-combinations used by shells and readline.
-//
-// Why: this predicate also narrows to ArrowLeft/ArrowRight (not just
-// "primary+alt") so a future alt-carrying chord added as its own branch in
-// resolveWindowShortcutAction is not silently swallowed by the early
-// return-null below. Any non-arrow alt combo falls through to the rest of
-// the policy, where Alt is rejected by isWindowShortcutModifierChord as
-// before.
-function isHistoryNavigateChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
-  // Why: excluding Shift reserves Cmd/Ctrl+Alt+Shift+Arrow for future chords
-  // (e.g. "close back/forward entry" or cross-stack selection) without
-  // taking a breaking-change hit on the v1 chord binding. Excluding the
-  // opposite primary modifier (Ctrl on darwin, Meta on non-darwin) prevents
-  // Cmd+Ctrl+Alt+Arrow / Win+Ctrl+Alt+Arrow from being mis-classified as
-  // history navigation — those combinations collide with OS chords
-  // (macOS Mission Control spaces, GNOME workspace switching) and must
-  // continue to flow to the OS.
-  return (
-    platformPrimaryModifier(input, platform) &&
-    !platformOppositeModifier(input, platform) &&
-    Boolean(input.alt) &&
-    !input.shift &&
-    (input.code === 'ArrowLeft' || input.code === 'ArrowRight')
-  )
-}
-
-function isFloatingTerminalChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
-  return (
-    platformPrimaryModifier(input, platform) &&
-    !platformOppositeModifier(input, platform) &&
-    Boolean(input.alt) &&
-    !input.shift &&
-    matchesLetterShortcut(input, 't', 'KeyT')
-  )
-}
-
-function isZoomInShortcut(input: WindowShortcutInput): boolean {
-  return input.key === '=' || input.key === '+' || input.code === 'NumpadAdd'
-}
-
-function isZoomOutShortcut(input: WindowShortcutInput): boolean {
-  // Why: Electron reports Cmd/Ctrl+Minus differently across layouts and devices:
-  // some emit '-' while shifted layouts emit '_', and other layouts/devices
-  // report symbolic names like "Minus"/"Subtract" in either key or code.
-  // We accept all known variants so zoom out remains reachable everywhere.
-  const key = (input.key ?? '').toLowerCase()
-  const code = (input.code ?? '').toLowerCase()
-  return (
-    key === '-' ||
-    key === '_' ||
-    key.includes('minus') ||
-    key.includes('subtract') ||
-    code.includes('minus') ||
-    code.includes('subtract')
-  )
-}
-
-// Why: letter shortcuts must follow the user's active keyboard layout. Matching
-// solely on `input.code` uses the physical QWERTY position of the key, which
-// breaks on Dvorak, Colemak, AZERTY, and other non-QWERTY layouts — e.g. on
-// Dvorak the key that types 'b' sits at physical position 'KeyN', so
-// `input.code === 'KeyB'` never fires when the user presses what is, to them,
-// "Cmd+B". `input.key` carries the layout-aware character, so we prefer it
-// when it looks like a letter. We fall back to the QWERTY code when `key` is
-// empty or non-letter (dead keys, some IME states, rare Electron edge cases)
-// so shortcuts still reach users whose driver does not surface `key`.
-function matchesLetterShortcut(
+export function matchesRecentTabSwitcherChord(
   input: WindowShortcutInput,
-  letter: string,
-  codeFallback: string
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
 ): boolean {
-  const key = (input.key ?? '').toLowerCase()
-  if (key.length === 1 && key >= 'a' && key <= 'z') {
-    return key === letter
+  const control = Boolean(input.control ?? input.ctrlKey)
+  const meta = Boolean(input.meta ?? input.metaKey)
+  const alt = Boolean(input.alt ?? input.altKey)
+  if (input.code !== 'Tab' || !control || meta || alt) {
+    return false
   }
-  return input.code === codeFallback
+  // Why: the Ctrl+Tab switcher is a held-key interaction where Shift reverses
+  // direction. Gate the whole family on the configurable unshifted binding.
+  return keybindingMatchesAction(
+    'tab.previousRecent',
+    {
+      key: input.key,
+      code: input.code,
+      alt,
+      meta,
+      control,
+      shift: false,
+      altKey: alt,
+      metaKey: meta,
+      ctrlKey: control,
+      shiftKey: false
+    },
+    platform,
+    keybindings
+  )
 }
 
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
 ): WindowShortcutAction | null {
-  // Why: evaluate the history-navigate chord BEFORE the standard modifier-chord
-  // gate because that gate rejects Alt. The predicate already narrows to
-  // ArrowLeft/ArrowRight so only those two codes reach here.
-  if (isHistoryNavigateChord(input, platform)) {
+  if (keybindingMatchesAction('worktree.history.back', input, platform, keybindings)) {
     return {
       type: 'worktreeHistoryNavigate',
-      direction: input.code === 'ArrowLeft' ? 'back' : 'forward'
+      direction: 'back'
     }
   }
 
-  if (isFloatingTerminalChord(input, platform)) {
+  if (keybindingMatchesAction('worktree.history.forward', input, platform, keybindings)) {
+    return {
+      type: 'worktreeHistoryNavigate',
+      direction: 'forward'
+    }
+  }
+
+  if (keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings)) {
     return { type: 'toggleFloatingTerminal' }
   }
 
-  if (!isWindowShortcutModifierChord(input, platform)) {
-    return null
-  }
-
-  if (isZoomInShortcut(input)) {
+  if (keybindingMatchesAction('zoom.in', input, platform, keybindings)) {
     return { type: 'zoom', direction: 'in' }
   }
 
-  if (isZoomOutShortcut(input)) {
+  if (keybindingMatchesAction('zoom.out', input, platform, keybindings)) {
     return { type: 'zoom', direction: 'out' }
   }
 
-  if (input.key === '0' && !input.shift) {
+  if (keybindingMatchesAction('zoom.reset', input, platform, keybindings)) {
     return { type: 'zoom', direction: 'reset' }
   }
 
-  if (
-    matchesLetterShortcut(input, 'j', 'KeyJ') &&
-    ((platform === 'darwin' && !input.shift) || (platform !== 'darwin' && input.shift))
-  ) {
+  if (keybindingMatchesAction('worktree.palette', input, platform, keybindings)) {
     return { type: 'toggleWorktreePalette' }
   }
 
-  // Why: Ctrl+B and Ctrl+L are terminal control characters (STX / form-feed).
-  // Without main-process interception, xterm.js processes the keydown before
-  // the renderer's window-capture handler can preventDefault, causing ^B / ^L
-  // to appear in the terminal alongside the sidebar toggle.
-  if (matchesLetterShortcut(input, 'b', 'KeyB') && !input.shift) {
+  if (keybindingMatchesAction('sidebar.left.toggle', input, platform, keybindings)) {
     return { type: 'toggleLeftSidebar' }
   }
 
-  if (matchesLetterShortcut(input, 'l', 'KeyL') && !input.shift) {
+  if (keybindingMatchesAction('sidebar.right.toggle', input, platform, keybindings)) {
     return { type: 'toggleRightSidebar' }
   }
 
-  if (matchesLetterShortcut(input, 'p', 'KeyP') && !input.shift) {
+  if (keybindingMatchesAction('worktree.quickOpen', input, platform, keybindings)) {
     return { type: 'openQuickOpen' }
   }
 
@@ -186,31 +131,36 @@ export function resolveWindowShortcutAction(
   // webContents, both of which bypass the renderer's window-level keydown.
   // Shift is accepted for compatibility with the former Create-from shortcut;
   // the unified composer now exposes source switching inside the name field.
-  if (matchesLetterShortcut(input, 'n', 'KeyN')) {
-    if (!input.alt) {
-      return { type: 'openNewWorkspace' }
-    }
+  if (keybindingMatchesAction('workspace.create', input, platform, keybindings)) {
+    return { type: 'openNewWorkspace' }
   }
 
-  // Why: Cmd/Ctrl+E activates voice dictation. Routed through the main process
-  // (same rationale as the other shortcuts in this allowlist) so the keydown
-  // reaches the renderer's dictation controller even when focus is inside a
-  // contentEditable surface or browser guest webContents. Acknowledged
-  // tradeoff: this preempts Ctrl+E (readline end-of-line) inside the terminal
-  // on Linux/Windows when the global window matches first. The renderer's
-  // dictation controller is responsible for forwarding the chord through to
-  // the PTY when dictation is intentionally disabled or the user is mid-input.
-  if (matchesLetterShortcut(input, 'e', 'KeyE') && !input.shift) {
+  if (keybindingMatchesAction('voice.dictation', input, platform, keybindings)) {
     return { type: 'dictationKeyDown' }
   }
 
-  if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {
+  if (keybindingMatchesAction('view.tasks', input, platform, keybindings)) {
+    return { type: 'openTasks' }
+  }
+
+  if (keybindingMatchesAction('tab.previousRecent', input, platform, keybindings)) {
+    return { type: 'switchRecentTab' }
+  }
+
+  if (
+    platformPrimaryModifier(input, platform) &&
+    !input.alt &&
+    !input.shift &&
+    input.key &&
+    input.key >= '1' &&
+    input.key <= '9'
+  ) {
     return { type: 'jumpToWorktreeIndex', index: parseInt(input.key, 10) - 1 }
   }
 
   // Why: this helper is the explicit allowlist for main-process interception.
   // Anything not listed here must keep flowing to the renderer/PTTY so readline
-  // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen by a
-  // future shortcut addition.
+  // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
+  // terminals own focus.
   return null
 }

@@ -1,8 +1,12 @@
 import { useEffect } from 'react'
-import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
@@ -11,8 +15,7 @@ import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import logo from '../../../../../resources/logo.svg'
-
-const isMac = navigator.userAgent.includes('Mac')
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 const stepCopy = {
   agent: {
@@ -59,6 +62,8 @@ export default function OnboardingFlow({
   onSettingsDetourStart
 }: OnboardingFlowProps): React.JSX.Element {
   const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
+  const keybindings = useAppStore((state) => state.keybindings)
+  const continueShortcutKeys = useShortcutKeys('onboarding.continue')
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
   const shouldShowSetupAction =
@@ -77,8 +82,9 @@ export default function OnboardingFlow({
       if (isEditableTarget(event.target)) {
         return
       }
-      const mod = isMac ? event.metaKey : event.ctrlKey
-      if (!mod || event.key !== 'Enter') {
+      if (
+        !keybindingMatchesAction('onboarding.continue', event, getShortcutPlatform(), keybindings)
+      ) {
         return
       }
       event.preventDefault()
@@ -90,7 +96,7 @@ export default function OnboardingFlow({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flowNext, flowOpenFolder])
+  }, [currentStep.id, flowNext, flowOpenFolder, keybindings])
 
   return (
     <div className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
@@ -258,10 +264,9 @@ export default function OnboardingFlow({
               >
                 {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
                 {primaryActionLabel}
-                <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-                  <span>{isMac ? '⌘' : 'Ctrl'}</span>
-                  <CornerDownLeft className="size-3" />
-                </span>
+                {continueShortcutKeys.length > 0 ? (
+                  <ShortcutKeyCombo keys={continueShortcutKeys} className="ml-1 text-current/80" />
+                ) : null}
               </button>
             )}
           </div>

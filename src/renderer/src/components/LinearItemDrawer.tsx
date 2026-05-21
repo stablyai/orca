@@ -24,6 +24,8 @@ import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   useTeamStates,
@@ -42,8 +44,7 @@ import {
   linearIssueComments,
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
-
-const IS_MAC = navigator.userAgent.includes('Mac')
+import { keybindingMatchesAction } from '../../../shared/keybindings'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -949,6 +950,8 @@ export function LinearIssueCommentFooter({
   variant?: 'compact' | 'linear-page'
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const keybindings = useAppStore((s) => s.keybindings)
+  const submitShortcutLabel = useShortcutLabel('composer.submit')
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -990,13 +993,12 @@ export function LinearIssueCommentFooter({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const mod = IS_MAC ? e.metaKey : e.ctrlKey
-      if (e.key === 'Enter' && mod) {
+      if (keybindingMatchesAction('composer.submit', e, getShortcutPlatform(), keybindings)) {
         e.preventDefault()
         handleSubmit()
       }
     },
-    [handleSubmit]
+    [handleSubmit, keybindings]
   )
 
   if (variant === 'linear-page') {
@@ -1016,7 +1018,7 @@ export function LinearIssueCommentFooter({
         />
         <div className="flex items-center justify-between px-4 pb-3">
           <span className="text-[11px] text-muted-foreground">
-            {IS_MAC ? '⌘' : 'Ctrl'} Enter to comment
+            {submitShortcutLabel !== 'Unassigned' ? `${submitShortcutLabel} to comment` : ''}
           </span>
           <Button
             size="icon-sm"

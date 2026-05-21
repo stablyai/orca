@@ -40,6 +40,7 @@ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
 
@@ -720,6 +721,7 @@ function ProviderDetailsMenu({
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
+  const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -931,11 +933,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {floatingTerminalActionLabel} (
-                {typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-                  ? '⌘⌥T'
-                  : 'Ctrl+Alt+T'}
-                )
+                {floatingTerminalActionLabel} ({floatingTerminalShortcut})
               </TooltipContent>
             </Tooltip>
           </FloatingTerminalIconContextMenu>

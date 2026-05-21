@@ -37,6 +37,7 @@ import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorato
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { installEditorSaveShortcut } from './editor-shortcuts'
 
 type MonacoEditorProps = {
   fileId: string
@@ -352,11 +353,13 @@ export default function MonacoEditor({
         return model.getValueInRange(selection)
       })
 
-      // Add Cmd+S save keybinding
-      editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        const value = editorInstance.getValue()
-        propsRef.current.onSave(value)
-      })
+      const cleanupSaveShortcut = installEditorSaveShortcut(
+        editorInstance.getContainerDomNode(),
+        () => {
+          const value = editorInstance.getValue()
+          propsRef.current.onSave(value)
+        }
+      )
 
       // Track cursor line for "copy path to line" feature
       const pos = editorInstance.getPosition()
@@ -372,6 +375,7 @@ export default function MonacoEditor({
       })
 
       editorInstance.onDidDispose(() => {
+        cleanupSaveShortcut()
         autoHeightSub?.dispose()
         if (autoHeightFrame !== null) {
           window.cancelAnimationFrame(autoHeightFrame)

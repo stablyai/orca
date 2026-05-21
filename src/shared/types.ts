@@ -14,6 +14,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
+import type { KeybindingOverrides } from './keybindings'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1645,6 +1646,9 @@ export type GlobalSettings = {
   /** Where the Floating Workspace toggle is shown. Defaults to the floating
    *  button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
+  /** Legacy pre-file-backed keyboard shortcut overrides. New writes go to
+   *  ~/.orca/keybindings.json; main migrates this once when present. */
+  keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   combinedDiffFileTreeVisibleByDefault: boolean
   notifications: NotificationSettings

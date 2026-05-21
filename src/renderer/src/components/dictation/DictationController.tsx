@@ -8,16 +8,17 @@ import {
   insertText,
   type DictationInsertionTarget
 } from './dictation-insertion-target'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatFinalTranscriptSegment } from './dictation-final-segments'
 import { waitForStoppedSession } from './dictation-stopped-sessions'
-
-const IS_MAC = navigator.userAgent.includes('Mac')
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
   const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
   const settings = useAppStore((s) => s.settings)
+  const keybindings = useAppStore((s) => s.keybindings)
   const {
     start: startCapture,
     stop: stopCapture,
@@ -270,8 +271,7 @@ export function DictationController() {
     }
 
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const mod = IS_MAC ? e.metaKey : e.ctrlKey
-      if (mod && (e.key.toLowerCase() === 'e' || e.code === 'KeyE') && !e.shiftKey && !e.altKey) {
+      if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
         if (!settings?.voice?.enabled || !settings.voice.sttModel) {
           return
         }
@@ -284,7 +284,7 @@ export function DictationController() {
       }
     }
 
-    const handleKeyUp = (e: KeyboardEvent): void => {
+    const handleKeyUp = (): void => {
       if (!holdGestureActiveRef.current) {
         return
       }
@@ -292,15 +292,8 @@ export function DictationController() {
         holdGestureActiveRef.current = false
         return
       }
-      if (
-        e.key.toLowerCase() === 'e' ||
-        e.code === 'KeyE' ||
-        e.key === 'Meta' ||
-        e.key === 'Control'
-      ) {
-        holdGestureActiveRef.current = false
-        void stopDictation()
-      }
+      holdGestureActiveRef.current = false
+      void stopDictation()
     }
 
     const handleBlur = (): void => {
@@ -336,6 +329,7 @@ export function DictationController() {
     settings?.voice?.dictationMode,
     settings?.voice?.enabled,
     settings?.voice?.sttModel,
+    keybindings,
     startDictation,
     stopDictation
   ])

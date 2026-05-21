@@ -19,8 +19,6 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 
-const isMac = navigator.userAgent.includes('Mac')
-
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp
@@ -91,7 +89,7 @@ function EditorPanelInner({
 
   useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
-  useMarkdownPreviewShortcut({ activeFile, panelRef, isMac, openMarkdownPreview })
+  useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
   useEffect(() => {
     if (!copiedPathToast) {
       return
