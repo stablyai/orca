@@ -1,8 +1,10 @@
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type { GitWorktreeInfo } from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
+import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
@@ -234,21 +236,9 @@ export async function addWorktree(
   // below for the terminal ergonomics.
   args.push('--no-track', '-b', branch, worktreePath)
   if (baseBranch) {
-    // Why: a bare name like 'main' is ambiguous when a same-named tag exists
-    // (e.g. fetched from a fork). Qualifying it as refs/heads/<name> tells git
-    // unambiguously which object to use, avoiding "fatal: Ambiguous object name".
-    // Remote refs (contain '/') and already-qualified refs are passed through.
-    let effectiveBase = baseBranch
-    if (!baseBranch.includes('/') && !baseBranch.startsWith('refs/')) {
-      try {
-        await gitExecFileAsync(['rev-parse', '--verify', '--quiet', `refs/heads/${baseBranch}`], {
-          cwd: repoPath
-        })
-        effectiveBase = `refs/heads/${baseBranch}`
-      } catch {
-        // Not found at refs/heads/ — keep the original name.
-      }
-    }
+    const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+      hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
+    )
     args.push(effectiveBase)
   }
   await gitExecFileAsync(args, { cwd: repoPath })
