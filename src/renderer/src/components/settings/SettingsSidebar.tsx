@@ -1,10 +1,8 @@
 import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-
-const SEARCH_SHORTCUT_HINT = isMacUserAgent() ? '⌘F' : 'Ctrl+F'
 
 type NavSection = {
   id: string
@@ -50,6 +48,8 @@ export function SettingsSidebar({
   onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
+  const searchShortcutHint = useShortcutLabel('settings.search')
+
   return (
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-border/50 bg-card/40">
       <div className="border-b border-border/50 px-3 py-3">
@@ -76,7 +76,7 @@ export function SettingsSidebar({
           />
           {searchQuery === '' ? (
             <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground">
-              {SEARCH_SHORTCUT_HINT}
+              {searchShortcutHint}
             </kbd>
           ) : null}
         </div>

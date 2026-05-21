@@ -20,7 +20,6 @@ import {
   ArrowRight,
   CircleCheck,
   Copy,
-  CornerDownLeft,
   Crosshair,
   ExternalLink,
   Globe,
@@ -62,6 +61,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../shared/browser-url'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
@@ -105,6 +105,7 @@ import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
+import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
   consumeBrowserFocusRequest,
@@ -318,8 +319,10 @@ function PendingBrowserAnnotationCard({
 }): React.JSX.Element {
   const [comment, setComment] = useState('')
   const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
+  const keybindings = useAppStore((state) => state.keybindings)
+  const submitShortcut = useShortcutLabel('composer.submit')
   const trimmed = comment.trim()
-  const isMac = navigator.userAgent.includes('Mac')
+  const shortcutPlatform = getShortcutPlatform()
 
   return (
     <Popover
@@ -378,14 +381,8 @@ function PendingBrowserAnnotationCard({
               onCancel()
               return
             }
-            const hasSubmitModifier = isMac
-              ? event.metaKey && !event.ctrlKey
-              : event.ctrlKey && !event.metaKey
             if (
-              event.key === 'Enter' &&
-              hasSubmitModifier &&
-              !event.altKey &&
-              !event.shiftKey &&
+              keybindingMatchesAction('composer.submit', event, shortcutPlatform, keybindings) &&
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault()
@@ -440,8 +437,7 @@ function PendingBrowserAnnotationCard({
             <MessageSquarePlus className="size-3.5" />
             Add
             <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-              <span>{isMac ? '⌘' : 'Ctrl'}</span>
-              <CornerDownLeft className="size-3" />
+              <span>{submitShortcut}</span>
             </span>
           </Button>
         </div>
@@ -2526,6 +2522,8 @@ function BrowserPagePane({
   browserTabIdRef.current = browserTab.id
   const inputLockedRef = useRef(inputLocked)
   inputLockedRef.current = inputLocked
+  const keybindings = useAppStore((state) => state.keybindings)
+  const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
@@ -3111,9 +3109,9 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
+    const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (!isMod || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') {
+      if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
         return
       }
       e.preventDefault()
@@ -3122,7 +3120,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive])
+  }, [isActive, keybindings])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
   // Why: a focused webview guest is a separate Chromium process so the renderer
@@ -3153,9 +3151,16 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
+    const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (!isMod || e.altKey || e.key.toLowerCase() !== 'r') {
+      const isHardReload = keybindingMatchesAction(
+        'browser.hardReload',
+        e,
+        shortcutPlatform,
+        keybindings
+      )
+      const isReload = keybindingMatchesAction('browser.reload', e, shortcutPlatform, keybindings)
+      if (!isHardReload && !isReload) {
         return
       }
       if (isEditableKeyboardTarget(e.target)) {
@@ -3163,7 +3168,7 @@ function BrowserPagePane({
       }
       e.preventDefault()
       e.stopPropagation()
-      if (e.shiftKey) {
+      if (isHardReload) {
         webviewRef.current?.reloadIgnoringCache()
       } else {
         webviewRef.current?.reload()
@@ -3171,7 +3176,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive])
+  }, [isActive, keybindings])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused webview guest is a separate Chromium process so the renderer
@@ -3726,6 +3731,7 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
+    const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       // Why: let native Cmd+C work in text inputs (address bar, search fields,
       // contentEditable regions). Only intercept when focus is on a non-input
@@ -3733,23 +3739,22 @@ function BrowserPagePane({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (isMod && !e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)) {
         e.preventDefault()
         startGrabIntent('copy')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, startGrabIntent])
+  }, [isActive, keybindings, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
+    const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (!isMod || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'l') {
+      if (!keybindingMatchesAction('browser.focusAddressBar', e, shortcutPlatform, keybindings)) {
         return
       }
       // Why: Cmd/Ctrl+L is a browser-local focus command. Capture it before
@@ -3761,7 +3766,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [focusAddressBarNow, isActive])
+  }, [focusAddressBarNow, isActive, keybindings])
 
   // Why: a focused webview guest receives Cmd/Ctrl+C inside Chromium, not the
   // host renderer window. Main forwards the chord back only when the page
@@ -4368,7 +4373,7 @@ function BrowserPagePane({
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {`Grab page element (${navigator.userAgent.includes('Mac') ? '⌘C' : 'Ctrl+C'})`}
+            {`Grab page element (${grabElementShortcut})`}
           </TooltipContent>
         </Tooltip>
 

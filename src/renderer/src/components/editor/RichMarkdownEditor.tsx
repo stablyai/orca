@@ -1164,7 +1164,6 @@ export default function RichMarkdownEditor({
     setSearchQuery
   } = useRichMarkdownSearch({
     editor,
-    isMac,
     rootRef,
     scrollContainerRef
   })

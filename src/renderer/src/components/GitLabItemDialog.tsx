@@ -17,13 +17,16 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
   MRComment
 } from '../../../shared/types'
+import { keybindingMatchesAction } from '../../../shared/keybindings'
 
 type Props = {
   item: GitLabWorkItem | null
@@ -150,6 +153,7 @@ export default function GitLabItemDialog({
   onClose,
   onCreateWorkspace
 }: Props): React.JSX.Element {
+  const keybindings = useAppStore((s) => s.keybindings)
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -421,12 +425,13 @@ export default function GitLabItemDialog({
                   disabled={commentSubmitting}
                   className="min-h-9 w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
                   onKeyDown={(e) => {
-                    // Why: Cmd/Ctrl+Enter sends — matches gitlab.com's
-                    // textarea behavior so users coming from the web UI
-                    // get a familiar shortcut.
                     if (
-                      e.key === 'Enter' &&
-                      (e.metaKey || e.ctrlKey) &&
+                      keybindingMatchesAction(
+                        'composer.submit',
+                        e,
+                        getShortcutPlatform(),
+                        keybindings
+                      ) &&
                       commentDraft.trim() &&
                       !commentSubmitting
                     ) {

@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: browser guest UI policy is the single
+privileged bridge for context menus, grab-mode shortcuts, and app-shortcut
+forwarding from webContents guests. Splitting this rebase-only integration
+would make the security boundary harder to audit. */
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
@@ -5,27 +9,14 @@ import {
   redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
-  isWindowShortcutModifierChord,
+  matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
-
-function isTerminalTabSwitchChord(input: Electron.Input): boolean {
-  return (
-    Boolean(input.control) &&
-    !input.meta &&
-    !input.alt &&
-    !input.shift &&
-    (input.code === 'PageDown' || input.code === 'PageUp')
-  )
-}
-
-function isCtrlTabSwitchKey(input: Electron.Input): boolean {
-  return input.code === 'Tab' && input.control && !input.meta && !input.alt
-}
 
 function isControlKeyRelease(input: Electron.Input): boolean {
   return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
@@ -140,8 +131,9 @@ export function setupGrabShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   hasActiveGrabOp: (browserTabId: string) => boolean
+  getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
-  const { browserTabId, guest, resolveRenderer, hasActiveGrabOp } = args
+  const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     if (input.type !== 'keyDown') {
       return
@@ -167,8 +159,9 @@ export function setupGrabShortcutForwarding(args: {
       return
     }
 
-    const isMod = process.platform === 'darwin' ? input.meta : input.control
-    if (!isMod || input.shift || input.alt || bareKey !== 'c') {
+    if (
+      !keybindingMatchesAction('browser.grabElement', input, process.platform, getKeybindings?.())
+    ) {
       return
     }
 
@@ -228,11 +221,14 @@ export function setupGuestShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
+  getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
-  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut } = args
+  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut, getKeybindings } =
+    args
   let ctrlTabSwitching = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
-    if (isCtrlTabSwitchKey(input)) {
+    const keybindings = getKeybindings?.()
+    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
       event.preventDefault()
       if (input.type === 'keyDown') {
         ctrlTabSwitching = true
@@ -258,7 +254,7 @@ export function setupGuestShortcutForwarding(args: {
     // Alt and must be handled before the generic modifier-chord gate below,
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
-    const action = resolveWindowShortcutAction(input, process.platform)
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()
@@ -288,34 +284,46 @@ export function setupGuestShortcutForwarding(args: {
     // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
     // the generic modifier-chord gate below because that gate rejects Alt.
     // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
-    const isPrimaryMod =
-      process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
-    if (
-      isPrimaryMod &&
-      input.alt &&
-      (input.code === 'BracketRight' || input.code === 'BracketLeft')
-    ) {
+    const switchAllTypesDirection = keybindingMatchesAction(
+      'tab.nextAllTypes',
+      input,
+      process.platform,
+      keybindings
+    )
+      ? 1
+      : keybindingMatchesAction('tab.previousAllTypes', input, process.platform, keybindings)
+        ? -1
+        : null
+    if (switchAllTypesDirection !== null) {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:switchTabAcrossAllTypes', input.code === 'BracketRight' ? 1 : -1)
+      renderer?.send('ui:switchTabAcrossAllTypes', switchAllTypesDirection)
       return
     }
 
-    // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
-    // every platform. Handle it before the primary-modifier gate so macOS Ctrl
-    // (non-primary there) still forwards out of focused browser guests.
-    if (isTerminalTabSwitchChord(input)) {
+    if (keybindingMatchesAction('tab.previousRecent', input, process.platform, keybindings)) {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:switchTerminalTab', input.code === 'PageDown' ? 1 : -1)
+      renderer?.send('ui:switchRecentTab')
       return
     }
 
-    // Why: browser guests need a broader modifier-chord gate than the main
-    // window because they also forward guest-specific tab shortcuts
-    // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
-    // handled by resolveWindowShortcutAction().
-    if (!isWindowShortcutModifierChord(input, process.platform)) {
+    // Why: terminal-only tab switching defaults to Ctrl+PageUp/PageDown on every
+    // platform, but still goes through the registry so disable/rebind is real.
+    const terminalTabDirection = keybindingMatchesAction(
+      'tab.nextTerminal',
+      input,
+      process.platform,
+      keybindings
+    )
+      ? 1
+      : keybindingMatchesAction('tab.previousTerminal', input, process.platform, keybindings)
+        ? -1
+        : null
+    if (terminalTabDirection !== null) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTerminalTab', terminalTabDirection)
       return
     }
 
@@ -323,47 +331,56 @@ export function setupGuestShortcutForwarding(args: {
     if (!renderer) {
       return
     }
-
-    if (input.code === 'KeyB' && input.shift) {
+    if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
-    } else if (input.code === 'KeyT' && !input.shift) {
+    } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
       // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
       // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
       // dedicated shortcut for new browser tabs.
       renderer.send('ui:newTerminalTab')
-    } else if (input.code === 'KeyL' && !input.shift) {
+    } else if (
+      keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
+    ) {
       // Why: the address bar lives in the renderer chrome, not the guest
       // page. Forward Cmd/Ctrl+L out of the guest so the active BrowserPane
       // can focus its own input just like a standalone browser would.
       renderer.send('ui:focusBrowserAddressBar')
-    } else if (input.code === 'KeyR' && input.shift) {
+    } else if (
+      keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)
+    ) {
       // Why: Cmd/Ctrl+Shift+R is the browser convention for hard reload
       // (bypass cache). The guest would handle it natively, but Orca's webview
       // reloadIgnoringCache() call must come from the renderer side so it goes
       // through the same parked-webview ref that owns the guest surface.
       renderer.send('ui:hardReloadBrowserPage')
-    } else if (input.code === 'KeyR' && !input.shift) {
+    } else if (keybindingMatchesAction('browser.reload', input, process.platform, keybindings)) {
       // Why: same as above for soft reload — Cmd/Ctrl+R must be forwarded so
       // the renderer can call reload() on its own webview ref rather than
       // relying on the guest's built-in shortcut, which may not reach the
       // parked-webview eviction logic.
       renderer.send('ui:reloadBrowserPage')
-    } else if (input.code === 'KeyF' && !input.shift) {
+    } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
       // Why: Cmd/Ctrl+F must be forwarded out of the guest so the renderer can
       // open its own find-in-page bar and call webview.findInPage(). Letting the
       // guest handle it natively would open Chromium's built-in find UI inside
       // the guest frame, which is invisible behind Orca's chrome.
       renderer.send('ui:findInBrowserPage')
-    } else if (input.code === 'KeyW' && !input.shift) {
+    } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
       renderer.send('ui:closeActiveTab')
-    } else if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {
-      renderer.send('ui:switchTab', input.code === 'BracketRight' ? 1 : -1)
+    } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
+      renderer.send('ui:switchTab', 1)
+    } else if (
+      keybindingMatchesAction('tab.previousSameType', input, process.platform, keybindings)
+    ) {
+      renderer.send('ui:switchTab', -1)
     } else if (action?.type === 'toggleWorktreePalette') {
       renderer.send('ui:toggleWorktreePalette')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
       renderer.send('ui:openNewWorkspace')
+    } else if (action?.type === 'openTasks') {
+      renderer.send('ui:openTasks')
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else if (action?.type === 'dictationKeyDown') {

@@ -10,13 +10,13 @@ import {
   shouldAllowComposerEnterSubmitTarget,
   shouldSuppressEnterSubmit
 } from '@/lib/new-workspace-enter-guard'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { keybindingMatchesAction } from '../../../shared/keybindings'
 import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 type ComposerModalData = {
   prefilledName?: string
@@ -137,6 +137,7 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     undefined
   )
+  const keybindings = useAppStore((s) => s.keybindings)
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
     if (pref === 'blank') {
@@ -160,7 +161,8 @@ function QuickTabBody({
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
 
-  // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
+  // The configured submit shortcut creates the workspace; Esc first blurs the
+  // focused input, matching the full-page composer.
   useEffect(() => {
     if (!active) {
       return
@@ -190,12 +192,7 @@ function QuickTabBody({
         return
       }
 
-      // Why: require the platform modifier (Cmd on macOS, Ctrl elsewhere) so
-      // plain Enter inside fields (notes, repo search) doesn't accidentally
-      // submit — users can type or confirm selections without triggering
-      // workspace creation.
-      const hasModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!hasModifier) {
+      if (!keybindingMatchesAction('composer.submit', event, getShortcutPlatform(), keybindings)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
@@ -212,7 +209,7 @@ function QuickTabBody({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, onClose])
+  }, [active, composerRef, createDisabled, handleCreate, keybindings, onClose])
 
   return (
     <>

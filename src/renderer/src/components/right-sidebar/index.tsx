@@ -28,6 +28,7 @@ import {
 } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -40,48 +41,14 @@ const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-const isWindows =
-  !isMac && typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
-const mod = isMac ? '\u2318' : 'Ctrl+'
-
-const ACTIVITY_ITEMS: ActivityBarItem[] = [
-  {
-    id: 'explorer',
-    icon: Files,
-    title: 'Explorer',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}E`
-  },
-  {
-    id: 'search',
-    icon: Search,
-    title: 'Search',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F`
-  },
-  {
-    id: 'source-control',
-    icon: GitBranch,
-    title: 'Source Control',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}G`,
-    gitOnly: true
-  },
-  {
-    id: 'checks',
-    icon: ListChecks,
-    title: 'Checks',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
-    gitOnly: true
-  },
-  {
-    id: 'ports',
-    icon: Plug,
-    title: 'Ports',
-    shortcut: '',
-    sshOnly: true
-  }
-]
-
+const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 function RightSidebarInner(): React.JSX.Element {
+  const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
+  const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
+  const searchShortcut = useShortcutLabel('sidebar.search.toggle')
+  const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
+  const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
+  const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktree = useActiveWorktree()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
@@ -99,9 +66,48 @@ function RightSidebarInner(): React.JSX.Element {
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const isSshRepo = Boolean(activeRepo?.connectionId)
 
+  const activityItems = useMemo<ActivityBarItem[]>(
+    () => [
+      {
+        id: 'explorer',
+        icon: Files,
+        title: 'Explorer',
+        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+      },
+      {
+        id: 'search',
+        icon: Search,
+        title: 'Search',
+        shortcut: searchShortcut === 'Unassigned' ? '' : searchShortcut
+      },
+      {
+        id: 'source-control',
+        icon: GitBranch,
+        title: 'Source Control',
+        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
+        gitOnly: true
+      },
+      {
+        id: 'checks',
+        icon: ListChecks,
+        title: 'Checks',
+        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
+        gitOnly: true
+      },
+      {
+        id: 'ports',
+        icon: Plug,
+        title: 'Ports',
+        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
+        sshOnly: true
+      }
+    ],
+    [checksShortcut, explorerShortcut, portsShortcut, searchShortcut, sourceControlShortcut]
+  )
+
   const visibleItems = useMemo(
-    () => getVisibleRightSidebarActivityItems(ACTIVITY_ITEMS, { isFolder, isSshRepo }),
-    [isFolder, isSshRepo]
+    () => getVisibleRightSidebarActivityItems(activityItems, { isFolder, isSshRepo }),
+    [activityItems, isFolder, isSshRepo]
   )
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
@@ -180,7 +186,7 @@ function RightSidebarInner(): React.JSX.Element {
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
+        {`Toggle right sidebar (${rightSidebarShortcut})`}
       </TooltipContent>
     </Tooltip>
   ) : null

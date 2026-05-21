@@ -6,6 +6,7 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FontAutocomplete } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
@@ -181,9 +182,8 @@ export function AppearancePane({
   fontSuggestions
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const isMac = navigator.userAgent.includes('Mac')
-  const zoomInLabel = isMac ? '⌘+' : 'Ctrl +'
-  const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
+  const zoomInLabel = useShortcutLabel('zoom.in')
+  const zoomOutLabel = useShortcutLabel('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)

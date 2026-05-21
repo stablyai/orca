@@ -1,6 +1,9 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { editorShortcutMatches } from './editor-shortcuts'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   commitRow,
@@ -56,12 +59,18 @@ export function createRichMarkdownKeyHandler(
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-    if (isMarkdownPreviewFindShortcut(event, ctx.isMac)) {
+    if (
+      isMarkdownPreviewFindShortcut(
+        event,
+        getShortcutPlatform(),
+        useAppStore.getState().keybindings
+      )
+    ) {
       event.preventDefault()
       ctx.openSearchRef.current()
       return true
     }
-    if (mod && event.key.toLowerCase() === 's') {
+    if (editorShortcutMatches('editor.save', event)) {
       event.preventDefault()
       // Why: flush any pending debounced serialization so the save
       // captures the very latest editor content, not a stale snapshot.

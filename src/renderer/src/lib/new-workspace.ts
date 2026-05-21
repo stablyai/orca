@@ -37,7 +37,6 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
 }
 
 export const IS_MAC = navigator.userAgent.includes('Mac')
-export const ADD_ATTACHMENT_SHORTCUT = IS_MAC ? '⌘U' : 'Ctrl+U'
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
   : IS_MAC

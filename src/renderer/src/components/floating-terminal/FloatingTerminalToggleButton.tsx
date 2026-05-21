@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function FloatingTerminalToggleButton({
   open,
@@ -13,8 +14,7 @@ export function FloatingTerminalToggleButton({
   onToggle: () => void
   className?: string
 }): React.JSX.Element {
-  const shortcutLabel =
-    typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? '⌘⌥T' : 'Ctrl+Alt+T'
+  const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"

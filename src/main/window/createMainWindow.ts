@@ -12,7 +12,11 @@ import {
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
 import { isCrashReportReason } from '../../shared/crash-reporting'
-import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
+import {
+  matchesRecentTabSwitcherChord,
+  resolveWindowShortcutAction
+} from '../../shared/window-shortcut-policy'
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
@@ -33,12 +37,38 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
-function isCtrlTabSwitchKey(input: Electron.Input): boolean {
-  return input.code === 'Tab' && input.control && !input.meta && !input.alt
-}
-
 function isControlKeyRelease(input: Electron.Input): boolean {
   return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+}
+
+function nativeZoomCommandMatchesKeybindings(
+  direction: 'in' | 'out',
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  const primary =
+    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+  const candidates =
+    direction === 'in'
+      ? [
+          { key: '=', code: 'Equal', shift: false },
+          { key: '+', code: 'Equal', shift: true },
+          { key: 'Add', code: 'NumpadAdd', shift: false }
+        ]
+      : [
+          { key: '-', code: 'Minus', shift: false },
+          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
+        ]
+
+  return candidates.some((candidate) =>
+    keybindingMatchesAction(
+      actionId,
+      { ...primary, alt: false, ...candidate },
+      platform,
+      keybindings
+    )
+  )
 }
 
 // Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
@@ -91,6 +121,7 @@ type CreateMainWindowOptions = {
    *  begins booting, or eager renderer calls can race into missing channels. */
   deferLoad?: boolean
   title?: string
+  getKeybindings?: () => KeybindingOverrides | undefined
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -462,9 +493,8 @@ export function createMainWindow(
   // Why: mirrors the renderer's markdown-editor focus state so the main-process
   // before-input-event handler can skip Cmd/Ctrl+B interception while TipTap
   // owns focus. See docs/markdown-cmd-b-bold-design.md. We only carve out
-  // Cmd+B — terminal and browser-guest focus still get sidebar-toggle, which
-  // preserves the ^B-to-PTY leak protection rationale in
-  // shared/window-shortcut-policy.ts:74-77.
+  // Cmd+B so browser guests and other editable surfaces keep the existing
+  // global shortcut behavior.
   let markdownEditorFocused = false
   let floatingTerminalInputFocused = false
 
@@ -509,9 +539,8 @@ export function createMainWindow(
   mainWindow.webContents.on('context-menu', onMainContextMenu)
 
   // Why: renderer can't mirror focus state across a crash/reload/close.
-  // Default-deny the carve-out so Cmd+B falls back to sidebar-toggle, which is
-  // the safe behavior when focus context is unknown. Preserves the
-  // ^B-to-PTY leak invariant from shared/window-shortcut-policy.ts:74-77.
+  // Default-deny the carve-outs so focus context from a dead renderer cannot
+  // disable app shortcuts in a later lifecycle state.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
   }
@@ -591,7 +620,8 @@ export function createMainWindow(
       return
     }
 
-    if (isCtrlTabSwitchKey(input)) {
+    const keybindings = opts?.getKeybindings?.()
+    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
       // Why: Ctrl+Tab is a held-key interaction. Route both press and release
       // through IPC so renderer keyup suppression from preventDefault cannot
       // leave the switcher overlay stranded.
@@ -613,9 +643,7 @@ export function createMainWindow(
     // Why: TipTap owns bare Cmd/Ctrl+B for bold while the markdown editor is
     // focused — skip interception so its keymap runs. Scoped to the bare chord
     // (no Shift/Alt): any extra modifier signals different intent and must
-    // still resolve through the policy allowlist. Other focus contexts
-    // (terminal, browser guest) still get sidebar-toggle because ^B would
-    // otherwise reach xterm.js / guest webContents.
+    // still resolve through the policy allowlist.
     // See docs/markdown-cmd-b-bold-design.md.
     const modForBold = process.platform === 'darwin' ? input.meta : input.control
     if (
@@ -628,7 +656,10 @@ export function createMainWindow(
       return
     }
 
-    const action = resolveWindowShortcutAction(input, process.platform)
+    // Why: keep the main-process interception surface as an explicit allowlist.
+    // Anything outside this helper must continue to the renderer/PTTY so
+    // readline control chords are not silently stolen above the terminal.
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
     if (!action) {
       return
     }
@@ -714,6 +745,16 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'openTasks') {
+      mainWindow.webContents.send('ui:openTasks')
+      return
+    }
+
+    if (action.type === 'switchRecentTab') {
+      mainWindow.webContents.send('ui:switchRecentTab')
+      return
+    }
+
     if (action.type === 'jumpToWorktreeIndex') {
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
       return
@@ -729,14 +770,22 @@ export function createMainWindow(
 
   mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
     // Why: Some keyboard layouts/platforms consume Ctrl/Cmd+Minus before
-    // before-input-event fires, but still emit Electron's zoom command. We
-    // reroute that command to terminal zoom so zoom-out remains reachable.
-    event.preventDefault()
-    if (zoomDirection === 'in') {
-      mainWindow.webContents.send('terminal:zoom', 'in')
-    } else if (zoomDirection === 'out') {
-      mainWindow.webContents.send('terminal:zoom', 'out')
+    // before-input-event fires, but still emit Electron's zoom command. Keep
+    // that fallback only while the matching zoom action is still bound.
+    if (zoomDirection !== 'in' && zoomDirection !== 'out') {
+      return
     }
+    if (
+      !nativeZoomCommandMatchesKeybindings(
+        zoomDirection,
+        process.platform,
+        opts?.getKeybindings?.()
+      )
+    ) {
+      return
+    }
+    event.preventDefault()
+    mainWindow.webContents.send('terminal:zoom', zoomDirection)
   })
 
   // Intercept window close so the renderer can show a confirmation dialog

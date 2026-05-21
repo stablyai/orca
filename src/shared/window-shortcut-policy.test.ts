@@ -5,13 +5,15 @@ fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
 import {
   isWindowShortcutModifierChord,
+  matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
   type WindowShortcutAction,
   type WindowShortcutInput
 } from './window-shortcut-policy'
+import type { KeybindingOverrides } from './keybindings'
 
 describe('resolveWindowShortcutAction', () => {
-  it('keeps ctrl/cmd+r and readline control chords out of the main-process allowlist', () => {
+  it('keeps ctrl/cmd+r and unrelated readline control chords out of the allowlist', () => {
     const macCases: WindowShortcutInput[] = [
       { code: 'KeyR', key: 'r', meta: true, control: false, alt: false, shift: false },
       { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: false },
@@ -96,6 +98,95 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('applies custom keybinding overrides to dictation and main-process shortcuts', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        { 'voice.dictation': [] }
+      )
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyY', key: 'y', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        { 'voice.dictation': ['Mod+Shift+Y'] }
+      )
+    ).toEqual({ type: 'dictationKeyDown' })
+  })
+
+  it('applies custom keybinding overrides to main-process shortcuts', () => {
+    const overrides: KeybindingOverrides = {
+      'worktree.quickOpen': ['Mod+Shift+O'],
+      'view.tasks': ['Mod+Alt+K']
+    }
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyP', key: 'p', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        overrides
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyO', key: 'o', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        overrides
+      )
+    ).toEqual({ type: 'openQuickOpen' })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyK', key: 'k', meta: false, control: true, alt: true, shift: false },
+        'linux',
+        overrides
+      )
+    ).toEqual({ type: 'openTasks' })
+  })
+
+  it('resolves the MRU tab quick-toggle chord', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: false },
+        'linux'
+      )
+    ).toEqual({ type: 'switchRecentTab' })
+  })
+
+  it('gates the held Ctrl+Tab switcher on the configurable binding', () => {
+    const input = { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: true }
+    const domInput = {
+      code: 'Tab',
+      key: 'Tab',
+      metaKey: false,
+      ctrlKey: true,
+      altKey: false,
+      shiftKey: true
+    }
+
+    expect(matchesRecentTabSwitcherChord(input, 'linux')).toBe(true)
+    expect(matchesRecentTabSwitcherChord(domInput, 'linux')).toBe(true)
+    expect(matchesRecentTabSwitcherChord(input, 'linux', { 'tab.previousRecent': [] })).toBe(false)
+    expect(
+      matchesRecentTabSwitcherChord(input, 'linux', { 'tab.previousRecent': ['Ctrl+Alt+Tab'] })
+    ).toBe(false)
+  })
+
+  it('matches real DOM-style event fields without relying on enumerable properties', () => {
+    const eventInput = {} as WindowShortcutInput
+    Object.defineProperties(eventInput, {
+      code: { value: 'Tab' },
+      key: { value: 'Tab' },
+      metaKey: { value: false },
+      ctrlKey: { value: true },
+      altKey: { value: false },
+      shiftKey: { value: true }
+    })
+
+    expect(matchesRecentTabSwitcherChord(eventInput, 'linux')).toBe(true)
+  })
+
   it('accepts all supported zoom key variants', () => {
     const zoomInCases: WindowShortcutInput[] = [
       { key: '=', meta: true, control: false, alt: false, shift: false },
@@ -111,8 +202,8 @@ describe('resolveWindowShortcutAction', () => {
 
     const zoomOutCases: WindowShortcutInput[] = [
       { key: '-', meta: false, control: true, alt: false, shift: false },
-      { key: '_', meta: false, control: true, alt: false, shift: true },
       { key: 'Minus', meta: false, control: true, alt: false, shift: false },
+      { key: 'Subtract', meta: false, control: true, alt: false, shift: false },
       { code: 'NumpadSubtract', key: '', meta: false, control: true, alt: false, shift: false }
     ]
     for (const input of zoomOutCases) {
@@ -128,6 +219,14 @@ describe('resolveWindowShortcutAction', () => {
         'linux'
       )
     ).toEqual({ type: 'zoom', direction: 'reset' })
+
+    // Why: Ctrl+Shift+_ is PowerShell undo on Windows; zoom-out must not steal it.
+    expect(
+      resolveWindowShortcutAction(
+        { key: '_', meta: false, control: true, alt: false, shift: true },
+        'win32'
+      )
+    ).toBeNull()
   })
 
   it('resolves the worktree-history chord despite carrying Alt', () => {

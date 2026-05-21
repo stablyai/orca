@@ -6,6 +6,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
@@ -100,6 +101,7 @@ type KeyboardHandlersDeps = {
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  keybindings?: KeybindingOverrides
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -120,7 +122,8 @@ export function useTerminalKeyboardShortcuts({
   onRequestClosePane,
   searchOpenRef,
   searchStateRef,
-  macOptionAsAltRef
+  macOptionAsAltRef,
+  keybindings
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -201,7 +204,8 @@ export function useTerminalKeyboardShortcuts({
         isMac,
         macOptionAsAltRef.current,
         optionKeyLocation,
-        isWindows
+        isWindows,
+        keybindings
       )
       if (!action) {
         return
@@ -390,6 +394,7 @@ export function useTerminalKeyboardShortcuts({
     onRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    keybindings
   ])
 }

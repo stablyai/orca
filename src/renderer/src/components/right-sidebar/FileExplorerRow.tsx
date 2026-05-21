@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { openFileInBrowserTab } from '@/lib/file-preview'
@@ -277,6 +278,8 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
+  const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
@@ -406,12 +409,16 @@ export function FileExplorerRow({
         <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
           {selectionSize > 1 ? 'Copy Paths' : 'Copy Path'}
-          <ContextMenuShortcut>{isMac ? '⌥⌘C' : 'Shift+Alt+C'}</ContextMenuShortcut>
+          {copyPathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
           <Copy />
           {selectionSize > 1 ? 'Copy Relative Paths' : 'Copy Relative Path'}
-          <ContextMenuShortcut>{isMac ? '⌥⇧⌘C' : 'Ctrl+Shift+Alt+C'}</ContextMenuShortcut>
+          {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
         {!node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>

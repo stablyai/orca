@@ -1,3 +1,5 @@
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+
 export type TerminalShortcutEvent = {
   key: string
   code?: string
@@ -41,75 +43,46 @@ export function resolveTerminalShortcutAction(
   isMac: boolean,
   macOptionAsAlt: MacOptionAsAlt = 'false',
   optionKeyLocation: number = 0,
-  isWindows: boolean = false
+  isWindows: boolean = false,
+  keybindings?: KeybindingOverrides
 ): TerminalShortcutAction | null {
-  const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!event.repeat && mod && !event.altKey) {
-    const lowerKey = event.key.toLowerCase()
-
-    if (event.shiftKey && lowerKey === 'c') {
+  const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+  if (!event.repeat) {
+    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       return { type: 'copySelection' }
     }
 
-    if (!event.shiftKey && lowerKey === 'f') {
+    if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
       return { type: 'toggleSearch' }
     }
 
-    if (!event.shiftKey && lowerKey === 'k') {
+    if (keybindingMatchesAction('terminal.clear', event, platform, keybindings)) {
       return { type: 'clearActivePane' }
     }
 
-    if (!event.shiftKey && (event.code === 'BracketLeft' || event.code === 'BracketRight')) {
-      return {
-        type: 'focusPane',
-        direction: event.code === 'BracketRight' ? 'next' : 'previous'
-      }
+    if (keybindingMatchesAction('terminal.focusPreviousPane', event, platform, keybindings)) {
+      return { type: 'focusPane', direction: 'previous' }
     }
 
-    if (
-      event.shiftKey &&
-      event.key === 'Enter' &&
-      (event.code === 'Enter' || event.code === 'NumpadEnter')
-    ) {
+    if (keybindingMatchesAction('terminal.focusNextPane', event, platform, keybindings)) {
+      return { type: 'focusPane', direction: 'next' }
+    }
+
+    if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
       return { type: 'toggleExpandActivePane' }
     }
 
-    if (!event.shiftKey && lowerKey === 'w') {
+    if (keybindingMatchesAction('terminal.closePane', event, platform, keybindings)) {
       return { type: 'closeActivePane' }
     }
 
-    if (lowerKey === 'd') {
-      if (isMac) {
-        return {
-          type: 'splitActivePane',
-          direction: event.shiftKey ? 'horizontal' : 'vertical'
-        }
-      }
-      // Why: on Windows/Linux, Ctrl+D is the standard EOF signal for terminals.
-      // Binding Ctrl+D to split-pane would swallow EOF and break shell workflows
-      // (see #586). Only Ctrl+Shift+D triggers split on non-Mac platforms;
-      // Ctrl+D (without Shift) falls through to the terminal as normal input.
-      if (event.shiftKey) {
-        return { type: 'splitActivePane', direction: 'vertical' }
-      }
-      return null
+    if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
+      return { type: 'splitActivePane', direction: 'vertical' }
     }
-  }
 
-  // Why: on Windows/Linux, Alt+Shift+D splits the pane down (horizontal).
-  // This lives outside the mod+!alt block above because it uses Alt instead
-  // of Ctrl, following the Windows Terminal convention for split shortcuts
-  // and avoiding the Ctrl+D / EOF conflict (see #586).
-  if (
-    !isMac &&
-    !event.repeat &&
-    !event.metaKey &&
-    !event.ctrlKey &&
-    event.altKey &&
-    event.shiftKey &&
-    event.key.toLowerCase() === 'd'
-  ) {
-    return { type: 'splitActivePane', direction: 'horizontal' }
+    if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
+      return { type: 'splitActivePane', direction: 'horizontal' }
+    }
   }
 
   if (

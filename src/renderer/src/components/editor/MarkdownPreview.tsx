@@ -63,6 +63,7 @@ import {
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -354,6 +355,7 @@ export default function MarkdownPreview({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
+  const keybindings = useAppStore((s) => s.keybindings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
@@ -682,7 +684,7 @@ export default function MarkdownPreview({
       const targetInsidePreview = target instanceof Node && root.contains(target)
 
       if (
-        isMarkdownPreviewFindShortcut(event, navigator.userAgent.includes('Mac')) &&
+        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
         targetInsidePreview
       ) {
         event.preventDefault()
@@ -705,7 +707,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, openSearch])
+  }, [closeSearch, isSearchOpen, keybindings, openSearch])
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {

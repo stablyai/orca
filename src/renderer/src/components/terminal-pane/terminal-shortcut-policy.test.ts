@@ -1,4 +1,6 @@
-/* eslint-disable max-lines -- Why: the shortcut policy matrix keeps cross-platform terminal chord expectations together. */
+/* eslint-disable max-lines -- Why: terminal keyboard policy covers platform
+ * readline compatibility, pane management, and Option-as-Alt translation in
+ * one pure function; the cases need to stay adjacent. */
 import { describe, expect, it } from 'vitest'
 import {
   resolveTerminalShortcutAction,
@@ -128,7 +130,7 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
-  it('uses ctrl as the non-mac pane modifier but still requires shift for tab-safe chords', () => {
+  it('preserves existing non-Mac terminal pane shortcuts', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'f', code: 'KeyF', ctrlKey: true }), false)
     ).toEqual({ type: 'toggleSearch' })
@@ -140,6 +142,50 @@ describe('resolveTerminalShortcutAction', () => {
     ).toEqual({ type: 'copySelection' })
     expect(
       resolveTerminalShortcutAction(event({ key: 'r', code: 'KeyR', ctrlKey: true }), false)
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'k', code: 'KeyK', ctrlKey: true }), false)
+    ).toEqual({ type: 'clearActivePane' })
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'w', code: 'KeyW', ctrlKey: true }), false)
+    ).toEqual({ type: 'closeActivePane' })
+  })
+
+  it('applies custom terminal pane keybindings', () => {
+    const keybindings = {
+      'terminal.clear': ['Ctrl+Alt+K'],
+      'terminal.search': []
+    }
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'k', code: 'KeyK', ctrlKey: true, shiftKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        keybindings
+      )
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        keybindings
+      )
+    ).toEqual({ type: 'clearActivePane' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'f', code: 'KeyF', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        keybindings
+      )
     ).toBeNull()
   })
 

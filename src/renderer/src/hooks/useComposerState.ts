@@ -34,10 +34,8 @@ import type {
 } from '../../../shared/types'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
-  ADD_ATTACHMENT_SHORTCUT,
   CLIENT_PLATFORM,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
-  IS_MAC,
   buildAgentPromptWithContext,
   ensureAgentStartupInTerminal,
   getAttachmentLabel,
@@ -50,6 +48,8 @@ import {
   type LinkedWorkItemSummary,
   type SetupConfig
 } from '@/lib/new-workspace'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
@@ -77,6 +77,7 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { resolveComposerBranchSelection } from './composer-branch-selection'
+import { keybindingMatchesAction } from '../../../shared/keybindings'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -1337,8 +1338,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handlePromptKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      const mod = IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'u') {
+      if (
+        !keybindingMatchesAction(
+          'composer.addAttachment',
+          event,
+          getShortcutPlatform(),
+          useAppStore.getState().keybindings
+        )
+      ) {
         return
       }
 
@@ -2095,6 +2102,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createGateMode === 'quick'
       ? getQuickComposerCreateDisabled(createGateInput)
       : getFullComposerCreateDisabled(createGateInput)
+  const addAttachmentShortcut = useShortcutLabel('composer.addAttachment')
 
   const cardProps: ComposerCardProps = {
     eligibleRepos,
@@ -2117,7 +2125,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
-    addAttachmentShortcut: ADD_ATTACHMENT_SHORTCUT,
+    addAttachmentShortcut,
     linkedWorkItem,
     onRemoveLinkedWorkItem: handleRemoveLinkedWorkItem,
     linkPopoverOpen,

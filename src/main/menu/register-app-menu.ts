@@ -1,4 +1,11 @@
 import { BrowserWindow, Menu, app } from 'electron'
+import {
+  formatElectronAccelerator,
+  formatKeybindingList,
+  getEffectiveKeybindingsForAction,
+  type KeybindingActionId,
+  type KeybindingOverrides
+} from '../../shared/keybindings'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -21,6 +28,7 @@ type RegisterAppMenuOptions = {
   onToggleRightSidebar: () => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
+  getKeybindings?: () => KeybindingOverrides | undefined
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -36,11 +44,28 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onToggleLeftSidebar,
     onToggleRightSidebar,
     onToggleAppearance,
-    getAppearanceState
+    getAppearanceState,
+    getKeybindings
   } = options
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
+  const shortcutLabel = (actionId: KeybindingActionId): string => {
+    const bindings = getEffectiveKeybindingsForAction(
+      actionId,
+      process.platform,
+      getKeybindings?.()
+    )
+    return formatKeybindingList(bindings, process.platform)
+  }
+  const shortcutAccelerator = (actionId: KeybindingActionId): string | undefined => {
+    const binding = getEffectiveKeybindingsForAction(
+      actionId,
+      process.platform,
+      getKeybindings?.()
+    )[0]
+    return binding ? (formatElectronAccelerator(binding) ?? undefined) : undefined
+  }
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
@@ -77,7 +102,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const settingsItem: Electron.MenuItemConstructorOptions = {
     label: 'Settings',
-    accelerator: 'CmdOrCtrl+,',
+    accelerator: shortcutAccelerator('app.settings'),
     click: () => onOpenSettings()
   }
 
@@ -93,7 +118,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {
     label: 'Export as PDF...',
-    accelerator: 'CmdOrCtrl+Shift+E',
+    accelerator: shortcutAccelerator('file.exportPdf'),
     click: () => {
       // Why: fire a one-way event into the focused renderer. The renderer
       // owns the knowledge of whether a markdown surface is active and
@@ -177,12 +202,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // accelerator here would steal the chord before that carve-out can
         // fire. Sidebar open/closed lives in the renderer store (non-persisted),
         // so we forward a toggle request rather than mirroring state in main.
-        label: `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`,
+        label: `Toggle Left Sidebar\t${shortcutLabel('sidebar.left.toggle')}`,
         click: () => onToggleLeftSidebar()
       },
       {
         // Why: display-only shortcut hint for the same reason as above.
-        label: `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`,
+        label: `Toggle Right Sidebar\t${shortcutLabel('sidebar.right.toggle')}`,
         click: () => onToggleRightSidebar()
       },
       {
@@ -216,36 +241,21 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       },
       {
         label: 'Force Reload',
-        accelerator: 'Shift+CmdOrCtrl+R',
+        accelerator: shortcutAccelerator('app.forceReload'),
         click: () => reloadFocusedWindow(true)
       },
       { role: 'toggleDevTools' },
       { type: 'separator' },
       {
-        label: 'Reset Size',
-        accelerator: 'CmdOrCtrl+0',
-        // Why: Some keyboard layouts/platforms intercept Cmd/Ctrl+zoom chords
-        // before before-input-event fires. Binding the menu accelerator gives
-        // us a reliable cross-platform fallback path.
+        label: `Reset Size\t${shortcutLabel('zoom.reset')}`,
         click: () => onZoomReset()
       },
       {
-        label: 'Zoom In',
-        accelerator: 'CmdOrCtrl+=',
+        label: `Zoom In\t${shortcutLabel('zoom.in')}`,
         click: () => onZoomIn()
       },
       {
-        label: 'Zoom Out',
-        accelerator: 'CmdOrCtrl+-',
-        click: () => onZoomOut()
-      },
-      {
-        label: 'Zoom Out (Shift Alias)',
-        // Why: Some Linux keyboard layouts report the top-row minus chord as
-        // an underscore accelerator. Keep this hidden alias so Ctrl+- and
-        // Ctrl+_ can both route to terminal zoom out.
-        accelerator: 'CmdOrCtrl+_',
-        visible: false,
+        label: `Zoom Out\t${shortcutLabel('zoom.out')}`,
         click: () => onZoomOut()
       },
       { type: 'separator' },
@@ -255,7 +265,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // before the renderer's keydown handler fires. The overlay
         // mutual-exclusion logic (which runs in the renderer) would be
         // bypassed if this were a real accelerator binding.
-        label: `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+        label: `Open Worktree Palette\t${shortcutLabel('worktree.palette')}`
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },
