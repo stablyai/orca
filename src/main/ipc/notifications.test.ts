@@ -67,6 +67,12 @@ import {
 describe('registerNotificationHandlers', () => {
   let tempDir: string
 
+  function expectedNativeNotificationOptions<T extends Record<string, unknown>>(
+    options: T
+  ): T & { sound?: string } {
+    return process.platform === 'darwin' ? { ...options, sound: 'default' } : options
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
@@ -200,11 +206,69 @@ describe('registerNotificationHandlers', () => {
     expect(
       handler({}, { source: 'agent-task-complete', repoLabel: 'orca', worktreeLabel: 'feat/notis' })
     ).toEqual({ delivered: true })
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'Task complete in feat/notis',
-      body: 'orca'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'Task complete in feat/notis',
+        body: 'orca'
+      })
+    )
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the macOS default notification sound when no custom sound is configured', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+      expect(notificationCtorMock).toHaveBeenCalledWith({
+        title: 'Orca notifications are on',
+        body: 'This is a test notification from Orca.',
+        sound: 'default'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('does not request a native macOS sound when a custom sound is configured', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+      expect(notificationCtorMock).toHaveBeenCalledWith({
+        title: 'Orca notifications are on',
+        body: 'This is a test notification from Orca.',
+        silent: true
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
   })
 
   it('focuses the originating terminal pane when a notification with paneKey is clicked', () => {
@@ -286,10 +350,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'feat/notis - Codex finished',
-      body: 'Updated the notification body.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Codex finished',
+        body: 'Updated the notification body.'
+      })
+    )
   })
 
   it('includes the repo name when multiple repos are active', () => {
@@ -321,10 +387,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'orca / feat/notis - Codex finished',
-      body: 'Updated the notification body.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'orca / feat/notis - Codex finished',
+        body: 'Updated the notification body.'
+      })
+    )
   })
 
   it('keeps a readable body when no assistant response was captured', () => {
@@ -356,10 +424,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'jinjing-work / main - Claude finished',
-      body: 'Claude finished.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'jinjing-work / main - Claude finished',
+        body: 'Claude finished.'
+      })
+    )
   })
 
   it('formats blocked and interrupted agent snapshots distinctly', () => {
@@ -404,14 +474,20 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
-      title: 'feat/notis - Claude needs input',
-      body: 'Please approve the command.'
-    })
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
-      title: 'feat/notis - Claude stopped',
-      body: 'Stopped by user.'
-    })
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(
+      1,
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude needs input',
+        body: 'Please approve the command.'
+      })
+    )
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(
+      2,
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude stopped',
+        body: 'Stopped by user.'
+      })
+    )
   })
 
   it('normalizes custom agent labels and re-bounds multiline assistant previews', () => {
@@ -484,10 +560,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'feat/notis - Agent finished',
-      body: 'Using Bash: pnpm test'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Agent finished',
+        body: 'Using Bash: pnpm test'
+      })
+    )
   })
 
   it('uses rich formatter output for mobile notifications before desktop guards', () => {

@@ -133,6 +133,10 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       const notificationOptions = buildNotificationOptions(args)
       if (settings.customSoundPath) {
         notificationOptions.silent = true
+      } else if (process.platform === 'darwin') {
+        // Why: macOS treats an unset notification sound as silent. When Orca is
+        // using the OS sound, ask Electron for the default notification sound.
+        notificationOptions.sound = 'default'
       }
       const notification = new Notification(notificationOptions)
 
