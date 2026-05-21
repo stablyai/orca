@@ -860,6 +860,7 @@ export function FloatingTerminalPanel({
               onNewMarkdown={createFloatingMarkdownTab}
               onOpenMarkdown={openFloatingMarkdownTab}
               onNewBrowser={createFloatingBrowserTab}
+              onClose={() => onOpenChange(false)}
             />
           ) : null}
         </div>
@@ -954,12 +955,14 @@ function FloatingTerminalEmptyState({
   onNewTerminal,
   onNewMarkdown,
   onOpenMarkdown,
-  onNewBrowser
+  onNewBrowser,
+  onClose
 }: {
   onNewTerminal: () => void
   onNewMarkdown: () => void
   onOpenMarkdown: () => void
   onNewBrowser: () => void
+  onClose: () => void
 }): React.JSX.Element {
   return (
     <div className="absolute inset-0 flex items-center justify-center">
@@ -999,6 +1002,14 @@ function FloatingTerminalEmptyState({
         >
           <FileText className="size-3.5 opacity-80" />
           Open Markdown Note
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-3 h-8 justify-center rounded-md px-3 text-sm font-normal text-muted-foreground/70 hover:bg-muted/30 hover:text-muted-foreground"
+          onClick={onClose}
+        >
+          Close
         </Button>
       </div>
     </div>

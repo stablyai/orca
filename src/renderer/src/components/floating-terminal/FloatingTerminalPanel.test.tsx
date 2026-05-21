@@ -523,6 +523,19 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
+  it('closes the empty floating workspace from the empty state', async () => {
+    const onOpenChange = vi.fn()
+    const element = await renderPanel(true, onOpenChange)
+
+    const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+    ;(emptyState.props.onClose as () => void)()
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+    expect(mocks.closeFile).not.toHaveBeenCalled()
+    expect(mocks.closeBrowserTab).not.toHaveBeenCalled()
+  })
+
   it('creates new floating terminal tabs without globally activating createTab', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
