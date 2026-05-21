@@ -537,6 +537,37 @@ function linkedReviewHintKeyForNoGitHubPR(
   return entry?.linkedReviewHintKey
 }
 
+function syncHostedReviewCacheFromGitHubPRResult(args: {
+  cache: AppState['hostedReviewCache']
+  repoPath: string
+  branch: string
+  settings: AppState['settings']
+  repoId?: string
+  pr: PRInfo | null
+  fetchedAt: number
+}): AppState['hostedReviewCache'] {
+  const hostedReviewCacheKey = getHostedReviewCacheKey(
+    args.repoPath,
+    args.branch,
+    args.settings,
+    args.repoId
+  )
+  const hostedReviewEntry = args.cache[hostedReviewCacheKey]
+  if (!args.pr && !shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
+    return args.cache
+  }
+  return {
+    ...args.cache,
+    [hostedReviewCacheKey]: {
+      data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,
+      fetchedAt: args.fetchedAt,
+      linkedReviewHintKey: args.pr
+        ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
+        : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry)
+    }
+  }
+}
+
 /**
  * Evict the oldest entries from a cache record when it exceeds the max size.
  * Returns a pruned copy, or the original reference if no eviction was needed.
@@ -1519,9 +1550,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           return cached?.data ?? null
         }
         if (prRequestGenerations.get(cacheKey) === generation) {
-          set((s) => ({
-            prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } }
-          }))
+          set((s) => {
+            const nextHostedReviewCache = syncHostedReviewCacheFromGitHubPRResult({
+              cache: s.hostedReviewCache,
+              repoPath,
+              branch,
+              settings: s.settings,
+              repoId,
+              pr,
+              fetchedAt: outcome.fetchedAt
+            })
+            return {
+              prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } },
+              ...(nextHostedReviewCache === s.hostedReviewCache
+                ? {}
+                : { hostedReviewCache: nextHostedReviewCache })
+            }
+          })
           debouncedSaveCache(get())
         }
         return pr ?? null
@@ -1910,25 +1955,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             ...nextPRCache,
             [alias.cacheKey]: { data, fetchedAt: event.outcome.fetchedAt }
           }
-          const hostedReviewCacheKey = getHostedReviewCacheKey(
-            alias.repoPath,
-            alias.branch,
-            s.settings,
-            alias.repoId
-          )
-          const hostedReviewEntry = nextHostedReviewCache[hostedReviewCacheKey]
-          if (data || shouldClearHostedReviewForNoGitHubPR(hostedReviewEntry)) {
-            nextHostedReviewCache = {
-              ...nextHostedReviewCache,
-              [hostedReviewCacheKey]: {
-                data: data ? hostedReviewInfoFromGitHubPRInfo(data) : null,
-                fetchedAt: event.outcome.fetchedAt,
-                linkedReviewHintKey: data
-                  ? linkedReviewHintKey({ linkedGitHubPR: data.number })
-                  : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry)
-              }
-            }
-          }
+          nextHostedReviewCache = syncHostedReviewCacheFromGitHubPRResult({
+            cache: nextHostedReviewCache,
+            repoPath: alias.repoPath,
+            branch: alias.branch,
+            settings: s.settings,
+            repoId: alias.repoId,
+            pr: data,
+            fetchedAt: event.outcome.fetchedAt
+          })
           continue
         }
 

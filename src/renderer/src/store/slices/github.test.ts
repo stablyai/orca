@@ -1284,6 +1284,14 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const repoPath = '/repo'
     const branch = 'feature/runtime'
     const worktreeId = 'wt-runtime'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(
+      repoPath,
+      branch,
+      {
+        activeRuntimeEnvironmentId: 'env-1'
+      } as AppState['settings'],
+      'repo-1'
+    )
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
@@ -1316,6 +1324,13 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       method: 'github.prForBranch',
       params: { repo: 'repo-1', branch, linkedPRNumber: 12 },
       timeoutMs: 30_000
+    })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
+      data: expect.objectContaining({
+        provider: 'github',
+        number: 12
+      }),
+      linkedReviewHintKey: 'github:12'
     })
   })
 })
