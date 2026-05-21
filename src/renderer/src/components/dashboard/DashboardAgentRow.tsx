@@ -202,7 +202,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     <div
       onClick={handleActivate}
       className={cn(
-        'group relative flex flex-col -ml-2 px-2 py-1',
+        // Why: this row owns the timestamp/X hover boundary; anonymous
+        // ancestor groups from workspace cards must not reveal every row's X.
+        'group/agent-row relative flex flex-col -ml-2 px-2 py-1',
         // Why: hover tints have to go in opposite directions per theme —
         // dark mode adds light on dark (bg-accent/30), light mode needs to
         // add *dark* on white. Alpha-on-accent in light mode collapses to
@@ -297,7 +299,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 className={cn(
                   '[grid-area:1/1] pointer-events-none text-[10px] leading-none text-muted-foreground/60',
                   'transition-opacity duration-150',
-                  'group-hover:opacity-0'
+                  'group-hover/agent-row:opacity-0'
                 )}
                 aria-hidden
               >
@@ -315,7 +317,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 className={cn(
                   '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
                   'opacity-0 transition-opacity duration-150',
-                  'group-hover:opacity-100 focus-visible:opacity-100'
+                  'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
                 )}
                 aria-label="Dismiss agent"
                 title="Dismiss"
@@ -338,7 +340,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               className={cn(
                 'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
                 'opacity-0 transition-opacity duration-150',
-                'group-hover:opacity-100 focus-visible:opacity-100'
+                'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
               )}
               aria-label="Dismiss agent"
               title="Dismiss"
