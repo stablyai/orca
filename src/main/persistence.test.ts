@@ -873,6 +873,9 @@ describe('Store', () => {
       const store = await createStore()
       expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(true)
       expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(true)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForTerminalDefaults).toBe(
+        true
+      )
     })
   })
 
@@ -894,10 +897,13 @@ describe('Store', () => {
       const store = await createStore()
       expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
       expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(true)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForTerminalDefaults).toBe(
+        true
+      )
     })
   })
 
-  it('keeps the primary-selection default disabled on non-Linux profiles', async () => {
+  it('migrates the legacy macOS primary-selection default to enabled', async () => {
     await withPlatform('darwin', async () => {
       writeDataFile({
         schemaVersion: 1,
@@ -910,8 +916,54 @@ describe('Store', () => {
       })
 
       const store = await createStore()
-      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(true)
       expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForTerminalDefaults).toBe(
+        true
+      )
+    })
+  })
+
+  it('preserves a post-migration macOS primary-selection opt-out', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          primarySelectionMiddleClickPaste: false,
+          primarySelectionMiddleClickPasteDefaultedForTerminalDefaults: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForTerminalDefaults).toBe(
+        true
+      )
+    })
+  })
+
+  it('keeps the primary-selection default disabled on Windows profiles', async () => {
+    await withPlatform('win32', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { primarySelectionMiddleClickPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForTerminalDefaults).toBe(
+        false
+      )
     })
   })
 

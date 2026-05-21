@@ -1399,9 +1399,18 @@ export class Store {
         })
         const primarySelectionDefaultedForLinux =
           parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
-        const migratePrimarySelectionLinuxDefault =
-          process.platform === 'linux' && !primarySelectionDefaultedForLinux
-        if (migratePrimarySelectionLinuxDefault) {
+        const primarySelectionDefaultedForTerminalDefaults =
+          parsed.settings?.primarySelectionMiddleClickPasteDefaultedForTerminalDefaults === true
+        const primarySelectionPlatformDefaultEnabled =
+          defaults.settings.primarySelectionMiddleClickPaste === true
+        const primarySelectionAlreadyDefaultedForPlatform =
+          primarySelectionDefaultedForTerminalDefaults ||
+          (process.platform === 'linux' && primarySelectionDefaultedForLinux)
+        const migratePrimarySelectionPlatformDefault =
+          primarySelectionPlatformDefaultEnabled && !primarySelectionAlreadyDefaultedForPlatform
+        const stampPrimarySelectionTerminalDefaults =
+          primarySelectionPlatformDefaultEnabled && !primarySelectionDefaultedForTerminalDefaults
+        if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
           this.loadNeedsSave = true
         }
         result = {
@@ -1415,15 +1424,18 @@ export class Store {
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
-            // Why: early primary-selection builds saved Linux's old disabled
-            // default. Flip those profiles once so the platform default matches
-            // terminal/editor convention; the guard preserves future opt-outs.
-            primarySelectionMiddleClickPaste: migratePrimarySelectionLinuxDefault
+            // Why: early primary-selection builds saved the disabled default.
+            // Flip Linux/macOS profiles once so terminal-style defaults match
+            // platform convention; the guards preserve future opt-outs.
+            primarySelectionMiddleClickPaste: migratePrimarySelectionPlatformDefault
               ? true
               : (parsed.settings?.primarySelectionMiddleClickPaste ??
                 defaults.settings.primarySelectionMiddleClickPaste),
             primarySelectionMiddleClickPasteDefaultedForLinux:
-              primarySelectionDefaultedForLinux || migratePrimarySelectionLinuxDefault,
+              primarySelectionDefaultedForLinux ||
+              (process.platform === 'linux' && migratePrimarySelectionPlatformDefault),
+            primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
+              primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
