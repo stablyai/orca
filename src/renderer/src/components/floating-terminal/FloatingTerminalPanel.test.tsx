@@ -78,6 +78,7 @@ const mocks = vi.hoisted(() => ({
   createWebRuntimeSessionBrowserTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
+  getFloatingMarkdownDirectory: vi.fn(),
   getFloatingTerminalCwd: vi.fn(),
   getInstallStatus: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
@@ -475,6 +476,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
     mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
+    mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed' })
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
@@ -483,6 +485,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       addEventListener: vi.fn(),
       api: {
         app: {
+          getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
           getFloatingTerminalCwd: mocks.getFloatingTerminalCwd,
           pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
         },
@@ -557,7 +560,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   it('creates floating markdown files in local filesystem mode', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     vi.mocked(createUntitledMarkdownFile).mockResolvedValue({
-      filePath: '/tmp/orca/untitled.md',
+      filePath: '/tmp/orca/floating-notes/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       language: 'markdown',
@@ -574,13 +577,13 @@ describe('FloatingTerminalPanel close behavior', () => {
     await flushAsyncWork()
 
     expect(createUntitledMarkdownFile).toHaveBeenCalledWith(
-      '/tmp/orca',
+      '/tmp/orca/floating-notes',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
       { activeRuntimeEnvironmentId: null }
     )
     expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/orca/untitled.md' }),
+      expect.objectContaining({ filePath: '/tmp/orca/floating-notes/untitled.md' }),
       expect.objectContaining({ suppressActiveRuntimeFallback: true })
     )
   })
@@ -599,7 +602,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onOpenFileTab as () => void)()
     await flushAsyncWork()
 
-    expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith({ path: '' })
+    expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
     expect(mocks.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/tmp/orca/notes.md',

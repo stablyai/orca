@@ -859,6 +859,44 @@ describe('Store', () => {
     expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([])
   })
 
+  it('restores migrated blank floating terminal cwd settings to home shorthand', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalCwd: '',
+        floatingTerminalCwdMigratedToAppWorkspace: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalCwd).toBe('~')
+  })
+
+  it('preserves legacy home shorthand as the floating terminal cwd', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalCwd: '~'
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalCwd).toBe('~')
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([])
+  })
+
   it('canonicalizes persisted floating workspace trust paths on load', async () => {
     const trustedTarget = join(testState.dir, 'trusted-target')
     const trustedLink = join(testState.dir, 'trusted-link')

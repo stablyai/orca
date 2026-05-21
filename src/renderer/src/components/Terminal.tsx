@@ -73,6 +73,10 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import {
+  createFloatingWorkspaceTerminalTab,
+  isFloatingWorkspacePanelVisible
+} from '@/lib/floating-workspace-terminal-actions'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -1048,6 +1052,10 @@ function Terminal(): React.JSX.Element | null {
       // terminal from anywhere in the central pane.
       if (mod && e.key === 't' && !e.shiftKey && !e.repeat) {
         e.preventDefault()
+        if (isFloatingWorkspacePanelVisible()) {
+          void createFloatingWorkspaceTerminalTab(useAppStore.getState())
+          return
+        }
         handleNewTab()
         return
       }

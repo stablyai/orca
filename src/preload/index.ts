@@ -368,10 +368,10 @@ const api = {
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
       ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
-    pickFloatingMarkdownDocument: (
-      args?: FloatingTerminalCwdRequest
-    ): Promise<MarkdownDocument | null> =>
-      ipcRenderer.invoke('app:pickFloatingMarkdownDocument', args),
+    getFloatingMarkdownDirectory: (): Promise<string> =>
+      ipcRenderer.invoke('app:getFloatingMarkdownDirectory'),
+    pickFloatingMarkdownDocument: (): Promise<MarkdownDocument | null> =>
+      ipcRenderer.invoke('app:pickFloatingMarkdownDocument'),
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },

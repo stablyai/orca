@@ -69,6 +69,10 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import {
+  createFloatingWorkspaceTerminalTab,
+  isFloatingWorkspacePanelVisible
+} from '@/lib/floating-workspace-terminal-actions'
+import {
   observeAgentHookCompletionForNotification,
   resetAgentHookCompletionNotificationCoordinators,
   syncAgentHookCompletionNotificationSettings
@@ -1461,6 +1465,10 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onNewTerminalTab(() => {
         const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelVisible()) {
+          void createFloatingWorkspaceTerminalTab(store)
+          return
+        }
         const worktreeId = store.activeWorktreeId
         if (!worktreeId) {
           return

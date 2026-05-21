@@ -20,6 +20,7 @@ vi.mock('./filesystem-auth', () => ({
 }))
 
 import {
+  ensureDefaultFloatingWorkspacePath,
   grantFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd,
   sanitizeFloatingWorkspaceDirectorySetting
@@ -76,6 +77,24 @@ describe('floating workspace directory authorization', () => {
   async function symlinkDirectory(target: string, linkPath: string): Promise<void> {
     await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
   }
+
+  it('defaults terminal cwd to home without authorizing home for markdown writes', async () => {
+    const store = createStore()
+
+    await expect(resolveFloatingTerminalCwd(store as never)).resolves.toBe(homeDir)
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalledWith(homeDir)
+  })
+
+  it('keeps the app-owned directory for floating markdown notes', async () => {
+    await expect(ensureDefaultFloatingWorkspacePath()).resolves.toBe(
+      path.join(userDataDir, 'floating-workspace')
+    )
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith(
+      path.join(userDataDir, 'floating-workspace')
+    )
+  })
 
   it('persists picker-approved directories and reauthorizes them on resolution', async () => {
     const store = createStore()
@@ -161,6 +180,16 @@ describe('floating workspace directory authorization', () => {
     await expect(
       sanitizeFloatingWorkspaceDirectorySetting(store as never, arbitraryDir)
     ).resolves.toBe('')
+  })
+
+  it('preserves home shorthand as a terminal-only setting', async () => {
+    const store = createStore()
+
+    await expect(sanitizeFloatingWorkspaceDirectorySetting(store as never, '~')).resolves.toBe('~')
+    await expect(resolveFloatingTerminalCwd(store as never, { path: '~' })).resolves.toBe(homeDir)
+    await expect(
+      resolveFloatingTerminalCwd(store as never, { path: '~', requireTrusted: true })
+    ).resolves.toBe(path.join(userDataDir, 'floating-workspace'))
   })
 
   it('still resolves accessible ad hoc terminal directories when trust is not required', async () => {
