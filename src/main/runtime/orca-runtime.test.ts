@@ -965,8 +965,63 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([
         {
           path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature',
           head: 'abc',
           branch: 'feature/foo',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    registerSshGitProvider('ssh-1', gitProvider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await runtime.removeManagedWorktree('path:/remote/feature', true)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+
+    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
+    expect(removeWorktree).not.toHaveBeenCalled()
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('rejects SSH-backed runtime removal of the main worktree before provider deletion', async () => {
+    const remoteStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: '/remote/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      getRepo: () => ({
+        id: TEST_REPO_ID,
+        path: '/remote/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'ssh-1'
+      })
+    }
+    const gitProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
           isBare: false,
           isMainWorktree: true
         }
@@ -977,14 +1032,15 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
-      await runtime.removeManagedWorktree('path:/remote/repo', true)
+      await expect(runtime.removeManagedWorktree('path:/remote/repo', true)).rejects.toThrow(
+        'Refusing to delete protected worktree path: /remote/repo'
+      )
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
 
-    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/repo', true)
+    expect(gitProvider.removeWorktree).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
-    expect(listWorktrees).not.toHaveBeenCalled()
   })
 
   it('reads SSH repo hooks through the SSH filesystem provider', async () => {

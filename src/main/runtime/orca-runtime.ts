@@ -293,7 +293,7 @@ import {
 } from '../ipc/worktree-logic'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
-  assertWorktreeDoesNotContainRegisteredWorktree
+  getRegisteredDeletableWorktree
 } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -6831,14 +6831,11 @@ export class OrcaRuntimeService {
     const registeredWorktrees = repo.connectionId
       ? await provider!.listWorktrees(repo.path)
       : await listWorktrees(repo.path)
-    const registeredWorktree = registeredWorktrees.find((item) =>
-      areWorktreePathsEqual(item.path, worktree.path)
-    )
-    if (!registeredWorktree) {
-      throw new Error(`Refusing to delete unregistered worktree path: ${worktree.path}`)
-    }
-    assertWorktreeDoesNotContainRegisteredWorktree(registeredWorktree.path, registeredWorktrees)
-    const canonicalWorktreePath = registeredWorktree.path
+    const canonicalWorktreePath = getRegisteredDeletableWorktree(
+      repo.path,
+      worktree.path,
+      registeredWorktrees
+    ).path
     if (repo.connectionId) {
       await provider!.removeWorktree(canonicalWorktreePath, force)
       await cleanupUnusedWorktreePushTargetRemoteSsh(

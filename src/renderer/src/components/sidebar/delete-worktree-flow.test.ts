@@ -284,4 +284,18 @@ describe('runWorktreeDeletesInParallel', () => {
     expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'child', false)
     expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'parent', false)
   })
+
+  it('does not delete an ancestor when a nested descendant delete fails', async () => {
+    mocks.state.removeWorktree.mockResolvedValueOnce({ ok: false, error: 'changed files' })
+
+    await expect(
+      runWorktreeDeletesInParallel([
+        { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
+        { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
+      ])
+    ).resolves.toEqual([])
+
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'child', false)
+  })
 })

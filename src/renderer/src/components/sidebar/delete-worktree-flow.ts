@@ -4,6 +4,10 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/types'
 
 type WorktreeBatchDeleteOptions = {
@@ -21,6 +25,13 @@ function viewWorktreeDiff(worktreeId: string): void {
   const state = useAppStore.getState()
   state.setRightSidebarTab('source-control')
   state.setRightSidebarOpen(true)
+}
+
+function isStrictDescendantPath(parentPath: string, childPath: string): boolean {
+  return (
+    normalizeRuntimePathForComparison(parentPath) !==
+      normalizeRuntimePathForComparison(childPath) && isPathInsideOrEqual(parentPath, childPath)
+  )
 }
 
 export async function runWorktreeDeletesInParallel(
@@ -49,10 +60,18 @@ export async function runWorktreeDeletesInParallel(
   const groupResults = await Promise.all(
     Array.from(groups.values()).map(async (group) => {
       const deletedInGroup: string[] = []
+      const failedInGroup: (typeof group)[number][] = []
       for (const target of group) {
+        if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
+          continue
+        }
         const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
         if (deleted) {
           deletedInGroup.push(target.id)
+        } else {
+          // Why: after a descendant delete fails, deleting an ancestor can still
+          // remove that child from disk when it lives under the parent directory.
+          failedInGroup.push(target)
         }
       }
       return deletedInGroup
