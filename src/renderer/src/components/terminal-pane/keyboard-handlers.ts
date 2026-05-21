@@ -6,7 +6,11 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
-import type { KeybindingOverrides } from '../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingOverrides,
+  type KeybindingPlatform
+} from '../../../../shared/keybindings'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
@@ -72,13 +76,15 @@ export function matchSearchNavigate(
 
 export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
-  isMac: boolean
+  platform: KeybindingPlatform,
+  keybindings?: KeybindingOverrides
 ): boolean {
-  if (e.repeat || e.altKey) {
+  if (e.repeat) {
     return false
   }
-  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-  return mod && e.shiftKey && e.key.toLowerCase() === 'f'
+  return keybindingMatchesAction('sidebar.search.toggle', e, platform, keybindings, {
+    context: 'terminal'
+  })
 }
 
 type KeyboardHandlersDeps = {
@@ -132,6 +138,7 @@ export function useTerminalKeyboardShortcuts({
 
     const isMac = navigator.userAgent.includes('Mac')
     const isWindows = navigator.userAgent.includes('Windows')
+    const shortcutPlatform: KeybindingPlatform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
     // reports that key's own position (0 = standard), not which modifier is
@@ -159,7 +166,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      if (matchFileSearchShortcut(e, isMac)) {
+      if (matchFileSearchShortcut(e, shortcutPlatform, keybindings)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
         if (selectedText) {
