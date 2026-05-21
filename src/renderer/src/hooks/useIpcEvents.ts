@@ -363,9 +363,6 @@ async function applyRemoteWorkspaceSnapshot(
 
 async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> {
   const store = useAppStore.getState()
-  if (store.sshTargetRemoteSyncEnabled.get(targetId) !== true) {
-    return
-  }
   if (!(await prepareRemoteWorkspaceTarget(targetId))) {
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: 'error',
@@ -1588,14 +1585,12 @@ export function useIpcEvents(): void {
                 useAppStore.getState().setPortForwards(target.id, forwards)
                 useAppStore.getState().setDetectedPorts(target.id, detected)
               }
-              if (target.remoteWorkspaceSyncEnabled) {
-                void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
-                  useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
-                    phase: 'error',
-                    message: err instanceof Error ? err.message : 'Workspace sync failed'
-                  })
+              void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
+                useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
+                  phase: 'error',
+                  message: err instanceof Error ? err.message : 'Workspace sync failed'
                 })
-              }
+              })
             }
           }
         }

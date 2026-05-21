@@ -28,7 +28,6 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
-  sshTargetRemoteSyncEnabled: Map<string, boolean>
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
@@ -46,9 +45,7 @@ export type SshSlice = {
   detectedPortsByConnection: Record<string, DetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
-  setSshTargetsMetadata: (
-    targets: Pick<SshTarget, 'id' | 'label' | 'remoteWorkspaceSyncEnabled'>[]
-  ) => void
+  setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
@@ -62,7 +59,6 @@ export type SshSlice = {
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
-  sshTargetRemoteSyncEnabled: new Map(),
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
@@ -87,10 +83,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setSshTargetsMetadata: (targets) =>
     set({
-      sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
-      sshTargetRemoteSyncEnabled: new Map(
-        targets.map((target) => [target.id, target.remoteWorkspaceSyncEnabled === true])
-      )
+      sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
     }),
   markRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {

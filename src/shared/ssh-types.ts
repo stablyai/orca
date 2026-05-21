@@ -1,10 +1,8 @@
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
-export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
-export const DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS =
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
 
 export type SshTarget = {
   id: string
@@ -21,15 +19,8 @@ export type SshTarget = {
   /** Jump host (ProxyJump), if any. */
   jumpHost?: string
   /** Grace period in seconds before relay shuts down after disconnect.
-   *  0 disables expiry. Default: 10800 (3 hours). */
+   *  0 disables expiry. Default: 10800 (3 hours). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
-  /** Opt in to remote-host-owned workspace/session state for this SSH target.
-   *  Classic SSH remains local-session-backed when this is false/absent. */
-  remoteWorkspaceSyncEnabled?: boolean
-  /** Grace period in seconds for synced remote workspace relays.
-   *  0 disables expiry. Default: 10800 (3 hours). Only applies when
-   *  remoteWorkspaceSyncEnabled is true. */
-  remoteWorkspaceSyncGracePeriodSeconds?: number
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can
    *  partition targets into eager (no passphrase) vs deferred (passphrase)

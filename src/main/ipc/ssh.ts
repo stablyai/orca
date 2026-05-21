@@ -8,7 +8,6 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import {
-  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
   type DetectedPort,
   type SavedPortForward,
   type SshTarget,
@@ -39,15 +38,7 @@ let portForwardManager: SshPortForwardManager | null = null
 const activeSessions = new Map<string, SshRelaySession>()
 
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
-  if (!target?.remoteWorkspaceSyncEnabled) {
-    return target?.relayGracePeriodSeconds
-  }
-  // Why: cross-device sync should survive transient app closes, but an
-  // unset value must not mean "keep remote PTYs forever" after disconnect.
-  return (
-    target.remoteWorkspaceSyncGracePeriodSeconds ??
-    DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS
-  )
+  return target?.relayGracePeriodSeconds
 }
 
 // Why: multiple renderer tabs for the same SSH target can fire ssh:connect

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import {
-  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -90,23 +89,18 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
 
-    const graceSeconds = parseInt(form.relayGracePeriodSeconds, 10)
+    const graceSeconds = form.relayKeepAliveUntilReset
+      ? 0
+      : parseInt(form.relayGracePeriodSeconds, 10)
     if (
-      isNaN(graceSeconds) ||
-      (graceSeconds !== 0 && graceSeconds < MIN_SSH_RELAY_GRACE_PERIOD_SECONDS) ||
-      graceSeconds > MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
+      !form.relayKeepAliveUntilReset &&
+      (isNaN(graceSeconds) ||
+        graceSeconds < MIN_SSH_RELAY_GRACE_PERIOD_SECONDS ||
+        graceSeconds > MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ) {
-      toast.error('Relay grace period must be 0 or between 60 and 10800 seconds')
-      return
-    }
-    const remoteGraceSeconds = parseInt(form.remoteWorkspaceSyncGracePeriodSeconds, 10)
-    if (
-      form.remoteWorkspaceSyncEnabled &&
-      (isNaN(remoteGraceSeconds) ||
-        remoteGraceSeconds < 0 ||
-        remoteGraceSeconds > MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
-    ) {
-      toast.error('Synced relay grace period must be between 0 and 10800 seconds')
+      toast.error(
+        `Relay grace period must be between 60 and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds, or choose keep alive until reset`
+      )
       return
     }
 
@@ -117,10 +111,6 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       port,
       username: form.username.trim(),
       relayGracePeriodSeconds: graceSeconds,
-      remoteWorkspaceSyncEnabled: form.remoteWorkspaceSyncEnabled,
-      remoteWorkspaceSyncGracePeriodSeconds: form.remoteWorkspaceSyncEnabled
-        ? remoteGraceSeconds
-        : DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
       ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
       ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),
       ...(form.jumpHost.trim() ? { jumpHost: form.jumpHost.trim() } : {})
@@ -183,13 +173,11 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       proxyCommand: target.proxyCommand ?? '',
       jumpHost: target.jumpHost ?? '',
       relayGracePeriodSeconds: String(
-        target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+        target.relayGracePeriodSeconds === 0
+          ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+          : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
       ),
-      remoteWorkspaceSyncEnabled: target.remoteWorkspaceSyncEnabled === true,
-      remoteWorkspaceSyncGracePeriodSeconds: String(
-        target.remoteWorkspaceSyncGracePeriodSeconds ??
-          DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS
-      )
+      relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
     })
     setShowForm(true)
   }

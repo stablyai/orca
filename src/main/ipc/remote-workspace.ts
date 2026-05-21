@@ -191,9 +191,6 @@ function importSessionForTarget(
 }
 
 async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnapshot | null> {
-  if (!target.remoteWorkspaceSyncEnabled) {
-    return null
-  }
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -221,7 +218,7 @@ export function handleRemoteWorkspaceNotification(
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
-  if (!target?.remoteWorkspaceSyncEnabled) {
+  if (!target) {
     return
   }
   const namespace = getRemoteWorkspaceNamespace(target)
@@ -272,7 +269,6 @@ export function registerRemoteWorkspaceHandlers(
           ?.listTargets()
           .filter(
             (target) =>
-              target.remoteWorkspaceSyncEnabled &&
               getActiveMultiplexer(target.id) &&
               (!hydratedTargetIds || hydratedTargetIds.has(target.id))
           ) ?? []
@@ -331,7 +327,7 @@ export function registerRemoteWorkspaceHandlers(
     async () =>
       getSshConnectionStore()
         ?.listTargets()
-        .filter((target) => target.remoteWorkspaceSyncEnabled && getActiveMultiplexer(target.id))
+        .filter((target) => getActiveMultiplexer(target.id))
         .map((target) => target.id) ?? []
   )
 
@@ -344,7 +340,6 @@ export function registerRemoteWorkspaceHandlers(
           ?.listTargets()
           .filter(
             (target) =>
-              target.remoteWorkspaceSyncEnabled &&
               getActiveMultiplexer(target.id) &&
               (!requestedTargetIds || requestedTargetIds.has(target.id))
           ) ?? []

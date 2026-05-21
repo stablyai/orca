@@ -134,6 +134,15 @@ describe('PtyHandler', () => {
     expect(onExpire).toHaveBeenCalledTimes(1)
   })
 
+  it('does not expire an unlimited grace timer', () => {
+    const onExpire = vi.fn()
+    handler.startGraceTimer(onExpire, 0)
+
+    expect(handler.graceTimerActive).toBe(false)
+    vi.advanceTimersByTime(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000)
+    expect(onExpire).not.toHaveBeenCalled()
+  })
+
   it('spawns a PTY and returns an id', async () => {
     const result = await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
     expect(result).toEqual({ id: 'pty-1' })
