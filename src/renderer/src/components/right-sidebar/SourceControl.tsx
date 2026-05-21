@@ -35,6 +35,7 @@ import { useAppStore } from '@/store'
 import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -926,12 +927,27 @@ function SourceControlInner(): React.JSX.Element {
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
     activeRepo && branchName
-      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      ? getHostedReviewCacheKey(
+          activeRepo.path,
+          branchName,
+          settings,
+          activeRepo.id,
+          activeRepo.connectionId
+        )
       : null
   const hostedReviewEntry = hostedReviewCacheKey
     ? hostedReviewCache[hostedReviewCacheKey]
     : undefined
-  const activePrCacheKey = activeRepo && branchName ? `${activeRepo.id}::${branchName}` : null
+  const activePrCacheKey =
+    activeRepo && branchName
+      ? getGitHubPRCacheKey(
+          activeRepo.path,
+          activeRepo.id,
+          branchName,
+          settings,
+          activeRepo.connectionId
+        )
+      : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? activePrFromQueue

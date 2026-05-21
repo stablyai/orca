@@ -21,6 +21,8 @@ import {
 } from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { SortBy } from './smart-sort'
+import type { AppState } from '@/store/types'
+import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 
 export { branchName }
 
@@ -144,17 +146,29 @@ export function getLineageRenderInfo(
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
-  prCache: Record<string, unknown> | null
+  prCache: Record<string, unknown> | null,
+  settings?: AppState['settings']
 ): PRGroupKey {
   const repo = repoMap.get(worktree.repoId)
   const branch = branchName(worktree.branch)
-  const repoScopedCacheKey = repo && branch ? `${repo.id}::${branch}` : ''
-  const legacyPathScopedCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
+  const repoScopedCacheKey =
+    repo && branch
+      ? getGitHubPRCacheKey(repo.path, repo.id, branch, settings, repo.connectionId)
+      : ''
+  const canUseLegacyPRCache =
+    repo !== undefined && !settings?.activeRuntimeEnvironmentId?.trim() && !repo.connectionId
+  const legacyRepoScopedCacheKey =
+    canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch) : ''
+  const legacyPathScopedCacheKey =
+    canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, undefined, branch) : ''
   // Why: PR refreshes now write repo-id scoped entries; legacy path entries may
   // still exist from persisted cache, but must not override fresher repo data.
   const prEntry = prCache
     ? ((repoScopedCacheKey
         ? (prCache[repoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined) ??
+      (legacyRepoScopedCacheKey
+        ? (prCache[legacyRepoScopedCacheKey] as { data?: { state?: string } } | undefined)
         : undefined) ??
       (legacyPathScopedCacheKey
         ? (prCache[legacyPathScopedCacheKey] as { data?: { state?: string } } | undefined)
@@ -336,7 +350,8 @@ export function buildRows(
   worktreeMap: Map<string, Worktree> = new Map(
     worktrees.map((worktree) => [worktree.id, worktree])
   ),
-  nestLineage = false
+  nestLineage = false,
+  settings?: AppState['settings']
 ): Row[] {
   const result: Row[] = []
 
@@ -385,7 +400,7 @@ export function buildRows(
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else {
-      const prGroup = getPRGroupKey(w, repoMap, prCache)
+      const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`
       label = PR_GROUP_META[prGroup].label
     }
@@ -498,7 +513,8 @@ export function getGroupKeyForWorktree(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
   prCache: Record<string, unknown> | null,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
+  settings?: AppState['settings']
 ): string | null {
   if (groupBy === 'none') {
     return ALL_GROUP_KEY
@@ -509,5 +525,5 @@ export function getGroupKeyForWorktree(
   if (groupBy === 'repo') {
     return `repo:${worktree.repoId}`
   }
-  return `pr:${getPRGroupKey(worktree, repoMap, prCache)}`
+  return `pr:${getPRGroupKey(worktree, repoMap, prCache, settings)}`
 }

@@ -1,5 +1,6 @@
 import type { AppState } from '../types'
 import type { PRCheckDetail, CheckStatus, GitHubOwnerRepo } from '../../../../shared/types'
+import { getGitHubPRCacheKey } from './github-cache-key'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -40,14 +41,16 @@ export function syncPRChecksStatus(
   branch: string | undefined,
   checks: PRCheckDetail[],
   headSha?: string,
-  prRepo?: GitHubOwnerRepo | null
+  prRepo?: GitHubOwnerRepo | null,
+  settings?: AppState['settings'],
+  connectionId?: string | null
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null
   }
 
-  const prCacheKey = `${repoId ?? repoPath}::${normalized}`
+  const prCacheKey = getGitHubPRCacheKey(repoPath, repoId, normalized, settings, connectionId)
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
     return null

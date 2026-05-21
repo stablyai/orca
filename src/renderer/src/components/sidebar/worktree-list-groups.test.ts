@@ -76,6 +76,35 @@ describe('getPRGroupKey', () => {
 
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('closed')
   })
+
+  it('does not fall back to local PR cache while runtime scoped data is loading', () => {
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { state: 'merged' }
+      }
+    }
+
+    expect(
+      getPRGroupKey(worktree, repoMap, prCache, {
+        activeRuntimeEnvironmentId: 'env-1'
+      } as never)
+    ).toBe('in-progress')
+  })
+
+  it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
+    const sshRepo = { ...repo, connectionId: 'ssh-1' }
+    const sshRepoMap = new Map([[sshRepo.id, sshRepo]])
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { state: 'merged' }
+      },
+      'ssh:ssh-1::repo-1::feature/super-critical': {
+        data: { state: 'closed' }
+      }
+    }
+
+    expect(getPRGroupKey(worktree, sshRepoMap, prCache)).toBe('closed')
+  })
 })
 
 describe('getGroupKeyForWorktree', () => {

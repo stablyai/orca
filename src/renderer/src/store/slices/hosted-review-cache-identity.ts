@@ -12,10 +12,16 @@ export function getHostedReviewCacheKey(
   repoPath: string,
   branch: string,
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
-  repoId?: string | null
+  repoId?: string | null,
+  connectionId?: string | null
 ): string {
   const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-  const scope = environmentId ? `runtime:${environmentId}` : 'local'
+  const sshConnectionId = connectionId?.trim()
+  const scope = environmentId
+    ? `runtime:${environmentId}`
+    : sshConnectionId
+      ? `ssh:${sshConnectionId}`
+      : 'local'
   return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 

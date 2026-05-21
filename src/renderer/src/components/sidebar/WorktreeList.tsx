@@ -320,6 +320,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
+  const settings = useAppStore((s) => s.settings)
 
   // Drag is only meaningful when repo headers are using manual order. The
   // controller is still constructed for hook order stability when inert.
@@ -552,7 +553,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           targetWorktree,
           repoMap,
           prCache,
-          workspaceStatuses
+          workspaceStatuses,
+          settings
         )
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
@@ -599,7 +601,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     clearPendingRevealWorktreeId,
     toggleGroup,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    settings
   ])
 
   const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
@@ -686,7 +689,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         repoGroupOrdering,
         worktreeLineageById,
         worktreeMap,
-        true
+        true,
+        settings
       ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
@@ -731,7 +735,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       repoOrder,
       workspaceStatuses,
       worktreeLineageById,
-      worktreeMap
+      worktreeMap,
+      settings
     ]
   )
 
@@ -1537,6 +1542,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const prCache = useAppStore((s) =>
     groupBy === 'pr-status' || cardProps.includes('pr') ? s.prCache : null
   )
+  const settings = useAppStore((s) => s.settings)
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
 
@@ -1834,7 +1840,8 @@ const WorktreeList = React.memo(function WorktreeList({
         repoGroupOrdering,
         worktreeLineageById,
         worktreeMap,
-        true
+        true,
+        settings
       ),
     [
       groupBy,
@@ -1846,7 +1853,8 @@ const WorktreeList = React.memo(function WorktreeList({
       workspaceStatuses,
       repoGroupOrdering,
       worktreeLineageById,
-      worktreeMap
+      worktreeMap,
+      settings
     ]
   )
   // Why: header/mode changes can shift entire groups, so remount the

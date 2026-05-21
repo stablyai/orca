@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: coordinator tests cover queueing, coalescing,
+request timestamps, and follow-up scheduling against shared module state. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubPRRefreshCandidate, PRInfo } from '../../shared/types'
 
@@ -287,6 +289,68 @@ describe('pr-refresh-coordinator', () => {
       '/repo::feature/b'
     ])
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('includes request start time on manual refresh events', async () => {
+    const { refreshPRNow } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'success' }),
+      fetchedAt: Date.now() + 5
+    })
+
+    await refreshPRNow(makeCandidate())
+
+    const events = sendMock.mock.calls.map(([, event]) => event)
+    const inFlight = events.find((event) => event.status === 'in-flight')
+    const outcome = events.find((event) => event.outcome)
+    expect(inFlight?.requestStartedAt).toBe(1_000)
+    expect(outcome?.requestStartedAt).toBe(1_000)
+    expect(outcome?.sequence).toBe(inFlight?.sequence)
+  })
+
+  it('does not coalesce local and SSH refreshes for the same branch', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 12 }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 44 }),
+        fetchedAt: Date.now()
+      })
+
+    enqueuePRRefresh(makeCandidate({ cacheKey: 'local::repo-1::feature/test' }), 'active', 80, 1)
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: 'ssh:ssh-1::repo-1::feature/test',
+        connectionId: 'ssh-1'
+      }),
+      'active',
+      80,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      1,
+      '/repo',
+      'feature/test',
+      null,
+      null
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      2,
+      '/repo',
+      'feature/test',
+      null,
+      'ssh-1'
+    )
   })
 
   it('preserves coalesced aliases across visible follow-up refreshes', async () => {
