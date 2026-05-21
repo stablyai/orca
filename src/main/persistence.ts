@@ -1370,6 +1370,13 @@ export class Store {
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
         })
+        const primarySelectionDefaultedForLinux =
+          parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
+        const migratePrimarySelectionLinuxDefault =
+          process.platform === 'linux' && !primarySelectionDefaultedForLinux
+        if (migratePrimarySelectionLinuxDefault) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1381,6 +1388,15 @@ export class Store {
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
+            // Why: early primary-selection builds saved Linux's old disabled
+            // default. Flip those profiles once so the platform default matches
+            // terminal/editor convention; the guard preserves future opt-outs.
+            primarySelectionMiddleClickPaste: migratePrimarySelectionLinuxDefault
+              ? true
+              : (parsed.settings?.primarySelectionMiddleClickPaste ??
+                defaults.settings.primarySelectionMiddleClickPaste),
+            primarySelectionMiddleClickPasteDefaultedForLinux:
+              primarySelectionDefaultedForLinux || migratePrimarySelectionLinuxDefault,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,

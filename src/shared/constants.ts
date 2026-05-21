@@ -159,6 +159,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorMinimapEnabled: false,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),
+    primarySelectionMiddleClickPasteDefaultedForLinux: getDefaultPrimarySelectionMiddleClickPaste(),
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,

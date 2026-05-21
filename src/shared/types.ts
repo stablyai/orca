@@ -1528,6 +1528,9 @@ export type GlobalSettings = {
    *  normal system clipboard; Linux enables it by default, other platforms
    *  leave middle-click semantics unchanged unless the user opts in. */
   primarySelectionMiddleClickPaste?: boolean
+  /** One-shot migration guard for turning the Linux default on for profiles
+   *  that persisted the earlier off-by-default value. */
+  primarySelectionMiddleClickPasteDefaultedForLinux?: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number

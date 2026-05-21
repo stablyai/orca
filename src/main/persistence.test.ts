@@ -82,6 +82,16 @@ async function createStore() {
   return new Store()
 }
 
+async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+  }
+}
+
 function dataFile(): string {
   return join(testState.dir, 'orca-data.json')
 }
@@ -783,6 +793,63 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().floatingTerminalEnabled).toBe(false)
     expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
+  })
+
+  it('migrates the legacy Linux primary-selection default to enabled', async () => {
+    await withPlatform('linux', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { primarySelectionMiddleClickPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(true)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(true)
+    })
+  })
+
+  it('preserves a post-migration Linux primary-selection opt-out', async () => {
+    await withPlatform('linux', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          primarySelectionMiddleClickPaste: false,
+          primarySelectionMiddleClickPasteDefaultedForLinux: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(true)
+    })
+  })
+
+  it('keeps the primary-selection default disabled on non-Linux profiles', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { primarySelectionMiddleClickPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().primarySelectionMiddleClickPaste).toBe(false)
+      expect(store.getSettings().primarySelectionMiddleClickPasteDefaultedForLinux).toBe(false)
+    })
   })
 
   it('seeds trusted floating workspace directories from legacy explicit cwd values', async () => {
