@@ -155,6 +155,13 @@ test.describe('Droid notifications', () => {
     await installMainProcessNotificationDispatchSpy(electronApp)
     const endpoint = await readHookEndpoint(electronApp)
 
+    // Why: the synthetic hook bypasses the shell startup path; wait for a
+    // responsive PTY so the notification liveness gate can observe the turn.
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const readyMarker = `__CODEX_HOOK_NOTIFY_READY_${Date.now()}__`
+    await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
+    await waitForTerminalOutput(orcaPage, readyMarker)
+
     const { paneKey, worktreeId } = await getActivePaneDescriptor(orcaPage)
     const prompt = `codex-hook-notify-${Date.now()}`
     await emitCodexHookStatus(endpoint, {
