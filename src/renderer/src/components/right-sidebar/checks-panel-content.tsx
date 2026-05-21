@@ -12,9 +12,13 @@ import {
   Copy,
   Check,
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  Sparkle,
+  RefreshCw,
+  Wrench
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Accordion,
   AccordionContent,
@@ -67,7 +71,50 @@ export const CHECK_COLOR: Record<string, string> = {
   timed_out: 'text-rose-500'
 }
 
-export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Element | null {
+function ResolveConflictsWithAIButton({
+  isResolvingWithAI,
+  onResolveWithAI,
+  disabled,
+  disabledReason
+}: {
+  isResolvingWithAI: boolean
+  onResolveWithAI: () => void
+  disabled?: boolean
+  disabledReason?: string
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="default"
+      size="sm"
+      className="mt-2 h-7 w-full text-xs"
+      disabled={isResolvingWithAI || disabled}
+      onClick={onResolveWithAI}
+      title={disabled ? disabledReason : undefined}
+    >
+      {isResolvingWithAI ? (
+        <RefreshCw className="size-3.5 animate-spin" />
+      ) : (
+        <Sparkle className="size-3.5" />
+      )}
+      Resolve with AI
+    </Button>
+  )
+}
+
+export function ConflictingFilesSection({
+  pr,
+  isResolvingWithAI,
+  onResolveWithAI,
+  resolveDisabled,
+  resolveDisabledReason
+}: {
+  pr: PRInfo
+  isResolvingWithAI: boolean
+  onResolveWithAI: () => void
+  resolveDisabled?: boolean
+  resolveDisabledReason?: string
+}): React.JSX.Element | null {
   const files = pr.conflictSummary?.files ?? []
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
@@ -96,6 +143,12 @@ export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Eleme
           </div>
         ))}
       </div>
+      <ResolveConflictsWithAIButton
+        isResolvingWithAI={isResolvingWithAI}
+        onResolveWithAI={onResolveWithAI}
+        disabled={resolveDisabled}
+        disabledReason={resolveDisabledReason}
+      />
     </div>
   )
 }
@@ -103,10 +156,18 @@ export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Eleme
 /** Fallback shown when GitHub reports merge conflicts but no file list is available yet. */
 export function MergeConflictNotice({
   pr,
-  isRefreshingConflictDetails
+  isRefreshingConflictDetails,
+  isResolvingWithAI,
+  onResolveWithAI,
+  resolveDisabled,
+  resolveDisabledReason
 }: {
   pr: PRInfo
   isRefreshingConflictDetails: boolean
+  isResolvingWithAI: boolean
+  onResolveWithAI: () => void
+  resolveDisabled?: boolean
+  resolveDisabledReason?: string
 }): React.JSX.Element | null {
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
     return null
@@ -122,6 +183,12 @@ export function MergeConflictNotice({
           ? 'Refreshing conflict details…'
           : 'Conflict file details are unavailable'}
       </div>
+      <ResolveConflictsWithAIButton
+        isResolvingWithAI={isResolvingWithAI}
+        onResolveWithAI={onResolveWithAI}
+        disabled={resolveDisabled}
+        disabledReason={resolveDisabledReason}
+      />
     </div>
   )
 }
@@ -139,10 +206,14 @@ const CHECK_SORT_ORDER: Record<string, number> = {
 /** Renders the checks summary bar + scrollable check list. */
 export function ChecksList({
   checks,
-  checksLoading
+  checksLoading,
+  isFixingWithAI,
+  onFixWithAI
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
+  isFixingWithAI?: boolean
+  onFixWithAI?: () => void
 }): React.JSX.Element {
   const [checksExpanded, setChecksExpanded] = useState(true)
   const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
@@ -155,7 +226,8 @@ export function ChecksList({
   )
   const passingCount = checks.filter((c) => c.conclusion === 'success').length
   const failingCount = checks.filter(
-    (c) => c.conclusion === 'failure' || c.conclusion === 'timed_out'
+    (c) =>
+      c.conclusion === 'failure' || c.conclusion === 'cancelled' || c.conclusion === 'timed_out'
   ).length
   const pendingCount = checks.filter(
     (c) => c.conclusion === 'pending' || c.conclusion === null
@@ -195,6 +267,29 @@ export function ChecksList({
           <span className="flex-1" />
           {checksLoading && <LoaderCircle className="size-3 animate-spin text-muted-foreground" />}
         </button>
+      )}
+
+      {/* Why: surface a one-click "Fix with AI" path right at the top of the
+          checks list so users can hand failing CI off to the default agent
+          without leaving the right sidebar — mirrors the Tasks page action. */}
+      {failingCount > 0 && onFixWithAI && (
+        <div className="border-b border-border px-3 py-2">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isFixingWithAI}
+            onClick={onFixWithAI}
+          >
+            {isFixingWithAI ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <Wrench className="size-3.5" />
+            )}
+            Fix with AI
+          </Button>
+        </div>
       )}
 
       {/* Checks List */}

@@ -14,6 +14,7 @@ import { isWslAvailable } from '../wsl'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
+  ensureDefaultFloatingWorkspacePath,
   grantFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
@@ -22,11 +23,9 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 const execFileAsync = promisify(execFile)
 
 async function pickFloatingMarkdownDocument(
-  event: IpcMainInvokeEvent,
-  store: Store,
-  args?: FloatingTerminalCwdRequest
+  event: IpcMainInvokeEvent
 ): Promise<MarkdownDocument | null> {
-  const cwd = await resolveFloatingTerminalCwd(store, args)
+  const cwd = await ensureDefaultFloatingWorkspacePath()
   const options = {
     defaultPath: cwd,
     properties: ['openFile'],
@@ -181,9 +180,9 @@ export function registerAppHandlers(store: Store): void {
     resolveFloatingTerminalCwd(store, args)
   )
 
-  ipcMain.handle('app:pickFloatingMarkdownDocument', (event, args?: FloatingTerminalCwdRequest) =>
-    pickFloatingMarkdownDocument(event, store, args)
-  )
+  ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
+
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
 
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)

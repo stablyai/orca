@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: hosted-review tests cover runtime routing,
+hinted cache revalidation, provider discovery, and PR cache reconciliation. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -38,10 +40,12 @@ function makeStore(settings: AppState['settings'] = null) {
       | 'createHostedReview'
       | 'settings'
       | 'repos'
+      | 'prCache'
     >
   >()((...args) => ({
     settings,
     repos: [{ id: 'repo-1', path: '/repo', connectionId: null } as AppState['repos'][number]],
+    prCache: {},
     ...createHostedReviewSlice(...(args as Parameters<typeof createHostedReviewSlice>))
   }))
 }
@@ -92,6 +96,67 @@ describe('hosted review slice', () => {
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
+  })
+
+  it('clears stale GitHub PR cache when branch review lookup finds a non-GitHub review', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    const store = makeStore()
+    store.setState({
+      prCache: {
+        'repo-1::feature/gitlab': {
+          data: {
+            number: 12,
+            title: 'Old GitHub PR',
+            state: 'open',
+            url: 'https://github.com/acme/orca/pull/12',
+            checksStatus: 'pending',
+            updatedAt: '2026-03-28T00:00:00Z',
+            mergeable: 'UNKNOWN',
+            headSha: 'head-oid'
+          },
+          fetchedAt: 1
+        },
+        '/repo::feature/gitlab': {
+          data: {
+            number: 99,
+            title: 'Old path-scoped GitHub PR',
+            state: 'closed',
+            url: 'https://github.com/acme/orca/pull/99',
+            checksStatus: 'failure',
+            updatedAt: '2026-03-28T00:00:00Z',
+            mergeable: 'UNKNOWN',
+            headSha: 'old-head-oid'
+          },
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab')
+    ).resolves.toEqual(review)
+
+    expect(store.getState().prCache['repo-1::feature/gitlab']).toBeUndefined()
+    expect(store.getState().prCache['/repo::feature/gitlab']).toBeUndefined()
+  })
+
+  it('uses SSH-scoped hosted review cache entries for SSH-backed repos', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    const store = makeStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab', {
+        repoId: 'repo-1'
+      })
+    ).resolves.toEqual(review)
+
+    expect(store.getState().hostedReviewCache['ssh:ssh-1::repo-1::feature/gitlab']).toMatchObject({
+      data: review
+    })
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/gitlab']).toBeUndefined()
   })
 
   it('routes active runtime review lookups through runtime RPC', async () => {

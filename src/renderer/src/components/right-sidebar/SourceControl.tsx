@@ -35,6 +35,7 @@ import { useAppStore } from '@/store'
 import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -116,9 +117,11 @@ import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
+  cancelRuntimeGeneratePullRequestFields,
   commitRuntimeGit,
   discardRuntimeGitPath,
   generateRuntimeCommitMessage,
+  generateRuntimePullRequestFields,
   getRuntimeGitBranchCompare,
   getRuntimeGitCommitCompare,
   getRuntimeGitHistory,
@@ -210,6 +213,35 @@ function createDefaultCollapsedSections(): Set<string> {
 // (tests and other components) instead of going through this module.
 
 type CommitDraftsByWorktree = Record<string, string>
+
+export type PullRequestGenerationFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+export type PullRequestGenerationContext = {
+  worktreeId: string | null
+  worktreePath: string
+  connectionId?: string
+  requestId: number
+  repoId: string
+  branch: string
+}
+
+export type PullRequestGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'
+
+export type PullRequestGenerationRecord = {
+  context: PullRequestGenerationContext
+  seed: PullRequestGenerationFields
+  status: PullRequestGenerationStatus
+  result: PullRequestGenerationFields | null
+  error: string | null
+  hydrated: boolean
+}
+
+type PullRequestGenerationRecords = Record<string, PullRequestGenerationRecord>
 
 export function normalizeSourceControlViewMode(value: unknown): SourceControlViewMode {
   return value === 'tree' || value === 'list' ? value : 'list'
@@ -308,6 +340,13 @@ type PendingDiffCommentsClear =
   | { kind: 'all'; worktreeId: string }
   | { kind: 'file'; worktreeId: string; filePath: string }
 
+type HostedReviewCreationState = {
+  repoId: string
+  worktreeId: string
+  branch: string
+  data: HostedReviewCreationEligibility
+}
+
 export function readCommitDraftForWorktree(
   drafts: CommitDraftsByWorktree,
   worktreeId: string | null | undefined
@@ -321,6 +360,160 @@ export function writeCommitDraftForWorktree(
   value: string
 ): CommitDraftsByWorktree {
   return { ...drafts, [worktreeId]: value }
+}
+
+export function getPullRequestGenerationWorktreeKey(
+  worktreeId: string | null | undefined,
+  worktreePath: string | null | undefined
+): string | null {
+  if (worktreeId) {
+    return worktreeId
+  }
+  return worktreePath?.trim() ? worktreePath : null
+}
+
+export function getPullRequestGenerationRecordKey({
+  worktreeId,
+  worktreePath,
+  repoId,
+  branch
+}: {
+  worktreeId: string | null | undefined
+  worktreePath: string | null | undefined
+  repoId: string | null | undefined
+  branch: string | null | undefined
+}): string | null {
+  const worktreeKey = getPullRequestGenerationWorktreeKey(worktreeId, worktreePath)
+  if (!worktreeKey || !repoId || !branch) {
+    return null
+  }
+  return JSON.stringify([repoId, worktreeKey, branch])
+}
+
+export function arePullRequestGenerationFieldsEqual(
+  left: PullRequestGenerationFields,
+  right: PullRequestGenerationFields
+): boolean {
+  return (
+    left.base === right.base &&
+    left.title === right.title &&
+    left.body === right.body &&
+    left.draft === right.draft
+  )
+}
+
+export function shouldApplyPullRequestGenerationResult({
+  record,
+  requestId,
+  currentFields
+}: {
+  record: PullRequestGenerationRecord | null | undefined
+  requestId: number
+  currentFields: PullRequestGenerationFields
+}): boolean {
+  return (
+    record?.context.requestId === requestId &&
+    record.status === 'running' &&
+    arePullRequestGenerationFieldsEqual(record.seed, currentFields)
+  )
+}
+
+export function shouldHydratePullRequestGenerationResult({
+  record,
+  currentFields
+}: {
+  record: PullRequestGenerationRecord | null | undefined
+  currentFields: PullRequestGenerationFields
+}): boolean {
+  return (
+    record?.status === 'succeeded' &&
+    record.result !== null &&
+    !record.hydrated &&
+    arePullRequestGenerationFieldsEqual(record.seed, currentFields)
+  )
+}
+
+export function createRunningPullRequestGenerationRecord(
+  context: PullRequestGenerationContext,
+  seed: PullRequestGenerationFields
+): PullRequestGenerationRecord {
+  return {
+    context,
+    seed,
+    status: 'running',
+    result: null,
+    error: null,
+    hydrated: false
+  }
+}
+
+export function resolvePullRequestGenerationSuccess({
+  record,
+  requestId,
+  currentFields,
+  result
+}: {
+  record: PullRequestGenerationRecord | null | undefined
+  requestId: number
+  currentFields: PullRequestGenerationFields
+  result: PullRequestGenerationFields
+}): PullRequestGenerationRecord | null {
+  if (!record || record.context.requestId !== requestId || record.status !== 'running') {
+    return null
+  }
+  if (!shouldApplyPullRequestGenerationResult({ record, requestId, currentFields })) {
+    return {
+      ...record,
+      status: 'failed',
+      result: null,
+      error: 'Fields changed while generating. Run generate again for a fresh draft.',
+      hydrated: false
+    }
+  }
+  return {
+    ...record,
+    status: 'succeeded',
+    result,
+    error: null,
+    hydrated: false
+  }
+}
+
+export function resolvePullRequestGenerationFailure({
+  record,
+  requestId,
+  error,
+  canceled = false
+}: {
+  record: PullRequestGenerationRecord | null | undefined
+  requestId: number
+  error: string | null
+  canceled?: boolean
+}): PullRequestGenerationRecord | null {
+  if (!record || record.context.requestId !== requestId || record.status !== 'running') {
+    return null
+  }
+  return {
+    ...record,
+    status: canceled ? 'canceled' : 'failed',
+    result: null,
+    error: canceled ? null : error,
+    hydrated: false
+  }
+}
+
+export function resolvePullRequestGenerationCancel(
+  record: PullRequestGenerationRecord | null | undefined
+): PullRequestGenerationRecord | null {
+  if (!record || record.status !== 'running') {
+    return null
+  }
+  return {
+    ...record,
+    status: 'canceled',
+    error: null,
+    hydrated: false
+  }
 }
 
 const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
@@ -791,8 +984,8 @@ function SourceControlInner(): React.JSX.Element {
   const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
   const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
-  const [hostedReviewCreation, setHostedReviewCreation] =
-    useState<HostedReviewCreationEligibility | null>(null)
+  const [hostedReviewCreationState, setHostedReviewCreationState] =
+    useState<HostedReviewCreationState | null>(null)
   const createPrInFlightRef = useRef<Record<string, boolean>>({})
   const [createPrInFlightByWorktree, setCreatePrInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -800,6 +993,10 @@ function SourceControlInner(): React.JSX.Element {
   const [createPrErrors, setCreatePrErrors] = useState<Record<string, string | null>>({})
   const isCreatingPr = createPrInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const createPrError = createPrErrors[activeWorktreeId ?? ''] ?? null
+  const prGenerationRequestSeqRef = useRef(0)
+  const prGenerationInFlightRef = useRef<Record<string, boolean>>({})
+  const prFieldsByGenerationKeyRef = useRef<Record<string, PullRequestGenerationFields>>({})
+  const [prGenerationRecords, setPrGenerationRecords] = useState<PullRequestGenerationRecords>({})
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const effectiveCommitMessageAgentId = useMemo(
     () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
@@ -820,6 +1017,23 @@ function SourceControlInner(): React.JSX.Element {
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
+  const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
+  const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
+    worktreeId: activeWorktreeId,
+    worktreePath,
+    repoId: activeRepo?.id,
+    branch: branchName
+  })
+  const activePullRequestGenerationRecordCandidate = activePullRequestGenerationKey
+    ? (prGenerationRecords[activePullRequestGenerationKey] ?? null)
+    : null
+  const activePullRequestGenerationRecord =
+    activePullRequestGenerationRecordCandidate &&
+    activePullRequestGenerationRecordCandidate.context.repoId === activeRepo?.id &&
+    activePullRequestGenerationRecordCandidate.context.worktreeId === activeWorktreeId &&
+    activePullRequestGenerationRecordCandidate.context.branch === branchName
+      ? activePullRequestGenerationRecordCandidate
+      : null
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
@@ -883,6 +1097,31 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [refreshActiveGitStatus])
 
+  const refreshGitStatusAfterPullRequestGeneration = useCallback(
+    async (context: PullRequestGenerationContext): Promise<void> => {
+      if (!context.worktreeId || isFolder) {
+        return
+      }
+      try {
+        await refreshGitStatusForWorktree({
+          settings: useAppStore.getState().settings,
+          worktreeId: context.worktreeId,
+          worktreePath: context.worktreePath,
+          connectionId: context.connectionId,
+          deps: {
+            setGitStatus,
+            updateWorktreeGitIdentity,
+            setUpstreamStatus,
+            fetchUpstreamStatus
+          }
+        })
+      } catch (error) {
+        console.warn('[SourceControl] post-generation git status refresh failed', error)
+      }
+    },
+    [fetchUpstreamStatus, isFolder, setGitStatus, setUpstreamStatus, updateWorktreeGitIdentity]
+  )
+
   useEffect(() => {
     if (!activeRepo || isFolder) {
       return
@@ -923,15 +1162,36 @@ function SourceControlInner(): React.JSX.Element {
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
 
-  const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
+  const hostedReviewCreation =
+    hostedReviewCreationState &&
+    activeRepo?.id === hostedReviewCreationState.repoId &&
+    activeWorktreeId === hostedReviewCreationState.worktreeId &&
+    branchName === hostedReviewCreationState.branch
+      ? hostedReviewCreationState.data
+      : null
   const hostedReviewCacheKey =
     activeRepo && branchName
-      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      ? getHostedReviewCacheKey(
+          activeRepo.path,
+          branchName,
+          settings,
+          activeRepo.id,
+          activeRepo.connectionId
+        )
       : null
   const hostedReviewEntry = hostedReviewCacheKey
     ? hostedReviewCache[hostedReviewCacheKey]
     : undefined
-  const activePrCacheKey = activeRepo && branchName ? `${activeRepo.id}::${branchName}` : null
+  const activePrCacheKey =
+    activeRepo && branchName
+      ? getGitHubPRCacheKey(
+          activeRepo.path,
+          activeRepo.id,
+          branchName,
+          settings,
+          activeRepo.connectionId
+        )
+      : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? activePrFromQueue
@@ -1586,6 +1846,170 @@ function SourceControlInner(): React.JSX.Element {
     await refreshActiveGitStatusAfterMutation()
   }, [refreshActiveGitStatusAfterMutation])
 
+  const handleGeneratePullRequestFieldsForActive = useCallback(
+    async (fields: PullRequestGenerationFields): Promise<void> => {
+      if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
+        return
+      }
+      if (prGenerationInFlightRef.current[activePullRequestGenerationKey]) {
+        return
+      }
+      const requestId = prGenerationRequestSeqRef.current + 1
+      prGenerationRequestSeqRef.current = requestId
+      const generationKey = activePullRequestGenerationKey
+      const context: PullRequestGenerationContext = {
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        requestId,
+        repoId: activeRepo.id,
+        branch: branchName
+      }
+      const seed = { ...fields }
+      prGenerationInFlightRef.current[generationKey] = true
+      prFieldsByGenerationKeyRef.current[generationKey] = seed
+      setPrGenerationRecords((prev) => ({
+        ...prev,
+        [generationKey]: createRunningPullRequestGenerationRecord(context, seed)
+      }))
+
+      try {
+        const result = await generateRuntimePullRequestFields(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: context.worktreeId,
+            worktreePath: context.worktreePath,
+            connectionId: context.connectionId
+          },
+          {
+            base: stripBaseRef(seed.base.trim()),
+            title: seed.title,
+            body: seed.body,
+            draft: seed.draft
+          }
+        )
+        if (result.branchChangedByPreparation) {
+          await refreshGitStatusAfterPullRequestGeneration(context)
+        }
+        setPrGenerationRecords((prev) => {
+          const record = prev[generationKey]
+          if (!result.success) {
+            const nextRecord = resolvePullRequestGenerationFailure({
+              record,
+              requestId,
+              canceled: result.canceled,
+              error: result.canceled ? null : result.error
+            })
+            if (!nextRecord) {
+              return prev
+            }
+            return {
+              ...prev,
+              [generationKey]: nextRecord
+            }
+          }
+          if (!record) {
+            return prev
+          }
+          const currentFields = prFieldsByGenerationKeyRef.current[generationKey] ?? record.seed
+          const nextRecord = resolvePullRequestGenerationSuccess({
+            record,
+            requestId,
+            currentFields,
+            result: {
+              base: stripBaseRef(result.fields.base),
+              title: result.fields.title,
+              body: result.fields.body,
+              draft: result.fields.draft
+            }
+          })
+          if (!nextRecord) {
+            return prev
+          }
+          return {
+            ...prev,
+            [generationKey]: nextRecord
+          }
+        })
+      } catch (error) {
+        setPrGenerationRecords((prev) => {
+          const record = prev[generationKey]
+          const nextRecord = resolvePullRequestGenerationFailure({
+            record,
+            requestId,
+            error:
+              error instanceof Error ? error.message : 'Failed to generate pull request details'
+          })
+          if (!nextRecord) {
+            return prev
+          }
+          return {
+            ...prev,
+            [generationKey]: nextRecord
+          }
+        })
+      } finally {
+        prGenerationInFlightRef.current[generationKey] = false
+      }
+    },
+    [
+      activePullRequestGenerationKey,
+      activeRepo,
+      activeWorktreeId,
+      branchName,
+      refreshGitStatusAfterPullRequestGeneration,
+      worktreePath
+    ]
+  )
+
+  const handleCancelGeneratePullRequestFieldsForActive = useCallback((): void => {
+    if (!activePullRequestGenerationKey) {
+      return
+    }
+    const record = prGenerationRecords[activePullRequestGenerationKey]
+    if (!record || record.status !== 'running') {
+      return
+    }
+    const generationKey = activePullRequestGenerationKey
+    setPrGenerationRecords((prev) => {
+      const current = prev[generationKey]
+      if (!current || current.context.requestId !== record.context.requestId) {
+        return prev
+      }
+      const nextRecord = resolvePullRequestGenerationCancel(current)
+      if (!nextRecord) {
+        return prev
+      }
+      return {
+        ...prev,
+        [generationKey]: nextRecord
+      }
+    })
+    void cancelRuntimeGeneratePullRequestFields({
+      settings: useAppStore.getState().settings,
+      worktreeId: record.context.worktreeId,
+      worktreePath: record.context.worktreePath,
+      connectionId: record.context.connectionId
+    }).catch((error) => {
+      setPrGenerationRecords((prev) => {
+        const current = prev[generationKey]
+        if (!current || current.context.requestId !== record.context.requestId) {
+          return prev
+        }
+        return {
+          ...prev,
+          [generationKey]: {
+            ...current,
+            status: 'failed',
+            error:
+              error instanceof Error ? error.message : 'Failed to stop pull request generation',
+            hydrated: false
+          }
+        }
+      })
+    })
+  }, [activePullRequestGenerationKey, prGenerationRecords])
+
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
     base: prBase,
@@ -1616,12 +2040,108 @@ function SourceControlInner(): React.JSX.Element {
     eligibility: hostedReviewCreation,
     settings,
     submitting: isCreatingPr,
-    onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration
+    onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
+    generation: {
+      generating: activePullRequestGenerationRecord?.status === 'running',
+      generateError: activePullRequestGenerationRecord?.error ?? null,
+      onGenerate: (fields) => {
+        void handleGeneratePullRequestFieldsForActive(fields)
+      },
+      onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
+    }
   })
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder || !branchName) {
-      setHostedReviewCreation(null)
+    if (!activePullRequestGenerationKey) {
+      return
+    }
+    if (
+      activePullRequestGenerationRecord?.status === 'succeeded' &&
+      !activePullRequestGenerationRecord.hydrated
+    ) {
+      return
+    }
+    prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] = {
+      base: prBase,
+      title: prTitle,
+      body: prBody,
+      draft: prDraft
+    }
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    prBase,
+    prBody,
+    prDraft,
+    prTitle
+  ])
+
+  useEffect(() => {
+    if (
+      !activePullRequestGenerationKey ||
+      !activePullRequestGenerationRecord ||
+      activePullRequestGenerationRecord.status !== 'succeeded' ||
+      !activePullRequestGenerationRecord.result ||
+      activePullRequestGenerationRecord.hydrated
+    ) {
+      return
+    }
+    const currentFields = prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] ?? {
+      base: prBase,
+      title: prTitle,
+      body: prBody,
+      draft: prDraft
+    }
+    if (
+      !shouldHydratePullRequestGenerationResult({
+        record: activePullRequestGenerationRecord,
+        currentFields
+      })
+    ) {
+      setPrGenerationRecords((prev) => ({
+        ...prev,
+        [activePullRequestGenerationKey]: {
+          ...activePullRequestGenerationRecord,
+          status: 'failed',
+          error: 'Fields changed while generating. Run generate again for a fresh draft.',
+          hydrated: false
+        }
+      }))
+      return
+    }
+    const result = activePullRequestGenerationRecord.result
+    setPrBase(result.base)
+    setPrBaseQuery('')
+    setPrBaseResults([])
+    setPrTitle(result.title)
+    setPrBody(result.body)
+    setPrDraft(result.draft)
+    prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] = result
+    setPrGenerationRecords((prev) => ({
+      ...prev,
+      [activePullRequestGenerationKey]: {
+        ...activePullRequestGenerationRecord,
+        hydrated: true
+      }
+    }))
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    prBase,
+    prBody,
+    prDraft,
+    prTitle,
+    setPrBase,
+    setPrBaseQuery,
+    setPrBaseResults,
+    setPrBody,
+    setPrDraft,
+    setPrTitle
+  ])
+
+  useEffect(() => {
+    if (!isBranchVisible || !activeRepo || isFolder || !branchName || !activeWorktreeId) {
+      setHostedReviewCreationState(null)
       return
     }
     // Why: skip refetches while the user's PR flow is mid-flight. AI generation
@@ -1648,13 +2168,18 @@ function SourceControlInner(): React.JSX.Element {
     })
       .then((result) => {
         if (!stale) {
-          setHostedReviewCreation(result)
+          setHostedReviewCreationState({
+            repoId: activeRepo.id,
+            worktreeId: activeWorktreeId,
+            branch: branchName,
+            data: result
+          })
         }
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
         if (!stale) {
-          setHostedReviewCreation(null)
+          setHostedReviewCreationState(null)
         }
       })
     return () => {
@@ -1675,6 +2200,7 @@ function SourceControlInner(): React.JSX.Element {
     remoteStatus?.ahead,
     remoteStatus?.behind,
     remoteStatus?.hasUpstream,
+    activeWorktreeId,
     worktreePath
   ])
 
@@ -3195,6 +3721,7 @@ function SourceControlInner(): React.JSX.Element {
                 commitError={commitError}
                 remoteActionError={remoteActionError?.message ?? null}
                 isCommitting={isCommitting}
+                showComposer={!(scope === 'all' && showGenericEmptyState)}
                 aiEnabled={commitMessageAi?.enabled === true}
                 aiAgentConfigured={
                   commitMessageAi?.enabled === true &&
@@ -3985,6 +4512,7 @@ type CommitAreaProps = {
   remoteActionError: string | null
   isCommitting: boolean
   isCreatingPr?: boolean
+  showComposer?: boolean
   aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
@@ -4009,6 +4537,7 @@ export function CommitArea({
   remoteActionError,
   isCommitting,
   isCreatingPr = false,
+  showComposer = true,
   aiEnabled,
   aiAgentConfigured,
   isGenerating,
@@ -4106,7 +4635,7 @@ export function CommitArea({
   // Why: only render the Generate button when the user has opted into the
   // feature. Mounting a perma-disabled button would leak space and add noise
   // for users who never plan to use AI commit messages.
-  const showGenerate = aiEnabled
+  const showGenerate = showComposer && aiEnabled
   let generateDisabledReason: string | undefined
   if (isGenerating) {
     generateDisabledReason = 'Generating commit message…'
@@ -4129,63 +4658,65 @@ export function CommitArea({
 
   return (
     <div className="px-3 pb-2">
-      <div className="relative">
-        <textarea
-          rows={rows}
-          value={commitMessage}
-          onChange={(e) => onCommitMessageChange(e.target.value)}
-          placeholder="Message"
-          aria-label="Commit message"
-          aria-describedby={describedBy || undefined}
-          // Why: reserve right padding so typed text does not slide under the
-          // absolute-positioned Generate icon in the top-right corner.
-          className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
-            showGenerate ? 'pr-7' : ''
-          }`}
-        />
-        {showGenerate &&
-          (isGenerating ? (
-            // Why: while generating the icon doubles as the cancel affordance.
-            // Default state shows the spinning RefreshCw; on hover/focus we
-            // swap to a Square ("stop") with a destructive tint so the user
-            // sees that clicking will abort the run. Group/group-hover toggles
-            // keep this stateless on the React side.
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => onCancelGenerate()}
-                  title="Stop generating"
-                  aria-label="Stop generating commit message"
-                  className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
-                >
-                  <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
-                  <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="left" sideOffset={6}>
-                Generating commit message. Click to stop.
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              disabled={isGenerateDisabled}
-              onClick={() => onGenerate()}
-              title={generateDisabledReason ?? 'Generate commit message with AI'}
-              aria-label="Generate commit message with AI"
-              className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-            >
-              <Sparkles className="size-3.5" />
-            </button>
-          ))}
-      </div>
+      {showComposer ? (
+        <div className="relative">
+          <textarea
+            rows={rows}
+            value={commitMessage}
+            onChange={(e) => onCommitMessageChange(e.target.value)}
+            placeholder="Message"
+            aria-label="Commit message"
+            aria-describedby={describedBy || undefined}
+            // Why: reserve right padding so typed text does not slide under the
+            // absolute-positioned Generate icon in the top-right corner.
+            className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
+              showGenerate ? 'pr-7' : ''
+            }`}
+          />
+          {showGenerate &&
+            (isGenerating ? (
+              // Why: while generating the icon doubles as the cancel affordance.
+              // Default state shows the spinning RefreshCw; on hover/focus we
+              // swap to a Square ("stop") with a destructive tint so the user
+              // sees that clicking will abort the run. Group/group-hover toggles
+              // keep this stateless on the React side.
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => onCancelGenerate()}
+                    title="Stop generating"
+                    aria-label="Stop generating commit message"
+                    className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
+                  >
+                    <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+                    <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" sideOffset={6}>
+                  Generating commit message. Click to stop.
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <button
+                type="button"
+                disabled={isGenerateDisabled}
+                onClick={() => onGenerate()}
+                title={generateDisabledReason ?? 'Generate commit message with AI'}
+                aria-label="Generate commit message with AI"
+                className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              >
+                <Sparkles className="size-3.5" />
+              </button>
+            ))}
+        </div>
+      ) : null}
       {/* Why: primary + chevron sit together as a visual split button so the
           edit → commit → push loop stays in a single vertical band. The
           chevron exposes the full action surface (fetch, pull, sync,
           publish, compound commits) without forcing morphing labels to
           carry every possible intent. */}
-      <div className="mt-1 flex items-stretch">
+      <div className={cn(showComposer ? 'mt-1 flex items-stretch' : 'flex items-stretch')}>
         {/* Why: match the "Squash and merge" button in PRActions
             (size="xs", px-3 text-[11px]) so the sidebar has a consistent
             action-button shape across Source Control and Checks. The primary

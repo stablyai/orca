@@ -212,7 +212,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     ctrlTabOrderMode: 'mru',
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
-    floatingTerminalCwd: '',
+    floatingTerminalCwd: '~',
     floatingTerminalTrustedCwds: [],
     floatingTerminalCwdMigratedToAppWorkspace: true,
     floatingTerminalTriggerLocation: 'floating-button',

@@ -106,6 +106,7 @@ export function FloatingTerminalPanel({
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '')
 
   const [cwd, setCwd] = useState<string | null>(null)
+  const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
@@ -328,11 +329,14 @@ export function FloatingTerminalPanel({
   useEffect(() => {
     void window.api.app
       .getFloatingTerminalCwd({
-        path: floatingTerminalCwd,
-        requireTrusted: true
+        path: floatingTerminalCwd
       })
       .then(setCwd)
   }, [floatingTerminalCwd])
+
+  useEffect(() => {
+    void window.api.app.getFloatingMarkdownDirectory().then(setMarkdownCwd)
+  }, [])
 
   useEffect(() => {
     if (!open || !activeTerminalId) {
@@ -461,13 +465,13 @@ export function FloatingTerminalPanel({
   }, [activeGroup, browserDefaultUrl, createBrowserTab])
 
   const createFloatingMarkdownTab = useCallback(() => {
-    if (!cwd) {
+    if (!markdownCwd) {
       return
     }
     void (async () => {
       try {
         const fileInfo = await createUntitledMarkdownFile(
-          cwd,
+          markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
           LOCAL_RUNTIME_SETTINGS
@@ -481,14 +485,12 @@ export function FloatingTerminalPanel({
         toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
       }
     })()
-  }, [activeGroup, cwd, openFile])
+  }, [activeGroup, markdownCwd, openFile])
 
   const openFloatingMarkdownTab = useCallback(() => {
     void (async () => {
       try {
-        const document = await window.api.app.pickFloatingMarkdownDocument({
-          path: floatingTerminalCwd
-        })
+        const document = await window.api.app.pickFloatingMarkdownDocument()
         if (!document) {
           return
         }
@@ -511,7 +513,7 @@ export function FloatingTerminalPanel({
         toast.error(extractIpcErrorMessage(err, 'Failed to open markdown file.'))
       }
     })()
-  }, [activeGroup, floatingTerminalCwd, openFile])
+  }, [activeGroup, openFile])
 
   const closeFloatingItems = useCallback(
     (visibleIds: string[]) => {

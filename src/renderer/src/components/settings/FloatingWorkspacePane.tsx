@@ -16,10 +16,16 @@ type FloatingWorkspacePaneProps = {
 }
 
 export function getFloatingWorkspaceDirectoryInputValue({
+  configuredFloatingWorkspacePath,
   resolvedFloatingWorkspacePath
 }: {
+  configuredFloatingWorkspacePath: string
   resolvedFloatingWorkspacePath: string
 }): string {
+  const configuredPath = configuredFloatingWorkspacePath.trim()
+  if (!configuredPath || configuredPath === '~') {
+    return '~'
+  }
   return resolvedFloatingWorkspacePath
 }
 
@@ -34,8 +40,7 @@ export function FloatingWorkspacePane({
     let cancelled = false
     void window.api.app
       .getFloatingTerminalCwd({
-        path: settings.floatingTerminalCwd,
-        requireTrusted: true
+        path: settings.floatingTerminalCwd
       })
       .then((path) => {
         if (!cancelled) {
@@ -61,6 +66,7 @@ export function FloatingWorkspacePane({
   }
 
   const directoryInputValue = getFloatingWorkspaceDirectoryInputValue({
+    configuredFloatingWorkspacePath: settings.floatingTerminalCwd,
     resolvedFloatingWorkspacePath
   })
 
@@ -116,12 +122,12 @@ export function FloatingWorkspacePane({
         </div>
 
         <div className="space-y-2">
-          <Label>Default Directory</Label>
+          <Label>Terminal Directory</Label>
           <div className="flex max-w-xl gap-2">
             <Input
               value={directoryInputValue}
               readOnly
-              placeholder="Orca floating workspace"
+              placeholder="~"
               className="min-w-0 flex-1"
             />
             <Button
@@ -135,7 +141,8 @@ export function FloatingWorkspacePane({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            New floating workspace tabs start here. The default is the Orca app-owned workspace.
+            New floating terminal tabs start here. Markdown notes are saved in Orca&apos;s app-owned
+            floating workspace.
           </p>
         </div>
 

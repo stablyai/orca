@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { Cable, Copy, ExternalLink, Trash2 } from 'lucide-react'
+import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -36,7 +36,7 @@ export function WorktreeCardPortsTrigger({
       aria-label={`${ports.length} live ${ports.length === 1 ? 'port' : 'ports'}`}
       onClick={(event) => event.stopPropagation()}
     >
-      <Cable className="size-3.5" />
+      <Plug className="size-3.5" />
     </button>
   )
 }
@@ -185,7 +185,7 @@ export function WorktreeCardPortsDetails({
   return (
     <section className="space-y-1.5">
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <Cable className="size-3" />
+        <Plug className="size-3" />
         <span>Live Ports</span>
         <span className="ml-auto font-normal tabular-nums text-muted-foreground/70">
           {ports.length}

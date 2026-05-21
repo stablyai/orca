@@ -172,7 +172,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
   const hostedReviewCacheKey =
-    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id) : ''
+    repo && branch
+      ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
+      : ''
   const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
   const linearIssueCacheKey = worktree.linkedLinearIssue
     ? `selected::${worktree.linkedLinearIssue}`

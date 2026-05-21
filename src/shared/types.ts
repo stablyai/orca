@@ -641,6 +641,7 @@ export type GitHubPRRefreshAlias = {
   repoPath: string
   branch: string
   worktreeId?: string
+  connectionId?: string | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
@@ -670,6 +671,7 @@ type GitHubPRRefreshEventBase = {
   sequence: number
   reason: GitHubPRRefreshReason
   aliases: GitHubPRRefreshAlias[]
+  requestStartedAt?: number
 }
 
 export type GitHubPRRefreshEvent =
@@ -1619,14 +1621,14 @@ export type GlobalSettings = {
    *  landed, the floating workspace defaulted off and many profiles persisted
    *  that inherited false. Once migrated, an explicit off choice sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
-  /** Where new Floating Workspace tabs start. Empty means Orca's app-owned
+  /** Where new Floating Workspace terminal tabs start. Empty or '~' means
+   *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
   floatingTerminalCwd: string
   /** Picker-approved Floating Workspace directories that may be reauthorized
    *  across restarts. Renderer-provided text alone must not populate this. */
   floatingTerminalTrustedCwds?: string[]
-  /** One-shot migration from the old implicit '~' default to the app-owned
-   *  floating workspace. Explicit future '~' choices are preserved. */
+  /** One-shot migration marker for legacy floating workspace cwd trust grants. */
   floatingTerminalCwdMigratedToAppWorkspace?: boolean
   /** Where the Floating Workspace toggle is shown. Defaults to the floating
    *  button for discoverability. */

@@ -1315,13 +1315,14 @@ export class Store {
           : true
         const floatingTerminalCwdMigrated =
           parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
-        // Why: the old inherited floating cwd was '~', which works for shells
-        // but not for app-managed markdown files. Migrate only once so users
-        // can still explicitly choose '~' after this release.
+        // Why: an earlier migration wrote '' for the default app-owned notes
+        // directory. Floating terminals should still open at home by default;
+        // markdown notes resolve their app-owned directory through a separate IPC.
         const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
-          ? (parsed.settings?.floatingTerminalCwd ?? defaults.settings.floatingTerminalCwd)
-          : parsed.settings?.floatingTerminalCwd === undefined ||
-              parsed.settings.floatingTerminalCwd === '~'
+          ? !parsed.settings?.floatingTerminalCwd
+            ? defaults.settings.floatingTerminalCwd
+            : parsed.settings.floatingTerminalCwd
+          : parsed.settings?.floatingTerminalCwd === undefined
             ? defaults.settings.floatingTerminalCwd
             : parsed.settings.floatingTerminalCwd
         const normalizedFloatingTerminalTrustedCwds = normalizeFloatingWorkspaceTrustedCwds(

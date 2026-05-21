@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { ActivityBarPosition } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -27,6 +25,7 @@ import {
   TopActivityOverflowMenu,
   type ActivityBarItem
 } from './activity-bar-buttons'
+import { getActiveChecksStatus } from './active-checks-status'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -38,31 +37,6 @@ const MIN_NON_SIDEBAR_AREA = 320
 const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
-function branchDisplayName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
-
-function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): CheckStatus | null {
-  const activeWorktree = state.activeWorktreeId
-    ? findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
-    : null
-  if (!activeWorktree) {
-    return null
-  }
-
-  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
-  if (!activeRepo) {
-    return null
-  }
-
-  const branch = branchDisplayName(activeWorktree.branch)
-  if (!branch) {
-    return null
-  }
-
-  const prCacheKey = `${activeRepo.path}::${branch}`
-  return state.prCache[prCacheKey]?.data?.checksStatus ?? null
-}
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 const isWindows =

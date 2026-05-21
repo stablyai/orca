@@ -1014,7 +1014,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
       const cacheKey =
         reviewRepo && reviewBranch
-          ? getHostedReviewCacheKey(reviewRepo.path, reviewBranch, s.settings, reviewRepo.id)
+          ? getHostedReviewCacheKey(
+              reviewRepo.path,
+              reviewBranch,
+              s.settings,
+              reviewRepo.id,
+              reviewRepo.connectionId
+            )
           : null
       const hostedReviewCache = s.hostedReviewCache ?? {}
       if (nextWorktrees === s.worktreesByRepo && !cacheKey) {

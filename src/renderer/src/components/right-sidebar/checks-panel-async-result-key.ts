@@ -11,9 +11,12 @@ export function checksPanelAsyncResultKey(
   repoId: string,
   branch: string,
   prNumber: number | null,
-  prRepo?: GitHubOwnerRepo | null
+  prRepo?: GitHubOwnerRepo | null,
+  headSha?: string | null
 ): string {
-  return `${repoId}::${branch}::${normalizedPRRepoIdentity(prRepo)}::${prNumber ?? 'none'}`
+  return `${repoId}::${branch}::${normalizedPRRepoIdentity(prRepo)}::${prNumber ?? 'none'}::${
+    headSha ?? 'none'
+  }`
 }
 
 export function shouldCommitChecksPanelAsyncResult(

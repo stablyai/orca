@@ -7,13 +7,13 @@ import {
 describe('checksPanelAsyncResultKey', () => {
   it('builds a stable repo-scoped key', () => {
     expect(checksPanelAsyncResultKey('repo-id', 'feature/test', 12)).toBe(
-      'repo-id::feature/test::none::12'
+      'repo-id::feature/test::none::12::none'
     )
   })
 
   it('uses explicit none marker when PR is absent', () => {
     expect(checksPanelAsyncResultKey('repo-id', 'feature/test', null)).toBe(
-      'repo-id::feature/test::none::none'
+      'repo-id::feature/test::none::none::none'
     )
   })
 
@@ -23,7 +23,13 @@ describe('checksPanelAsyncResultKey', () => {
         owner: 'Acme',
         repo: 'Widgets'
       })
-    ).toBe('repo-id::feature/test::acme/widgets::12')
+    ).toBe('repo-id::feature/test::acme/widgets::12::none')
+  })
+
+  it('includes PR head SHA so stale checks cannot commit after a new head is discovered', () => {
+    expect(checksPanelAsyncResultKey('repo-id', 'feature/test', 12, null, 'head-a')).toBe(
+      'repo-id::feature/test::none::12::head-a'
+    )
   })
 })
 

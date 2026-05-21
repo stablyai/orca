@@ -19,7 +19,12 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
 
 function renderNotice(pr: PRInfo, isRefreshingConflictDetails = false): string {
   return renderToStaticMarkup(
-    React.createElement(MergeConflictNotice, { pr, isRefreshingConflictDetails })
+    React.createElement(MergeConflictNotice, {
+      pr,
+      isRefreshingConflictDetails,
+      isResolvingWithAI: false,
+      onResolveWithAI: () => {}
+    })
   )
 }
 
