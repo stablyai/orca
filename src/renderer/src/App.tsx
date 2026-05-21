@@ -92,7 +92,10 @@ import {
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
-import { folderRelativePathToIncludeGlob } from './components/right-sidebar/file-search-include-pattern'
+import {
+  folderRelativePathToIncludeGlob,
+  selectedExplorerFolderRelativePath
+} from './components/right-sidebar/file-search-include-pattern'
 import { shouldShowWorktreeHistoryControls } from './lib/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
@@ -1029,16 +1032,11 @@ function App(): React.JSX.Element {
         // Why: when focus is inside the file explorer and a folder is selected,
         // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
         // with that folder instead of treating the chord as a text-search seed.
-        const explorerShell =
-          document.activeElement instanceof Element
-            ? document.activeElement.closest('[data-orca-explorer-shell]')
-            : null
-        const selectedFolderEl = explorerShell?.querySelector(
-          '[data-selected-folder-relative-path]'
-        )
         const selectedFolderRelativePath =
-          selectedFolderEl?.getAttribute('data-selected-folder-relative-path') ?? null
-        if (selectedFolderRelativePath && activeWorktreeId) {
+          document.activeElement instanceof Element
+            ? selectedExplorerFolderRelativePath(document.activeElement)
+            : null
+        if (selectedFolderRelativePath !== null && activeWorktreeId) {
           e.preventDefault()
           actions.seedFileSearchIncludePattern(
             activeWorktreeId,

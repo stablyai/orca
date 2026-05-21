@@ -1,5 +1,15 @@
 import { normalizeRelativePath } from '@/lib/path'
 
+const SEARCH_GLOB_LITERAL_META = new Set(['\\', '*', '?', '[', ']', '{', '}', '!', ','])
+
+function escapeSearchGlobLiteralSegment(segment: string): string {
+  let escaped = ''
+  for (const ch of segment) {
+    escaped += SEARCH_GLOB_LITERAL_META.has(ch) ? `\\${ch}` : ch
+  }
+  return escaped
+}
+
 /**
  * Convert a folder's relative path into a "Files to include" glob.
  *
@@ -12,5 +22,11 @@ export function folderRelativePathToIncludeGlob(relativePath: string): string {
   if (!normalized) {
     return ''
   }
-  return `${normalized}/**`
+  const escaped = normalized.split('/').map(escapeSearchGlobLiteralSegment).join('/')
+  return `${escaped}/**`
+}
+
+export function selectedExplorerFolderRelativePath(activeElement: Element | null): string | null {
+  const explorerShell = activeElement?.closest('[data-orca-explorer-shell]')
+  return explorerShell?.getAttribute('data-selected-folder-relative-path') ?? null
 }

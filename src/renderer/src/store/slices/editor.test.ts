@@ -216,6 +216,51 @@ describe('createEditorSlice file search seed state', () => {
     expect(state.collapsedFiles.size).toBe(0)
   })
 
+  it('seeds file search include pattern with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: '',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search query and options while replacing stale scoped results', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'old/**',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'src/**',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
   it('consumes only the matching seed request id', () => {
     const store = createEditorStore()
     store.getState().seedFileSearchQuery('wt-1', 'selectedText')

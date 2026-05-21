@@ -241,6 +241,10 @@ export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boole
   return node.isDirectory && isExpanded
 }
 
+export function shouldShowFindInFolderAction(node: TreeNode): boolean {
+  return node.isDirectory
+}
+
 export function FileExplorerRow({
   node,
   isExpanded,
@@ -307,9 +311,6 @@ export function FileExplorerRow({
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
           data-native-file-drop-dir={rowDropDir}
-          data-selected-folder-relative-path={
-            isSelected && node.isDirectory ? node.relativePath : undefined
-          }
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
@@ -445,7 +446,7 @@ export function FileExplorerRow({
             Collapse Folder
           </ContextMenuItem>
         )}
-        {node.isDirectory && (
+        {shouldShowFindInFolderAction(node) && (
           <ContextMenuItem onSelect={onFindInFolder}>
             <Search />
             Find in Folder

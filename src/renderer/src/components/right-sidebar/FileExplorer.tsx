@@ -355,7 +355,14 @@ function FileExplorerInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+      <div
+        ref={explorerShellRef}
+        data-orca-explorer-shell
+        data-selected-folder-relative-path={
+          selectedNode?.isDirectory ? selectedNode.relativePath : undefined
+        }
+        className="flex h-full min-h-0 flex-col"
+      >
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
