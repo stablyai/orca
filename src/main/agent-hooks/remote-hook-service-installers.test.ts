@@ -236,7 +236,8 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
-    for (const eventName of ['PreToolUse', 'PostToolUse']) {
+    expect(antigravityConfig['orca-status'].PreToolUse).toBeUndefined()
+    for (const eventName of ['PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBe('*')
@@ -283,6 +284,55 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+  })
+
+  it('removes stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.files.set(
+      '/home/dev/.gemini/config/hooks.json',
+      `${JSON.stringify(
+        {
+          'orca-status': {
+            PreToolUse: [
+              {
+                matcher: '*',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: '/tmp/old/agent-hooks/antigravity-hook.sh'
+                  }
+                ]
+              }
+            ],
+            PostToolUse: [
+              {
+                matcher: '*',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'echo user-authored'
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )}\n`
+    )
+
+    await new AntigravityHookService().installRemote(sftp, '/home/dev')
+
+    const config = JSON.parse(fs.files.get('/home/dev/.gemini/config/hooks.json')!) as {
+      'orca-status': Record<string, { hooks?: { command: string }[] }[]>
+    }
+    expect(config['orca-status'].PreToolUse).toBeUndefined()
+    const postToolCommands = config['orca-status'].PostToolUse.flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(postToolCommands).toContain('echo user-authored')
+    expect(postToolCommands.some((command) => command.includes('antigravity-hook.sh'))).toBe(true)
   })
 
   it('installs remote Copilot hooks under the user-level hooks directory', async () => {
