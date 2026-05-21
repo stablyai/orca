@@ -182,8 +182,11 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
   })
 }
 
-export async function seedCleanBranchEmptyState(page: Page): Promise<string> {
-  return page.evaluate(async () => {
+export async function seedCleanBranchEmptyState(
+  page: Page,
+  targetWorktreeId?: string
+): Promise<string> {
+  return page.evaluate(async (targetWorktreeId: string | null) => {
     const store =
       window.__store ??
       (() => {
@@ -193,7 +196,11 @@ export async function seedCleanBranchEmptyState(page: Page): Promise<string> {
     const state = store.getState()
     const primaryWorktree = Object.values(state.worktreesByRepo)
       .flat()
-      .find((entry) => entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/))
+      .find((entry) =>
+        targetWorktreeId
+          ? entry.id === targetWorktreeId
+          : entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/)
+      )
     if (!primaryWorktree) {
       throw new Error('Primary worktree not found')
     }
@@ -229,7 +236,7 @@ export async function seedCleanBranchEmptyState(page: Page): Promise<string> {
       }
     }))
     return primaryWorktree.id
-  })
+  }, targetWorktreeId ?? null)
 }
 
 export function createBranchCommit(worktreePath: string): void {

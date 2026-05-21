@@ -261,7 +261,37 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
 
     await openSourceControl(orcaPage, primaryWorktreeId)
-    await expect(orcaPage.getByText('No changes on this branch')).toBeVisible({ timeout: 10_000 })
+    await expect
+      .poll(
+        async () => {
+          // Why: this full-suite spec shares the physical E2E repo with other
+          // workers. Keep this assertion scoped to the seeded Source Control
+          // state instead of racing unrelated real git-status refreshes.
+          await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
+          return orcaPage.evaluate(() => {
+            const emptyStateVisible =
+              document.body.textContent?.includes('No changes on this branch') === true
+            const commitMessageInput = document.querySelector('[aria-label="Commit message"]')
+            const commitAiButton = document.querySelector(
+              '[aria-label="Generate commit message with AI"]'
+            )
+            return {
+              emptyStateVisible,
+              hasCommitMessageInput: commitMessageInput !== null,
+              hasCommitAiButton: commitAiButton !== null
+            }
+          })
+        },
+        {
+          timeout: 10_000,
+          message: 'Clean branch empty state did not render without the commit AI composer'
+        }
+      )
+      .toEqual({
+        emptyStateVisible: true,
+        hasCommitMessageInput: false,
+        hasCommitAiButton: false
+      })
     await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveCount(0)
     await expect(
       orcaPage.getByRole('button', { name: 'Generate commit message with AI' })

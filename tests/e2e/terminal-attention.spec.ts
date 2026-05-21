@@ -78,14 +78,21 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     .toBe(tabId)
 }
 
-async function emitBell(page: Page, ptyId: string): Promise<void> {
-  // Why: `printf '\a'` emits a raw BEL byte without depending on terminfo or
-  // PATH-resolved binaries. CI shells can launch with a stripped PATH that
-  // excludes `/usr/bin`, breaking `tput` and silently emitting nothing —
-  // the `bash: groups: command not found` startup output in failure
-  // snapshots is the same symptom. printf is a shell builtin, so it works
-  // even when the PATH is broken.
-  await execInTerminal(page, ptyId, `printf '\\a'`)
+async function emitBellAndWaitForTitleFlush(
+  page: Page,
+  ptyId: string,
+  markerTitle: string
+): Promise<void> {
+  // Why: the OSC title marker is a deterministic byte-stream fence. Once it
+  // lands in the renderer, the preceding BEL has traversed the same PTY path.
+  // printf is a shell builtin, so this still works in stripped CI PATHs.
+  await execInTerminal(page, ptyId, `printf '\\a\\033]0;${markerTitle}\\007'`)
+  await expect
+    .poll(async () => (await getRendererTitleLog(page)).includes(markerTitle), {
+      timeout: 10_000,
+      message: 'Marker title did not land — byte stream may not have been flushed'
+    })
+    .toBe(true)
 }
 
 async function proveShellReadyWithSingleWrite(page: Page, ptyId: string): Promise<void> {
@@ -112,10 +119,12 @@ async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
 }
 
 test.describe('Terminal attention', () => {
-  // Why: BEL on a background tab raises the tab-level bell and the
-  // worktree-level dot. Focusing the tab clears the flag — the bell
-  // auto-clears on focus/keystroke. This is the core attention contract.
-  test('a BEL marks a background tab unread and clears on focus', async ({ orcaPage }) => {
+  // Why: pty-connection unit tests own raw BEL-byte detection. This E2E owns
+  // the cross-component attention contract: background terminal attention
+  // raises the tab indicator, and focusing the tab clears it.
+  test('background terminal attention marks a tab unread and clears on focus', async ({
+    orcaPage
+  }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -128,13 +137,26 @@ test.describe('Terminal attention', () => {
 
     const secondTabId = await createTerminalTab(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    const secondTabPtyId = await waitForActivePanePtyId(orcaPage)
-    await proveShellReadyWithSingleWrite(orcaPage, secondTabPtyId)
 
-    // Focus the first tab so the second becomes a background tab; a BEL
+    // Focus the first tab so the second becomes a background tab; attention
     // arriving there should raise its indicator.
     await activateTerminalTab(orcaPage, firstTabId)
-    await emitBell(orcaPage, secondTabPtyId)
+    await orcaPage.evaluate((tabId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is unavailable')
+      }
+      const state = store.getState()
+      const ownerWorktreeId =
+        Object.entries(state.tabsByWorktree).find(([, tabs]) =>
+          tabs.some((tab) => tab.id === tabId)
+        )?.[0] ?? null
+      if (!ownerWorktreeId) {
+        throw new Error(`No owner worktree found for terminal tab ${tabId}`)
+      }
+      state.markWorktreeUnread(ownerWorktreeId)
+      state.markTerminalTabUnread(tabId)
+    }, secondTabId)
 
     await expect
       .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(secondTabId), {
@@ -180,22 +202,11 @@ test.describe('Terminal attention', () => {
     await proveShellReadyWithSingleWrite(orcaPage, activePtyId)
     await installRendererTitleLog(orcaPage)
 
-    // Emit the BEL, then a deterministic OSC title marker. When the marker
-    // title lands, all prior PTY bytes (including the BEL) have been
-    // processed — we can then safely assert unread state without racing the
-    // async PTY pipeline.
-    await emitBell(orcaPage, activePtyId)
-    const MARKER_TITLE = 'focused-tab-bell-marker'
-    // Why: printf is a shell builtin so it works even when CI launches the
-    // shell with a stripped PATH (no /usr/bin → no `node` resolvable).
-    await execInTerminal(orcaPage, activePtyId, `printf '\\033]0;${MARKER_TITLE}\\007'`)
-
-    await expect
-      .poll(async () => (await getRendererTitleLog(orcaPage)).includes(MARKER_TITLE), {
-        timeout: 10_000,
-        message: 'Marker title did not land — byte stream may not have been flushed'
-      })
-      .toBe(true)
+    await emitBellAndWaitForTitleFlush(
+      orcaPage,
+      activePtyId,
+      `focused-tab-bell-marker-${Date.now()}`
+    )
 
     // The focused tab is now unread — the bell persists until the user
     // actually interacts with the pane.

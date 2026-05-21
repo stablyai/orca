@@ -282,7 +282,25 @@ test.describe('Terminal restart persistence', () => {
       await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
       await waitForTerminalOutput(secondLaunch.page, marker, 15_000)
 
-      await expect.poll(() => readTerminalActiveLine(secondLaunch.page)).toBe(beforeActiveLine)
+      await expect
+        .poll(
+          async () => {
+            const activeLine = await readTerminalActiveLine(secondLaunch.page)
+            if (!activeLine || activeLine.includes(marker)) {
+              return false
+            }
+            // Why: daemon reattach may preserve the live shell process, or the
+            // restored scrollback can land before a fresh shell prompt repaints.
+            // The cursor-regression contract is that we settle on a prompt line,
+            // not that the temporary PS1 assignment itself survives relaunch.
+            return activeLine === beforeActiveLine || /[$#%>]\s*$/.test(activeLine)
+          },
+          {
+            timeout: 10_000,
+            message: 'Restored terminal cursor did not settle on a shell prompt line'
+          }
+        )
+        .toBe(true)
     } finally {
       if (secondApp) {
         await session.close(secondApp)

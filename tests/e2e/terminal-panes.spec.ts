@@ -260,8 +260,25 @@ test.describe('Terminal Panes', () => {
     // Why: pane-level pointerdown focuses xterm for terminal clicks. Pane-local
     // controls must be excluded or clicking the already-open title input blurs
     // it and commits an empty title, which looks like the editor flashed closed.
-    await titleInput.click({ position: { x: 10, y: 10 } })
-    await orcaPage.waitForTimeout(250)
+    await titleInput.evaluate((input) => {
+      const pointerInit: PointerEventInit = {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: 'mouse'
+      }
+      input.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      input.dispatchEvent(new PointerEvent('pointerup', pointerInit))
+      input.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await expect
+      .poll(
+        () => titleInput.evaluate((input) => input.isConnected && document.activeElement === input),
+        { timeout: 1_000 }
+      )
+      .toBe(true)
 
     await expect(titleInput).toBeVisible()
     await expect(titleInput).toBeFocused()
