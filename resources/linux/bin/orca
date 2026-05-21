@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# Why: when invoked via a symlink (e.g. ~/.local/bin/orca created by the in-app
+# CLI installer), BASH_SOURCE points at the symlink itself. Without resolving
+# it, SCRIPT_DIR/APP_DIR fall back to the symlink's parent (often $HOME), and
+# the binary probe below would match a same-named directory like ~/orca.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+	DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+	SOURCE="$(readlink "$SOURCE")"
+	[[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 RESOURCES_DIR="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 APP_DIR="$(cd "$RESOURCES_DIR/.." >/dev/null 2>&1 && pwd)"
 
-if [ -x "$APP_DIR/orca" ]; then
-	ELECTRON="$APP_DIR/orca"
-elif [ -x "$APP_DIR/Orca" ]; then
-	ELECTRON="$APP_DIR/Orca"
-else
+# Why: electron-builder ships the Linux binary as `orca-ide` to avoid colliding
+# with Ubuntu's GNOME Orca package (see electron-builder.config.cjs). Older or
+# alternate builds may still use `orca`/`Orca`, so probe each name. The -f test
+# rejects same-named directories — bash `-x` alone is true for traversable
+# dirs, which caused the original `Is a directory` exec failure.
+ELECTRON=""
+for candidate in orca-ide orca Orca; do
+	if [ -f "$APP_DIR/$candidate" ] && [ -x "$APP_DIR/$candidate" ]; then
+		ELECTRON="$APP_DIR/$candidate"
+		break
+	fi
+done
+
+if [ -z "$ELECTRON" ]; then
 	echo "Unable to locate the Orca executable next to $RESOURCES_DIR" >&2
 	exit 1
 fi
