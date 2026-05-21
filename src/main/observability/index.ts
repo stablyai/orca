@@ -40,14 +40,16 @@ import {
 } from './local-file-sink'
 import {
   collectBundle as _collectBundle,
+  type CollectBundleOptions,
+  type CollectedBundle
+} from './bundle'
+import {
   deleteBundle as _deleteBundle,
   uploadBundle as _uploadBundle,
-  type CollectBundleOptions,
-  type CollectedBundle,
   type DeleteBundleOptions,
   type UploadBundleOptions,
   type UploadBundleResult
-} from './bundle'
+} from './diagnostic-bundle-upload'
 import { createOtlpExporterFromEnv, type OtlpExporter } from './otlp-exporter'
 import { setActiveSink, type TracerSink } from './tracer'
 

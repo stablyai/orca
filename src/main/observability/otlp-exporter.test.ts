@@ -1,12 +1,40 @@
-// OTLP encoder tests. Network roundtrip is not exercised here — the
-// `postJson` path is a thin Node http wrapper and is best left to integration
-// tests against a real LGTM container. This suite locks the wire encoding.
+// OTLP exporter tests. Most cases lock the wire encoding; the flush suite uses
+// a local HTTP server to verify batching without requiring an LGTM container.
 
-import { describe, expect, it } from 'vitest'
-import { _internalsForTests, createOtlpExporterFromEnv } from './otlp-exporter'
+import { createServer, type RequestListener, type Server } from 'node:http'
+import { afterEach, describe, expect, it } from 'vitest'
+import { _internalsForTests, createOtlpExporter, createOtlpExporterFromEnv } from './otlp-exporter'
 import type { RedactableSpan } from './redactor'
 
 const { encodeOtlpPayload, toOtlpAttributes, spanKindToOtlp } = _internalsForTests
+
+let server: Server | null = null
+
+afterEach(
+  () =>
+    new Promise<void>((resolve) => {
+      if (!server) {
+        resolve()
+        return
+      }
+      server.close(() => {
+        server = null
+        resolve()
+      })
+    })
+)
+
+function listen(handler: RequestListener): Promise<string> {
+  server = createServer(handler)
+  return new Promise((resolve) => {
+    server?.listen(0, '127.0.0.1', () => {
+      const address = server?.address()
+      if (address && typeof address === 'object') {
+        resolve(`http://127.0.0.1:${address.port}`)
+      }
+    })
+  })
+}
 
 function span(overrides: Partial<RedactableSpan> = {}): RedactableSpan {
   return {
@@ -32,6 +60,39 @@ describe('otlp-exporter — env gating', () => {
     if (before !== undefined) {
       process.env.ORCA_OTLP_TRACES_URL = before
     }
+  })
+})
+
+describe('otlp-exporter — flushing', () => {
+  it('serializes batch POSTs and awaits in-flight flushes', async () => {
+    let activeRequests = 0
+    let maxConcurrentRequests = 0
+    let requestCount = 0
+    const baseUrl = await listen((req, res) => {
+      req.resume()
+      requestCount += 1
+      activeRequests += 1
+      maxConcurrentRequests = Math.max(maxConcurrentRequests, activeRequests)
+      setTimeout(() => {
+        activeRequests -= 1
+        res.setHeader('content-type', 'application/json')
+        res.end('{}')
+      }, 20)
+    })
+    const exporter = createOtlpExporter({
+      tracesUrl: `${baseUrl}/v1/traces`,
+      serviceName: 'orca-test',
+      timeoutMs: 1_000
+    })
+
+    for (let i = 0; i < 128; i++) {
+      exporter.exportSpan(span({ spanId: i.toString(16).padStart(16, '0') }))
+    }
+    await exporter.flush()
+    exporter.close()
+
+    expect(requestCount).toBe(2)
+    expect(maxConcurrentRequests).toBe(1)
   })
 })
 

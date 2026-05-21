@@ -1,18 +1,38 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, Globe, Trash2 } from 'lucide-react'
-import type { DiagnosticsStatusPayload } from '../../../../preload/api-types'
+import { FileText, Folder, Globe, Trash2 } from 'lucide-react'
+import type {
+  DiagnosticsBundlePayload,
+  DiagnosticsStatusPayload
+} from '../../../../preload/api-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
+import {
+  getDiagnosticBundleDescription,
+  PrivacyDiagnosticBundleControls
+} from './PrivacyDiagnosticBundleControls'
 
 export function PrivacyDiagnosticsSection(): React.JSX.Element {
   const [status, setStatus] = useState<DiagnosticsStatusPayload | null>(null)
+  const [bundle, setBundle] = useState<DiagnosticsBundlePayload | null>(null)
+  const [previewOpened, setPreviewOpened] = useState(false)
+  const [ticketId, setTicketId] = useState<string | null>(null)
+  const [collecting, setCollecting] = useState(false)
+  const [openingPreview, setOpeningPreview] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
+  const [copyingTicket, setCopyingTicket] = useState(false)
+  const [deletingTicket, setDeletingTicket] = useState(false)
+  const mountedRef = useRef(true)
+  const activeBundleSubmissionIdRef = useRef<string | null>(null)
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     try {
       const next = await window.api.diagnostics.getStatus()
-      setStatus(next)
+      if (mountedRef.current) {
+        setStatus(next)
+      }
     } catch {
       /* swallow — pane shows N/A while the IPC is unavailable */
     }
@@ -21,6 +41,20 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
   useEffect(() => {
     void refreshStatus()
   }, [refreshStatus])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (activeBundleSubmissionIdRef.current) {
+        void window.api.diagnostics.discardBundlePreview(activeBundleSubmissionIdRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    activeBundleSubmissionIdRef.current = bundle?.bundleSubmissionId ?? null
+  }, [bundle])
 
   const handleOpenFolder = useCallback(async (): Promise<void> => {
     try {
@@ -33,18 +67,197 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
   const handleClear = useCallback(async (): Promise<void> => {
     try {
       await window.api.diagnostics.clearTraces()
+      if (!mountedRef.current) {
+        return
+      }
+      activeBundleSubmissionIdRef.current = null
+      setBundle(null)
+      setPreviewOpened(false)
+      setTicketId(null)
       await refreshStatus()
       toast.success('Local trace files cleared')
     } catch {
-      toast.error('Could not clear trace files')
+      if (mountedRef.current) {
+        toast.error('Could not clear trace files')
+      }
     }
   }, [refreshStatus])
+
+  const handleCollectBundle = useCallback(async (): Promise<void> => {
+    setCollecting(true)
+    try {
+      const nextBundle = await window.api.diagnostics.collectBundle()
+      if (!mountedRef.current) {
+        await window.api.diagnostics.discardBundlePreview(nextBundle.bundleSubmissionId)
+        return
+      }
+      setBundle(nextBundle)
+      setPreviewOpened(false)
+      setTicketId(null)
+      toast.success('Diagnostic bundle preview created')
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(getDiagnosticsErrorMessage(error, 'Could not create diagnostic bundle'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setCollecting(false)
+      }
+    }
+  }, [])
+
+  const handleOpenPreview = useCallback(async (): Promise<void> => {
+    if (!bundle) {
+      return
+    }
+    setOpeningPreview(true)
+    try {
+      await window.api.diagnostics.openBundlePreview(bundle.bundleSubmissionId)
+      if (!mountedRef.current) {
+        return
+      }
+      setPreviewOpened(true)
+      toast.success('Diagnostic bundle preview opened')
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(getDiagnosticsErrorMessage(error, 'Could not open diagnostic bundle preview'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setOpeningPreview(false)
+      }
+    }
+  }, [bundle])
+
+  const handleUploadBundle = useCallback(async (): Promise<void> => {
+    if (!bundle) {
+      return
+    }
+    setUploading(true)
+    try {
+      const upload = await window.api.diagnostics.uploadBundle(bundle.bundleSubmissionId)
+      if (!mountedRef.current) {
+        return
+      }
+      activeBundleSubmissionIdRef.current = null
+      setBundle(null)
+      setPreviewOpened(false)
+      setTicketId(upload.ticketId)
+      toast.success('Diagnostic bundle uploaded')
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(getDiagnosticsErrorMessage(error, 'Could not upload diagnostic bundle'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setUploading(false)
+      }
+    }
+  }, [bundle])
+
+  const handleDiscardBundle = useCallback(async (): Promise<void> => {
+    if (!bundle) {
+      return
+    }
+    setDiscarding(true)
+    try {
+      await window.api.diagnostics.discardBundlePreview(bundle.bundleSubmissionId)
+      if (!mountedRef.current) {
+        return
+      }
+      activeBundleSubmissionIdRef.current = null
+      setBundle(null)
+      setPreviewOpened(false)
+      toast.success('Diagnostic bundle preview discarded')
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          getDiagnosticsErrorMessage(error, 'Could not discard diagnostic bundle preview')
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDiscarding(false)
+      }
+    }
+  }, [bundle])
+
+  const handleCopyTicket = useCallback(async (): Promise<void> => {
+    if (!ticketId) {
+      return
+    }
+    setCopyingTicket(true)
+    try {
+      await window.api.ui.writeClipboardText(ticketId)
+      if (!mountedRef.current) {
+        return
+      }
+      toast.success('Diagnostic ticket copied')
+    } catch {
+      if (mountedRef.current) {
+        toast.error('Could not copy diagnostic ticket')
+      }
+    } finally {
+      if (mountedRef.current) {
+        setCopyingTicket(false)
+      }
+    }
+  }, [ticketId])
+
+  const handleDeleteUploadedBundle = useCallback(async (): Promise<void> => {
+    if (!ticketId) {
+      return
+    }
+    setDeletingTicket(true)
+    try {
+      await window.api.diagnostics.deleteBundle(ticketId)
+      if (!mountedRef.current) {
+        return
+      }
+      setTicketId(null)
+      toast.success('Uploaded diagnostic bundle deleted')
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(getDiagnosticsErrorMessage(error, 'Could not delete diagnostic bundle'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDeletingTicket(false)
+      }
+    }
+  }, [ticketId])
 
   return (
     <>
       {status?.disabledReason ? (
         <DiagnosticsDisabledStateNote reason={status.disabledReason} />
       ) : null}
+      <Separator />
+      <Section
+        icon={<FileText className="size-4" />}
+        title="Diagnostic bundle"
+        description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId })}
+      >
+        <PrivacyDiagnosticBundleControls
+          status={status}
+          bundle={bundle}
+          previewOpened={previewOpened}
+          ticketId={ticketId}
+          collecting={collecting}
+          openingPreview={openingPreview}
+          uploading={uploading}
+          discarding={discarding}
+          copyingTicket={copyingTicket}
+          deletingTicket={deletingTicket}
+          onCollect={handleCollectBundle}
+          onOpenPreview={handleOpenPreview}
+          onUpload={handleUploadBundle}
+          onDiscard={handleDiscardBundle}
+          onCopyTicket={handleCopyTicket}
+          onDeleteUploadedBundle={handleDeleteUploadedBundle}
+          onDismissTicket={() => setTicketId(null)}
+        />
+      </Section>
       <Separator />
       <Section
         icon={<Folder className="size-4" />}
@@ -91,6 +304,10 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       </Section>
     </>
   )
+}
+
+function getDiagnosticsErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
 function DiagnosticsDisabledStateNote({

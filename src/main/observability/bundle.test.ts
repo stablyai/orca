@@ -1,21 +1,15 @@
 /* oxlint-disable max-lines -- Why: diagnostics bundle fixtures cover collection, preview deletion, upload URL hardening, and byte caps as one contract surface. Splitting would duplicate the temp-file/server harness and make edge-case coverage harder to audit. */
-// Bundle collection tests — focused on the data-shape contracts. The HTTP
-// upload path is exercised by integration tests against a real or mocked
-// server endpoint and is intentionally out of scope here.
+// Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
+// this suite keeps the diagnostic bundle contract in one place.
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type RequestListener, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  _internalsForTests,
-  collectBundle,
-  deleteBundle,
-  generateBundleSubmissionId,
-  uploadBundle,
-  validateUploadUrl
-} from './bundle'
+import { _internalsForTests, collectBundle, generateBundleSubmissionId } from './bundle'
+import { deleteBundle, uploadBundle, validateUploadUrl } from './diagnostic-bundle-upload'
+import { MAX_RESPONSE_BYTES } from './diagnostic-upload-http'
 
 let dir: string
 let traceFile: string
@@ -464,6 +458,31 @@ describe('uploadBundle and deleteBundle', () => {
         bundleSubmissionId: generateBundleSubmissionId()
       })
     ).rejects.toThrow(/^diagnostic network request failed$/)
+  })
+
+  it('does not include invalid tokenEndpoint values in thrown errors', async () => {
+    await expect(
+      uploadBundle({
+        tokenEndpoint: 'not a url with sk-ant-api03-secret',
+        payload: '{}\n',
+        bundleSubmissionId: generateBundleSubmissionId()
+      })
+    ).rejects.toThrow(/^diagnostic endpoint configuration is invalid$/)
+  })
+
+  it('caps diagnostic endpoint response bodies', async () => {
+    const baseUrl = await listen((_req, res) => {
+      res.setHeader('content-type', 'application/json')
+      res.end('x'.repeat(MAX_RESPONSE_BYTES + 1))
+    })
+
+    await expect(
+      uploadBundle({
+        tokenEndpoint: `${baseUrl}/token`,
+        payload: '{}\n',
+        bundleSubmissionId: generateBundleSubmissionId()
+      })
+    ).rejects.toThrow(/^diagnostic response exceeded size limit$/)
   })
 
   it('posts deletion requests to the diagnostics delete endpoint for a ticket', async () => {

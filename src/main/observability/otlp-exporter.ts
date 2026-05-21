@@ -68,6 +68,7 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
   let timer: NodeJS.Timeout | null = null
   let warned = false
   let closed = false
+  let flushPromise: Promise<void> | null = null
 
   function ensureTimer(): void {
     if (timer || closed) {
@@ -75,14 +76,14 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
     }
     timer = setTimeout(() => {
       timer = null
-      void flush()
+      void runFlushLoop()
     }, FLUSH_INTERVAL_MS)
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
   }
 
-  async function flush(): Promise<void> {
+  async function flushBatch(): Promise<void> {
     if (queue.length === 0) {
       return
     }
@@ -101,9 +102,23 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
       // Drop the batch on the floor; this is a best-effort path. Re-queueing
       // forever would risk unbounded memory growth on a misconfigured URL.
     }
-    if (queue.length > 0) {
-      ensureTimer()
+  }
+
+  function runFlushLoop(): Promise<void> {
+    if (flushPromise) {
+      return flushPromise
     }
+    // Why: MAX_BATCH flushes can be triggered by both the timer and exportSpan.
+    // Serialize them so shutdown can await the currently-posting batch and a
+    // slow collector cannot create overlapping POST bursts.
+    flushPromise = (async () => {
+      while (queue.length > 0) {
+        await flushBatch()
+      }
+    })().finally(() => {
+      flushPromise = null
+    })
+    return flushPromise
   }
 
   return {
@@ -117,7 +132,7 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
       const redacted = redactSpan(span, 'client')
       queue.push({ span: redacted })
       if (queue.length >= MAX_BATCH) {
-        void flush()
+        void runFlushLoop()
       } else {
         ensureTimer()
       }
@@ -127,9 +142,7 @@ export function createOtlpExporter(opts: OtlpExporterOptions): OtlpExporter {
         clearTimeout(timer)
         timer = null
       }
-      while (queue.length > 0) {
-        await flush()
-      }
+      await runFlushLoop()
     },
     close(): void {
       if (timer) {

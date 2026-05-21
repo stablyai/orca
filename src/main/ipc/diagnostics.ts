@@ -21,7 +21,7 @@
 // constant or env var and does the POST itself.
 
 import { app, dialog, ipcMain, shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +34,8 @@ import {
   uploadDiagnosticBundle,
   type DiagnosticsStatus
 } from '../observability'
-import type { CollectedBundle, UploadBundleResult } from '../observability/bundle'
+import type { CollectedBundle } from '../observability/bundle'
+import type { UploadBundleResult } from '../observability/diagnostic-bundle-upload'
 
 export type DiagnosticsBundlePreview = Omit<CollectedBundle, 'payload'>
 
@@ -157,13 +158,9 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   if (!pending.previewOpened) {
     throw new Error('open the diagnostic bundle preview before uploading')
   }
-  let payload: string
-  try {
-    payload = readFileSync(pending.previewFilePath, 'utf8')
-  } catch {
-    throw new Error('diagnostic bundle preview is unavailable; collect a new preview')
-  }
-  return { bundle: pending.bundle, payload }
+  // Why: the preview file is user-editable once opened in the OS. Upload only
+  // the redacted bytes main collected and retained before preview.
+  return { bundle: pending.bundle, payload: pending.bundle.payload }
 }
 
 function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
@@ -309,15 +306,20 @@ export function registerDiagnosticsHandlers(): void {
     async (_event, bundleSubmissionId: unknown): Promise<UploadBundleResult> => {
       // Why: the renderer is in the threat model. Upload only a payload main
       // collected and retained for preview, never renderer-supplied bytes.
-      const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
+      const pendingForConfirmation = getPendingBundleForUpload(bundleSubmissionId)
       // Consent gate: main is the consent enforcement boundary; the
       // renderer-side button-hide is UX, not security. Re-check here in case
       // the user toggled the setting off between collect and upload.
-      const status = getDiagnosticsStatus()
-      if (!status.bundleEnabled) {
+      if (!getDiagnosticsStatus().bundleEnabled) {
         throw new Error('diagnostic bundle collection is disabled')
       }
-      await confirmBundleUpload(bundle)
+      await confirmBundleUpload(pendingForConfirmation.bundle)
+      // Why: the preview can be discarded or diagnostics can be disabled
+      // while the native confirmation dialog is open.
+      const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
+      if (!getDiagnosticsStatus().bundleEnabled) {
+        throw new Error('diagnostic bundle collection is disabled')
+      }
       const tokenEndpoint = resolveTokenEndpoint()
       if (!tokenEndpoint) {
         throw new Error('diagnostic upload endpoint is not configured for this build')

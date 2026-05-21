@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: diagnostics IPC tests share mocked Electron handler setup; splitting would duplicate brittle IPC wiring. */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CollectedBundle } from '../observability/bundle'
@@ -189,7 +190,26 @@ describe('diagnostics IPC handlers', () => {
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
-  it('uploads edited preview file contents instead of the original payload', async () => {
+  it('rechecks the retained preview after upload confirmation', async () => {
+    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
+    collectDiagnosticBundleMock.mockReturnValue(bundle)
+    const collect = handlers.get('diagnostics:collectBundle')!
+    const openPreview = handlers.get('diagnostics:openBundlePreview')!
+    const discard = handlers.get('diagnostics:discardBundlePreview')!
+    const upload = handlers.get('diagnostics:uploadBundle')!
+    showMessageBoxMock.mockImplementation(async () => {
+      await discard({}, bundle.bundleSubmissionId)
+      return { response: 0 }
+    })
+
+    await collect({}, 30)
+    await openPreview({}, bundle.bundleSubmissionId)
+    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
+
+    expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores edited preview file contents and uploads the retained original payload', async () => {
     const bundle = makeBundle({
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"original":true}\n'
@@ -204,12 +224,9 @@ describe('diagnostics IPC handlers', () => {
     await openPreview({}, bundle.bundleSubmissionId)
     await upload({}, bundle.bundleSubmissionId)
 
-    expect(readFileSync).toHaveBeenCalledWith(
-      expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`),
-      'utf8'
-    )
+    expect(readFileSync).not.toHaveBeenCalled()
     expect(uploadDiagnosticBundleMock).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: '{"edited":true}\n' })
+      expect.objectContaining({ payload: '{"original":true}\n' })
     )
   })
 
