@@ -20,6 +20,10 @@ import {
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { buildResolveConflictsPrompt, pickDefaultSourceControlAgent } from './SourceControl'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-prompt'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review'
@@ -73,6 +77,8 @@ export default function ChecksPanel(): React.JSX.Element {
   const [conflictDetailsRefreshing, setConflictDetailsRefreshing] = useState(false)
   const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
+  const [isResolvingConflictsWithAI, setIsResolvingConflictsWithAI] = useState(false)
+  const [isFixingChecksWithAI, setIsFixingChecksWithAI] = useState(false)
   const [hostedReviewCreation, setHostedReviewCreation] =
     useState<HostedReviewCreationEligibility | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -702,6 +708,105 @@ export default function ChecksPanel(): React.JSX.Element {
     [repo, prNumber, pr?.prRepo, resolveReviewThread]
   )
 
+  // Why: PR conflict files come from GitHub (paths only, no per-file conflict
+  // kind), so we hand them to the same prompt builder used by Source Control
+  // with conflictKind left undefined. The agent picks up the rest from
+  // `git status` once it lands in the worktree.
+  const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
+    if (isResolvingConflictsWithAI || !activeWorktreeId || !pr) {
+      return
+    }
+    const conflictFiles = pr.conflictSummary?.files ?? []
+    setIsResolvingConflictsWithAI(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId)
+      if (connectionId === undefined) {
+        toast.error('Unable to resolve the workspace connection.')
+        return
+      }
+      const store = useAppStore.getState()
+      const detectedAgents =
+        typeof connectionId === 'string'
+          ? await store.ensureRemoteDetectedAgents(connectionId)
+          : await store.ensureDetectedAgents()
+      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      if (!agent) {
+        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        return
+      }
+      const prompt = buildResolveConflictsPrompt({
+        conflictOperation: 'merge',
+        entries: conflictFiles.map((path) => ({ path })),
+        worktreePath: activeWorktreePath ?? null
+      })
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId: activeWorktreeId,
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'conflict_resolution'
+      })
+      if (!result) {
+        toast.error('Could not build the agent launch command.')
+        return
+      }
+      focusTerminalTabSurface(result.tabId)
+      toast.success('Started an AI agent for the conflicts.')
+    } finally {
+      setIsResolvingConflictsWithAI(false)
+    }
+  }, [activeWorktreeId, activeWorktreePath, isResolvingConflictsWithAI, pr])
+
+  const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
+    if (isFixingChecksWithAI || !activeWorktreeId || !pr) {
+      return
+    }
+    const broken = getBrokenChecks(checks)
+    if (broken.length === 0) {
+      toast.message('No broken checks to fix.')
+      return
+    }
+    setIsFixingChecksWithAI(true)
+    try {
+      const connectionId = getConnectionId(activeWorktreeId)
+      if (connectionId === undefined) {
+        toast.error('Unable to resolve the workspace connection.')
+        return
+      }
+      const store = useAppStore.getState()
+      const detectedAgents =
+        typeof connectionId === 'string'
+          ? await store.ensureRemoteDetectedAgents(connectionId)
+          : await store.ensureDetectedAgents()
+      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      if (!agent) {
+        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        return
+      }
+      const prompt = buildFixBrokenChecksPrompt({
+        prNumber: pr.number,
+        prTitle: pr.title,
+        prUrl: pr.url,
+        checks
+      })
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId: activeWorktreeId,
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'task_page'
+      })
+      if (!result) {
+        toast.error('Could not build the agent launch command.')
+        return
+      }
+      focusTerminalTabSurface(result.tabId)
+      toast.success('Started an AI agent for the broken checks.')
+    } finally {
+      setIsFixingChecksWithAI(false)
+    }
+  }, [activeWorktreeId, checks, isFixingChecksWithAI, pr])
+
   // Refresh PR (passed to PRActions)
   const handleRefreshPR = useCallback(async () => {
     if (repo && branch) {
@@ -1118,16 +1223,27 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
       </div>
 
-      <ConflictingFilesSection pr={pr} />
+      <ConflictingFilesSection
+        pr={pr}
+        isResolvingWithAI={isResolvingConflictsWithAI}
+        onResolveWithAI={() => void handleResolveConflictsWithAI()}
+      />
       <MergeConflictNotice
         pr={pr}
         isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
+        isResolvingWithAI={isResolvingConflictsWithAI}
+        onResolveWithAI={() => void handleResolveConflictsWithAI()}
       />
       {/* Why: when the PR has merge conflicts and no checks have been fetched,
           showing "No checks configured" is misleading — checks may exist but
           simply cannot run until conflicts are resolved. Hide the empty state. */}
       {!(pr.mergeable === 'CONFLICTING' && checks.length === 0 && !checksLoading) && (
-        <ChecksList checks={checks} checksLoading={checksLoading} />
+        <ChecksList
+          checks={checks}
+          checksLoading={checksLoading}
+          isFixingWithAI={isFixingChecksWithAI}
+          onFixWithAI={() => void handleFixChecksWithAI()}
+        />
       )}
       <PRCommentsList
         comments={comments}
