@@ -272,7 +272,8 @@ const TerminalRead = TerminalHandle.extend({
           message: 'Cursor must be a non-negative integer'
         })
     )
-    .optional()
+    .optional(),
+  limit: OptionalFiniteNumber
 })
 
 // Why: the legacy handler allowed `title: string | null` and rejected every
@@ -472,7 +473,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.read',
     params: TerminalRead,
     handler: async (params, { runtime }) => ({
-      terminal: await runtime.readTerminal(params.terminal, { cursor: params.cursor })
+      terminal: await runtime.readTerminal(params.terminal, {
+        cursor: params.cursor,
+        limit: params.limit
+      })
     })
   }),
   defineMethod({

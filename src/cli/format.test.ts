@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RuntimeRpcFailureError } from './runtime-client'
-import { formatCliError, formatWorktreeList } from './format'
+import { formatCliError, formatTerminalRead, formatWorktreeList } from './format'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 
 function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktreeRecord {
@@ -87,5 +87,45 @@ describe('formatWorktreeList', () => {
     expect(output).toContain('childWorktreeIds: repo::/tmp/repo/child')
     expect(output).toContain('parentWorktreeId: repo::/tmp/repo/parent')
     expect(output).toContain('childWorktreeIds: []')
+  })
+})
+
+describe('formatTerminalRead', () => {
+  it('prints cursor metadata and limit warnings when the runtime returns them', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: ['line 1'],
+        truncated: false,
+        limited: true,
+        oldestCursor: '0',
+        nextCursor: '50',
+        latestCursor: '150',
+        returnedLineCount: 1
+      }
+    })
+
+    expect(output).toContain('cursor: 50')
+    expect(output).toContain('oldest cursor: 0')
+    expect(output).toContain('latest cursor: 150')
+    expect(output).toContain('warning: output limited; read again with the returned cursor')
+  })
+
+  it('keeps older runtime read responses readable', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: ['old server output'],
+        truncated: true,
+        nextCursor: '12'
+      }
+    })
+
+    expect(output).toContain('cursor: 12')
+    expect(output).toContain('warning: older output is no longer retained')
+    expect(output).toContain('old server output')
+    expect(output).not.toContain('undefined')
   })
 })

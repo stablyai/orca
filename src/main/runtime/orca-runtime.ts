@@ -4216,49 +4216,27 @@ export class OrcaRuntimeService {
     }
   }
 
-  async readTerminal(handle: string, opts: { cursor?: number } = {}): Promise<RuntimeTerminalRead> {
+  async readTerminal(
+    handle: string,
+    opts: { cursor?: number; limit?: number } = {}
+  ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       return this.readPtyTerminal(handle, pty.pty, opts)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
-    const allLines = buildTailLines(leaf.tailBuffer, leaf.tailPartialLine)
-
-    let tail: string[]
-    let truncated: boolean
-
-    if (typeof opts.cursor === 'number' && opts.cursor >= 0) {
-      // Why: the buffer only retains the last MAX_TAIL_LINES lines. If the
-      // caller's cursor points to lines that were already evicted, we can only
-      // return what's still in memory and mark truncated=true to signal the gap.
-      const bufferStart = leaf.tailLinesTotal - leaf.tailBuffer.length
-      const sliceFrom = Math.max(0, opts.cursor - bufferStart)
-      // Why: cursor-based reads return only completed lines, excluding the
-      // trailing partial line. Including the partial would cause duplication:
-      // the consumer sees "hel" now, then "hello\n" on the next read after
-      // the line completes — same content delivered twice.
-      tail = leaf.tailBuffer.slice(sliceFrom)
-      truncated = opts.cursor < bufferStart
-    } else {
-      tail = allLines
-      // Why: Orca does not have a truthful main-owned screen model yet,
-      // especially for hidden panes. Focused v1 therefore returns the bounded
-      // tail lines directly instead of duplicating the same text in a fake
-      // screen field that would waste agent tokens.
-      truncated = leaf.tailTruncated
-    }
-
-    return {
+    const read = readTerminalTail({
       handle,
       status: getTerminalState(leaf),
-      tail,
-      truncated,
-      // Why: cursors advance by completed lines only. If we count the current
-      // partial line here, later reads can skip continued output on that same
-      // line because no new complete line was emitted yet.
-      nextCursor: String(leaf.tailLinesTotal)
-    }
+      completedLines: leaf.tailBuffer,
+      partialLine: leaf.tailPartialLine,
+      completedLineCount: leaf.tailLinesTotal,
+      bufferTruncated: leaf.tailTruncated,
+      cursor: opts.cursor,
+      limit: opts.limit
+    })
+    return read
   }
 
   async sendTerminal(
@@ -9092,30 +9070,18 @@ export class OrcaRuntimeService {
   private readPtyTerminal(
     handle: string,
     pty: RuntimePtyWorktreeRecord,
-    opts: { cursor?: number } = {}
+    opts: { cursor?: number; limit?: number } = {}
   ): RuntimeTerminalRead {
-    const allLines = buildTailLines(pty.tailBuffer, pty.tailPartialLine)
-
-    let tail: string[]
-    let truncated: boolean
-
-    if (typeof opts.cursor === 'number' && opts.cursor >= 0) {
-      const bufferStart = pty.tailLinesTotal - pty.tailBuffer.length
-      const sliceFrom = Math.max(0, opts.cursor - bufferStart)
-      tail = pty.tailBuffer.slice(sliceFrom)
-      truncated = opts.cursor < bufferStart
-    } else {
-      tail = allLines
-      truncated = pty.tailTruncated
-    }
-
-    return {
+    return readTerminalTail({
       handle,
       status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-      tail,
-      truncated,
-      nextCursor: String(pty.tailLinesTotal)
-    }
+      completedLines: pty.tailBuffer,
+      partialLine: pty.tailPartialLine,
+      completedLineCount: pty.tailLinesTotal,
+      bufferTruncated: pty.tailTruncated,
+      cursor: opts.cursor,
+      limit: opts.limit
+    })
   }
 
   private issueHandle(leaf: RuntimeLeafRecord): string {
@@ -10128,8 +10094,10 @@ export class OrcaRuntimeService {
   }
 }
 
-const MAX_TAIL_LINES = 120
-const MAX_TAIL_CHARS = 4000
+const MAX_TAIL_LINES = 2000
+const MAX_TAIL_CHARS = 256 * 1024
+const DEFAULT_TERMINAL_READ_LIMIT = 120
+const MAX_TERMINAL_READ_LIMIT = 2000
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
@@ -10245,6 +10213,81 @@ function appendToTailBuffer(
 
 function buildTailLines(lines: string[], partialLine: string): string[] {
   return partialLine.length > 0 ? [...lines, partialLine] : lines
+}
+
+function terminalReadLimit(limit: number | undefined, defaultLimit: number): number {
+  if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
+    return defaultLimit
+  }
+  return Math.min(Math.floor(limit), MAX_TERMINAL_READ_LIMIT)
+}
+
+function readTerminalTail(args: {
+  handle: string
+  status: RuntimeTerminalState
+  completedLines: string[]
+  partialLine: string
+  completedLineCount: number
+  bufferTruncated: boolean
+  cursor?: number
+  limit?: number
+}): RuntimeTerminalRead {
+  const oldestCursor = Math.max(0, args.completedLineCount - args.completedLines.length)
+  const latestCursor = args.completedLineCount
+
+  if (typeof args.cursor === 'number' && args.cursor >= 0) {
+    const limit = terminalReadLimit(args.limit, MAX_TERMINAL_READ_LIMIT)
+    if (args.cursor > latestCursor) {
+      return {
+        handle: args.handle,
+        status: args.status,
+        tail: [],
+        truncated: false,
+        limited: false,
+        oldestCursor: String(oldestCursor),
+        nextCursor: String(latestCursor),
+        latestCursor: String(latestCursor),
+        returnedLineCount: 0
+      }
+    }
+    // Why: cursor reads are transcript/pagination reads. They return completed
+    // lines only so a partial line is not delivered once as "hel" and again as
+    // "hello" after the newline arrives.
+    const startCursor = Math.max(args.cursor, oldestCursor)
+    const startIndex = startCursor - oldestCursor
+    const available = args.completedLines.slice(startIndex)
+    const tail = available.slice(0, limit)
+    const nextCursor = startCursor + tail.length
+    return {
+      handle: args.handle,
+      status: args.status,
+      tail,
+      truncated: args.cursor < oldestCursor,
+      limited: tail.length < available.length,
+      oldestCursor: String(oldestCursor),
+      nextCursor: String(nextCursor),
+      latestCursor: String(latestCursor),
+      returnedLineCount: tail.length
+    }
+  }
+
+  // Why: un-cursored reads are preview reads for humans/agents. Return the
+  // latest bounded view, while the larger retained buffer remains available
+  // through cursor reads plus --limit.
+  const limit = terminalReadLimit(args.limit, DEFAULT_TERMINAL_READ_LIMIT)
+  const allLines = buildTailLines(args.completedLines, args.partialLine)
+  const tail = allLines.slice(-limit)
+  return {
+    handle: args.handle,
+    status: args.status,
+    tail,
+    truncated: args.bufferTruncated,
+    limited: tail.length < allLines.length,
+    oldestCursor: String(oldestCursor),
+    nextCursor: String(latestCursor),
+    latestCursor: String(latestCursor),
+    returnedLineCount: tail.length
+  }
 }
 
 function getTerminalState(leaf: RuntimeLeafRecord): RuntimeTerminalState {

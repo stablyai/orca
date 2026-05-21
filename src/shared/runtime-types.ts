@@ -310,7 +310,11 @@ export type RuntimeTerminalRead = {
   status: RuntimeTerminalState
   tail: string[]
   truncated: boolean
+  limited?: boolean
+  oldestCursor?: string
   nextCursor: string | null
+  latestCursor?: string
+  returnedLineCount?: number
 }
 
 export type RuntimeTerminalRename = {

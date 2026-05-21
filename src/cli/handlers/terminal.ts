@@ -75,7 +75,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     }
     const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      ...(cursor !== undefined ? { cursor } : {})
+      ...(cursor !== undefined ? { cursor } : {}),
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, formatTerminalRead)
   },

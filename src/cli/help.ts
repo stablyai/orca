@@ -169,7 +169,7 @@ Common Commands:
   orca worktree ps [--limit <n>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--json]
   orca terminal show [--terminal <handle>] [--json]
-  orca terminal read [--terminal <handle>] [--json]
+  orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]

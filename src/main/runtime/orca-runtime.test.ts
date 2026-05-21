@@ -2686,6 +2686,90 @@ describe('OrcaRuntimeService', () => {
     expect(thirdRead.nextCursor).toBe('2')
   })
 
+  it('paginates retained terminal output with explicit limits and truncation metadata', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      `${Array.from({ length: 150 }, (_, index) => `line-${index}`).join('\n')}\n`,
+      100
+    )
+
+    const preview = await runtime.readTerminal(terminal.handle)
+    expect(preview.tail).toHaveLength(120)
+    expect(preview.tail[0]).toBe('line-30')
+    expect(preview.limited).toBe(true)
+    expect(preview.oldestCursor).toBe('0')
+    expect(preview.latestCursor).toBe('150')
+
+    const defaultCursorRead = await runtime.readTerminal(terminal.handle, { cursor: 0 })
+    expect(defaultCursorRead.tail).toHaveLength(150)
+    expect(defaultCursorRead.nextCursor).toBe('150')
+    expect(defaultCursorRead.limited).toBe(false)
+
+    const firstPage = await runtime.readTerminal(terminal.handle, { cursor: 0, limit: 50 })
+    expect(firstPage.tail).toHaveLength(50)
+    expect(firstPage.tail[0]).toBe('line-0')
+    expect(firstPage.nextCursor).toBe('50')
+    expect(firstPage.limited).toBe(true)
+    expect(firstPage.truncated).toBe(false)
+
+    const secondPage = await runtime.readTerminal(terminal.handle, {
+      cursor: Number(firstPage.nextCursor),
+      limit: 200
+    })
+    expect(secondPage.tail).toHaveLength(100)
+    expect(secondPage.tail[0]).toBe('line-50')
+    expect(secondPage.nextCursor).toBe('150')
+    expect(secondPage.limited).toBe(false)
+
+    runtime.onPtyData(
+      'pty-1',
+      `${Array.from({ length: 2100 }, (_, index) => `later-${index}`).join('\n')}\n`,
+      101
+    )
+
+    const staleCursorRead = await runtime.readTerminal(terminal.handle, { cursor: 0, limit: 5 })
+    expect(staleCursorRead.truncated).toBe(true)
+    expect(staleCursorRead.oldestCursor).toBe('250')
+    expect(staleCursorRead.tail).toEqual([
+      'later-100',
+      'later-101',
+      'later-102',
+      'later-103',
+      'later-104'
+    ])
+    expect(staleCursorRead.nextCursor).toBe('255')
+
+    const futureCursorRead = await runtime.readTerminal(terminal.handle, { cursor: 9999 })
+    expect(futureCursorRead.tail).toEqual([])
+    expect(futureCursorRead.nextCursor).toBe('2250')
+    expect(futureCursorRead.limited).toBe(false)
+  })
+
   it('delivers pending orchestration messages to an already-idle agent', async () => {
     vi.useFakeTimers()
     try {

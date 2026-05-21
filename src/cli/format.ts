@@ -174,10 +174,18 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
   const terminal = result.terminal
+  const oldestCursor =
+    typeof terminal.oldestCursor === 'string' ? [`oldest cursor: ${terminal.oldestCursor}`] : []
+  const latestCursor =
+    typeof terminal.latestCursor === 'string' ? [`latest cursor: ${terminal.latestCursor}`] : []
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
-    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : [])
+    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
+    ...oldestCursor,
+    ...latestCursor,
+    ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
+    ...(terminal.limited ? ['warning: output limited; read again with the returned cursor'] : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }
