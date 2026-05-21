@@ -14,6 +14,10 @@
 
 const PER_PTY_BUFFER_LIMIT = 4096
 const PENDING_PRE_BIND_LIMIT = 16 * 1024
+/** Cap on distinct never-bound PTY IDs. Spawn-failure paths can leave a
+ *  pending entry that never gets bindPty'd — without an upper bound, a
+ *  long-running app would slowly leak one entry per failure. */
+const MAX_PENDING_ENTRIES = 32
 const MAX_CACHE_ENTRIES = 256
 const URL_CANDIDATE_LIMIT = 2048
 
@@ -181,6 +185,11 @@ function isPrivateIpv4(value: string): boolean {
   return false
 }
 
+function isUnspecifiedHost(hostname: string): boolean {
+  const stripped = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  return stripped === '0.0.0.0' || stripped === '::' || stripped === '*'
+}
+
 function isIpv6(value: string): boolean {
   // url.hostname for IPv6 returns lowercase without brackets — quick sniff.
   return value.includes(':') && /^[0-9a-f:]+$/.test(value)
@@ -266,7 +275,18 @@ export class AdvertisedUrlWatcher {
       // src/main/ipc/pty.ts:1318-1323). Buffer until bindPty replays.
       const prior = this.pending.get(ptyId) ?? ''
       const merged = (prior + chunk).slice(-PENDING_PRE_BIND_LIMIT)
+      // Why: drop+reinsert touches insertion order so this acts as an LRU
+      // (Map iterates in insertion order). Combined with the eviction below,
+      // we keep at most MAX_PENDING_ENTRIES distinct unbound PTYs.
+      this.pending.delete(ptyId)
       this.pending.set(ptyId, merged)
+      while (this.pending.size > MAX_PENDING_ENTRIES) {
+        const oldest = this.pending.keys().next().value
+        if (oldest === undefined) {
+          break
+        }
+        this.pending.delete(oldest)
+      }
       return
     }
     let buffer = this.buffers.get(ptyId)
@@ -291,6 +311,14 @@ export class AdvertisedUrlWatcher {
       return
     }
     const hostname = url.hostname
+    // Why: dev servers sometimes print their bind address verbatim
+    // (`http://0.0.0.0:3000/`). Those wildcard hosts cannot be opened in a
+    // browser — the OS scanner already normalizes wildcards to `localhost`
+    // for the connect host, so refuse the advertised value rather than let
+    // it overwrite that sensible default.
+    if (isUnspecifiedHost(hostname)) {
+      return
+    }
     const hostKind = classifyHost(hostname)
     // Why: store origin only — no path, query, fragment, or userinfo. A
     // terminal line containing an OAuth callback or token must not get
@@ -365,13 +393,31 @@ export class AdvertisedUrlWatcher {
    *  worktrees attached to that connection. Returns the highest-scoring
    *  entry by hostKind (custom DNS > loopback > private IP > public IP),
    *  with HTTPS and recency as tie-breakers — same rule as `shouldReplace`
-   *  uses on insert. */
-  lookupBest(worktreeIds: readonly string[], port: number): AdvertisedUrl | undefined {
+   *  uses on insert.
+   *
+   *  When `currentListenerPid` is supplied each candidate entry is run
+   *  through the same pin-then-evict logic as `lookup()`: entries whose
+   *  validated PID disagrees with the current one are dropped from the
+   *  cache and skipped, so remote port reuse can't surface a stale URL. */
+  lookupBest(
+    worktreeIds: readonly string[],
+    port: number,
+    currentListenerPid?: number
+  ): AdvertisedUrl | undefined {
     let best: AdvertisedUrl | undefined
     for (const worktreeId of worktreeIds) {
-      const candidate = this.cache.get(cacheKey(worktreeId, port))
+      const key = cacheKey(worktreeId, port)
+      const candidate = this.cache.get(key)
       if (!candidate) {
         continue
+      }
+      if (currentListenerPid !== undefined) {
+        if (candidate.validatedListenerPid === undefined) {
+          candidate.validatedListenerPid = currentListenerPid
+        } else if (candidate.validatedListenerPid !== currentListenerPid) {
+          this.cache.delete(key)
+          continue
+        }
       }
       if (!best || shouldReplace(best, candidate)) {
         best = candidate

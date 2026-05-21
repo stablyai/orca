@@ -208,6 +208,27 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     watcher.invalidate(WORKTREE, 3001)
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
   })
+
+  it('rejects wildcard advertised hosts so they cannot override connectHost', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'Listening on http://0.0.0.0:3000/\n')
+    watcher.ingest(PTY, 'Listening on http://[::]:3000/\n')
+    expect(watcher.lookup(WORKTREE, 3000)).toBeUndefined()
+  })
+
+  it('caps the pre-bind pending buffer at 32 distinct PTY IDs', () => {
+    const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
+    // 33 distinct unbound IDs; the first should be evicted before bind.
+    for (let i = 0; i < 33; i++) {
+      watcher.ingest(`pty-${i}`, `https://h${i}.example.com:300${i % 10}/\n`)
+    }
+    // Bind the first ID now; if it was evicted (LRU), no URL should appear.
+    watcher.bindPty('pty-0', WORKTREE)
+    expect(watcher.lookup(WORKTREE, 3000)).toBeUndefined()
+    // Bind the most-recent ID; its pending data must still be there.
+    watcher.bindPty('pty-32', WORKTREE)
+    expect(watcher.lookup(WORKTREE, 3002)?.host).toBe('h32.example.com')
+  })
 })
 
 describe('AdvertisedUrlWatcher.lookupBest', () => {
@@ -230,6 +251,43 @@ describe('AdvertisedUrlWatcher.lookupBest', () => {
     watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
     const best = watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)
     expect(best?.host).toBe('custom.example.com')
+  })
+
+  it('pins the listener PID on first lookupBest match', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
+    const first = watcher.lookupBest([WORKTREE], 3001, 4242)
+    expect(first?.validatedListenerPid).toBe(4242)
+    const second = watcher.lookupBest([WORKTREE], 3001, 4242)
+    expect(second?.host).toBe('a.example.com')
+  })
+
+  it('evicts the stale candidate when the listener PID changed', () => {
+    const watcher = bindFresh()
+    watcher.bindPty('pty-2', 'repo::/wt2')
+    watcher.ingest(PTY, 'A: http://localhost:3001/\n')
+    watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
+    // Pin both candidates to PID 4242.
+    expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 4242)?.host).toBe(
+      'custom.example.com'
+    )
+    // Remote port reused by a different process: both pinned entries get
+    // evicted, so the search now finds nothing.
+    expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 9999)).toBeUndefined()
+    expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)).toBeUndefined()
+  })
+
+  it('falls through to a still-valid candidate when one entry was reassigned', () => {
+    const watcher = bindFresh()
+    watcher.bindPty('pty-2', 'repo::/wt2')
+    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
+    watcher.ingest('pty-2', 'B: https://b.example.com:3001/\n')
+    // Pin only the WORKTREE entry to PID 100.
+    expect(watcher.lookup(WORKTREE, 3001, 100)?.host).toBe('a.example.com')
+    // Now query with PID 200 across both worktrees: the WORKTREE entry
+    // gets evicted (mismatch), and the repo::/wt2 entry — which had no
+    // pinned PID yet — gets pinned to 200 and wins.
+    expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 200)?.host).toBe('b.example.com')
   })
 })
 

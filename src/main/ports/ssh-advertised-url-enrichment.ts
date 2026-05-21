@@ -53,7 +53,10 @@ export function enrichSshDetectedPorts(
     return [...ports]
   }
   return ports.map((port) => {
-    const found = watcher.lookupBest(worktreeIds, port.port)
+    // Why: pass the remote listener PID so the watcher can evict stale URLs
+    // when the port has been reused by a different process. The relay-side
+    // scanner reads /proc/net/tcp and includes the PID when available.
+    const found = watcher.lookupBest(worktreeIds, port.port, port.pid)
     return found ? applyAdvertisedUrl(port, found) : port
   })
 }
@@ -66,6 +69,10 @@ export function enrichSshForwardEntries(
   if (worktreeIds.length === 0 || entries.length === 0) {
     return [...entries]
   }
+  // Why: forward entries are user-configured (persisted by remotePort), not
+  // observed listeners — we cannot validate against a current listener PID
+  // here. Detected-port enrichment is the eviction path; whatever survives
+  // there is safe to surface for the matching forward.
   return entries.map((entry) => {
     const found = watcher.lookupBest(worktreeIds, entry.remotePort)
     return found ? applyAdvertisedUrl(entry, found) : entry
