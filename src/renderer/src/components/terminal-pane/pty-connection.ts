@@ -1128,15 +1128,20 @@ export function connectPanePty(
 
     const dataCallback = (data: string): void => {
       commandLifecycle.handlePtyData(data)
-      if (terminalOutputPrefersDomRenderer(data)) {
-        manager.markPaneHasComplexScriptOutput(pane.id)
-      }
-      recordTerminalOutput(pane.terminal)
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only
       // hidden panes (background tabs) should be throttled.
       writeTerminalOutput(pane.terminal, data, {
-        foreground: deps.isVisibleRef.current
+        foreground: deps.isVisibleRef.current,
+        beforeWrite: (chunk) => {
+          // Why: hidden tab output is coalesced by the scheduler. Run per-byte
+          // renderer checks at the xterm write boundary so background PTY bursts
+          // do not spend foreground event-loop time scanning bytes we will delay.
+          if (terminalOutputPrefersDomRenderer(chunk)) {
+            manager.markPaneHasComplexScriptOutput(pane.id)
+          }
+          recordTerminalOutput(pane.terminal)
+        }
       })
 
       if (pendingStartupCommand) {

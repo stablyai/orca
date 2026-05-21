@@ -35,6 +35,19 @@ function isRendererRiskCodePoint(value: number): boolean {
 }
 
 export function terminalOutputPrefersDomRenderer(data: string): boolean {
+  let hasNonAscii = false
+  for (let i = 0; i < data.length; i += 1) {
+    if (data.charCodeAt(i) > 0x7f) {
+      hasNonAscii = true
+      break
+    }
+  }
+  if (!hasNonAscii) {
+    // Why: Codex-style terminal redraws are usually ASCII; avoid the Unicode
+    // emoji/property regex and code-point walk on the hottest output path.
+    return false
+  }
+
   if (EMOJI_PRESENTATION_PATTERN.test(data)) {
     return true
   }
