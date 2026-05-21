@@ -3,13 +3,14 @@ import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { AGENT_CATALOG, AgentIcon, buildAgentCatalog } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isCustomTuiAgentId } from '../../../../shared/effective-tui-agent'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -26,16 +27,26 @@ export function FloatingTerminalWindowControls({
   onMinimize
 }: FloatingTerminalWindowControlsProps): React.JSX.Element {
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents ?? [])
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
+  const catalog = useMemo(() => buildAgentCatalog(customTuiAgents), [customTuiAgents])
 
-  const defaultAgent = defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
+  const defaultAgent =
+    defaultTuiAgent && defaultTuiAgent !== 'blank'
+      ? isCustomTuiAgentId(defaultTuiAgent) &&
+        !catalog.some((agent) => agent.id === defaultTuiAgent)
+        ? null
+        : defaultTuiAgent
+      : null
   const defaultAgentLabel = useMemo(
     () =>
       defaultAgent
-        ? (AGENT_CATALOG.find((agent) => agent.id === defaultAgent)?.label ?? defaultAgent)
+        ? (catalog.find((agent) => agent.id === defaultAgent)?.label ??
+          AGENT_CATALOG.find((agent) => agent.id === defaultAgent)?.label ??
+          defaultAgent)
         : null,
-    [defaultAgent]
+    [catalog, defaultAgent]
   )
 
   const launchDefaultAgent = useCallback(() => {
@@ -71,9 +82,11 @@ export function FloatingTerminalWindowControls({
     const stored = fresh.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const validIds = new Set(currentTabs.map((entry) => entry.id))
     const order = stored.filter((id) => validIds.has(id) && id !== tab.id)
+    const orderIds = new Set(order)
     for (const entry of currentTabs) {
-      if (entry.id !== tab.id && !order.includes(entry.id)) {
+      if (entry.id !== tab.id && !orderIds.has(entry.id)) {
         order.push(entry.id)
+        orderIds.add(entry.id)
       }
     }
     order.push(tab.id)
@@ -98,7 +111,7 @@ export function FloatingTerminalWindowControls({
             disabled={!defaultAgent}
             onClick={launchDefaultAgent}
           >
-            <AgentIcon agent={defaultAgent} size={14} />
+            <AgentIcon agent={defaultAgent} size={14} catalog={catalog} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>

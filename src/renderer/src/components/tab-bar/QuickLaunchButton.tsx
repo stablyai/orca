@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -31,30 +31,30 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
-function getCatalogEntry(
-  agent: TuiAgentId,
-  customAgents: readonly CustomTuiAgent[]
-): { id: TuiAgentId; label: string } | null {
-  const merged = buildAgentCatalog(customAgents)
-  return merged.find((a) => a.id === agent) ?? null
-}
-
-function orderAgents(
+export function orderAgents(
   defaultAgent: TuiAgentId | 'blank' | null | undefined,
   detected: TuiAgentId[],
   customAgents: readonly CustomTuiAgent[]
 ): TuiAgentId[] {
-  const builtInOrder = AGENT_CATALOG.filter((entry) => detected.includes(entry.id)).map(
-    (entry) => entry.id
-  )
-  // Why: custom agent presets (issue #2284) land after built-ins in the picker,
-  // sorted by their user-facing label for predictable ordering.
-  const detectedCustoms = customAgents
-    .filter((agent) => detected.includes(agent.id))
-    .slice()
-    .sort((a, b) => a.label.localeCompare(b.label))
-    .map((agent) => agent.id)
-  const inCatalogOrder = [...builtInOrder, ...detectedCustoms]
+  const builtInOrder: TuiAgentId[] = []
+  const detectedSet = new Set(detected)
+  for (const entry of AGENT_CATALOG) {
+    if (detectedSet.has(entry.id)) {
+      builtInOrder.push(entry.id)
+    }
+  }
+  // Why: custom presets may be absolute paths or wrapper commands that do not
+  // pass PATH detection. Once a command is configured, keep them launchable in
+  // manual surfaces and sort by their user-facing label.
+  const readyCustomAgents: CustomTuiAgent[] = []
+  for (const agent of customAgents) {
+    if (agent.command.trim().length > 0) {
+      readyCustomAgents.push(agent)
+    }
+  }
+  readyCustomAgents.sort((a, b) => a.label.localeCompare(b.label))
+  const readyCustoms = readyCustomAgents.map((agent) => agent.id)
+  const inCatalogOrder = [...builtInOrder, ...readyCustoms]
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }
@@ -111,6 +111,7 @@ function QuickLaunchAgentMenuItemsInner({
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents ?? [])
+  const catalog = useMemo(() => buildAgentCatalog(customTuiAgents), [customTuiAgents])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -121,7 +122,7 @@ function QuickLaunchAgentMenuItemsInner({
 
   const runLaunch = useCallback(
     (agent: TuiAgentId) => {
-      const entry = getCatalogEntry(agent, customTuiAgents)
+      const entry = catalog.find((candidate) => candidate.id === agent) ?? null
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
@@ -173,7 +174,16 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      catalog,
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered
+    ]
   )
 
   const agents = detectedIds ? orderAgents(defaultAgent, detectedIds, customTuiAgents) : []
@@ -189,7 +199,7 @@ function QuickLaunchAgentMenuItemsInner({
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
-        const entry = getCatalogEntry(agent, customTuiAgents)
+        const entry = catalog.find((candidate) => candidate.id === agent) ?? null
         const label = entry?.label ?? agent
         return (
           <DropdownMenuItem
@@ -198,7 +208,7 @@ function QuickLaunchAgentMenuItemsInner({
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             title={`Launch ${label} in a new terminal`}
           >
-            <AgentIcon agent={agent} size={14} />
+            <AgentIcon agent={agent} size={14} catalog={catalog} />
             {label}
           </DropdownMenuItem>
         )

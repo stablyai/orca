@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG, buildAgentCatalog } from '@/lib/agent-catalog'
+import { isCustomTuiAgentId } from '../../../shared/effective-tui-agent'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
   shouldAllowComposerEnterSubmitTarget,
@@ -146,6 +147,12 @@ function QuickTabBody({
       return null
     }
     if (pref) {
+      if (isCustomTuiAgentId(pref)) {
+        const customExists = buildAgentCatalog(settings?.customTuiAgents ?? []).some(
+          (agent) => agent.id === pref
+        )
+        return customExists ? pref : null
+      }
       return pref
     }
     const detected = cardProps.detectedAgentIds
@@ -155,7 +162,7 @@ function QuickTabBody({
       AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id as TuiAgent))?.id ??
       null
     )
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
+  }, [cardProps.detectedAgentIds, settings?.customTuiAgents, settings?.defaultTuiAgent])
   const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
 
   const handleQuickAgentChange = useCallback((agent: TuiAgentId | null) => {

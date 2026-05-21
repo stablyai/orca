@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG, buildAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -247,6 +247,7 @@ export default function NewWorkspaceComposerCard({
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents ?? [])
   const updateSettings = useAppStore((s) => s.updateSettings)
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -277,13 +278,18 @@ export default function NewWorkspaceComposerCard({
   }, [nameInputRef])
 
   const visibleQuickAgents = React.useMemo(
-    () =>
+    () => [
       // Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId
       // in issue #2284 but the values here are still TuiAgent.
-      AGENT_CATALOG.filter(
+      ...AGENT_CATALOG.filter(
         (agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id as TuiAgent)
       ),
-    [detectedAgentIds]
+      // Why: custom presets may be absolute paths or wrapper commands that do
+      // not pass PATH detection. Once a command is configured, keep them
+      // selectable in manual launch surfaces.
+      ...buildAgentCatalog(customTuiAgents).filter((agent) => agent.isCustom)
+    ],
+    [customTuiAgents, detectedAgentIds]
   )
 
   const handleAddRepo = React.useCallback((): void => {
