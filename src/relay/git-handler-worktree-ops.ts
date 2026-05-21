@@ -16,6 +16,7 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
   const base = params.base as string | undefined
+  const checkoutExistingBranch = params.checkoutExistingBranch === true
 
   // Why: a branchName starting with '-' would be interpreted as a git flag,
   // potentially changing the command's semantics (e.g. "--detach").
@@ -31,23 +32,30 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   // (state machine, common-dir scope, old-git fallback) in the comments
   // around src/main/git/worktree.ts addWorktree — those invariants apply
   // identically here.
-  const effectiveBase = base
-    ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
-        try {
-          await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
-          return true
-        } catch {
-          return false
-        }
-      })
-    : undefined
+  const effectiveBase =
+    base && !checkoutExistingBranch
+      ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
+          try {
+            await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
+            return true
+          } catch {
+            return false
+          }
+        })
+      : undefined
 
-  const args = ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
+  const args = checkoutExistingBranch
+    ? ['worktree', 'add', targetDir, branchName]
+    : ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
   if (effectiveBase) {
     args.push(effectiveBase)
   }
 
   await git(args, repoPath)
+
+  if (checkoutExistingBranch) {
+    return
+  }
 
   // Why: best-effort write so a deliberate user value (any scope) is
   // preserved and a real read failure is not silently overwritten. Final
@@ -84,6 +92,7 @@ export async function removeWorktreeOp(
 ): Promise<void> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
+  const deleteBranch = params.deleteBranch !== false
 
   let repoPath = worktreePath
   try {
@@ -111,6 +120,9 @@ export async function removeWorktreeOp(
   await git(['worktree', 'prune'], repoPath)
 
   if (!branchName) {
+    return
+  }
+  if (!deleteBranch) {
     return
   }
 

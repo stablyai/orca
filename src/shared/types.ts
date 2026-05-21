@@ -229,6 +229,8 @@ export type WorktreeMeta = {
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
+  /** True when Orca checked out a pre-existing local branch that delete must not prune. */
+  preserveBranchOnDelete?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
   /** User-assigned workspace board status for manual sidebar organization. */

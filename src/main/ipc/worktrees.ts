@@ -616,10 +616,14 @@ export function registerWorktreeHandlers(
         worktreePath,
         registeredWorktrees
       ).path
-      const removedPushTarget = store.getWorktreeMeta(args.worktreeId)?.pushTarget
+      const removedMeta = store.getWorktreeMeta(args.worktreeId)
+      const removedPushTarget = removedMeta?.pushTarget
+      const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
       if (repo.connectionId) {
-        await provider!.removeWorktree(canonicalWorktreePath, args.force)
+        await (deleteBranch
+          ? provider!.removeWorktree(canonicalWorktreePath, args.force)
+          : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
         await cleanupUnusedWorktreePushTargetRemoteSsh(
           provider!,
           repo.path,
@@ -687,7 +691,11 @@ export function registerWorktreeHandlers(
       }
 
       try {
-        await removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+        await (deleteBranch
+          ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+          : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
+              deleteBranch
+            }))
       } catch (error) {
         // If git no longer tracks this worktree, clean up the directory and metadata
         if (isOrphanedWorktreeError(error)) {

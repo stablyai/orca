@@ -43,7 +43,8 @@ const {
   muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   createHostedReviewMock,
-  getHostedReviewCreationEligibilityMock
+  getHostedReviewCreationEligibilityMock,
+  getPRForBranchMock
 } = vi.hoisted(() => {
   // Why: SSH runtime tests register providers through the public dispatcher API,
   // so the mock needs the same registry semantics as the real module.
@@ -75,7 +76,8 @@ const {
     muxRequestMock: vi.fn(),
     invalidateAuthorizedRootsCacheMock: vi.fn(),
     createHostedReviewMock: vi.fn(),
-    getHostedReviewCreationEligibilityMock: vi.fn()
+    getHostedReviewCreationEligibilityMock: vi.fn(),
+    getPRForBranchMock: vi.fn().mockResolvedValue(null)
   }
 })
 
@@ -138,6 +140,14 @@ vi.mock('../source-control/hosted-review-creation', () => ({
   createHostedReview: createHostedReviewMock,
   getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
 }))
+
+vi.mock('../github/client', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getPRForBranch: getPRForBranchMock
+  }
+})
 
 // Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
 // fallback base branch. Real resolution shells out to `git` against the
@@ -209,6 +219,8 @@ afterEach(() => {
     title: null,
     body: null
   })
+  getPRForBranchMock.mockReset()
+  getPRForBranchMock.mockResolvedValue(null)
 })
 
 function syncSinglePty(runtime: OrcaRuntimeService, ptyId: string | null = 'pty-1'): void {
@@ -863,6 +875,73 @@ describe('OrcaRuntimeService', () => {
       path: '/tmp/workspaces/feature-something',
       branch: 'feature/something'
     })
+  })
+
+  it('checks out a selected existing local branch even when that branch already has a PR', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-bug-0',
+      head: 'def',
+      branch: 'refs/heads/fix/bug-0',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(getBranchConflictKind).mockClear()
+    getPRForBranchMock.mockResolvedValue({
+      number: 42,
+      title: 'Existing PR',
+      state: 'open',
+      url: 'https://example.com/pr/42',
+      checksStatus: 'success',
+      updatedAt: '2026-05-21T00:00:00Z',
+      mergeable: 'UNKNOWN'
+    })
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: TEST_REPO_PATH,
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+      .mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        return { stdout: 'branch-sha\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix/bug-0',
+        baseBranch: 'fix/bug-0',
+        branchNameOverride: 'fix/bug-0'
+      })
+
+      expect(getBranchConflictKind).not.toHaveBeenCalled()
+      expect(getPRForBranchMock).not.toHaveBeenCalled()
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'fix/bug-0',
+        'fix/bug-0',
+        false,
+        false,
+        { checkoutExistingBranch: true }
+      )
+      expect(result.worktree).toMatchObject({
+        path: createdWorktree.path,
+        branch: 'refs/heads/fix/bug-0'
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
   })
 
   it('creates SSH-backed worktrees through the SSH provider for mobile/runtime callers', async () => {

@@ -237,6 +237,18 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('checks out a selected existing local branch without creating a new branch', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {
+      checkoutExistingBranch: true
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'add', '/repo-feature', 'feature/test'], { cwd: '/repo' }]
+    ])
+  })
+
   it('warns but does not throw when push.autoSetupRemote config fails', async () => {
     resolveRemoteBase()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add

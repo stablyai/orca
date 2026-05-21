@@ -132,6 +132,53 @@ async function resolveCreateBranchNameSsh(
   return branchNameOverride
 }
 
+function normalizeLocalBranchName(branchName: string | undefined): string {
+  return branchName?.replace(/^refs\/heads\//, '') ?? ''
+}
+
+async function canCheckoutExistingLocalBranch(
+  repoPath: string,
+  branchName: string,
+  baseBranch: string
+): Promise<boolean> {
+  if (normalizeLocalBranchName(baseBranch) !== branchName) {
+    return false
+  }
+  try {
+    await gitExecFileAsync(
+      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
+      {
+        cwd: repoPath
+      }
+    )
+  } catch {
+    return false
+  }
+  const worktrees = await listWorktrees(repoPath)
+  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
+}
+
+async function canCheckoutExistingLocalBranchSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  branchName: string,
+  baseBranch: string
+): Promise<boolean> {
+  if (normalizeLocalBranchName(baseBranch) !== branchName) {
+    return false
+  }
+  try {
+    await provider.exec(
+      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
+      repoPath
+    )
+  } catch {
+    return false
+  }
+  const worktrees = await provider.listWorktrees(repoPath)
+  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
+}
+
 async function ensureUniqueRemoteName(repoPath: string, preferred: string): Promise<string> {
   const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath })
   const existing = new Set(
@@ -627,18 +674,6 @@ export async function createRemoteWorktree(
     username
   )
 
-  // Check branch conflict on remote
-  try {
-    const { stdout } = await provider.exec(['branch', '--list', '--all', branchName], repo.path)
-    if (stdout.trim()) {
-      throw new Error(`Branch "${branchName}" already exists. Pick a different worktree name.`)
-    }
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('already exists')) {
-      throw e
-    }
-  }
-
   // Compute worktree path relative to the repo's parent on the remote
   const remotePath = `${repo.path}/../${sanitizedName}`
 
@@ -664,6 +699,26 @@ export async function createRemoteWorktree(
     throw new Error(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
+  }
+
+  const checkoutExistingBranch = await canCheckoutExistingLocalBranchSsh(
+    provider,
+    repo.path,
+    branchName,
+    baseBranch
+  )
+  if (!checkoutExistingBranch) {
+    // Check branch conflict on remote
+    try {
+      const { stdout } = await provider.exec(['branch', '--list', '--all', branchName], repo.path)
+      if (stdout.trim()) {
+        throw new Error(`Branch "${branchName}" already exists. Pick a different worktree name.`)
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('already exists')) {
+        throw e
+      }
+    }
   }
 
   const remoteTrackingBase = await resolveRemoteTrackingBaseSsh(provider, repo.path, baseBranch)
@@ -740,9 +795,12 @@ export async function createRemoteWorktree(
 
   // Create worktree via relay
   try {
-    await provider.addWorktree(repo.path, branchName, remotePath, {
-      base: baseBranch
-    })
+    await provider.addWorktree(
+      repo.path,
+      branchName,
+      remotePath,
+      checkoutExistingBranch ? { checkoutExistingBranch } : { base: baseBranch }
+    )
   } catch (err) {
     if (
       err instanceof Error &&
@@ -796,6 +854,7 @@ export async function createRemoteWorktree(
     // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
     baseRef: baseBranch,
+    ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
       ? { displayName: requestedDisplayName }
@@ -980,6 +1039,8 @@ export async function createLocalWorktree(
   // conflict) cannot spin this loop indefinitely.
   const MAX_SUFFIX_ATTEMPTS = 100
   let resolved = false
+  let checkoutExistingBranch = false
+  let selectedExistingLocalBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   for (let suffix = 1; suffix <= MAX_SUFFIX_ATTEMPTS; suffix += 1) {
@@ -993,16 +1054,26 @@ export async function createLocalWorktree(
 
     branchName = await resolveCreateBranchName(
       repo.path,
-      suffix === 1 && args.branchNameOverride
-        ? args.branchNameOverride
-        : args.branchNameOverride
-          ? `${args.branchNameOverride}-${suffix}`
-          : undefined,
+      selectedExistingLocalBranchName
+        ? selectedExistingLocalBranchName
+        : suffix === 1 && args.branchNameOverride
+          ? args.branchNameOverride
+          : args.branchNameOverride
+            ? `${args.branchNameOverride}-${suffix}`
+            : undefined,
       effectiveSanitizedName,
       settings,
       username
     )
-    lastBranchConflictKind = await getBranchConflictKind(repo.path, branchName, baseBranch)
+    checkoutExistingBranch = await canCheckoutExistingLocalBranch(repo.path, branchName, baseBranch)
+    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+      // Why: suffix retries may need a new path, but an existing branch checkout
+      // must keep using the user-selected branch instead of creating a sibling.
+      selectedExistingLocalBranchName = branchName
+    }
+    lastBranchConflictKind = checkoutExistingBranch
+      ? null
+      : await getBranchConflictKind(repo.path, branchName, baseBranch)
     if (lastBranchConflictKind) {
       continue
     }
@@ -1013,7 +1084,7 @@ export async function createLocalWorktree(
     // forced us past the first suffix — at that point uniqueness matters
     // enough to justify the GitHub call. The common case (brand-new branch
     // name, no collisions) skips the network entirely.
-    if (suffix > 1) {
+    if (suffix > 1 && !checkoutExistingBranch) {
       lastExistingPR = null
       try {
         lastExistingPR = await getPRForBranch(repo.path, branchName)
@@ -1084,22 +1155,45 @@ export async function createLocalWorktree(
     preparedPushTarget = await prepareWorktreePushTarget(repo.path, args.pushTarget, store, repo.id)
   }
 
-  await (sparseDirectories.length > 0
-    ? addSparseWorktree(
-        repo.path,
-        worktreePath,
-        branchName,
-        sparseDirectories,
-        baseBranch,
-        settings.refreshLocalBaseRefOnWorktreeCreate
-      )
-    : addWorktree(
-        repo.path,
-        worktreePath,
-        branchName,
-        baseBranch,
-        settings.refreshLocalBaseRefOnWorktreeCreate
-      ))
+  const existingBranchOption = { checkoutExistingBranch }
+  if (sparseDirectories.length > 0) {
+    await (checkoutExistingBranch
+      ? addSparseWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          sparseDirectories,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate,
+          existingBranchOption
+        )
+      : addSparseWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          sparseDirectories,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate
+        ))
+  } else {
+    await (checkoutExistingBranch
+      ? addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate,
+          false,
+          existingBranchOption
+        )
+      : addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate
+        ))
+  }
 
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
@@ -1136,6 +1230,7 @@ export async function createLocalWorktree(
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
     baseRef: baseBranch,
+    ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
       ? { displayName: requestedDisplayName }

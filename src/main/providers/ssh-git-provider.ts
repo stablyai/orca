@@ -373,7 +373,7 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string }
+    options?: { base?: string; checkoutExistingBranch?: boolean }
   ): Promise<void> {
     await this.mux.request('git.addWorktree', {
       repoPath,
@@ -383,8 +383,12 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
-  async removeWorktree(worktreePath: string, force?: boolean): Promise<void> {
-    await this.mux.request('git.removeWorktree', { worktreePath, force })
+  async removeWorktree(
+    worktreePath: string,
+    force?: boolean,
+    options?: { deleteBranch?: boolean }
+  ): Promise<void> {
+    await this.mux.request('git.removeWorktree', { worktreePath, force, ...options })
   }
 
   async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {

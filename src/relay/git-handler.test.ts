@@ -790,6 +790,23 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[3]?.[1]).toBe('/relay/wt')
     })
 
+    it('checks out a selected existing local branch without creating a new branch', async () => {
+      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+
+      await localDispatcher.callRequest('git.addWorktree', {
+        repoPath: '/relay/repo',
+        branchName: 'feature/test',
+        targetDir: '/relay/wt',
+        base: 'feature/test',
+        checkoutExistingBranch: true
+      })
+
+      expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
+        ['worktree', 'add', '/relay/wt', 'feature/test']
+      ])
+    })
+
     it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
       // Why: repos that fetch with --tags can end up with a local tag named
       // 'main', making `git worktree add ... main` fail with "fatal: Ambiguous

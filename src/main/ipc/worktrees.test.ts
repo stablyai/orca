@@ -479,6 +479,114 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('checks out a selected existing local branch exactly', async () => {
+    listWorktreesMock
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/workspace/fix-bug-0',
+          head: 'abc123',
+          branch: 'refs/heads/fix/bug-0',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'fix/bug-0',
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0'
+    })
+
+    expect(getBranchConflictKindMock).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/fix-bug-0',
+      'fix/bug-0',
+      'fix/bug-0',
+      false,
+      false,
+      { checkoutExistingBranch: true }
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/fix-bug-0',
+      expect.objectContaining({ preserveBranchOnDelete: true })
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        path: '/workspace/fix-bug-0',
+        branch: 'refs/heads/fix/bug-0'
+      })
+    })
+  })
+
+  it('suffixes only the path when an existing local branch checkout path already exists', async () => {
+    const mainWorktree = {
+      path: '/workspace/repo',
+      head: 'main',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+    computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
+      sanitizedName === 'fix-bug-0' ? process.cwd() : `/workspace/${sanitizedName}`
+    )
+    listWorktreesMock
+      .mockResolvedValueOnce([mainWorktree])
+      .mockResolvedValueOnce([mainWorktree])
+      .mockResolvedValueOnce([
+        mainWorktree,
+        {
+          path: '/workspace/fix-bug-0-2',
+          head: 'abc123',
+          branch: 'refs/heads/fix/bug-0',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'fix/bug-0',
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0'
+    })
+
+    expect(getBranchConflictKindMock).not.toHaveBeenCalled()
+    expect(getPRForBranchMock).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/fix-bug-0-2',
+      'fix/bug-0',
+      'fix/bug-0',
+      false,
+      false,
+      { checkoutExistingBranch: true }
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        path: '/workspace/fix-bug-0-2',
+        branch: 'refs/heads/fix/bug-0'
+      })
+    })
+  })
+
   it('suffixes branchNameOverride without flattening slashes when the first branch collides', async () => {
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'feature/something' ? 'remote' : null
@@ -2235,6 +2343,23 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/repo',
       '/workspace/feature-wt',
       false
+    )
+  })
+
+  it('preserves the branch on remove for worktrees created from an existing local branch', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue(undefined)
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ preserveBranchOnDelete: true }))
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      false,
+      { deleteBranch: false }
     )
   })
 

@@ -33,4 +33,21 @@ describe('resolveComposerBranchSelection', () => {
       name: undefined
     })
   })
+
+  it('replaces a typed branch prefix with the selected branch name', () => {
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'fix/bug-0',
+        localBranchName: 'fix/bug-0',
+        currentName: 'fix/bug',
+        lastAutoName: ''
+      })
+    ).toEqual({
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0',
+      branchAutoName: 'fix/bug-0',
+      name: 'fix/bug-0',
+      lastAutoName: 'fix/bug-0'
+    })
+  })
 })
