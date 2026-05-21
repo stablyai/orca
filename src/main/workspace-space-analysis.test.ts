@@ -328,7 +328,7 @@ describe('analyzeWorkspaceSpace', () => {
       '/remote/feature',
       expect.objectContaining({ signal: undefined })
     )
-    expect(readDir).toHaveBeenCalledWith('/remote/feature')
+    expect(readDir).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
     expect(result.worktrees[0]?.sizeBytes).toBe(4096)
   })

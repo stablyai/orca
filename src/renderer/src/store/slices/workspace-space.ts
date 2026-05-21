@@ -1,10 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type {
   WorkspaceSpaceAnalysis,
-  WorkspacePackageManagerCacheTarget,
   WorkspaceSpaceScanProgress
 } from '../../../../shared/workspace-space-types'
-import { createPackageManagerCacheTargetId } from '../../../../shared/package-manager-cache-cleanup'
 import type { AppState } from '../types'
 
 let inFlightScan: Promise<WorkspaceSpaceAnalysis> | null = null
@@ -32,9 +30,6 @@ function removeDeletedWorktreesFromAnalysis(
     repoRows.push(worktree)
     rowsByRepoId.set(worktree.repoId, repoRows)
   }
-  const worktreePathById = new Map(
-    worktrees.map((worktree) => [worktree.worktreeId, worktree.path])
-  )
   const repos = analysis.repos.map((repo) => {
     const repoRows = rowsByRepoId.get(repo.repoId) ?? []
     return {
@@ -46,35 +41,6 @@ function removeDeletedWorktreesFromAnalysis(
       reclaimableBytes: repoRows.reduce((sum, row) => sum + row.reclaimableBytes, 0)
     }
   })
-  const packageManagerCaches = analysis.packageManagerCaches.flatMap((target) => {
-    const detectedWorktrees = target.detectedWorktrees.filter(
-      (worktree) => !deletedSet.has(worktree.worktreeId)
-    )
-    if (detectedWorktrees.length === 0) {
-      return []
-    }
-    const survivingCwds = detectedWorktrees
-      .map((worktree) => worktreePathById.get(worktree.worktreeId))
-      .filter((path): path is string => typeof path === 'string' && path.length > 0)
-    const cwd = survivingCwds.includes(target.cwd) ? target.cwd : survivingCwds[0]
-    if (!cwd) {
-      return []
-    }
-    const detectedLockfiles = [
-      ...new Set(detectedWorktrees.flatMap((worktree) => worktree.lockfiles))
-    ].sort((a, b) => a.localeCompare(b))
-    return [
-      {
-        ...target,
-        id: createPackageManagerCacheTargetId(target.connectionId, target.packageManager, cwd),
-        cwd,
-        detectedWorktreeCount: detectedWorktrees.length,
-        detectedWorktrees,
-        detectedLockfiles
-      } satisfies WorkspacePackageManagerCacheTarget
-    ]
-  })
-
   return {
     ...analysis,
     totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),
@@ -84,7 +50,6 @@ function removeDeletedWorktreesFromAnalysis(
     unavailableWorktreeCount:
       worktrees.filter((row) => row.status !== 'ok').length +
       repos.filter((repo) => repo.error !== null).length,
-    packageManagerCaches,
     repos,
     worktrees
   }

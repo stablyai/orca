@@ -21,43 +21,6 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
     worktreeCount: 2,
     scannedWorktreeCount: 2,
     unavailableWorktreeCount: 0,
-    packageManagerCaches: [
-      {
-        id: 'local:pnpm:%2Frepo%2Fmain',
-        packageManager: 'pnpm',
-        connectionId: null,
-        isRemote: false,
-        targetLabel: 'pnpm on this computer',
-        cwd: '/repo/main',
-        cachePath: null,
-        detectedWorktreeCount: 2,
-        detectedWorktrees: [
-          { worktreeId: 'repo-1::/repo/main', lockfiles: ['pnpm-lock.yaml'] },
-          { worktreeId: 'repo-1::/repo/feature', lockfiles: ['pnpm-lock.yaml'] }
-        ],
-        detectedLockfiles: ['pnpm-lock.yaml'],
-        cliAvailable: true,
-        unavailableReason: null,
-        cleanupActions: []
-      },
-      {
-        id: 'local:npm:%2Frepo%2Ffeature',
-        packageManager: 'npm',
-        connectionId: null,
-        isRemote: false,
-        targetLabel: 'npm on this computer',
-        cwd: '/repo/feature',
-        cachePath: null,
-        detectedWorktreeCount: 1,
-        detectedWorktrees: [
-          { worktreeId: 'repo-1::/repo/feature', lockfiles: ['package-lock.json'] }
-        ],
-        detectedLockfiles: ['package-lock.json'],
-        cliAvailable: true,
-        unavailableReason: null,
-        cleanupActions: []
-      }
-    ],
     repos: [
       {
         repoId: 'repo-1',
@@ -124,7 +87,7 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
 }
 
 describe('workspace space slice', () => {
-  it('removes stale package-manager cache detections when workspaces are removed', () => {
+  it('removes deleted worktrees from cached analysis totals', () => {
     const store = createWorkspaceSpaceTestStore()
     store.setState({ workspaceSpaceAnalysis: makeAnalysis() })
 
@@ -132,39 +95,13 @@ describe('workspace space slice', () => {
 
     const analysis = store.getState().workspaceSpaceAnalysis
     expect(analysis?.worktreeCount).toBe(1)
-    expect(analysis?.packageManagerCaches).toEqual([
-      expect.objectContaining({
-        id: 'local:pnpm:%2Frepo%2Fmain',
-        cwd: '/repo/main',
-        detectedWorktreeCount: 1,
-        detectedWorktrees: [{ worktreeId: 'repo-1::/repo/main', lockfiles: ['pnpm-lock.yaml'] }],
-        detectedLockfiles: ['pnpm-lock.yaml']
-      })
-    ])
-  })
-
-  it('moves a package-manager cleanup target to a surviving cwd', () => {
-    const store = createWorkspaceSpaceTestStore()
-    store.setState({ workspaceSpaceAnalysis: makeAnalysis() })
-
-    store.getState().removeWorkspaceSpaceWorktrees(['repo-1::/repo/main'])
-
-    const analysis = store.getState().workspaceSpaceAnalysis
-    expect(analysis?.packageManagerCaches).toEqual([
-      expect.objectContaining({
-        id: 'local:pnpm:%2Frepo%2Ffeature',
-        cwd: '/repo/feature',
-        detectedWorktreeCount: 1,
-        detectedWorktrees: [{ worktreeId: 'repo-1::/repo/feature', lockfiles: ['pnpm-lock.yaml'] }]
-      }),
-      expect.objectContaining({
-        id: 'local:npm:%2Frepo%2Ffeature',
-        cwd: '/repo/feature',
-        detectedWorktreeCount: 1,
-        detectedWorktrees: [
-          { worktreeId: 'repo-1::/repo/feature', lockfiles: ['package-lock.json'] }
-        ]
-      })
-    ])
+    expect(analysis?.totalSizeBytes).toBe(100)
+    expect(analysis?.reclaimableBytes).toBe(0)
+    expect(analysis?.repos[0]).toMatchObject({
+      worktreeCount: 1,
+      scannedWorktreeCount: 1,
+      totalSizeBytes: 100,
+      reclaimableBytes: 0
+    })
   })
 })

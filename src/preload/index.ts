@@ -56,8 +56,6 @@ import type {
 } from '../shared/mobile-markdown-document'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type {
-  WorkspacePackageManagerCacheCleanupRequest,
-  WorkspacePackageManagerCacheCleanupResult,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
@@ -564,10 +562,6 @@ const api = {
     analyze: (): Promise<WorkspaceSpaceAnalyzeResult> =>
       ipcRenderer.invoke('workspaceSpace:analyze'),
     cancel: (): Promise<boolean> => ipcRenderer.invoke('workspaceSpace:cancel'),
-    cleanupPackageManagerCache: (
-      request: WorkspacePackageManagerCacheCleanupRequest
-    ): Promise<WorkspacePackageManagerCacheCleanupResult> =>
-      ipcRenderer.invoke('workspaceSpace:cleanupPackageManagerCache', request),
     onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

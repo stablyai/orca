@@ -20,12 +20,6 @@ import type {
   WorkspaceSpaceWorktree
 } from '../shared/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../shared/workspace-space-compaction'
-import {
-  buildPackageManagerCacheTargets,
-  detectPackageManagersForDirectoryEntries,
-  detectRemotePackageManagers,
-  type WorkspacePackageManagerDetection
-} from './workspace-package-manager-cache-cleanup'
 import type { IFilesystemProvider } from './providers/types'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
@@ -57,12 +51,6 @@ type WorktreeListResult =
 type RepoScanResult = {
   summary: WorkspaceSpaceRepoSummary
   worktrees: WorkspaceSpaceWorktree[]
-  packageManagerDetections: WorkspacePackageManagerDetection[]
-}
-
-type WorktreeScanResult = {
-  row: WorkspaceSpaceWorktree
-  packageManagerDetections: WorkspacePackageManagerDetection[]
 }
 
 type WorkspaceSpaceAnalyzeOptions = {
@@ -722,54 +710,6 @@ async function scanRemoteWorktree(
   }
 }
 
-async function detectLocalPackageManagers(
-  repo: Repo,
-  worktree: Worktree,
-  row: WorkspaceSpaceWorktree
-): Promise<WorkspacePackageManagerDetection[]> {
-  try {
-    const entries = await readdir(worktree.path, { withFileTypes: true })
-    return detectPackageManagersForDirectoryEntries({
-      entryNames: entries.map((entry) => entry.name),
-      connectionId: null,
-      isRemote: false,
-      repoDisplayName: repo.displayName,
-      worktreeId: row.worktreeId,
-      worktreePath: worktree.path
-    })
-  } catch {
-    return []
-  }
-}
-
-async function detectWorktreePackageManagers(
-  repo: Repo,
-  worktree: Worktree,
-  row: WorkspaceSpaceWorktree,
-  remoteProvider: IFilesystemProvider | undefined
-): Promise<WorkspacePackageManagerDetection[]> {
-  if (row.status !== 'ok') {
-    return []
-  }
-  if (repo.connectionId) {
-    if (!remoteProvider) {
-      return []
-    }
-    try {
-      return await detectRemotePackageManagers({
-        provider: remoteProvider,
-        connectionId: repo.connectionId,
-        repoDisplayName: repo.displayName,
-        worktreeId: row.worktreeId,
-        worktreePath: worktree.path
-      })
-    } catch {
-      return []
-    }
-  }
-  return detectLocalPackageManagers(repo, worktree, row)
-}
-
 async function listWorktreesForSpaceScan(
   repo: Repo,
   signal?: AbortSignal
@@ -842,7 +782,6 @@ async function scanRepo(
       options.onProgress
     )
     return {
-      packageManagerDetections: [],
       worktrees: [],
       summary: {
         repoId: repo.id,
@@ -868,7 +807,7 @@ async function scanRepo(
     options.onProgress
   )
   const remoteProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : undefined
-  const scanResults = await mapLimit(worktrees, WORKTREE_SCAN_CONCURRENCY, async (worktree) => {
+  const rows = await mapLimit(worktrees, WORKTREE_SCAN_CONCURRENCY, async (worktree) => {
     throwIfAborted(options.signal)
     reportProgress(
       progress,
@@ -894,15 +833,8 @@ async function scanRepo(
       { scannedWorktreeCount: progress.scannedWorktreeCount + 1 },
       options.onProgress
     )
-    const packageManagerDetections = await detectWorktreePackageManagers(
-      repo,
-      worktree,
-      row,
-      remoteProvider
-    )
-    return { row, packageManagerDetections } satisfies WorktreeScanResult
+    return row
   })
-  const rows = scanResults.map((result) => result.row)
   reportProgress(
     progress,
     {
@@ -915,7 +847,6 @@ async function scanRepo(
 
   return {
     worktrees: rows,
-    packageManagerDetections: scanResults.flatMap((result) => result.packageManagerDetections),
     summary: {
       repoId: repo.id,
       displayName: repo.displayName,
@@ -959,16 +890,6 @@ export async function analyzeWorkspaceSpace(
   const worktrees = repoResults
     .flatMap((result) => result.worktrees)
     .sort((a, b) => b.sizeBytes - a.sizeBytes || a.displayName.localeCompare(b.displayName))
-  let packageManagerCaches: WorkspaceSpaceAnalysis['packageManagerCaches']
-  try {
-    packageManagerCaches = await buildPackageManagerCacheTargets(
-      repoResults.flatMap((result) => result.packageManagerDetections),
-      { signal: options.signal }
-    )
-  } catch (error) {
-    throwIfAborted(options.signal)
-    throw error
-  }
   throwIfAborted(options.signal)
 
   return {
@@ -980,7 +901,6 @@ export async function analyzeWorkspaceSpace(
     unavailableWorktreeCount:
       worktrees.filter((row) => row.status !== 'ok').length +
       repos.filter((repo) => repo.error !== null).length,
-    packageManagerCaches,
     repos,
     worktrees
   }

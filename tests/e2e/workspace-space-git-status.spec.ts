@@ -90,7 +90,6 @@ test.describe('Workspace Space git status checks', () => {
               worktreeCount: rows.length,
               scannedWorktreeCount: rows.length,
               unavailableWorktreeCount: 0,
-              packageManagerCaches: [],
               repos: [
                 {
                   repoId: repo.id,

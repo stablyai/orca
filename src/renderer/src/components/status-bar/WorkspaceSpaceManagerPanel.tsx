@@ -15,11 +15,9 @@ import {
   HardDrive,
   Loader2,
   Minus,
-  Package,
   RefreshCw,
   Search,
   Server,
-  ShieldCheck,
   Terminal,
   Trash2,
   ZoomIn,
@@ -32,16 +30,9 @@ import type {
 } from '../../../../shared/agent-status-types'
 import type { GitStatusResult, TerminalTab, Worktree } from '../../../../shared/types'
 import type {
-  WorkspacePackageManagerCacheCleanupAction,
-  WorkspacePackageManagerCacheCleanupResult,
-  WorkspacePackageManagerCacheTarget,
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
-import {
-  getPackageManagerCacheSafetyCopy,
-  getPackageManagerLabel
-} from '../../../../shared/package-manager-cache-cleanup'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -99,21 +90,10 @@ type WorkspaceSpaceDeleteState = {
   canForceDelete: boolean
 }
 
-type PackageManagerCacheCleanupState = {
-  runningActionId: string | null
-  error: string | null
-  lastOutput: string | null
-}
-
 type WorkspaceGitRefreshState = {
   isRefreshing: boolean
   error: string | null
 }
-
-type PackageManagerCacheCleanupSuccess = Extract<
-  WorkspacePackageManagerCacheCleanupResult,
-  { ok: true }
->
 
 type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -276,33 +256,6 @@ function getTreemapFill(rect: TreemapRect, selected: boolean): string {
     return 'color-mix(in srgb, var(--ring) 40%, var(--card))'
   }
   return TREEMAP_FILLS[rect.index % TREEMAP_FILLS.length]
-}
-
-function getPackageManagerCleanupSuccessCopy(result: PackageManagerCacheCleanupSuccess): {
-  output: string
-  toastDescription: string
-} {
-  const commandOutput = [result.stdout, result.stderr].filter((part) => part.trim()).join('\n')
-  if (result.reclaimedBytes === null) {
-    return {
-      output: commandOutput || `${result.action.command} completed.`,
-      toastDescription: result.action.command
-    }
-  }
-
-  const summary =
-    result.reclaimedBytes > 0
-      ? `Freed ${formatBytes(result.reclaimedBytes)}`
-      : 'Cleanup completed; measured cache size was unchanged'
-  const measured =
-    result.cacheSizeBeforeBytes !== null && result.cacheSizeAfterBytes !== null
-      ? `${summary} (${formatBytes(result.cacheSizeBeforeBytes)} -> ${formatBytes(result.cacheSizeAfterBytes)}).`
-      : `${summary}.`
-
-  return {
-    output: commandOutput ? `${measured}\n${commandOutput}` : measured,
-    toastDescription: measured
-  }
 }
 
 function Metric({
@@ -941,146 +894,6 @@ function BreakdownRow({
   )
 }
 
-function PackageManagerCacheActions({
-  target,
-  state,
-  onRun
-}: {
-  target: WorkspacePackageManagerCacheTarget
-  state?: PackageManagerCacheCleanupState
-  onRun: (
-    target: WorkspacePackageManagerCacheTarget,
-    action: WorkspacePackageManagerCacheCleanupAction
-  ) => void
-}): React.JSX.Element {
-  const runningActionId = state?.runningActionId ?? null
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {target.cleanupActions.map((action) => {
-        const isRunning = runningActionId === action.id
-        return (
-          <Button
-            key={action.id}
-            variant={action.safety === 'aggressive' ? 'destructive' : 'outline'}
-            size="sm"
-            onClick={() => onRun(target, action)}
-            disabled={!target.cliAvailable || runningActionId !== null}
-            className="gap-1.5"
-            title={action.description}
-          >
-            {isRunning ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : action.safety === 'safe' ? (
-              <ShieldCheck className="size-3.5" />
-            ) : (
-              <Trash2 className="size-3.5" />
-            )}
-            {isRunning ? 'Running' : action.label}
-          </Button>
-        )
-      })}
-    </div>
-  )
-}
-
-function PackageManagerCacheSection({
-  targets,
-  stateByTargetId,
-  onRun
-}: {
-  targets: WorkspacePackageManagerCacheTarget[]
-  stateByTargetId: Record<string, PackageManagerCacheCleanupState>
-  onRun: (
-    target: WorkspacePackageManagerCacheTarget,
-    action: WorkspacePackageManagerCacheCleanupAction
-  ) => void
-}): React.JSX.Element | null {
-  if (targets.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="rounded-lg border border-border/70 bg-background/30">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Package className="size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold">Package Manager Caches</div>
-            <div className="text-xs text-muted-foreground">
-              Detected from lockfiles. Cleanup runs only when you choose an action.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="divide-y divide-border/50">
-        {targets.map((target) => {
-          const state = stateByTargetId[target.id]
-          const lastOutput = state?.lastOutput?.trim() ?? ''
-          return (
-            <div key={target.id} className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0 space-y-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="font-medium">
-                    {getPackageManagerLabel(target.packageManager)}
-                  </span>
-                  <Badge variant={target.cliAvailable ? 'secondary' : 'outline'}>
-                    {target.cliAvailable ? 'CLI found' : 'CLI missing'}
-                  </Badge>
-                  {target.isRemote ? (
-                    <Badge variant="outline" className="gap-1">
-                      <Server className="size-3" />
-                      SSH
-                    </Badge>
-                  ) : null}
-                </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {target.targetLabel} · {target.detectedWorktreeCount}{' '}
-                  {target.detectedWorktreeCount === 1 ? 'workspace' : 'workspaces'} ·{' '}
-                  {target.detectedLockfiles.join(', ')}
-                </div>
-                <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Terminal className="size-3 shrink-0" />
-                  <span className="truncate font-mono">
-                    {target.cleanupActions.map((action) => action.command).join(' · ')}
-                  </span>
-                </div>
-                {target.unavailableReason ? (
-                  <div className="text-xs text-muted-foreground">{target.unavailableReason}</div>
-                ) : null}
-                {state?.error ? (
-                  <div className="flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/8 px-2 py-1.5 text-xs text-destructive">
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <span className="min-w-0 break-words">{state.error}</span>
-                  </div>
-                ) : lastOutput ? (
-                  <div className="truncate rounded-md border border-border/60 bg-muted/20 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
-                    {lastOutput}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex min-w-0 flex-col items-start gap-2 md:items-end">
-                <div className="flex flex-wrap justify-start gap-1 md:justify-end">
-                  {target.cleanupActions.map((action) => (
-                    <Badge
-                      key={action.id}
-                      variant={action.safety === 'safe' ? 'secondary' : 'outline'}
-                    >
-                      {getPackageManagerCacheSafetyCopy(action.safety)}
-                    </Badge>
-                  ))}
-                </div>
-                <PackageManagerCacheActions target={target} state={state} onRun={onRun} />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 function WorkspaceRow({
   worktree,
   maxSize,
@@ -1276,9 +1089,6 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [inspectedWorktreeId, setInspectedWorktreeId] = useState<string | null>(null)
   const [treemapZoomWorktreeId, setTreemapZoomWorktreeId] = useState<string | null>(null)
-  const [cacheCleanupStateByTargetId, setCacheCleanupStateByTargetId] = useState<
-    Record<string, PackageManagerCacheCleanupState>
-  >({})
   const [gitRefreshStateByWorktreeId, setGitRefreshStateByWorktreeId] = useState<
     Record<string, WorkspaceGitRefreshState>
   >({})
@@ -1295,10 +1105,6 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [cancelWorkspaceSpaceScan])
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
-  const packageManagerCaches = useMemo(
-    () => analysis?.packageManagerCaches ?? [],
-    [analysis?.packageManagerCaches]
-  )
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Why: active-agent freshness is time-based. The epoch bumps when fresh
     // hook entries cross the stale boundary so delete readiness recomputes.
@@ -1638,69 +1444,6 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     deleteWorktrees(selectedDeletableIds)
   }
 
-  const runPackageManagerCacheCleanup = useCallback(
-    (
-      target: WorkspacePackageManagerCacheTarget,
-      action: WorkspacePackageManagerCacheCleanupAction
-    ): void => {
-      setCacheCleanupStateByTargetId((current) => ({
-        ...current,
-        [target.id]: {
-          runningActionId: action.id,
-          error: null,
-          lastOutput: current[target.id]?.lastOutput ?? null
-        }
-      }))
-      void window.api.workspaceSpace
-        .cleanupPackageManagerCache({
-          targetId: target.id,
-          actionId: action.id,
-          packageManager: target.packageManager,
-          connectionId: target.connectionId,
-          cwd: target.cwd
-        })
-        .then((result) => {
-          if (!result.ok) {
-            setCacheCleanupStateByTargetId((current) => ({
-              ...current,
-              [target.id]: {
-                runningActionId: null,
-                error: result.error,
-                lastOutput: current[target.id]?.lastOutput ?? null
-              }
-            }))
-            toast.error('Cache cleanup failed', { description: result.error })
-            return
-          }
-          const copy = getPackageManagerCleanupSuccessCopy(result)
-          setCacheCleanupStateByTargetId((current) => ({
-            ...current,
-            [target.id]: {
-              runningActionId: null,
-              error: null,
-              lastOutput: copy.output
-            }
-          }))
-          toast.success('Cache cleanup completed', {
-            description: copy.toastDescription
-          })
-        })
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error)
-          setCacheCleanupStateByTargetId((current) => ({
-            ...current,
-            [target.id]: {
-              runningActionId: null,
-              error: message,
-              lastOutput: current[target.id]?.lastOutput ?? null
-            }
-          }))
-          toast.error('Cache cleanup failed', { description: message })
-        })
-    },
-    []
-  )
-
   return (
     <div className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border border-border/65 bg-background/35 md:grid-cols-4 md:divide-x md:divide-border/60">
@@ -1787,12 +1530,6 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           ))}
         </div>
       ) : null}
-
-      <PackageManagerCacheSection
-        targets={packageManagerCaches}
-        stateByTargetId={cacheCleanupStateByTargetId}
-        onRun={runPackageManagerCacheCleanup}
-      />
 
       {hasRows || isInitialScan ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]">
