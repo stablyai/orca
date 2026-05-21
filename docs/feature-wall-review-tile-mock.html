@@ -1,0 +1,2525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Explore Orca — Review tile mock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --bg: #fafafa;
+        --card: #ffffff;
+        --fg: #18181b;
+        --muted-fg: #71717a;
+        --border: #e4e4e7;
+        --editor-surface: #fdfdfd;
+
+        /* Diff colors — pulled from the real Monaco diff treatment in
+           main.css (subtle red/green tints over the editor surface). */
+        --diff-add-bg: rgba(22, 163, 74, 0.10);
+        --diff-add-fg: #166534;
+        --diff-add-gutter: rgba(22, 163, 74, 0.55);
+        --diff-rem-bg: rgba(220, 38, 38, 0.10);
+        --diff-rem-fg: #991b1b;
+        --diff-rem-gutter: rgba(220, 38, 38, 0.55);
+
+        /* Subtle highlight for the Add-note button + popover, matching the
+           orca-diff-comment-* tokens in main.css. */
+        --note-accent: rgba(24,24,27,0.55);
+      }
+      body {
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        letter-spacing: 0.01em;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .visual-frame.tall { background: transparent; border: 0; }
+
+      /* ─── Modal-bullets stage (left aside, page-aware) ─── */
+      .modal-bullets-stage { position: relative; min-height: 220px; }
+      .bullets-page {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 360ms ease, transform 360ms ease;
+        pointer-events: none;
+      }
+      .bullets-page.active {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .bullets-page code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13.5px;
+        background: rgba(24,24,27,0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .bullets-page ul {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      /* ─── Outer panel ─── */
+      .review-panel {
+        position: relative;
+        background: transparent;
+        padding: 0;
+        color: var(--fg);
+        overflow: visible;
+        height: 392px;
+        width: 560px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* ─── Pages ─── */
+      .pages { position: relative; flex: 1; min-height: 0; }
+      .page {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 360ms ease, transform 360ms ease;
+        pointer-events: none;
+      }
+      .page.active {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      /* Review substeps live in the workflow rail, matching FeatureWallRail. */
+      .rail-substeps {
+        margin-top: 2px;
+        padding-left: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail-substep {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 8px;
+        border-radius: 6px;
+        padding: 6px 10px;
+        text-align: left;
+        font-size: 13px;
+        line-height: 1.2;
+        color: var(--muted-fg);
+        transition: background 180ms ease, color 180ms ease;
+      }
+      .rail-substep:hover { background: rgba(24,24,27,0.04); }
+      .rail-substep.active {
+        background: rgba(24,24,27,0.06);
+        color: var(--fg);
+      }
+      .rail-substep-mark {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--muted-fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+      }
+      .rail-substep.active .rail-substep-mark {
+        border-color: rgba(24,24,27,0.18);
+        background: #fff;
+        color: var(--fg);
+      }
+      .rail-substep-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rail-substep.active .rail-substep-name { font-weight: 600; }
+
+      /* ─── Shared "app-window" chrome (both pages) ─── */
+      .app-window {
+        position: absolute;
+        inset: 0;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+      }
+      /* ─── Diff toolbar for the Notes step ─── */
+      .diff-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(24,24,27,0.015);
+        font-size: 11px;
+        color: var(--muted-fg);
+      }
+      .diff-toolbar .file {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--fg);
+      }
+      .diff-toolbar .stats { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .diff-toolbar .diff-path {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--fg);
+      }
+      .diff-toolbar .ai-notes-chip {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: stretch;
+        overflow: hidden;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: rgba(24,24,27,0.02);
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: opacity 320ms ease, transform 320ms ease;
+      }
+      .diff-toolbar .ai-notes-chip.visible {
+        opacity: 1;
+        transform: none;
+      }
+      .ai-notes-chip .count-btn,
+      .ai-notes-chip .send-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        font-size: 11px;
+        color: var(--muted-fg);
+        background: transparent;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .ai-notes-chip .count-btn { border-right: 1px solid var(--border); }
+      .ai-notes-chip .send-btn {
+        padding: 3px 7px;
+        position: relative;
+      }
+      .ai-notes-chip .send-btn .send-glow {
+        position: absolute;
+        inset: 0;
+        border-radius: 0;
+        background: rgba(34, 197, 94, 0.18);
+        opacity: 0;
+        transition: opacity 280ms ease;
+      }
+      .ai-notes-chip .send-btn.flash .send-glow { opacity: 1; }
+      .ai-notes-chip .count-num {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .ai-notes-chip svg { width: 12px; height: 12px; }
+
+      /* ─── Diff body ─── */
+      .diff-body {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        background: var(--editor-surface);
+        /* The diff content itself is clipped by .diff-scroll; we keep this
+           container visible so the popover and Send-menu can render slightly
+           outside the diff frame without being cut off. */
+        overflow: visible;
+      }
+      .diff-scroll {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: var(--fg);
+        padding: 4px 0 8px;
+        transition: opacity 240ms ease;
+      }
+      .diff-scroll.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      /* Claude Code terminal acknowledgement panel — covers .diff-scroll
+         once the user "sends" notes, so the viewer sees Claude receive
+         and acknowledge each note. */
+      .claude-term {
+        position: absolute;
+        inset: 0;
+        background: #fafafa;
+        color: var(--fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 240ms ease;
+        z-index: 4;
+      }
+      .claude-term.visible { opacity: 1; }
+      .claude-term-body {
+        flex: 1;
+        min-height: 0;
+        padding: 10px 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .claude-term-line {
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.45;
+      }
+      .claude-term-line.muted,
+      .claude-term-muted {
+        color: var(--muted-fg);
+      }
+      .claude-term-prompt {
+        color: rgb(16 185 129);
+        margin-right: 6px;
+      }
+      .claude-term-glyph {
+        color: rgb(217 119 6);
+        margin-right: 6px;
+      }
+      .claude-term-check {
+        color: rgb(16 185 129);
+        font-weight: 700;
+        margin-right: 6px;
+      }
+      .claude-term-spinner {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 6px;
+        border-radius: 999px;
+        border: 1.5px solid rgba(24,24,27,0.20);
+        border-top-color: var(--fg);
+        vertical-align: -1px;
+        animation: spin 0.9s linear infinite;
+      }
+      .claude-term-cursor {
+        display: inline-block;
+        width: 5px;
+        height: 11px;
+        background: var(--fg);
+        vertical-align: -1px;
+        animation: claude-term-blink 1.1s steps(1) infinite;
+      }
+      @keyframes claude-term-blink {
+        0%, 50% { opacity: 1 }
+        51%, 100% { opacity: 0 }
+      }
+      .hunk-header {
+        display: grid;
+        grid-template-columns: 36px 36px 16px minmax(0,1fr);
+        align-items: center;
+        gap: 0;
+        padding: 1px 8px 1px 0;
+        background: rgba(99, 102, 241, 0.06);
+        color: var(--muted-fg);
+        font-size: 10.5px;
+        border-top: 1px solid rgba(24,24,27,0.06);
+        border-bottom: 1px solid rgba(24,24,27,0.06);
+      }
+      .hunk-header .gut {
+        text-align: right;
+        padding-right: 6px;
+        font-size: 10px;
+      }
+      .hunk-header .text {
+        grid-column: 4 / -1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: rgb(99 102 241);
+        font-size: 10.5px;
+      }
+
+      .diff-line {
+        display: grid;
+        grid-template-columns: 36px 36px 16px minmax(0,1fr);
+        align-items: stretch;
+        position: relative;
+      }
+      .diff-line .ln {
+        text-align: right;
+        padding: 0 6px 0 0;
+        color: var(--muted-fg);
+        font-size: 10.5px;
+        user-select: none;
+        opacity: 0.85;
+      }
+      .diff-line .marker {
+        text-align: center;
+        color: var(--muted-fg);
+        font-weight: 700;
+        opacity: 0.7;
+      }
+      .diff-line .text {
+        padding-right: 8px;
+        white-space: pre;
+        overflow: hidden;
+      }
+      /* Token coloring — kept quiet so the - / + is the dominant signal. */
+      .tok-kw { color: #a855f7; }
+      .tok-id { color: #2563eb; }
+      .tok-str { color: #16a34a; }
+      .tok-mut { color: var(--muted-fg); }
+
+      .diff-line.add { background: var(--diff-add-bg); }
+      .diff-line.add .marker { color: var(--diff-add-gutter); opacity: 1; }
+      .diff-line.rem { background: var(--diff-rem-bg); }
+      .diff-line.rem .marker { color: var(--diff-rem-gutter); opacity: 1; }
+
+      /* The "+ add note" gutter button. Always-rendered, but only visible
+         while the loop is anchoring it to a target line. */
+      .add-note-btn {
+        position: absolute;
+        left: 4px;
+        width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, #18181b 22%, var(--border));
+        border-radius: 4px;
+        background: rgba(24,24,27,0.04);
+        color: rgba(24,24,27,0.78);
+        z-index: 5;
+        opacity: 0;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.12);
+        pointer-events: none;
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+      .add-note-btn.visible { opacity: 1; }
+
+      /* Saved AI note card (matches .orca-diff-comment-card from main.css). */
+      .note-card-row {
+        padding: 4px 8px 4px 0;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition:
+          max-height 360ms cubic-bezier(.4,0,.2,1),
+          opacity 280ms ease 60ms,
+          padding 360ms cubic-bezier(.4,0,.2,1);
+      }
+      .note-card-row.visible {
+        max-height: 90px;
+        opacity: 1;
+      }
+      .note-card {
+        margin: 0 12px;
+        position: relative;
+        border: 1px solid rgba(24,24,27,0.22);
+        border-left: 3px solid rgba(24,24,27,0.55);
+        border-radius: 6px;
+        background-color: #ffffff;
+        padding: 5px 8px 5px 10px;
+        font-family: 'Geist', system-ui, sans-serif;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.15);
+      }
+      .note-card .note-meta {
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted-fg);
+      }
+      .note-card .note-body {
+        font-size: 11.5px;
+        color: var(--fg);
+        line-height: 1.35;
+        margin-top: 2px;
+      }
+
+      /* The note popover that appears when "+" is clicked — mirrors
+         .orca-diff-comment-popover from main.css. */
+      .note-popover {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        z-index: 20;
+        padding: 8px 10px;
+        border: 1px solid rgba(24,24,27,0.32);
+        border-left: 3px solid rgba(24,24,27,0.7);
+        border-radius: 6px;
+        background-color: #ffffff;
+        color: var(--fg);
+        box-shadow:
+          0 14px 30px rgba(0,0,0,0.22),
+          0 2px 6px rgba(0,0,0,0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-family: 'Geist', system-ui, sans-serif;
+        opacity: 0;
+        transform: translateY(-4px) scale(0.985);
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+      }
+      .note-popover.visible {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+      }
+      .note-popover .pop-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted-fg);
+      }
+      .note-popover .pop-input {
+        min-height: 38px;
+        max-height: 80px;
+        padding: 6px 8px;
+        border: 1px solid rgba(24,24,27,0.18);
+        border-radius: 4px;
+        background-color: #ffffff;
+        font-size: 12px;
+        font-family: 'Geist', system-ui, sans-serif;
+        line-height: 1.4;
+        color: var(--fg);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: hidden;
+        position: relative;
+      }
+      .note-popover .pop-input.focused {
+        border-color: color-mix(in srgb, #18181b 60%, var(--border));
+      }
+      .note-popover .pop-input .caret {
+        display: inline-block;
+        width: 1.5px;
+        height: 1.05em;
+        background: currentColor;
+        vertical-align: -2px;
+        margin-left: 1px;
+        animation: caret-blink 1.05s steps(1) infinite;
+      }
+      @keyframes caret-blink {
+        0%, 50% { opacity: 1 }
+        51%, 100% { opacity: 0 }
+      }
+      .note-popover .pop-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      .note-popover .pop-btn {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 4px 9px;
+        border-radius: 5px;
+        line-height: 1;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .note-popover .pop-btn.cancel {
+        color: var(--muted-fg);
+        background: transparent;
+      }
+      .note-popover .pop-btn.add {
+        color: #fff;
+        background: var(--fg);
+      }
+      .note-popover .pop-btn.add svg { width: 11px; height: 11px; opacity: 0.7; }
+
+      /* "Send to AI" agent dropdown — mirrors QuickLaunchAgentMenuItems. */
+      .send-menu {
+        position: absolute;
+        z-index: 30;
+        right: 0;
+        top: 30px;
+        min-width: 200px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 16px 38px rgba(24,24,27,0.18), 0 2px 6px rgba(24,24,27,0.08);
+        opacity: 0;
+        transform: translateY(-4px) scale(0.985);
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+        font-family: 'Geist', system-ui, sans-serif;
+      }
+      .send-menu.visible {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+      }
+      .send-menu .menu-row {
+        display: grid;
+        grid-template-columns: 16px minmax(0,1fr);
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .send-menu .menu-row.hot {
+        background: rgba(24,24,27,0.06);
+        box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06);
+      }
+      .send-menu .menu-row svg,
+      .send-menu .menu-row img {
+        width: 14px; height: 14px; border-radius: 3px;
+      }
+      .send-menu .menu-section {
+        padding: 4px 8px 2px;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted-fg);
+      }
+
+      /* ─── Page 2 — PR view: comments, checks, status ─── */
+      .pr-view-stack {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        justify-content: flex-end;
+        padding: 4px 34px 4px 2px;
+        overflow: hidden;
+      }
+      .pr-view-card {
+        width: 464px;
+        height: calc(100% - 8px);
+        position: absolute;
+        top: 4px;
+        right: 2px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        opacity: 0;
+        transition: opacity 260ms ease;
+      }
+      .pr-view-card.visible {
+        opacity: 1;
+      }
+      .right-sidebar-peek {
+        position: absolute;
+        top: 4px;
+        right: 2px;
+        width: 464px;
+        height: calc(100% - 8px);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--fg);
+        overflow: hidden;
+        opacity: 0;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+        transition: opacity 220ms ease;
+      }
+      .right-sidebar-peek.visible {
+        opacity: 1;
+      }
+      .right-sidebar-peek.hiding {
+        opacity: 0;
+      }
+      .right-sidebar-tabs {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 36px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(24,24,27,0.015);
+      }
+      .right-sidebar-tab {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted-fg);
+      }
+      .right-sidebar-tab.active,
+      .right-sidebar-tab.hovered { color: var(--fg); }
+      .right-sidebar-tab.active::after {
+        content: '';
+        position: absolute;
+        left: -5px;
+        right: -5px;
+        bottom: -10px;
+        height: 1px;
+        background: var(--fg);
+      }
+      .right-sidebar-tab svg { width: 15px; height: 15px; }
+      .checks-tab-tooltip {
+        position: absolute;
+        top: 34px;
+        left: 106px;
+        z-index: 6;
+        padding: 7px 11px;
+        border-radius: 8px;
+        background: #fff;
+        color: #18181b;
+        font-size: 12px;
+        line-height: 1;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.22);
+        opacity: 0;
+        transform: translateY(-3px);
+        pointer-events: none;
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+      .checks-tab-tooltip.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .right-sidebar-explorer {
+        padding: 10px 12px 12px;
+      }
+      .right-sidebar-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted-fg);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .right-sidebar-file-list {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .right-sidebar-file {
+        display: grid;
+        grid-template-columns: 14px minmax(0,1fr) 22px;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--fg);
+      }
+      .right-sidebar-file.active {
+        background: rgba(24,24,27,0.06);
+        box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06);
+      }
+      .right-sidebar-file .file-icon {
+        color: var(--muted-fg);
+      }
+      .right-sidebar-file .file-icon.skeleton {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: rgba(24,24,27,0.14);
+      }
+      .right-sidebar-file .file-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .right-sidebar-file .file-name.skeleton {
+        width: var(--w, 170px);
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(24,24,27,0.14);
+      }
+      .right-sidebar-file .file-status {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        color: var(--muted-fg);
+      }
+      .right-sidebar-file .file-status.skeleton {
+        width: 14px;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(24,24,27,0.12);
+      }
+      .right-sidebar-file .file-status.added { color: rgb(22 163 74); }
+      .right-sidebar-file .file-status.modified { color: rgb(180 83 9); }
+      .right-sidebar-file .file-status.deleted { color: rgb(220 38 38); }
+      .right-sidebar-section-title {
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--muted-fg);
+      }
+      .pr-view-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 36px;
+        padding: 0 14px;
+        background: rgba(24,24,27,0.015);
+        color: var(--muted-fg);
+      }
+      .pr-view-toolbar .toolbar-spacer { flex: 1; }
+      .pr-icon-btn {
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        color: var(--muted-fg);
+      }
+      .pr-icon-btn:hover { background: rgba(24,24,27,0.05); color: var(--fg); }
+      .pr-icon-btn svg { width: 13px; height: 13px; }
+      .pr-view-body {
+        padding: 6px 12px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-height: 0;
+      }
+      .pr-number-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pr-number {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .open-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 18px;
+        padding: 0 7px;
+        border-radius: 5px;
+        background: rgba(16,185,129,0.10);
+        border: 1px solid rgba(16,185,129,0.28);
+        color: rgb(4 120 87);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .pr-view-title {
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--fg);
+      }
+      .pr-view-meta {
+        font-size: 10.5px;
+        color: var(--muted-fg);
+      }
+      .merge-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 30px;
+        min-height: 30px;
+        flex: 0 0 30px;
+        border-radius: 7px;
+        background: rgb(22 163 74);
+        color: #fff;
+        font-size: 11.5px;
+        font-weight: 700;
+        box-shadow: 0 1px 2px rgba(22,163,74,0.18);
+        transition: box-shadow 220ms ease, filter 220ms ease;
+      }
+      .merge-btn.ready {
+        box-shadow: 0 0 0 3px rgba(34,197,94,0.22), 0 1px 2px rgba(22,163,74,0.18);
+      }
+      .merge-btn svg { width: 12px; height: 12px; }
+      .pr-section-row {
+        display: grid;
+        grid-template-columns: 18px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 0;
+        font-size: 11.5px;
+        color: var(--fg);
+      }
+      .pr-section-row .label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pr-section-row .meta {
+        color: var(--muted-fg);
+        font-size: 10.5px;
+      }
+      .status-ring {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        border: 2px solid rgba(245,158,11,0.35);
+        border-top-color: rgb(245 158 11);
+        animation: spin 1.1s linear infinite;
+      }
+      .status-check {
+        width: 15px;
+        height: 15px;
+        border-radius: 999px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(34,197,94,0.14);
+        color: rgb(22 163 74);
+      }
+      .status-check svg { width: 10px; height: 10px; }
+      .pr-section-row.done .status-ring,
+      .check-row.done .status-ring {
+        display: none;
+      }
+      .pr-section-row.done .status-check,
+      .check-row.done .status-check {
+        display: inline-flex;
+      }
+      .pr-inline-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .pr-reveal-block {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 260ms ease, transform 260ms ease;
+        pointer-events: none;
+      }
+      .pr-reveal-block.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .comment-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-height: 0;
+      }
+      .comment-card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #fff;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 260ms ease, transform 260ms ease;
+      }
+      .comment-card.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .comment-head {
+        display: grid;
+        grid-template-columns: 18px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 7px;
+        background: rgba(24,24,27,0.015);
+      }
+      .avatar {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: rgba(24,24,27,0.16);
+      }
+      .comment-author {
+        height: 8px;
+        width: 78px;
+        border-radius: 999px;
+        background: rgba(24,24,27,0.18);
+      }
+      .comment-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 9.5px;
+        color: var(--muted-fg);
+      }
+      .comment-body {
+        padding: 5px 7px 6px;
+        font-size: 11px;
+        line-height: 1.32;
+        color: var(--fg);
+      }
+      .comment-body code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: rgba(24,24,27,0.06);
+      }
+      .checks-panel {
+        border-radius: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+      .checks-title {
+        display: none;
+      }
+      .checks-title.done .status-ring { display: none; }
+      .checks-title.done .status-check { display: inline-flex; }
+      .check-row {
+        display: grid;
+        grid-template-columns: 18px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 7px;
+        font-size: 10.5px;
+        color: var(--fg);
+      }
+      .check-row .check-state {
+        font-size: 10px;
+        color: var(--muted-fg);
+      }
+
+      /* ─── Page 3 — Generate: Source Control commit + PR dialog ─── */
+      .ship-stack {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: 232px minmax(0,1fr);
+        gap: 14px;
+        padding: 4px 2px;
+      }
+
+      /* Source Control mini-sidebar: just the commit area (textarea + split
+         button), since that's what carries the AI-commit-message story. We
+         intentionally strip the rest of the sidebar — file list, header,
+         branch row — to keep the visual quiet. */
+      .sc-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+      }
+      .sc-card .sc-meta {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted-fg);
+      }
+      .sc-textarea {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--editor-surface);
+        padding: 6px 26px 6px 8px;
+        min-height: 86px;
+        font-family: 'Geist', system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--fg);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: hidden;
+      }
+      .sc-textarea .placeholder {
+        color: rgba(113,113,122,0.7);
+      }
+      .sc-textarea .typed { display: inline; }
+      .sc-textarea .caret {
+        display: inline-block;
+        width: 1.5px;
+        height: 1em;
+        background: currentColor;
+        vertical-align: -2px;
+        margin-left: 1px;
+        animation: caret-blink 1.05s steps(1) infinite;
+        opacity: 0;
+      }
+      .sc-textarea.generating .caret { opacity: 1; }
+      .sc-sparkle {
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: var(--muted-fg);
+        background: transparent;
+        cursor: pointer;
+      }
+      .sc-sparkle:hover { background: rgba(24,24,27,0.06); color: var(--fg); }
+      .sc-sparkle svg { width: 14px; height: 14px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .sc-split {
+        display: flex;
+        align-items: stretch;
+      }
+      .sc-split .primary {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 5px 10px;
+        background: var(--fg);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 500;
+        border-radius: 6px 0 0 6px;
+        border: 1px solid var(--fg);
+      }
+      .sc-split .primary svg { width: 12px; height: 12px; }
+      .sc-split .chev {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        background: var(--fg);
+        color: #fff;
+        border-radius: 0 6px 6px 0;
+        border: 1px solid var(--fg);
+        border-left: 1px solid rgba(255,255,255,0.18);
+      }
+      .sc-split .chev svg { width: 12px; height: 12px; }
+
+      /* PR dialog */
+      .pr-dialog {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 18px 40px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05);
+        padding: 12px 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .pr-dialog .pr-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .pr-dialog .pr-title-text {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .pr-dialog .pr-gen-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 9px;
+        border-radius: 5px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--fg);
+        background: #fff;
+        border: 1px solid var(--border);
+        cursor: pointer;
+      }
+      .pr-dialog .pr-gen-btn:hover { background: rgba(24,24,27,0.05); }
+      .pr-dialog .pr-gen-btn svg { width: 12px; height: 12px; }
+      .pr-dialog .pr-desc {
+        font-size: 10.5px;
+        color: var(--muted-fg);
+        margin-top: -4px;
+      }
+
+      .pr-field-label {
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--fg);
+        margin-bottom: 3px;
+      }
+      .pr-base-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--fg);
+        background: rgba(24,24,27,0.04);
+      }
+      .pr-base-row svg { width: 10px; height: 10px; color: var(--muted-fg); }
+      .pr-input {
+        position: relative;
+        padding: 5px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--editor-surface);
+        min-height: 24px;
+        font-size: 11.5px;
+        font-family: 'Geist', system-ui, sans-serif;
+        line-height: 1.35;
+        color: var(--fg);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: hidden;
+      }
+      .pr-input.empty .placeholder {
+        color: rgba(113,113,122,0.7);
+      }
+      .pr-input.body { min-height: 64px; }
+
+      .pr-footer {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 2px;
+      }
+      .pr-footer .btn {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 5px 11px;
+        border-radius: 5px;
+        line-height: 1;
+        border: 1px solid transparent;
+      }
+      .pr-footer .btn.outline {
+        background: #fff;
+        color: var(--fg);
+        border-color: var(--border);
+      }
+      .pr-footer .btn.solid {
+        background: var(--fg);
+        color: #fff;
+      }
+
+      /* Cursor used by both pages — anchored to a parent .page via JS. */
+      .fake-cursor {
+        position: absolute;
+        z-index: 40;
+        pointer-events: none;
+        transition: transform 600ms cubic-bezier(.45,.05,.2,1), opacity 200ms ease;
+        transform: translate(-30px, 220px);
+        opacity: 0;
+      }
+      .fake-cursor.visible { opacity: 1; }
+      .fake-cursor svg { display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }
+      .fake-cursor .ripple {
+        position: absolute;
+        left: -6px;
+        top: -6px;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: 2px solid rgba(24,24,27,0.5);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .fake-cursor.clicking .ripple {
+        animation: ripple 460ms ease-out forwards;
+      }
+      @keyframes ripple {
+        0% { transform: scale(0.4); opacity: 0.9; }
+        100% { transform: scale(1.4); opacity: 0; }
+      }
+    </style>
+  </head>
+  <body class="px-8 py-8">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="claude-logo" viewBox="0 0 24 24">
+        <path fill="#D97757" fill-rule="nonzero" d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/>
+      </symbol>
+      <symbol id="openai-logo" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5Z"/>
+      </symbol>
+      <symbol id="icon-message" viewBox="0 0 16 16">
+        <path d="M3 4h10v6H7l-3 3v-3H3z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-file" viewBox="0 0 16 16">
+        <path d="M4 2.5h5l3 3v8H4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M9 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 16 16">
+        <circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M10 10l3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-sidebar-files" viewBox="0 0 24 24">
+        <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sidebar-search" viewBox="0 0 24 24">
+        <path d="m21 21-4.34-4.34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sidebar-git-branch" viewBox="0 0 24 24">
+        <path d="M15 6a9 9 0 0 0-9 9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sidebar-list-checks" viewBox="0 0 24 24">
+        <path d="M13 5h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M13 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M13 19h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="m3 17 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="m3 7 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-send" viewBox="0 0 16 16">
+        <path d="M2 8 14 3l-4 11-2-5-6-1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sparkles" viewBox="0 0 24 24">
+        <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20 3v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M22 5h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 17v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 18H3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-corner-enter" viewBox="0 0 16 16">
+        <path d="M3 4v4a2 2 0 0 0 2 2h7M9 7l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-check-tiny" viewBox="0 0 16 16">
+        <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-chev-down" viewBox="0 0 16 16">
+        <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-branch" viewBox="0 0 24 24">
+        <line x1="6" y1="3" x2="6" y2="15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M18 9a9 9 0 0 1-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 16 16">
+        <path d="M13 4v4H9M3 12V8h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12.2 6.2A4.5 4.5 0 0 0 4.5 4M3.8 9.8A4.5 4.5 0 0 0 11.5 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-external" viewBox="0 0 16 16">
+        <path d="M6 4H4.5A1.5 1.5 0 0 0 3 5.5v6A1.5 1.5 0 0 0 4.5 13h6A1.5 1.5 0 0 0 12 11.5V10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M9 3h4v4M8 8l5-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-pr" viewBox="0 0 16 16">
+        <circle cx="4" cy="3.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="4" cy="12.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="12" cy="12.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M4 5v6M6 4.5h2a4 4 0 0 1 4 4V11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="cursor-arrow" viewBox="0 0 16 16">
+        <path d="M2 1.5 L2 12 L5 9 L7.2 14.5 L9.5 13.6 L7.3 8 L11.5 8 Z"
+              fill="#fff" stroke="#18181b" stroke-width="1" stroke-linejoin="round"/>
+      </symbol>
+    </svg>
+
+    <div class="mx-auto max-w-[1600px] space-y-12">
+
+      <header>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.05em] text-zinc-500">Mock — explore orca · workflow 5</div>
+        <h1 class="text-xl font-semibold mt-1">Review tile · paged animation</h1>
+        <p class="mt-2 text-sm text-zinc-600 max-w-[80ch]">
+          Three pages, advanced from Review's nested substeps in the workflow rail.
+        </p>
+        <ol class="mt-2 list-decimal pl-5 text-sm text-zinc-600 space-y-1 max-w-[80ch]">
+          <li><strong>Notes &amp; diffs</strong> — inline diff review, exact line notes, and one clean feedback batch for any connected agent.</li>
+          <li><strong>PR checks &amp; comments</strong> — hosted PR status, checks, review activity, merge readiness, and conflicts inside Orca.</li>
+          <li><strong>AI commit &amp; PR</strong> — AI writes the Source Control commit message plus the PR title and body, both editable.</li>
+        </ol>
+      </header>
+
+      <section>
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.05em] text-zinc-500 mb-3">Modal chrome (workflow 5 selected)</h2>
+
+        <div class="rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden mx-auto"
+             style="width: min(1240px, calc(100vw - 8rem)); height: min(780px, calc(100vh - 8rem)); display: grid; grid-template-rows: auto minmax(0,1fr) auto;">
+          <div class="border-b border-zinc-200 px-7 py-4">
+            <div class="text-xs font-semibold uppercase tracking-[0.05em] text-zinc-500">Explore Orca</div>
+            <div class="text-lg font-semibold mt-1">Get to know Orca</div>
+          </div>
+
+          <div class="grid min-h-0" style="grid-template-columns: 280px minmax(0,1fr);">
+            <nav class="border-r border-zinc-200 bg-zinc-50 p-2 overflow-hidden">
+              <div class="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-zinc-500">Workflows</div>
+              <div class="flex flex-col gap-0.5">
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">1</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Workspaces</span>
+                    <span class="truncate text-xs text-zinc-500">Isolated work · Context kept together</span>
+                  </span>
+                </button>
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">2</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Tasks</span>
+                    <span class="truncate text-xs text-zinc-500">GitHub · Linear</span>
+                  </span>
+                </button>
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">3</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Agents &amp; orchestration</span>
+                    <span class="truncate text-xs text-zinc-500">Agents · Usage · Orca CLI</span>
+                  </span>
+                </button>
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">4</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Workbench</span>
+                    <span class="truncate text-xs text-zinc-500">Terminal · Editor · Browser · Files</span>
+                  </span>
+                </button>
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm bg-zinc-200/60">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">5</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Review</span>
+                    <span class="truncate text-xs text-zinc-500">Diffs · Comments · PRs</span>
+                  </span>
+                </button>
+                <div class="rail-substeps" data-rail-stepper>
+                  <!-- rendered by JS, matching the real nested workflow substeps -->
+                </div>
+                <button class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-sm border border-zinc-200 bg-white font-mono text-xs text-zinc-500">6</span>
+                  <span class="flex min-w-0 flex-col gap-px">
+                    <span class="truncate font-medium leading-tight">Remote development</span>
+                    <span class="truncate text-xs text-zinc-500">Remote machines</span>
+                  </span>
+                </button>
+              </div>
+            </nav>
+
+            <section class="overflow-hidden">
+              <div class="px-9 pb-3 pt-7">
+                <h3 class="text-3xl font-semibold leading-tight tracking-tight">Review</h3>
+                <div class="mt-3 text-xl font-semibold leading-snug tracking-tight text-zinc-800" data-page-subtitle>Notes &amp; diffs</div>
+                <p class="mt-1.5 text-sm leading-relaxed text-zinc-500" data-page-description>
+                  See the code diff, mark changed lines, and send a notes batch to your agent.
+                </p>
+              </div>
+
+              <div class="grid items-start gap-7 px-9 pb-9 pt-3"
+                   style="grid-template-columns: minmax(0,1fr) auto;">
+                <aside class="flex flex-col gap-5 min-w-0">
+                  <div class="modal-bullets-stage" data-bullets-stage>
+                    <!-- rendered by JS — cross-faded with the right column -->
+                  </div>
+                </aside>
+
+                <div>
+                  <div class="visual-frame tall">
+                    <div class="p-2 flex justify-end">
+                      <div class="review-panel" data-review-panel>
+                        <div class="pages" data-pages>
+                          <div class="page page-notes active" data-page="notes" data-anim-step="notes">
+                            <!-- Notes step rendered by JS for incremental hunk + note state -->
+                          </div>
+                          <div class="page page-pr-view" data-page="pr-view" data-anim-step="pr-view">
+                            <!-- PR view step rendered by JS -->
+                          </div>
+                          <div class="page page-ship" data-page="ship" data-anim-step="ship">
+                            <!-- Generate step rendered by JS -->
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="flex items-center justify-between border-t border-zinc-200 bg-zinc-50/50 px-7 py-3">
+            <span class="text-xs text-zinc-500">Reopen any time from Help &gt; Explore Orca.</span>
+            <div class="flex items-center gap-2">
+              <button class="text-sm text-zinc-500 px-3 h-8 rounded-md hover:bg-zinc-100">Open docs</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <script>
+      // ─── Helpers ──────────────────────────────────────────────────────────
+      function svgUse(id, size = 14, className = '') {
+        return `<svg width="${size}" height="${size}" class="${className}"><use href="#${id}"/></svg>`
+      }
+      function claudeIcon(size = 14) {
+        return `<svg width="${size}" height="${size}" aria-label="Claude"><use href="#claude-logo"/></svg>`
+      }
+      function codexIcon(size = 14) {
+        return `<svg width="${size}" height="${size}" aria-label="Codex" style="color:#111"><use href="#openai-logo"/></svg>`
+      }
+
+      // ─── Step config (drives the rail substeps + pages) ────────────────
+      const STEPS = [
+        { id: 'notes', name: 'Notes', subtitle: 'Notes & diffs', desc: 'Review code diffs, leave notes on the exact lines that need attention, and send them to any agent in one click.' },
+        { id: 'pr-view', name: 'PR checks', subtitle: 'PR checks & comments', desc: 'See the hosted PR status and merge from inside Orca.' },
+        { id: 'ship', name: 'AI commit & PR', subtitle: 'AI commit & PR', desc: 'Let AI write your commit message and pull request from the diff — both fully editable before they go out.' }
+      ]
+
+      const PAGE_INTROS = {
+        'pr-view': 'Open the Checks page to view pull request details, CI status, review comments, merge readiness, and conflicts, then merge the PR from Orca without leaving your workspace.'
+      }
+
+      const PAGE_BULLETS = {
+        notes: [
+          {
+            leadIn: 'Easily review code changes.',
+            body: 'Scan changed files in a compact inline diff without jumping between tools.'
+          },
+          {
+            leadIn: 'Write notes and send them to AI.',
+            body: 'Comment on modified lines, collect the notes, and send them to Claude, Codex, or any connected AI agent as one focused set of instructions.'
+          }
+        ],
+        'pr-view': [
+          {
+            leadIn: 'Know where the PR stands.',
+            body: 'See the PR title, number, state, last update, readiness badges, and conflict status in one compact panel.'
+          },
+          {
+            leadIn: 'Track every check.',
+            body: 'Scan passing, failing, and pending CI results, then jump into the specific check when you need the full log.'
+          },
+          {
+            leadIn: 'Read review activity in context.',
+            body: 'View PR comments and inline review threads, filter human vs bot feedback, and see which conversations are resolved.'
+          }
+        ],
+        ship: [
+          'Generate a commit message from the staged diff with one click.',
+          'Open a PR with an AI-written title and description, ready to edit.',
+          'Keep both generated drafts editable before anything is submitted.'
+        ]
+      }
+
+      // ─── Rail substep render ────────────────────────────────────────────
+      function renderStepper(activeIdx) {
+        const host = document.querySelector('[data-rail-stepper]')
+        host.innerHTML = ''
+        STEPS.forEach((step, i) => {
+          const el = document.createElement('button')
+          el.type = 'button'
+          el.className = 'rail-substep' + (i === activeIdx ? ' active' : '')
+          el.setAttribute('aria-current', i === activeIdx ? 'step' : 'false')
+          const label = String.fromCharCode(97 + i)
+          el.innerHTML = `<span class="rail-substep-mark">${label}.</span><span class="rail-substep-name">${step.name}</span>`
+          el.addEventListener('click', () => goTo(i))
+          host.appendChild(el)
+        })
+      }
+
+      function renderBullets() {
+        const host = document.querySelector('[data-bullets-stage]')
+        host.innerHTML = ''
+        STEPS.forEach((step, i) => {
+          const wrap = document.createElement('div')
+          wrap.className = 'bullets-page' + (i === 0 ? ' active' : '')
+          wrap.dataset.bulletsPage = String(i)
+          const intro = PAGE_INTROS[step.id]
+          if (intro) {
+            const p = document.createElement('p')
+            p.className = 'text-[15px] leading-relaxed text-zinc-700'
+            p.textContent = intro
+            wrap.appendChild(p)
+          }
+          const ul = document.createElement('ul')
+          for (const b of PAGE_BULLETS[step.id]) {
+            const li = document.createElement('li')
+            li.className = 'flex items-start gap-2.5 text-[15px] leading-relaxed'
+            const content =
+              typeof b === 'string'
+                ? b
+                : `<strong>${b.leadIn}</strong><br><span>${b.body}</span>`
+            li.innerHTML = `
+              <span class="mt-[8px] inline-block size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
+              <span>${content}</span>
+            `
+            ul.appendChild(li)
+          }
+          wrap.appendChild(ul)
+          host.appendChild(wrap)
+        })
+      }
+
+      function setPageMeta(idx) {
+        document.querySelector('[data-page-subtitle]').textContent = STEPS[idx].subtitle
+        document.querySelector('[data-page-description]').textContent = STEPS[idx].desc
+        document.querySelectorAll('[data-bullets-page]').forEach((el, i) => {
+          el.classList.toggle('active', i === idx)
+        })
+      }
+
+      function setActivePage(idx) {
+        const pages = document.querySelectorAll('[data-page]')
+        pages.forEach((p, i) => p.classList.toggle('active', i === idx))
+      }
+
+      // ─── Notes page ─────────────────────────────────────────────────────
+      // Plain string lines for the diff. Each line is one of: { kind: 'ctx'|'add'|'rem', t }.
+      // We render a small, deliberately quiet diff with two hunks so the
+      // visual reads as a real edit, not a textbook example.
+      const HUNKS = [
+        {
+          header: '@@ -42,5 +42,7 @@ export function applyMigration(db, version) {',
+          oldStart: 42,
+          newStart: 42,
+          lines: [
+            { kind: 'ctx', t: '  const ctx = beginTx(db)' },
+            { kind: 'rem', t: '    runStep(ctx, "schema", version)' },
+            { kind: 'add', t: '    await runStep(ctx, "schema", version)' },
+            { kind: 'add', t: '    await runStep(ctx, "backfill", version)' },
+            { kind: 'ctx', t: '    commit(ctx)' }
+          ]
+        },
+        {
+          header: '@@ -88,3 +90,4 @@ function backfillUsers(rows) {',
+          oldStart: 88,
+          newStart: 90,
+          lines: [
+            { kind: 'ctx', t: '  for (const row of rows) {' },
+            { kind: 'rem', t: '    db.exec(sql, row)' },
+            { kind: 'add', t: '    if (!row.tier) continue' },
+            { kind: 'add', t: '    db.exec(sql, [row.tier, row.id])' }
+          ]
+        }
+      ]
+
+      // Pre-pick which two lines we'll add notes on. Indices into the
+      // flattened list of (hunk, lineIdx). We pick the first '+ await runStep
+      // ' line and the '+ if (!row.tier) continue' line — both reads as a
+      // reviewer flagging a real concern.
+      const NOTE_TARGETS = [
+        {
+          hunk: 0,
+          lineIdx: 2,
+          body: 'Backfill must run before commit if schema assumes new columns.',
+          summary: 'Sequence schema → backfill before commit'
+        },
+        {
+          hunk: 1,
+          lineIdx: 2,
+          body: 'Silently skipping rows — log the count or surface it in the result.',
+          summary: 'Log skipped rows in result'
+        }
+      ]
+
+      function tokenize(line) {
+        // Tiny syntax highlighter — strings, keywords, idents. Quiet by
+        // design; purely so the diff doesn't look like one solid block.
+        const KW = /\b(?:const|let|await|function|return|if|else|for|of|in|try|catch|throw|new|export|import|from)\b/g
+        const STR = /(`[^`]*`|"[^"]*"|'[^']*')/g
+        let html = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+        html = html.replace(STR, (m) => `<span class="tok-str">${m}</span>`)
+        html = html.replace(KW, (m) => `<span class="tok-kw">${m}</span>`)
+        // call sites: name(
+        html = html.replace(/(\b[A-Za-z_][\w]*\b)(?=\()/g, (m) => `<span class="tok-id">${m}</span>`)
+        return html
+      }
+
+      function buildNotesPage() {
+        const page = document.querySelector('[data-page="notes"]')
+        page.innerHTML = `
+          <div class="app-window">
+            <div class="diff-toolbar">
+              <span class="diff-path">src/server/migrate.ts (diff)</span>
+              <span class="ai-notes-chip" data-ai-notes-chip>
+                <button class="count-btn" type="button">${svgUse('icon-message', 12)} AI notes <span class="count-num" data-ai-count>0</span></button>
+                <button class="send-btn" type="button" data-send-btn>${svgUse('icon-send', 12)}<span class="send-glow"></span></button>
+              </span>
+            </div>
+            <div class="diff-body">
+              <div class="diff-scroll" data-diff-scroll></div>
+              <div class="claude-term" data-term aria-hidden="true">
+                <div class="claude-term-body">
+                  <div class="claude-term-line muted" data-term-line-start></div>
+                  <div class="claude-term-line" data-term-line-loaded></div>
+                  <div class="claude-term-line" data-term-line-ack-0></div>
+                  <div class="claude-term-line" data-term-line-ack-1></div>
+                  <div class="claude-term-line" data-term-line-tail></div>
+                </div>
+              </div>
+              <button class="add-note-btn" data-add-note-btn aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+              </button>
+              <div class="note-popover" data-note-popover>
+                <div class="pop-label">Line <span data-pop-line>?</span></div>
+                <div class="pop-input" data-pop-input></div>
+                <div class="pop-footer">
+                  <button class="pop-btn cancel" type="button">Cancel</button>
+                  <button class="pop-btn add" type="button">Add note ${svgUse('icon-corner-enter', 11)}</button>
+                </div>
+              </div>
+              <div class="send-menu" data-send-menu>
+                <div class="menu-section">Send notes to</div>
+                <div class="menu-row" data-send-row="claude">${claudeIcon(14)}<span>Claude Code</span></div>
+                <div class="menu-row" data-send-row="codex">${codexIcon(14)}<span>Codex</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="fake-cursor" data-cursor>
+            <svg width="16" height="16" viewBox="0 0 16 16"><use href="#cursor-arrow"/></svg>
+            <span class="ripple"></span>
+          </div>
+        `
+
+        // Build the diff DOM. We render hunks as {header} + {lines}. Each
+        // line gets a stable index attribute so the loop can locate the
+        // target line for the "+" button + popover.
+        const scroll = page.querySelector('[data-diff-scroll]')
+        let oldNo = 0, newNo = 0
+        HUNKS.forEach((h, hi) => {
+          oldNo = h.oldStart - 1
+          newNo = h.newStart - 1
+          const hdr = document.createElement('div')
+          hdr.className = 'hunk-header'
+          hdr.innerHTML = `
+            <span class="gut"></span>
+            <span class="gut"></span>
+            <span></span>
+            <span class="text mono">${h.header}</span>
+          `
+          scroll.appendChild(hdr)
+
+          h.lines.forEach((ln, li) => {
+            let ol = '', nl = ''
+            let mark = ' '
+            if (ln.kind === 'ctx') { oldNo += 1; newNo += 1; ol = String(oldNo); nl = String(newNo) }
+            else if (ln.kind === 'add') { newNo += 1; nl = String(newNo); mark = '+' }
+            else if (ln.kind === 'rem') { oldNo += 1; ol = String(oldNo); mark = '-' }
+
+            const row = document.createElement('div')
+            row.className = 'diff-line ' + (ln.kind === 'add' ? 'add' : ln.kind === 'rem' ? 'rem' : '')
+            row.dataset.hunkIdx = hi
+            row.dataset.lineIdx = li
+            row.innerHTML = `
+              <span class="ln">${ol}</span>
+              <span class="ln">${nl}</span>
+              <span class="marker">${mark}</span>
+              <span class="text">${tokenize(ln.t)}</span>
+            `
+            scroll.appendChild(row)
+          })
+
+          // After each hunk, a placeholder slot for the saved AI note card —
+          // hidden until the loop reveals it.
+          const noteSlot = document.createElement('div')
+          noteSlot.className = 'note-card-row'
+          noteSlot.dataset.hunkSlot = hi
+          noteSlot.innerHTML = `
+            <div class="note-card">
+              <div class="note-meta">Note · line <span data-slot-line>?</span></div>
+              <div class="note-body" data-slot-body></div>
+            </div>
+          `
+          scroll.appendChild(noteSlot)
+        })
+      }
+
+      function findDiffRow(hunkIdx, lineIdx) {
+        return document.querySelector(`[data-page="notes"] [data-hunk-idx="${hunkIdx}"][data-line-idx="${lineIdx}"]`)
+      }
+
+      function moveCursor(cursor, anchor, ox = 0, oy = 0) {
+        if (!anchor) return
+        const page = cursor.parentElement
+        const pr = page.getBoundingClientRect()
+        const ar = anchor.getBoundingClientRect()
+        cursor.style.transform = `translate(${ar.left - pr.left + ox}px, ${ar.top - pr.top + oy}px)`
+      }
+
+      // ─── PR view page ───────────────────────────────────────────────────
+      function buildPRViewPage() {
+        const page = document.querySelector('[data-page="pr-view"]')
+        page.innerHTML = `
+          <div class="pr-view-stack">
+            <div class="right-sidebar-peek" data-checks-sidebar-peek>
+              <div class="right-sidebar-tabs">
+                <span class="right-sidebar-tab active" data-explorer-tab>${svgUse('icon-sidebar-files', 16)}</span>
+                <span class="right-sidebar-tab">${svgUse('icon-sidebar-search', 16)}</span>
+                <span class="right-sidebar-tab">${svgUse('icon-sidebar-git-branch', 16)}</span>
+                <span class="right-sidebar-tab" data-checks-tab>${svgUse('icon-sidebar-list-checks', 16)}</span>
+                <span class="checks-tab-tooltip" data-checks-tooltip>Checks (⇧⌘K)</span>
+              </div>
+              <div class="right-sidebar-explorer">
+                <div class="right-sidebar-heading">
+                  <span>Explorer</span>
+                </div>
+                <div class="right-sidebar-file-list">
+                  <div class="right-sidebar-file active">
+                    <span class="file-icon skeleton"></span>
+                    <span class="file-name skeleton" style="--w: 190px"></span>
+                    <span class="file-status skeleton"></span>
+                  </div>
+                  <div class="right-sidebar-file">
+                    <span class="file-icon skeleton"></span>
+                    <span class="file-name skeleton" style="--w: 158px"></span>
+                    <span class="file-status skeleton"></span>
+                  </div>
+                  <div class="right-sidebar-file">
+                    <span class="file-icon skeleton"></span>
+                    <span class="file-name skeleton" style="--w: 176px"></span>
+                    <span class="file-status skeleton"></span>
+                  </div>
+                  <div class="right-sidebar-file">
+                    <span class="file-icon skeleton"></span>
+                    <span class="file-name skeleton" style="--w: 132px"></span>
+                    <span class="file-status skeleton"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pr-view-card" data-pr-view-card>
+              <div class="right-sidebar-tabs">
+                <span class="right-sidebar-tab">${svgUse('icon-sidebar-files', 16)}</span>
+                <span class="right-sidebar-tab">${svgUse('icon-sidebar-search', 16)}</span>
+                <span class="right-sidebar-tab">${svgUse('icon-sidebar-git-branch', 16)}</span>
+                <span class="right-sidebar-tab active">${svgUse('icon-sidebar-list-checks', 16)}</span>
+              </div>
+              <div class="pr-view-body">
+                <div class="pr-number-row">
+                  <span class="pr-number">#2351</span>
+                  <span class="open-pill">OPEN</span>
+                </div>
+                <div class="pr-view-title">Add local diagnostics error tracking</div>
+                <button class="merge-btn" type="button" data-merge-btn>
+                  ${svgUse('icon-branch', 12)}
+                  Squash and merge
+                  ${svgUse('icon-chev-down', 12)}
+                </button>
+                <div class="pr-reveal-block" data-checks-block>
+                  <div class="pr-section-row" data-check-summary>
+                    <span>
+                      <span class="status-ring"></span>
+                      <span class="status-check">${svgUse('icon-check-tiny', 10)}</span>
+                    </span>
+                    <span class="label" data-check-summary-label>1 pending</span>
+                    <span class="meta" data-check-summary-meta>verify</span>
+                  </div>
+                  <div class="pr-inline-section">
+                    <div class="checks-panel">
+                      <div class="checks-title">
+                        <span class="status-ring" data-checks-title-ring></span>
+                        <span class="status-check" data-checks-title-check>${svgUse('icon-check-tiny', 10)}</span>
+                        <span data-checks-title>Checks running</span>
+                      </div>
+                      <div class="check-row" data-check-row="verify">
+                        <span>
+                          <span class="status-ring"></span>
+                          <span class="status-check">${svgUse('icon-check-tiny', 10)}</span>
+                        </span>
+                        <span>verify</span>
+                        <span class="check-state" data-check-verify-state>Running</span>
+                      </div>
+                      <div class="check-row done" data-check-row="typecheck">
+                        <span>
+                          <span class="status-ring"></span>
+                          <span class="status-check">${svgUse('icon-check-tiny', 10)}</span>
+                        </span>
+                        <span>typecheck</span>
+                        <span class="check-state">Passed</span>
+                      </div>
+                      <div class="check-row done" data-check-row="lint">
+                        <span>
+                          <span class="status-ring"></span>
+                          <span class="status-check">${svgUse('icon-check-tiny', 10)}</span>
+                        </span>
+                        <span>lint</span>
+                        <span class="check-state">Passed</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pr-reveal-block" data-comments-block>
+                  <div class="pr-section-row" data-comments-summary>
+                    ${svgUse('icon-message', 14)}
+                    <span class="label">Comments</span>
+                    <span class="meta"><span data-comments-count>0</span> open</span>
+                  </div>
+                  <div class="pr-inline-section">
+                    <div class="comment-list">
+                      <div class="comment-card" data-comment-card="0">
+                        <div class="comment-head">
+                          <span class="avatar"></span>
+                          <span class="comment-author"></span>
+                          <span class="comment-path">src/main/diagnostics.ts</span>
+                        </div>
+                        <div class="comment-body">Can we include the failing command in the diagnostic payload?</div>
+                      </div>
+                      <div class="comment-card" data-comment-card="1">
+                        <div class="comment-head">
+                          <span class="avatar"></span>
+                          <span class="comment-author"></span>
+                          <span class="comment-path">tests/diagnostics.test.ts</span>
+                        </div>
+                        <div class="comment-body">Add a coverage case for <code>stderr</code> truncation before merge.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fake-cursor" data-cursor>
+            <svg width="16" height="16" viewBox="0 0 16 16"><use href="#cursor-arrow"/></svg>
+            <span class="ripple"></span>
+          </div>
+        `
+      }
+
+      // ─── Generate page ──────────────────────────────────────────────────
+      function buildShipPage() {
+        const page = document.querySelector('[data-page="ship"]')
+        page.innerHTML = `
+          <div class="ship-stack">
+            <div class="sc-card">
+              <div class="sc-meta">Source Control · Message</div>
+              <div class="sc-textarea" data-commit-textarea><button class="sc-sparkle" type="button" data-commit-sparkle aria-label="Generate commit message with AI">${svgUse('icon-sparkles', 14)}</button><span class="placeholder" data-commit-placeholder>Message</span><span class="typed" data-commit-typed></span><span class="caret"></span></div>
+              <div class="sc-split">
+                <span class="primary">${svgUse('icon-check-tiny', 12)} Commit</span>
+                <span class="chev">${svgUse('icon-chev-down', 12)}</span>
+              </div>
+            </div>
+
+            <div class="pr-dialog">
+              <div class="pr-head">
+                <div class="pr-title-text">Create Pull Request</div>
+                <button class="pr-gen-btn" type="button" data-pr-gen-btn>${svgUse('icon-sparkles', 12)} Generate with AI</button>
+              </div>
+              <div class="pr-desc">Confirm the target branch and PR details before creating the hosted review.</div>
+              <div>
+                <div class="pr-field-label">Base branch</div>
+                <span class="pr-base-row">${svgUse('icon-branch', 10)} main</span>
+              </div>
+              <div>
+                <div class="pr-field-label">Title</div>
+                <div class="pr-input empty" data-pr-title><span class="placeholder">Pull request title</span><span data-pr-title-typed></span></div>
+              </div>
+              <div>
+                <div class="pr-field-label">Description</div>
+                <div class="pr-input body empty" data-pr-body><span class="placeholder">Pull request description</span><span data-pr-body-typed></span></div>
+              </div>
+              <div class="pr-footer">
+                <button class="btn outline" type="button">Cancel</button>
+                <button class="btn solid" type="button" data-pr-create-btn>Create PR</button>
+              </div>
+            </div>
+          </div>
+          <div class="fake-cursor" data-cursor>
+            <svg width="16" height="16" viewBox="0 0 16 16"><use href="#cursor-arrow"/></svg>
+            <span class="ripple"></span>
+          </div>
+        `
+      }
+
+      // ─── Animation loops ────────────────────────────────────────────────
+      function makeWait(timers) {
+        return (ms) => new Promise((res) => {
+          const t = setTimeout(res, ms)
+          timers.push(t)
+        })
+      }
+
+      async function typeInto(el, text, perChar, getCancelled) {
+        for (const ch of text) {
+          if (getCancelled()) return
+          el.textContent += ch
+          await new Promise((r) => setTimeout(r, perChar))
+        }
+      }
+
+      function runNotesLoop(page) {
+        let cancelled = false
+        const timers = []
+        const wait = makeWait(timers)
+        const cursor = page.querySelector('[data-cursor]')
+        const popover = page.querySelector('[data-note-popover]')
+        const popInput = page.querySelector('[data-pop-input]')
+        const popLine = page.querySelector('[data-pop-line]')
+        const addBtn = page.querySelector('[data-add-note-btn]')
+        const sendChip = page.querySelector('[data-ai-notes-chip]')
+        const sendBtn = page.querySelector('[data-send-btn]')
+        const sendMenu = page.querySelector('[data-send-menu]')
+        const aiCount = page.querySelector('[data-ai-count]')
+        const diffScroll = page.querySelector('[data-diff-scroll]')
+        const term = page.querySelector('[data-term]')
+
+        function resetTerminal() {
+          const sels = ['[data-term-line-start]', '[data-term-line-loaded]', '[data-term-line-ack-0]', '[data-term-line-ack-1]', '[data-term-line-tail]']
+          sels.forEach((s) => {
+            const el = term.querySelector(s)
+            if (el) el.innerHTML = ''
+          })
+        }
+
+        function resetState() {
+          // Hide all saved notes / popovers / chip.
+          page.querySelectorAll('[data-hunk-slot]').forEach((el) => el.classList.remove('visible'))
+          popover.classList.remove('visible')
+          popInput.innerHTML = ''
+          addBtn.classList.remove('visible')
+          sendChip.classList.remove('visible')
+          sendMenu.classList.remove('visible')
+          sendBtn.classList.remove('flash')
+          aiCount.textContent = '0'
+          diffScroll.classList.remove('hidden')
+          term.classList.remove('visible')
+          resetTerminal()
+          cursor.classList.remove('visible', 'clicking')
+          cursor.style.transition = 'none'
+          cursor.style.transform = 'translate(-30px, 220px)'
+          void cursor.offsetWidth
+          cursor.style.transition = ''
+        }
+
+        // The "+" button and the popover both live inside .diff-body (so
+        // they're clipped to the diff). Anchor positions are computed
+        // relative to .diff-body, not the page.
+        const diffBody = page.querySelector('.diff-body')
+
+        function anchorAddBtnTo(row) {
+          const dr = diffBody.getBoundingClientRect()
+          const rr = row.getBoundingClientRect()
+          const x = rr.left - dr.left + 4
+          const y = rr.top - dr.top + (rr.height - 18) / 2
+          addBtn.style.left = `${x}px`
+          addBtn.style.top = `${y}px`
+          addBtn.classList.add('visible')
+        }
+
+        function anchorPopoverTo(row) {
+          const dr = diffBody.getBoundingClientRect()
+          const rr = row.getBoundingClientRect()
+          const popH = popover.offsetHeight || 110
+          const spaceBelow = dr.bottom - rr.bottom
+          if (spaceBelow < popH + 12) {
+            const yAbove = rr.top - dr.top - popH - 4
+            popover.style.top = `${Math.max(8, yAbove)}px`
+          } else {
+            popover.style.top = `${rr.bottom - dr.top + 4}px`
+          }
+          popover.style.left = ''
+        }
+
+        async function fillPopoverInput(text) {
+          // Start from a blank input before typing so no placeholder flashes
+          // between the cursor click and the generated note text.
+          popInput.innerHTML = '<span data-pop-typed></span><span class="caret"></span>'
+          const typed = popInput.querySelector('[data-pop-typed]')
+          for (const ch of text) {
+            if (cancelled) return
+            typed.textContent += ch
+            await wait(18)
+          }
+        }
+
+        function showSavedNote(target) {
+          const slot = page.querySelector(`[data-hunk-slot="${target.hunk}"]`)
+          if (!slot) return
+          const lineEl = slot.querySelector('[data-slot-line]')
+          const bodyEl = slot.querySelector('[data-slot-body]')
+          // Resolve the actual displayed line number from the diff row's
+          // "new" gutter cell so the saved note label matches what the user
+          // saw the popover anchored to.
+          const row = findDiffRow(target.hunk, target.lineIdx)
+          if (row) {
+            const newLn = row.querySelectorAll('.ln')[1]?.textContent || ''
+            lineEl.textContent = newLn
+          }
+          bodyEl.textContent = target.body
+          slot.classList.add('visible')
+        }
+
+        async function loop() {
+          while (!cancelled) {
+            resetState()
+            await wait(520)
+            if (cancelled) return
+
+            // For each note target, walk through: cursor → "+" → popover →
+            // type → submit → saved note appears.
+            for (let i = 0; i < NOTE_TARGETS.length; i++) {
+              const target = NOTE_TARGETS[i]
+              const row = findDiffRow(target.hunk, target.lineIdx)
+              if (!row) continue
+
+              // 1. Park cursor near the gutter of the target row.
+              cursor.classList.add('visible')
+              moveCursor(cursor, row, -8, 4)
+              anchorAddBtnTo(row)
+              await wait(700)
+              if (cancelled) return
+
+              // 2. Cursor lands on the "+" button.
+              moveCursor(cursor, addBtn, 4, 4)
+              await wait(360)
+              if (cancelled) return
+
+              // 3. Click ripple → popover opens.
+              cursor.classList.add('clicking')
+              await wait(220)
+              if (cancelled) return
+              cursor.classList.remove('clicking')
+              addBtn.classList.remove('visible')
+              const newLn = row.querySelectorAll('.ln')[1]?.textContent || ''
+              popLine.textContent = newLn
+              anchorPopoverTo(row)
+              popInput.innerHTML = ''
+              popover.classList.add('visible')
+              // Move cursor to inside the popover (suggesting focus).
+              moveCursor(cursor, popInput, 12, 18)
+              await wait(280)
+              if (cancelled) return
+
+              // 4. Type the note.
+              await fillPopoverInput(target.body)
+              if (cancelled) return
+              await wait(360)
+              if (cancelled) return
+
+              // 5. Click "Add note" — popover closes, saved note fades in.
+              const addPopBtn = popover.querySelector('.pop-btn.add')
+              moveCursor(cursor, addPopBtn, 30, 10)
+              await wait(280)
+              if (cancelled) return
+              cursor.classList.add('clicking')
+              await wait(200)
+              if (cancelled) return
+              cursor.classList.remove('clicking')
+              popover.classList.remove('visible')
+              showSavedNote(target)
+              aiCount.textContent = String(i + 1)
+              if (!sendChip.classList.contains('visible')) {
+                sendChip.classList.add('visible')
+              }
+              await wait(620)
+              if (cancelled) return
+            }
+
+            // 6. Cursor moves up to the AI notes "send" icon, opens dropdown.
+            moveCursor(cursor, sendBtn, 6, 8)
+            await wait(420)
+            if (cancelled) return
+            cursor.classList.add('clicking')
+            await wait(200)
+            if (cancelled) return
+            cursor.classList.remove('clicking')
+            sendMenu.classList.add('visible')
+            await wait(420)
+            if (cancelled) return
+
+            // 7. Hover over Claude row, click — send the batch.
+            const claudeRow = sendMenu.querySelector('[data-send-row="claude"]')
+            claudeRow.classList.add('hot')
+            moveCursor(cursor, claudeRow, 24, 10)
+            await wait(540)
+            if (cancelled) return
+            cursor.classList.add('clicking')
+            await wait(220)
+            if (cancelled) return
+            cursor.classList.remove('clicking')
+            claudeRow.classList.remove('hot')
+            sendMenu.classList.remove('visible')
+            sendBtn.classList.add('flash')
+            await wait(560)
+            if (cancelled) return
+            sendBtn.classList.remove('flash')
+            cursor.classList.remove('visible')
+
+            // 8. Claude Code receives the notes — swap diff body for a
+            // terminal-style panel and show the agent starting the fixes.
+            await runTerminalPhase()
+            if (cancelled) return
+          }
+        }
+
+        async function typeIntoTerm(selector, text, perChar = 18) {
+          const el = term.querySelector(selector)
+          if (!el) return
+          for (const ch of text) {
+            if (cancelled) return
+            el.textContent = (el.textContent ?? '') + ch
+            await wait(perChar)
+          }
+        }
+
+        function getNewLineNo(target) {
+          const row = findDiffRow(target.hunk, target.lineIdx)
+          const lns = row?.querySelectorAll('.ln')
+          return lns?.[1]?.textContent ?? '?'
+        }
+
+        async function runTerminalPhase() {
+          diffScroll.classList.add('hidden')
+          term.classList.add('visible')
+          await wait(280)
+          if (cancelled) return
+          const startEl = term.querySelector('[data-term-line-start]')
+          if (startEl) {
+            startEl.innerHTML = '<span class="claude-term-muted">● Claude Code session started</span>'
+          }
+          await wait(520)
+          if (cancelled) return
+          const loadedEl = term.querySelector('[data-term-line-loaded]')
+          if (loadedEl) {
+            loadedEl.innerHTML = `<span class="claude-term-check">✓</span><span class="claude-term-muted">Loaded ${NOTE_TARGETS.length} review notes from Orca</span>`
+          }
+          await wait(520)
+          if (cancelled) return
+          for (let i = 0; i < NOTE_TARGETS.length && i < 2; i++) {
+            const tgt = NOTE_TARGETS[i]
+            const lineNo = getNewLineNo(tgt)
+            const ackSel = i === 0 ? '[data-term-line-ack-0]' : '[data-term-line-ack-1]'
+            const ackEl = term.querySelector(ackSel)
+            if (ackEl) {
+              ackEl.innerHTML = `  <span class="claude-term-glyph">•</span><span class="claude-term-muted">line ${lineNo}</span> ${tgt.summary}`
+              await wait(360)
+              if (cancelled) return
+            }
+          }
+          const tail = term.querySelector('[data-term-line-tail]')
+          if (tail) {
+            tail.innerHTML = '<span class="claude-term-spinner" aria-hidden="true"></span><span class="claude-term-muted" data-term-tail-text></span>'
+          }
+          await typeIntoTerm('[data-term-tail-text]', 'Fixing both issues...', 14)
+          if (cancelled) return
+          await wait(3200)
+        }
+
+        loop()
+        return () => {
+          cancelled = true
+          timers.forEach((t) => clearTimeout(t))
+        }
+      }
+
+      function runPRViewLoop(page) {
+        let cancelled = false
+        const timers = []
+        const wait = makeWait(timers)
+        const comments = Array.from(page.querySelectorAll('[data-comment-card]'))
+        const commentsCount = page.querySelector('[data-comments-count]')
+        const checkSummary = page.querySelector('[data-check-summary]')
+        const checkSummaryLabel = page.querySelector('[data-check-summary-label]')
+        const checkSummaryMeta = page.querySelector('[data-check-summary-meta]')
+        const checksBlock = page.querySelector('[data-checks-block]')
+        const commentsBlock = page.querySelector('[data-comments-block]')
+        const verifyRow = page.querySelector('[data-check-row="verify"]')
+        const verifyState = page.querySelector('[data-check-verify-state]')
+        const checksTitleRow = page.querySelector('.checks-title')
+        const checksTitle = page.querySelector('[data-checks-title]')
+        const mergeBtn = page.querySelector('[data-merge-btn]')
+        const sidebarPeek = page.querySelector('[data-checks-sidebar-peek]')
+        const prCard = page.querySelector('[data-pr-view-card]')
+        const cursor = page.querySelector('[data-cursor]')
+        const explorerTab = page.querySelector('[data-explorer-tab]')
+        const checksTab = page.querySelector('[data-checks-tab]')
+        const checksTooltip = page.querySelector('[data-checks-tooltip]')
+
+        function resetState() {
+          sidebarPeek.classList.add('visible')
+          sidebarPeek.classList.remove('hiding')
+          prCard.classList.remove('visible')
+          explorerTab.classList.add('active')
+          checksTab.classList.remove('active')
+          checksTab.classList.remove('hovered')
+          checksTooltip.classList.remove('visible')
+          cursor.classList.remove('visible', 'clicking')
+          cursor.style.transition = 'none'
+          cursor.style.transform = 'translate(-30px, 220px)'
+          void cursor.offsetWidth
+          cursor.style.transition = ''
+          checksBlock.classList.remove('visible')
+          commentsBlock.classList.remove('visible')
+          comments.forEach((el) => el.classList.remove('visible'))
+          commentsCount.textContent = '0'
+          checkSummary.classList.remove('done')
+          checkSummaryLabel.textContent = '1 pending'
+          checkSummaryMeta.textContent = 'verify'
+          verifyRow.classList.remove('done')
+          verifyState.textContent = 'Running'
+          checksTitleRow.classList.remove('done')
+          checksTitle.textContent = 'Checks running'
+          mergeBtn.classList.remove('ready')
+        }
+
+        async function loop() {
+          while (!cancelled) {
+            resetState()
+            await wait(420)
+            if (cancelled) return
+
+            // Start on the already-open right sidebar, then hover Checks so
+            // the tooltip and shortcut are visible before the click.
+            cursor.classList.add('visible')
+            moveCursor(cursor, checksTab, 5, 6)
+            checksTab.classList.add('hovered')
+            await wait(260)
+            if (cancelled) return
+            checksTooltip.classList.add('visible')
+            await wait(1300)
+            if (cancelled) return
+            cursor.classList.add('clicking')
+            await wait(220)
+            if (cancelled) return
+            cursor.classList.remove('clicking')
+            checksTooltip.classList.remove('visible')
+            checksTab.classList.remove('hovered')
+            explorerTab.classList.remove('active')
+            checksTab.classList.add('active')
+            await wait(420)
+            if (cancelled) return
+            sidebarPeek.classList.add('hiding')
+            prCard.classList.add('visible')
+            cursor.classList.remove('visible')
+            await wait(560)
+            if (cancelled) return
+
+            checksBlock.classList.add('visible')
+            await wait(1050)
+            if (cancelled) return
+            verifyRow.classList.add('done')
+            verifyState.textContent = 'Passed'
+            checkSummary.classList.add('done')
+            checkSummaryLabel.textContent = 'Checks passed'
+            checkSummaryMeta.textContent = '3 checks'
+            checksTitleRow.classList.add('done')
+            checksTitle.textContent = 'All checks passed'
+            mergeBtn.classList.add('ready')
+
+            await wait(560)
+            if (cancelled) return
+            commentsBlock.classList.add('visible')
+            await wait(260)
+            if (cancelled) return
+
+            for (let i = 0; i < comments.length; i++) {
+              comments[i].classList.add('visible')
+              commentsCount.textContent = String(i + 1)
+              await wait(520)
+              if (cancelled) return
+            }
+
+            await wait(2900)
+            if (cancelled) return
+          }
+        }
+
+        loop()
+        return () => {
+          cancelled = true
+          timers.forEach((t) => clearTimeout(t))
+        }
+      }
+
+      function runShipLoop(page) {
+        let cancelled = false
+        const timers = []
+        const wait = makeWait(timers)
+        const cursor = page.querySelector('[data-cursor]')
+        const sparkle = page.querySelector('[data-commit-sparkle]')
+        const ta = page.querySelector('[data-commit-textarea]')
+        const placeholder = page.querySelector('[data-commit-placeholder]')
+        const typed = page.querySelector('[data-commit-typed]')
+        const prGen = page.querySelector('[data-pr-gen-btn]')
+        const prTitleHost = page.querySelector('[data-pr-title]')
+        const prTitleTyped = page.querySelector('[data-pr-title-typed]')
+        const prTitlePh = prTitleHost.querySelector('.placeholder')
+        const prBodyHost = page.querySelector('[data-pr-body]')
+        const prBodyTyped = page.querySelector('[data-pr-body-typed]')
+        const prBodyPh = prBodyHost.querySelector('.placeholder')
+        const prCreate = page.querySelector('[data-pr-create-btn]')
+
+        const COMMIT_MSG = 'Run schema + backfill steps in order during migration'
+        const PR_TITLE = 'Run schema + backfill in order during migration'
+        const PR_BODY = '## Summary\n• Sequence schema + backfill with await so commit fires after both\n• Skip backfill rows with no tier so reruns don’t overwrite data\n\n## Test plan\n• Rerun the migration on a clean staging DB'
+
+        function resetState() {
+          ta.classList.remove('generating')
+          placeholder.style.display = ''
+          typed.textContent = ''
+          sparkle.classList.remove('spinning')
+          prGen.classList.remove('spinning')
+          prTitlePh.style.display = ''
+          prBodyPh.style.display = ''
+          prTitleTyped.textContent = ''
+          prBodyTyped.textContent = ''
+          prTitleHost.classList.add('empty')
+          prBodyHost.classList.add('empty')
+          prCreate.style.background = ''
+          prCreate.style.boxShadow = ''
+          cursor.classList.remove('visible', 'clicking')
+          cursor.style.transition = 'none'
+          cursor.style.transform = 'translate(-30px, 220px)'
+          void cursor.offsetWidth
+          cursor.style.transition = ''
+        }
+
+        async function loop() {
+          while (!cancelled) {
+            resetState()
+            await wait(520)
+            if (cancelled) return
+
+            // 1. Cursor moves to the sparkle icon on the commit textarea.
+            cursor.classList.add('visible')
+            moveCursor(cursor, sparkle, 6, 6)
+            await wait(620)
+            if (cancelled) return
+
+            // 2. Click — sparkle starts spinning.
+            cursor.classList.add('clicking')
+            await wait(220)
+            if (cancelled) return
+            cursor.classList.remove('clicking')
+            sparkle.classList.add('spinning')
+            placeholder.style.display = 'none'
+            ta.classList.add('generating')
+            // Move cursor away so the typing reads as agent output.
+            moveCursor(cursor, ta, 240, 10)
+            await wait(380)
+            if (cancelled) return
+
+            // 3. Type the commit message into the textarea.
+            for (const ch of COMMIT_MSG) {
+              if (cancelled) return
+              typed.textContent += ch
+              await wait(ch === '\n' ? 80 : 16)
+            }
+            sparkle.classList.remove('spinning')
+            ta.classList.remove('generating')
+            await wait(540)
+            if (cancelled) return
+
+            // 4. Cursor moves to the PR Generate-with-AI button.
+            moveCursor(cursor, prGen, 28, 10)
+            await wait(540)
+            if (cancelled) return
+            cursor.classList.add('clicking')
+            await wait(220)
+            if (cancelled) return
+            cursor.classList.remove('clicking')
+            prGen.classList.add('spinning')
+
+            // 5. Title types in.
+            prTitlePh.style.display = 'none'
+            prTitleHost.classList.remove('empty')
+            for (const ch of PR_TITLE) {
+              if (cancelled) return
+              prTitleTyped.textContent += ch
+              await wait(20)
+            }
+            // 6. Body types in.
+            prBodyPh.style.display = 'none'
+            prBodyHost.classList.remove('empty')
+            for (const ch of PR_BODY) {
+              if (cancelled) return
+              prBodyTyped.textContent += ch
+              await wait(ch === '\n' ? 60 : 10)
+            }
+            prGen.classList.remove('spinning')
+            await wait(420)
+            if (cancelled) return
+
+            // 7. Highlight the Create PR button briefly.
+            prCreate.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.30)'
+            await wait(720)
+            if (cancelled) return
+            prCreate.style.boxShadow = ''
+
+            // Hold the final state.
+            await wait(2200)
+            if (cancelled) return
+          }
+        }
+
+        loop()
+        return () => {
+          cancelled = true
+          timers.forEach((t) => clearTimeout(t))
+        }
+      }
+
+      // ─── Page lifecycle ────────────────────────────────────────────────
+      let activeIdx = 0
+      let stopFn = null
+
+      function startActive() {
+        if (stopFn) {
+          stopFn()
+          stopFn = null
+        }
+        const page = document.querySelectorAll('[data-page]')[activeIdx]
+        if (!page) return
+        if (activeIdx === 0) {
+          stopFn = runNotesLoop(page)
+        } else if (activeIdx === 1) {
+          stopFn = runPRViewLoop(page)
+        } else {
+          stopFn = runShipLoop(page)
+        }
+      }
+
+      function goTo(idx) {
+        if (idx === activeIdx) return
+        activeIdx = idx
+        renderStepper(idx)
+        setPageMeta(idx)
+        setActivePage(idx)
+        // Wait for the cross-fade to finish before swapping the running loop
+        // so the old loop doesn't visibly mutate the dimmed page.
+        setTimeout(() => startActive(), 380)
+      }
+
+      // Boot.
+      buildNotesPage()
+      buildPRViewPage()
+      buildShipPage()
+      renderBullets()
+      renderStepper(0)
+      setPageMeta(0)
+      setActivePage(0)
+      startActive()
+    </script>
+  </body>
+</html>
