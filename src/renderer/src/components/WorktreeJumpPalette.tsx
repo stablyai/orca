@@ -17,6 +17,7 @@ import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -169,6 +170,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
 
@@ -189,9 +191,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const hasQuery = deferredQuery.trim().length > 0
 
-  // Why: keep the jump palette aligned with the sidebar. If the user
-  // opted to hide the default-branch workspace, surfacing it here via
-  // Cmd+J would reintroduce the entry they asked to remove.
+  // Why: keep the jump palette aligned with the sidebar. Surfacing hidden
+  // default-branch or sleeping workspaces here would reintroduce entries the
+  // user asked the workspace navigation surfaces to omit.
   // Drift warning: this check must stay in lockstep with the sidebar's
   // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
   // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
@@ -207,9 +209,22 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
+        if (
+          !showSleepingWorkspaces &&
+          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+        ) {
+          return false
+        }
         return true
       }),
-    [allWorktrees, hideDefaultBranchWorkspace]
+    [
+      allWorktrees,
+      browserTabsByWorktree,
+      hideDefaultBranchWorkspace,
+      ptyIdsByTabId,
+      showSleepingWorkspaces,
+      tabsByWorktree
+    ]
   )
 
   // Why: empty-query rows use focus-recency (lastVisitedAtByWorktreeId) with

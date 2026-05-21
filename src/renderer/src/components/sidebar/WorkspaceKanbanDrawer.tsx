@@ -64,7 +64,6 @@ export default function WorkspaceKanbanDrawer({
   const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
-    activeWorktreeId,
     repoMap
   })
   const worktreesByStatus = useMemo(() => {

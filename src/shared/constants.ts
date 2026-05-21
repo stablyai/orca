@@ -344,6 +344,7 @@ export function getDefaultUIState(): PersistedUIState {
     groupBy: 'workspace-status',
     sortBy: 'recent',
     showActiveOnly: false,
+    showSleepingWorkspaces: false,
     hideDefaultBranchWorkspace: false,
     filterRepoIds: [],
     collapsedGroups: [],

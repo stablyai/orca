@@ -1,11 +1,11 @@
 import React from 'react'
-import { Activity, GitBranch } from 'lucide-react'
+import { GitBranch, Moon } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 
 const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilterSection() {
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
-  const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
@@ -15,10 +15,10 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         <span className="text-[11px] font-semibold text-muted-foreground">Filters</span>
       </div>
       <FilterToggleRow
-        icon={<Activity className="size-3.5" />}
-        label="Active only"
-        checked={showActiveOnly}
-        onChange={setShowActiveOnly}
+        icon={<Moon className="size-3.5" />}
+        label="Show sleeping"
+        checked={showSleepingWorkspaces}
+        onChange={setShowSleepingWorkspaces}
       />
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}

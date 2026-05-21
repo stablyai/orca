@@ -1975,12 +1975,16 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
+  /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
+  /** Off by default: sleeping/inactive workspaces stay hidden until shown. */
+  showSleepingWorkspaces?: boolean
+  /** Legacy name for the same setting used by a short-lived build. */
+  showInactiveWorkspaces?: boolean
   /** Hide the repo's original checked-out branch from workspace navigation
    *  (sidebar and Cmd+J jump palette). Folder-mode repos are unaffected —
    *  the predicate in visible-worktrees.ts excludes worktrees with an empty
-   *  branch. Lives alongside showActiveOnly because both are user-facing
-   *  sidebar filters reached through the same dropdown. */
+   *  branch. */
   hideDefaultBranchWorkspace: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]

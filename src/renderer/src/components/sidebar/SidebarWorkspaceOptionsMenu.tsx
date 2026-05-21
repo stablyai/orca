@@ -55,7 +55,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -94,9 +94,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     return count
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
-  const hasAnyFilter = showActiveOnly || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasAnyFilter = showSleepingWorkspaces || hideDefaultBranchWorkspace || hasRepoFilter
   const activeFilterCount =
-    (showActiveOnly ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (showSleepingWorkspaces ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>

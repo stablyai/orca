@@ -97,7 +97,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarWidth).toBe(360)
   })
 
-  it('restores the active-only filter from persisted UI state', () => {
+  it('does not restore the retired active-only filter from persisted UI state', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -106,7 +106,32 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().showActiveOnly).toBe(true)
+    expect(store.getState().showActiveOnly).toBe(false)
+  })
+
+  it('restores the show-sleeping filter from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showSleepingWorkspaces: true
+      })
+    )
+
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
+  it('restores the legacy show-inactive filter as show-sleeping', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showSleepingWorkspaces: undefined,
+        showInactiveWorkspaces: true
+      })
+    )
+
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
   it('restores the hide-default-branch filter from persisted UI state', () => {

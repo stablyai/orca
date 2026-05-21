@@ -391,6 +391,8 @@ export type UISlice = {
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
+  showSleepingWorkspaces: boolean
+  setShowSleepingWorkspaces: (v: boolean) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
   filterRepoIds: string[]
@@ -847,6 +849,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
+  showSleepingWorkspaces: false,
+  setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
+
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
 
@@ -1055,10 +1060,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
-        // Why: "Active only" is part of the user's sidebar working set, not a
-        // transient render detail. Restoring it on launch keeps the filtered
-        // worktree list stable across restarts instead of silently widening it.
-        showActiveOnly: ui.showActiveOnly,
+        // Why: Active-only was retired. Force the old persisted flag off so an
+        // old profile cannot invisibly keep narrowing the workspace list.
+        showActiveOnly: false,
+        // Why: a short-lived build called this "inactive"; keep that key as a
+        // fallback so the renamed sleeping filter preserves user intent.
+        showSleepingWorkspaces:
+          ui.showSleepingWorkspaces ??
+          (ui as PersistedUIState & { showInactiveWorkspaces?: boolean }).showInactiveWorkspaces ??
+          false,
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),

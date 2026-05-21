@@ -1511,7 +1511,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const groupBy = useAppStore((s) => s.groupBy)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
@@ -1523,11 +1523,11 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
   // Read tabsByWorktree when needed for filtering or sorting
-  const needsTabs = showActiveOnly || sortBy === 'smart'
-  const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
-  const ptyIdsByTabId = useAppStore((s) => (needsTabs ? s.ptyIdsByTabId : null))
+  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const tabsByWorktree = useAppStore((s) => (needsActivityMaps ? s.tabsByWorktree : null))
+  const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    showActiveOnly ? s.browserTabsByWorktree : null
+    !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
@@ -1780,11 +1780,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const visibleWorktrees = useMemo(() => {
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
-      showActiveOnly,
+      showSleepingWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
-      activeWorktreeId,
       hideDefaultBranchWorkspace,
       repoMap,
       worktreeLineageById
@@ -1792,8 +1791,7 @@ const WorktreeList = React.memo(function WorktreeList({
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     filterRepoIds,
-    showActiveOnly,
-    activeWorktreeId,
+    showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
@@ -2045,18 +2043,18 @@ const WorktreeList = React.memo(function WorktreeList({
   // worktree is a default-branch row and who just toggled hide on would see
   // "No workspaces found" with no way back short of reopening the filter menu.
   const filterState = useMemo(
-    () => ({ showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace }),
-    [showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace]
+    () => ({ showSleepingWorkspaces, filterRepoIds, hideDefaultBranchWorkspace }),
+    [showSleepingWorkspaces, filterRepoIds, hideDefaultBranchWorkspace]
   )
   const hasFilters = sidebarHasActiveFilters(filterState)
-  const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
     const actions = computeClearFilterActions(filterState)
-    if (actions.resetShowActiveOnly) {
-      setShowActiveOnly(false)
+    if (actions.resetShowSleepingWorkspaces) {
+      setShowSleepingWorkspaces(false)
     }
     if (actions.resetFilterRepoIds) {
       setFilterRepoIds([])
@@ -2064,7 +2062,7 @@ const WorktreeList = React.memo(function WorktreeList({
     if (actions.resetHideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
     }
-  }, [setShowActiveOnly, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
+  }, [setShowSleepingWorkspaces, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
   if (worktrees.length === 0) {
     return (

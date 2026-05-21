@@ -355,7 +355,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -872,7 +872,8 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
-        showActiveOnly,
+        showActiveOnly: false,
+        showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         filterRepoIds,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
@@ -891,7 +892,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
-    showActiveOnly,
+    showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
