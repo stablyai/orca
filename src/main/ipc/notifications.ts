@@ -14,7 +14,11 @@ import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
+const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
+const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
+const MACOS_NOTIFICATION_SETTINGS_URL =
+  'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
 const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
   ['.ogg', 'audio/ogg'],
   ['.mp3', 'audio/mpeg'],
@@ -31,6 +35,40 @@ const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Ma
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
 
+function getMacNotificationSettingsUrl(): string {
+  const bundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID ?? MACOS_PACKAGED_BUNDLE_ID
+  return `${MACOS_NOTIFICATION_SETTINGS_URL}?id=${encodeURIComponent(bundleId)}`
+}
+
+function openNotificationSystemSettings(): void {
+  if (process.platform === 'darwin') {
+    void shell.openExternal(getMacNotificationSettingsUrl())
+  } else if (process.platform === 'win32') {
+    void shell.openExternal('ms-settings:notifications')
+  }
+}
+
+function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const settle = (displayed: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      resolve(displayed)
+    }
+
+    notification.once('show', () => settle(true))
+    notification.once('failed', () => settle(false))
+    timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
+  })
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
@@ -38,12 +76,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.removeHandler('notifications:getPermissionStatus')
   ipcMain.removeHandler('notifications:requestPermission')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
-    if (process.platform === 'darwin') {
-      // Deep-link into the macOS Notifications settings pane.
-      void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings')
-    } else if (process.platform === 'win32') {
-      void shell.openExternal('ms-settings:notifications')
-    }
+    openNotificationSystemSettings()
   })
 
   // Why: Electron's main-process `Notification` class exposes no synchronous
@@ -68,7 +101,10 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
-    (_event, args: NotificationDispatchRequest): NotificationDispatchResult => {
+    (
+      _event,
+      args: NotificationDispatchRequest
+    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
       // Why: mobile push is independent of desktop notification guards.
       // The user's phone should receive the notification even when the desktop
       // window is focused (suppressWhenFocused), Electron notifications aren't
@@ -197,7 +233,20 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         })
       }
 
+      const displayConfirmation = args.requireDisplayConfirmation
+        ? waitForNotificationDisplay(notification)
+        : null
       notification.show()
+
+      if (displayConfirmation) {
+        return displayConfirmation.then((displayed) => {
+          if (!displayed) {
+            release()
+            return { delivered: false, reason: 'not-displayed' }
+          }
+          return { delivered: true }
+        })
+      }
 
       return { delivered: true }
     }
@@ -308,7 +357,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   // notifications…") but clicking it does nothing, which is confusing.
   notification.on('click', () => {
     cleanup()
-    void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings')
+    openNotificationSystemSettings()
   })
 
   notification.on('show', () => {

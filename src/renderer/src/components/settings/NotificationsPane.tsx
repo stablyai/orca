@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Slider } from '../ui/slider'
-import { BellRing, Bot, FileAudio, Siren, Volume2, X } from 'lucide-react'
+import { BellRing, Bot, ExternalLink, FileAudio, Siren, Volume2, X } from 'lucide-react'
 import type { SettingsSearchEntry } from './settings-search'
 import { basename } from '@/lib/path'
 
@@ -63,7 +63,10 @@ export async function sendNotificationSettingsTestNotification(
     return
   }
 
-  const result = await window.api.notifications.dispatch({ source: 'test' })
+  const result = await window.api.notifications.dispatch({
+    source: 'test',
+    requireDisplayConfirmation: true
+  })
   if (result.delivered) {
     // Why: the Test button must always play through, even if the user clicks
     // it twice in quick succession — the in-flight dedupe is for incidental
@@ -79,6 +82,19 @@ export async function sendNotificationSettingsTestNotification(
       return
     }
     toast.success('Test notification sent')
+    return
+  }
+
+  if (result.reason === 'not-displayed') {
+    toast.error('macOS did not show the notification', {
+      description: 'Enable Allow notifications for Orca in System Settings.',
+      action: {
+        label: 'Open Settings',
+        onClick: () => {
+          void window.api.notifications.openSystemSettings()
+        }
+      }
+    })
     return
   }
 
@@ -123,6 +139,10 @@ export function NotificationsPane({
 
   const handleSendTestNotification = async (): Promise<void> => {
     await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
+  }
+
+  const handleOpenSystemSettings = async (): Promise<void> => {
+    await window.api.notifications.openSystemSettings()
   }
 
   const handleChooseSound = async (): Promise<void> => {
@@ -267,7 +287,7 @@ export function NotificationsPane({
         }
       />
 
-      <div className="px-1 pt-3">
+      <div className="flex flex-wrap items-center gap-2 px-1 pt-3">
         <Button
           variant="outline"
           size="sm"
@@ -277,6 +297,15 @@ export function NotificationsPane({
         >
           <BellRing className="size-3.5" />
           Send Test Notification
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleOpenSystemSettings()}
+          className="gap-2"
+        >
+          <ExternalLink className="size-3.5" />
+          macOS Settings
         </Button>
       </div>
     </div>

@@ -10,33 +10,40 @@ const {
   notificationShowMock,
   notificationCloseMock,
   notificationOnMock,
+  notificationOnceMock,
   notificationCtorMock,
   notificationIsSupportedMock,
-  getAllWindowsMock
+  getAllWindowsMock,
+  shellOpenExternalMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
   const handleMock = vi.fn()
   const notificationShowMock = vi.fn()
   const notificationCloseMock = vi.fn()
   const notificationOnMock = vi.fn()
+  const notificationOnceMock = vi.fn()
   const notificationCtorMock = vi.fn(function () {
     return {
       show: notificationShowMock,
       close: notificationCloseMock,
-      on: notificationOnMock
+      on: notificationOnMock,
+      once: notificationOnceMock
     }
   })
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
+  const shellOpenExternalMock = vi.fn()
   return {
     removeHandlerMock,
     handleMock,
     notificationShowMock,
     notificationCloseMock,
     notificationOnMock,
+    notificationOnceMock,
     notificationCtorMock,
     notificationIsSupportedMock,
-    getAllWindowsMock
+    getAllWindowsMock,
+    shellOpenExternalMock
   }
 })
 
@@ -55,7 +62,7 @@ vi.mock('electron', () => ({
     focus: vi.fn()
   },
   shell: {
-    openExternal: vi.fn()
+    openExternal: shellOpenExternalMock
   }
 }))
 
@@ -83,10 +90,12 @@ describe('registerNotificationHandlers', () => {
     notificationShowMock.mockClear()
     notificationCloseMock.mockClear()
     notificationOnMock.mockClear()
+    notificationOnceMock.mockClear()
     notificationIsSupportedMock.mockReset()
     notificationIsSupportedMock.mockReturnValue(true)
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
+    shellOpenExternalMock.mockClear()
   })
 
   afterEach(() => {
@@ -99,6 +108,16 @@ describe('registerNotificationHandlers', () => {
       throw new Error('notifications:dispatch handler not registered')
     }
     return call[1] as (event: unknown, args: unknown) => unknown
+  }
+
+  function getOpenSystemSettingsHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'notifications:openSystemSettings'
+    )
+    if (!call) {
+      throw new Error('notifications:openSystemSettings handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
   }
 
   function getLoadSoundHandler(): (event: unknown) => Promise<unknown> {
@@ -127,6 +146,14 @@ describe('registerNotificationHandlers', () => {
     return call[1] as () => void
   }
 
+  function getNotificationOnceEventHandler(eventName: string): () => void {
+    const call = notificationOnceMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+    if (!call) {
+      throw new Error(`Notification ${eventName} once handler not registered`)
+    }
+    return call[1] as () => void
+  }
+
   it('registers the IPC handler', () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -141,6 +168,39 @@ describe('registerNotificationHandlers', () => {
 
     expect(removeHandlerMock).toHaveBeenCalledWith('notifications:dispatch')
     expect(handleMock).toHaveBeenCalledWith('notifications:dispatch', expect.any(Function))
+  })
+
+  it('opens the current macOS app notification settings entry', () => {
+    const originalPlatform = process.platform
+    const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev.fb5a47066f08'
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.dev.fb5a47066f08'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      if (originalBundleId === undefined) {
+        delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+      } else {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+      }
+    }
   })
 
   it('suppresses notifications when disabled in settings', () => {
@@ -721,6 +781,48 @@ describe('registerNotificationHandlers', () => {
     expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
     expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
     expect(notificationShowMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirms explicit test notifications after the native show event', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    getNotificationOnceEventHandler('show')()
+
+    await expect(result).resolves.toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports not-displayed when explicit test notifications never show', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    await vi.advanceTimersByTimeAsync(2501)
+
+    await expect(result).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
   it('loads allowed custom sound files for preload playback', async () => {

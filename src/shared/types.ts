@@ -1850,6 +1850,8 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  /** Why: the Settings test button must not report success unless macOS actually shows it. */
+  requireDisplayConfirmation?: boolean
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
@@ -1870,7 +1872,13 @@ export type NotificationDispatchRequest = {
 export type NotificationDispatchResult = {
   delivered: boolean
   /** Present when delivered is false. Tells the caller why delivery was skipped. */
-  reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
+  reason?:
+    | 'disabled'
+    | 'source-disabled'
+    | 'suppressed-focus'
+    | 'cooldown'
+    | 'not-supported'
+    | 'not-displayed'
 }
 
 export type NotificationSoundResult = {

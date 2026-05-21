@@ -150,6 +150,7 @@ function prepareMacDevElectronApp() {
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
   const bundleId = `com.stablyai.orca.dev.${sanitizeBundleIdPart(hash)}`
+  process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
   const expectedMarker = JSON.stringify(
     { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
     null,
