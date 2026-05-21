@@ -4,7 +4,7 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
-  Cable,
+  Plug,
   ChevronDown,
   ChevronRight,
   PanelsTopLeft,
@@ -995,7 +995,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             checked={statusBarItems.includes('ports')}
             onCheckedChange={() => toggleStatusBarItem('ports')}
           >
-            <Cable className="size-3.5" />
+            <Plug className="size-3.5" />
             Ports
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>

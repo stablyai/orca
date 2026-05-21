@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import {
-  Cable,
+  Plug,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -227,7 +227,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
               ) : (
-                <Cable className="size-3 text-muted-foreground" />
+                <Plug className="size-3 text-muted-foreground" />
               )}
               {!iconOnly && (
                 <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
@@ -259,7 +259,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <Cable className="size-3 shrink-0 text-muted-foreground" />
+            <Plug className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">Ports</span>
           </div>
           <span className="text-[11px] tabular-nums text-muted-foreground">
