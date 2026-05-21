@@ -97,21 +97,38 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             ]
           },
           {
-            title: 'orca.yaml hooks',
-            description: 'Shared setup and archive hook commands for this repository.',
-            keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
-          },
-          {
-            title: 'Local Settings Commands',
-            description: 'Personal setup and archive commands stored locally on this machine.',
-            keywords: [repo.displayName, 'local', 'personal', 'hooks']
-          },
-          {
-            title: 'Command Source',
-            description:
-              'Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.',
+            title: 'Setup Command',
+            description: 'Local and shared commands that run after a new worktree is created.',
             keywords: [
               repo.displayName,
+              'hooks',
+              'setup',
+              'setup command',
+              'local settings commands',
+              'orca.yaml hooks',
+              'yaml'
+            ]
+          },
+          {
+            title: 'Archive Command',
+            description: 'Local and shared commands that run before a worktree is archived.',
+            keywords: [
+              repo.displayName,
+              'hooks',
+              'archive',
+              'archive command',
+              'local settings commands',
+              'orca.yaml hooks',
+              'yaml'
+            ]
+          },
+          {
+            title: 'Advanced',
+            description: 'Command source and orca.yaml details.',
+            keywords: [
+              repo.displayName,
+              'advanced',
+              'command source',
               'local',
               'orca.yaml',
               'shared',
@@ -200,9 +217,9 @@ export function RepositoryPane({
   )
   const hooksEntries = allEntries.filter((entry) =>
     [
-      'orca.yaml hooks',
-      'Local Settings Commands',
-      'Command Source',
+      'Setup Command',
+      'Archive Command',
+      'Advanced',
       'When to Run Setup',
       'Custom GitHub Issue Command'
     ].includes(entry.title)
@@ -210,6 +227,23 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
 
+  const hooksSection =
+    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
+      <RepositoryHooksSection
+        key="hooks"
+        repo={repo}
+        yamlHooks={yamlHooks}
+        hasHooksFile={hasHooksFile}
+        mayNeedUpdate={mayNeedUpdate}
+        copiedTemplate={copiedTemplate}
+        onCopyTemplate={() => void handleCopyTemplate()}
+        onUpdateHookSettings={updateSelectedRepoHookSettings}
+      />
+    ) : null
+
+  // Why: Identity (name, color, base ref) stays at the top so it's the first
+  // thing a user sees. Setup commands follow immediately because they're the
+  // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
       <section key="identity" className="space-y-8">
@@ -306,6 +340,7 @@ export function RepositoryPane({
         ) : null}
       </section>
     ) : null,
+    hooksSection,
     !isFolder &&
     !repo.connectionId &&
     symlinksEnabled &&
@@ -317,18 +352,6 @@ export function RepositoryPane({
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, mcpEntries) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
-    ) : null,
-    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
-      <RepositoryHooksSection
-        key="hooks"
-        repo={repo}
-        yamlHooks={yamlHooks}
-        hasHooksFile={hasHooksFile}
-        mayNeedUpdate={mayNeedUpdate}
-        copiedTemplate={copiedTemplate}
-        onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
-      />
     ) : null
   ].filter(Boolean)
 
