@@ -92,6 +92,7 @@ import {
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
+import { folderRelativePathToIncludeGlob } from './components/right-sidebar/file-search-include-pattern'
 import { shouldShowWorktreeHistoryControls } from './lib/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
@@ -262,6 +263,7 @@ function App(): React.JSX.Element {
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
       seedFileSearchQuery: s.seedFileSearchQuery,
+      seedFileSearchIncludePattern: s.seedFileSearchIncludePattern,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -1024,6 +1026,29 @@ function App(): React.JSX.Element {
       }
 
       if (mod && isSearchShortcut && canRevealRightSidebar) {
+        // Why: when focus is inside the file explorer and a folder is selected,
+        // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
+        // with that folder instead of treating the chord as a text-search seed.
+        const explorerShell =
+          document.activeElement instanceof Element
+            ? document.activeElement.closest('[data-orca-explorer-shell]')
+            : null
+        const selectedFolderEl = explorerShell?.querySelector(
+          '[data-selected-folder-relative-path]'
+        )
+        const selectedFolderRelativePath =
+          selectedFolderEl?.getAttribute('data-selected-folder-relative-path') ?? null
+        if (selectedFolderRelativePath && activeWorktreeId) {
+          e.preventDefault()
+          actions.seedFileSearchIncludePattern(
+            activeWorktreeId,
+            folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+          )
+          actions.setRightSidebarTab('search')
+          actions.setRightSidebarOpen(true)
+          return
+        }
+
         const selectedText = getSelectedTextForFileSearch()
         if (selectedText) {
           e.preventDefault()

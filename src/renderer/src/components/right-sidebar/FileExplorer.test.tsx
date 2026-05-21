@@ -354,6 +354,7 @@ describe('FileExplorerRow collapse folder action', () => {
       onDuplicate: vi.fn(),
       onRequestDelete: vi.fn(),
       onCollapseFolderSubtree,
+      onFindInFolder: vi.fn(),
       onMoveDrop: vi.fn(),
       onDragTargetChange: vi.fn(),
       onDragSourceChange: vi.fn(),

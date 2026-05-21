@@ -461,6 +461,7 @@ export type EditorSlice = {
     updates: Partial<EditorSlice['fileSearchStateByWorktree'][string]>
   ) => void
   seedFileSearchQuery: (worktreeId: string, query: string) => void
+  seedFileSearchIncludePattern: (worktreeId: string, includePattern: string) => void
   consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
@@ -2906,6 +2907,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           [worktreeId]: {
             ...current,
             query,
+            results: null,
+            loading: false,
+            collapsedFiles: new Set(),
+            seedRequestId: (current.seedRequestId ?? 0) + 1
+          }
+        }
+      }
+    }),
+  seedFileSearchIncludePattern: (worktreeId, includePattern) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId] || {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includePattern: '',
+        excludePattern: '',
+        results: null,
+        loading: false,
+        collapsedFiles: new Set()
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: {
+            ...current,
+            includePattern,
             results: null,
             loading: false,
             collapsedFiles: new Set(),

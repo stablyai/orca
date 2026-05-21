@@ -242,12 +242,13 @@ export default function Search(): React.JSX.Element {
       return
     }
 
-    // Why: Cmd/Ctrl+Shift+F can seed the query before this lazy panel mounts.
-    // The one-shot request lets the mounted panel run the real runtime search.
+    // Why: Cmd/Ctrl+Shift+F can seed the query or the include pattern (Find in
+    // Folder) before this lazy panel mounts. The one-shot request lets the
+    // mounted panel run the real runtime search and steal focus to the input.
     if (fileSearchQuery.trim()) {
       executeSearch(fileSearchQuery)
-      scheduleSeededInputSelection()
     }
+    scheduleSeededInputSelection()
     consumeFileSearchSeedRequest(activeWorktreeId, fileSearchSeedRequestId)
   }, [
     activeWorktreeId,
