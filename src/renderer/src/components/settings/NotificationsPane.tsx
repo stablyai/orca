@@ -53,23 +53,40 @@ type NotificationsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-function getRendererNotificationPermission(): NotificationPermission | null {
-  if (typeof window.Notification === 'undefined') {
-    return null
+export async function sendNotificationSettingsTestNotification(
+  notificationSettings: GlobalSettings['notifications'],
+  volumeDraft: number
+): Promise<void> {
+  const permissionStatus = await window.api.notifications.getPermissionStatus()
+  if (!permissionStatus.supported) {
+    toast.error('Notifications are not supported on this system')
+    return
   }
-  return window.Notification.permission
-}
 
-function showNotificationPermissionDeniedToast(): void {
-  toast.error('Notifications are blocked in macOS', {
-    description: 'Enable notifications for this Orca app in System Settings.',
-    action: {
-      label: 'Open Settings',
-      onClick: () => {
-        void window.api.notifications.openSystemSettings()
-      }
+  const result = await window.api.notifications.dispatch({ source: 'test' })
+  if (result.delivered) {
+    // Why: the Test button must always play through, even if the user clicks
+    // it twice in quick succession — the in-flight dedupe is for incidental
+    // bursts of real notifications, not for an explicit user action.
+    const soundResult = notificationSettings.customSoundPath
+      ? await window.api.notifications.playSound({
+          force: true,
+          volume: volumeDraft
+        })
+      : null
+    if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
+      toast.error('Custom notification sound could not be played')
+      return
     }
-  })
+    toast.success('Test notification sent')
+    return
+  }
+
+  toast.error(
+    result.reason === 'disabled'
+      ? 'Notifications are disabled'
+      : 'Test notification was not delivered'
+  )
 }
 
 export function NotificationsPane({
@@ -105,49 +122,7 @@ export function NotificationsPane({
   }
 
   const handleSendTestNotification = async (): Promise<void> => {
-    // Why: Electron main cannot reliably read macOS notification authorization,
-    // but the renderer exposes it. Without this check, dev builds can report
-    // "sent" while macOS silently drops the notification.
-    if (getRendererNotificationPermission() === 'denied') {
-      showNotificationPermissionDeniedToast()
-      return
-    }
-
-    const permissionStatus = await window.api.notifications.getPermissionStatus()
-    if (!permissionStatus.supported) {
-      toast.error('Notifications are not supported on this system')
-      return
-    }
-
-    const result = await window.api.notifications.dispatch({ source: 'test' })
-    if (result.delivered) {
-      // Why: the Test button must always play through, even if the user clicks
-      // it twice in quick succession — the in-flight dedupe is for incidental
-      // bursts of real notifications, not for an explicit user action.
-      const soundResult = notificationSettings.customSoundPath
-        ? await window.api.notifications.playSound({
-            force: true,
-            volume: volumeDraft
-          })
-        : null
-      if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
-        toast.error('Custom notification sound could not be played')
-        return
-      }
-      toast.success('Test notification sent')
-      return
-    }
-
-    if (getRendererNotificationPermission() === 'denied') {
-      showNotificationPermissionDeniedToast()
-      return
-    }
-
-    toast.error(
-      result.reason === 'disabled'
-        ? 'Notifications are disabled'
-        : 'Test notification was not delivered'
-    )
+    await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
   }
 
   const handleChooseSound = async (): Promise<void> => {
