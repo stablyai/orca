@@ -11,6 +11,7 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import rehypeSlug from 'rehype-slug'
 import { extractFrontMatter } from './markdown-frontmatter'
 import {
   Check,
@@ -80,7 +81,6 @@ import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButto
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
-import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 
 type MarkdownPreviewProps = {
   content: string
@@ -227,28 +227,6 @@ const markdownPreviewSanitizeSchema = {
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   }
-}
-
-function getMarkdownPreviewNodeText(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') {
-    return String(node)
-  }
-  if (Array.isArray(node)) {
-    return node.map((child) => getMarkdownPreviewNodeText(child)).join('')
-  }
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
-    return getMarkdownPreviewNodeText(node.props.children)
-  }
-  return ''
-}
-
-// Why: heading IDs must match the editor TOC/link handling, including duplicate
-// suffixes and punctuation removal, without carrying another renderer plugin.
-function createMarkdownPreviewHeadingId(
-  headingText: string,
-  slugger: MarkdownHeadingSlugger
-): string {
-  return slugger.slug(headingText)
 }
 
 function parseLineTarget(hash: string): { line: number; column?: number } | null {
@@ -471,7 +449,6 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  const sluggerRef = useRef(new MarkdownHeadingSlugger())
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(false)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
@@ -884,7 +861,6 @@ export default function MarkdownPreview({
   )
 
   const components: Components = useMemo(() => {
-    const slugger = sluggerRef.current
     return {
       a: ({ href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
@@ -1238,61 +1214,55 @@ export default function MarkdownPreview({
         )
       },
       h1: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h1',
           node as MarkdownPreviewPositionNode,
-          <h1 {...props} id={id} tabIndex={-1}>
+          <h1 {...props} tabIndex={-1}>
             {children}
           </h1>
         )
       },
       h2: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h2',
           node as MarkdownPreviewPositionNode,
-          <h2 {...props} id={id} tabIndex={-1}>
+          <h2 {...props} tabIndex={-1}>
             {children}
           </h2>
         )
       },
       h3: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h3',
           node as MarkdownPreviewPositionNode,
-          <h3 {...props} id={id} tabIndex={-1}>
+          <h3 {...props} tabIndex={-1}>
             {children}
           </h3>
         )
       },
       h4: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h4',
           node as MarkdownPreviewPositionNode,
-          <h4 {...props} id={id} tabIndex={-1}>
+          <h4 {...props} tabIndex={-1}>
             {children}
           </h4>
         )
       },
       h5: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h5',
           node as MarkdownPreviewPositionNode,
-          <h5 {...props} id={id} tabIndex={-1}>
+          <h5 {...props} tabIndex={-1}>
             {children}
           </h5>
         )
       },
       h6: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h6',
           node as MarkdownPreviewPositionNode,
-          <h6 {...props} id={id} tabIndex={-1}>
+          <h6 {...props} tabIndex={-1}>
             {children}
           </h6>
         )
@@ -1322,11 +1292,6 @@ export default function MarkdownPreview({
     worktreesByRepo,
     wrapAnnotatedBlock
   ])
-
-  // Why: react-markdown can reuse component overrides across state-only
-  // rerenders; reset per render so duplicate heading suffixes do not accumulate
-  // when content is unchanged.
-  sluggerRef.current.reset()
 
   return (
     <div className="markdown-preview-shell">
@@ -1498,6 +1463,7 @@ export default function MarkdownPreview({
             rehypePlugins={[
               rehypeRaw,
               [rehypeSanitize, markdownPreviewSanitizeSchema],
+              rehypeSlug,
               rehypeHighlight,
               rehypeKatex
             ]}

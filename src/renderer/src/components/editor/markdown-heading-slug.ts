@@ -1,6 +1,6 @@
-// Scoped local fork of github-slugger@2.0.0 / rehype-slug@6.0.0 behavior.
-// Why: Orca only needs heading slug generation + duplicate suffixing, so we
-// keep that behavior local instead of shipping two extra runtime packages.
+// Scoped local fork of github-slugger@2.0.0 behavior.
+// Why: TOC/editor anchors need to match rehype-slug@6.0.0 preview IDs without
+// adding a direct github-slugger runtime dependency.
 const markdownSlugPunctuationPattern = /[^\p{L}\p{M}\p{N} _-]/gu
 
 export class MarkdownHeadingSlugger {
