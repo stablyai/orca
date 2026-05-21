@@ -51,7 +51,20 @@ type Props = {
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
+const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
+
+function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
+  const maybeElement = target as {
+    closest?: (selector: string) => Element | null
+    parentElement?: { closest?: (selector: string) => Element | null }
+  } | null
+  const nativeContextMenuSelector = `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`
+  return (
+    (maybeElement?.closest?.(nativeContextMenuSelector) ??
+      maybeElement?.parentElement?.closest?.(nativeContextMenuSelector)) != null
+  )
+}
 
 function shouldIgnoreNestedWorktreeContextMenuScope(
   currentTarget: EventTarget,
@@ -391,6 +404,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
+        if (shouldUseNativeContextMenu(event.target)) {
+          return
+        }
         if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
           return
         }
@@ -563,7 +579,9 @@ export default WorktreeContextMenu
 export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
+  WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
+  shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope
 }

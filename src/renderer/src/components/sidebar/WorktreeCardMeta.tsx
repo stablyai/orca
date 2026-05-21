@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import CommentMarkdown from './CommentMarkdown'
 import { PullRequestIcon } from './WorktreeCardHelpers'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
+import { SelectedTextCopyMenu } from './SelectedTextCopyMenu'
 import {
   IssueStateBadge,
   LinearStateBadge,
@@ -50,6 +52,7 @@ type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
 
 type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
+  detailsAfter?: React.ReactNode
   onEditIssue: (event: React.MouseEvent) => void
   onEditComment: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
@@ -259,6 +262,7 @@ export function WorktreeCardDetailsHover({
   review,
   comment,
   children,
+  detailsAfter,
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
@@ -274,7 +278,7 @@ export function WorktreeCardDetailsHover({
     []
   )
 
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment }) && !detailsAfter) {
     return children
   }
 
@@ -290,9 +294,11 @@ export function WorktreeCardDetailsHover({
         align="start"
         sideOffset={8}
         className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+        {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
         onClick={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
       >
-        <div className="space-y-3">
+        <SelectedTextCopyMenu className="space-y-3">
           {issue && (
             <section className="space-y-1.5">
               <DetailHeader
@@ -437,7 +443,9 @@ export function WorktreeCardDetailsHover({
               </div>
             </section>
           )}
-        </div>
+
+          {detailsAfter}
+        </SelectedTextCopyMenu>
       </HoverCardContent>
     </HoverCard>
   )

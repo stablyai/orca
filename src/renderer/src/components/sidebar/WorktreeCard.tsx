@@ -38,7 +38,7 @@ import {
   hasWorktreeCardDetails,
   type WorktreeCardIssueDisplay
 } from './WorktreeCardMeta'
-import { WorktreeCardPorts } from './WorktreeCardPorts'
+import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
@@ -470,6 +470,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     review: metaReview,
     comment: metaComment
   })
+  const hasPorts = workspacePorts.length > 0
 
   const cardBody = (
     <div
@@ -671,44 +672,39 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">
-            {hasDetails ? (
-              <WorktreeCardDetailsHover
-                issue={metaIssue}
-                linearIssue={metaLinearIssue}
-                review={metaReview}
-                comment={metaComment}
-                onEditIssue={handleEditIssue}
-                onEditComment={handleEditComment}
-                onOpenGitHubIssueInOrca={
-                  metaIssue && 'url' in metaIssue && metaIssue.url
-                    ? handleOpenGitHubIssueInOrca
-                    : undefined
-                }
-                onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-                onOpenReviewInOrca={
-                  metaReview?.url && metaReview.provider === 'github'
-                    ? handleOpenReviewInOrca
-                    : undefined
-                }
-              >
-                <WorktreeCardMetaBadges
-                  issue={metaIssue}
-                  linearIssue={metaLinearIssue}
-                  review={metaReview}
-                  comment={metaComment}
-                  className="ml-0 pr-0"
-                />
-              </WorktreeCardDetailsHover>
-            ) : (
-              <WorktreeCardMetaBadges
-                issue={metaIssue}
-                linearIssue={metaLinearIssue}
-                review={metaReview}
-                comment={metaComment}
-                className="ml-0 pr-0"
-              />
-            )}
-            <WorktreeCardPorts ports={workspacePorts} />
+            <WorktreeCardDetailsHover
+              issue={metaIssue}
+              linearIssue={metaLinearIssue}
+              review={metaReview}
+              comment={metaComment}
+              detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+              onEditIssue={handleEditIssue}
+              onEditComment={handleEditComment}
+              onOpenGitHubIssueInOrca={
+                metaIssue && 'url' in metaIssue && metaIssue.url
+                  ? handleOpenGitHubIssueInOrca
+                  : undefined
+              }
+              onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
+              onOpenReviewInOrca={
+                metaReview?.url && metaReview.provider === 'github'
+                  ? handleOpenReviewInOrca
+                  : undefined
+              }
+            >
+              <div className="flex shrink-0 items-center gap-1">
+                {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
+                {hasDetails && (
+                  <WorktreeCardMetaBadges
+                    issue={metaIssue}
+                    linearIssue={metaLinearIssue}
+                    review={metaReview}
+                    comment={metaComment}
+                    className="ml-0 pr-0"
+                  />
+                )}
+              </div>
+            </WorktreeCardDetailsHover>
           </div>
         </div>
 
