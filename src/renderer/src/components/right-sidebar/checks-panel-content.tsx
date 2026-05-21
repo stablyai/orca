@@ -226,7 +226,8 @@ export function ChecksList({
   )
   const passingCount = checks.filter((c) => c.conclusion === 'success').length
   const failingCount = checks.filter(
-    (c) => c.conclusion === 'failure' || c.conclusion === 'timed_out'
+    (c) =>
+      c.conclusion === 'failure' || c.conclusion === 'cancelled' || c.conclusion === 'timed_out'
   ).length
   const pendingCount = checks.filter(
     (c) => c.conclusion === 'pending' || c.conclusion === null
