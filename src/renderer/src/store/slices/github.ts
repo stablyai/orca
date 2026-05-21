@@ -27,7 +27,11 @@ import type {
   GitHubProjectTable,
   GitHubProjectViewError
 } from '../../../../shared/github-project-types'
-import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
+import {
+  isGitHubWorkItemsSshRemoteRequiredError,
+  sortWorkItemsByUpdatedAt,
+  PER_REPO_FETCH_LIMIT
+} from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
@@ -1561,7 +1565,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       } catch (err) {
         // Why: surface the error to the caller; keep stale cache entry so the
         // UI can continue to render something useful while the user retries.
-        console.error('Failed to fetch GitHub work items:', err)
+        if (!isGitHubWorkItemsSshRemoteRequiredError(err)) {
+          console.error('Failed to fetch GitHub work items:', err)
+        }
         throw err
       } finally {
         releaseWorkItemSlot()
@@ -1590,6 +1596,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           // nothing at all to contribute.
           // Why: must use perRepoLimit (not displayLimit) so the cache key
           // matches what fetchWorkItems wrote.
+          if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            return [] as GitHubWorkItem[]
+          }
           const key = workItemsCacheKey(r.repoId, perRepoLimit, query)
           const cached = get().workItemsCache[key]?.data
           if (cached) {
@@ -1634,6 +1643,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
+          if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            return [] as GitHubWorkItem[]
+          }
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)
           failedCount += 1
           return [] as GitHubWorkItem[]

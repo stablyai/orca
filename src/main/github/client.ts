@@ -25,7 +25,10 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
-import { sortWorkItemsByUpdatedAt } from '../../shared/work-items'
+import {
+  GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
+  sortWorkItemsByUpdatedAt
+} from '../../shared/work-items'
 import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -792,7 +795,7 @@ function assertSshRepoHasResolvedGitHubSource(args: {
   }
   // Why: SSH repo paths are remote-only, so gh cannot use cwd to infer repo
   // context. Without a resolved owner/repo, running gh would query local state.
-  throw new Error('GitHub work items require a GitHub remote for SSH repositories')
+  throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
 async function listRecentWorkItems(

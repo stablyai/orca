@@ -8,6 +8,7 @@ import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import type { GitHubWorkItem, PRInfo } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -2189,6 +2190,84 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       repoId: 'repo-id',
       number: 7
     })
+  })
+
+  it('quietly skips SSH repos without a resolved GitHub remote in cross-repo fetches', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 7,
+      title: 'Server PR',
+      url: 'https://example.test/7',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      })
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.failedCount).toBe(0)
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(consoleWarn).not.toHaveBeenCalled()
+      expect(consoleError).not.toHaveBeenCalled()
+    } finally {
+      consoleWarn.mockRestore()
+      consoleError.mockRestore()
+    }
+  })
+
+  it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'issue',
+      number: 8,
+      title: 'Server issue',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      })
+
+    try {
+      const result = await store.getState().fetchWorkItemsNextPage(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        '',
+        '2026-05-21T00:00:00Z'
+      )
+
+      expect(result.failedCount).toBe(0)
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(consoleWarn).not.toHaveBeenCalled()
+    } finally {
+      consoleWarn.mockRestore()
+    }
   })
 
   it('routes project table fetches through the active runtime environment', async () => {
