@@ -10,14 +10,48 @@ export type ParsedTaskQuery = {
   freeText: string
 }
 
-export function tokenizeSearchQuery(rawQuery: string): string[] {
-  const tokens: string[] = []
-  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(rawQuery)) !== null) {
-    tokens.push(match[1] ?? match[2] ?? match[3] ?? '')
+type SearchQueryToken = {
+  value: string
+  raw: string
+}
+
+function tokenizeSearchQueryWithRaw(rawQuery: string): SearchQueryToken[] {
+  const tokens: SearchQueryToken[] = []
+  let value = ''
+  let raw = ''
+  let quote: '"' | "'" | null = null
+
+  const flush = (): void => {
+    if (value || raw) {
+      tokens.push({ value, raw })
+      value = ''
+      raw = ''
+    }
   }
+
+  for (let i = 0; i < rawQuery.length; i += 1) {
+    const char = rawQuery[i]
+    if (/\s/.test(char) && quote === null) {
+      flush()
+      continue
+    }
+    raw += char
+    if ((char === '"' || char === "'") && quote === null) {
+      quote = char
+      continue
+    }
+    if (char === quote) {
+      quote = null
+      continue
+    }
+    value += char
+  }
+  flush()
   return tokens
+}
+
+export function tokenizeSearchQuery(rawQuery: string): string[] {
+  return tokenizeSearchQueryWithRaw(rawQuery).map((token) => token.value)
 }
 
 export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
@@ -34,17 +68,18 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   }
 
   const freeTextTokens: string[] = []
-  for (const token of tokenizeSearchQuery(rawQuery.trim())) {
+  let sawIssueScope = false
+  let sawPRScope = false
+  for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
     const normalized = token.toLowerCase()
     if (normalized === 'is:issue') {
-      if (query.scope === 'pr') {
-        continue
-      }
-      query.scope = 'issue'
+      sawIssueScope = true
+      query.scope = sawPRScope ? 'all' : 'issue'
       continue
     }
-    if (normalized === 'is:pr') {
-      query.scope = query.scope === 'issue' ? 'all' : 'pr'
+    if (normalized === 'is:pr' || normalized === 'is:pull-request') {
+      sawPRScope = true
+      query.scope = sawIssueScope ? 'all' : 'pr'
       continue
     }
     if (normalized === 'is:open') {
@@ -70,7 +105,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
     const value = rest.join(':').trim()
     const key = rawKey.toLowerCase()
     if (!value) {
-      freeTextTokens.push(token)
+      freeTextTokens.push(raw)
       continue
     }
 
@@ -96,12 +131,148 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
       query.labels.push(value)
       continue
     }
+    const normalizedValue = value.toLowerCase()
+    if (
+      key === 'state' &&
+      (normalizedValue === 'open' ||
+        normalizedValue === 'closed' ||
+        normalizedValue === 'merged' ||
+        normalizedValue === 'all')
+    ) {
+      query.state = normalizedValue
+      continue
+    }
 
-    freeTextTokens.push(token)
+    // Why: unknown qualifiers and exact phrases are passed through to GitHub
+    // search as-is; reserializing stripped quotes changes search semantics.
+    freeTextTokens.push(raw)
   }
 
+  if (query.draft) {
+    query.scope = 'pr'
+    query.state = 'open'
+  } else if (
+    query.state === 'merged' ||
+    query.reviewRequested !== null ||
+    query.reviewedBy !== null
+  ) {
+    query.scope = 'pr'
+  }
   query.freeText = freeTextTokens.join(' ').trim()
   return query
+}
+
+function quoteIfNeeded(value: string): string {
+  return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value
+}
+
+/**
+ * Serialize a ParsedTaskQuery back to a raw search string. Round-trips with
+ * parseTaskQuery for the qualifiers it understands; freeText is appended last.
+ */
+export function serializeTaskQuery(q: ParsedTaskQuery): string {
+  const parts: string[] = []
+  if (q.scope === 'pr') {
+    parts.push('is:pr')
+  } else if (q.scope === 'issue') {
+    parts.push('is:issue')
+  }
+  if (q.state === 'open') {
+    parts.push('is:open')
+  } else if (q.state === 'closed') {
+    parts.push('is:closed')
+  } else if (q.state === 'merged') {
+    parts.push('is:merged')
+  } else if (q.state === 'all') {
+    parts.push('state:all')
+  }
+  if (q.draft) {
+    parts.push('is:draft')
+  }
+  if (q.author) {
+    parts.push(`author:${quoteIfNeeded(q.author)}`)
+  }
+  if (q.assignee) {
+    parts.push(`assignee:${quoteIfNeeded(q.assignee)}`)
+  }
+  if (q.reviewRequested) {
+    parts.push(`review-requested:${quoteIfNeeded(q.reviewRequested)}`)
+  }
+  if (q.reviewedBy) {
+    parts.push(`reviewed-by:${quoteIfNeeded(q.reviewedBy)}`)
+  }
+  for (const label of q.labels) {
+    parts.push(`label:${quoteIfNeeded(label)}`)
+  }
+  if (q.freeText) {
+    parts.push(q.freeText)
+  }
+  return parts.join(' ')
+}
+
+export type TaskQueryFilterKey =
+  | 'author'
+  | 'assignee'
+  | 'reviewRequested'
+  | 'reviewedBy'
+  | 'labels'
+  | 'state'
+  | 'draft'
+
+/**
+ * Apply a filter change to a raw query string and return the updated raw string.
+ * For single-value keys, pass `null` to clear. For `labels`, pass the full next
+ * array (caller manages add/remove).
+ */
+export function withQualifier(
+  rawQuery: string,
+  key: TaskQueryFilterKey,
+  value: string | string[] | null
+): string {
+  const parsed = parseTaskQuery(rawQuery)
+  switch (key) {
+    case 'author':
+      parsed.author = typeof value === 'string' ? value : null
+      break
+    case 'assignee':
+      parsed.assignee = typeof value === 'string' ? value : null
+      break
+    case 'reviewRequested':
+      parsed.reviewRequested = typeof value === 'string' ? value : null
+      if (parsed.reviewRequested) {
+        parsed.scope = 'pr'
+      }
+      break
+    case 'reviewedBy':
+      parsed.reviewedBy = typeof value === 'string' ? value : null
+      if (parsed.reviewedBy) {
+        parsed.scope = 'pr'
+      }
+      break
+    case 'labels':
+      parsed.labels = Array.isArray(value) ? value : []
+      break
+    case 'state':
+      parsed.state =
+        value === 'open' || value === 'closed' || value === 'merged' || value === 'all'
+          ? value
+          : null
+      if (parsed.state === 'merged') {
+        parsed.scope = 'pr'
+      }
+      if (parsed.state !== 'open') {
+        parsed.draft = false
+      }
+      break
+    case 'draft':
+      parsed.draft = value === 'true'
+      if (parsed.draft) {
+        parsed.scope = 'pr'
+        parsed.state = 'open'
+      }
+      break
+  }
+  return serializeTaskQuery(parsed)
 }
 
 /**

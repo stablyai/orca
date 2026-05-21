@@ -120,7 +120,14 @@ export default function RepoMultiCombobox({
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+      {/* Why: trigger width can be as narrow as the "All repos" label, but the
+          popover hosts a search input and repo rows with paths. Use the
+          trigger as a minimum width and let the content expand to a readable
+          size so the search field and repo names aren't truncated. */}
+      <PopoverContent
+        align="start"
+        className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
+      >
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus

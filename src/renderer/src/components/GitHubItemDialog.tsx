@@ -362,14 +362,14 @@ function getStateTone(item: GitHubWorkItem): string {
 }
 
 function getPRMergeTooltip(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status has not loaded yet'
-  }
   if (item.state === 'merged') {
     return 'This pull request is already merged'
   }
   if (item.state === 'closed') {
     return 'This pull request is closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge status is unavailable for this PR'
   }
   if (item.mergeable === 'CONFLICTING') {
     return 'GitHub reports merge conflicts'

@@ -302,6 +302,21 @@
   min-height: 28px;
 }
 
+/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
+.scrollbar-sleek-lg {
+  scrollbar-width: auto;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  min-height: 36px;
+}
+
 .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }

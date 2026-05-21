@@ -588,13 +588,13 @@ function mapPullRequestWorkItem(
     number: Number(item.number),
     title: String(item.title ?? ''),
     state:
-      state === 'closed'
-        ? item.merged_at || item.mergedAt
-          ? 'merged'
-          : 'closed'
-        : item.isDraft || item.draft
-          ? 'draft'
-          : 'open',
+      state === 'merged' || item.merged_at || item.mergedAt
+        ? 'merged'
+        : state === 'closed'
+          ? 'closed'
+          : item.isDraft || item.draft
+            ? 'draft'
+            : 'open',
     url: String(item.html_url ?? item.url ?? ''),
     labels: Array.isArray(item.labels)
       ? item.labels
@@ -718,14 +718,13 @@ function buildWorkItemListArgs(args: {
     out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
   }
 
-  const state = query.state
-  if (state && !(kind === 'issue' && state === 'merged')) {
-    out.push('--state', state === 'all' ? 'all' : state)
+  if (query.state) {
+    out.push('--state', query.state)
   }
-
-  if (kind === 'pr' && query.state === 'merged') {
-    out.push('--state', 'merged')
-  }
+  // Why: GitHub considers merged PRs as "closed". When the user filters for
+  // closed-only, exclude merged PRs via the search predicate so the displayed
+  // and counted results match the user's intent.
+  const excludeMergedFromClosed = kind === 'pr' && query.state === 'closed'
 
   if (query.assignee) {
     out.push('--assignee', query.assignee)
@@ -746,6 +745,9 @@ function buildWorkItemListArgs(args: {
   }
 
   const searchParts: string[] = []
+  if (excludeMergedFromClosed) {
+    searchParts.push('-is:merged')
+  }
   // Why: cursor-based pagination. GitHub search supports updated:<DATE to
   // fetch items older than the cursor. We use the oldest item's updatedAt
   // from the previous page as the cursor.
@@ -944,7 +946,12 @@ async function listQueriedWorkItems(
   connectionId?: string | null
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const issueScope = query.scope !== 'pr'
+  const hasPrOnlyFilter =
+    query.state === 'merged' ||
+    query.draft ||
+    query.reviewRequested !== null ||
+    query.reviewedBy !== null
+  const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
 
   // Why: run the issue and PR fetches in parallel but surface the
@@ -985,9 +992,13 @@ async function listQueriedWorkItems(
     })
     try {
       const { stdout } = await ghExecFileAsync(args, ghOptions)
-      return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
+      const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
+      if (query.state === 'closed') {
+        return mapped.filter((item) => item.state !== 'merged')
+      }
+      return mapped
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       return []
@@ -1068,7 +1079,12 @@ function buildSearchQueryString(
   if (query.state === 'open') {
     parts.push('is:open')
   } else if (query.state === 'closed') {
+    // Why: GitHub search treats merged PRs as closed. Exclude merged so the
+    // "Closed" filter actually means closed-without-merge.
     parts.push('is:closed')
+    if (query.scope !== 'issue') {
+      parts.push('-is:merged')
+    }
   } else if (query.state === 'merged') {
     parts.push('is:merged')
   }
@@ -1076,24 +1092,28 @@ function buildSearchQueryString(
     parts.push('draft:true')
   }
   if (query.assignee) {
-    parts.push(`assignee:${query.assignee}`)
+    parts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
   if (query.author) {
-    parts.push(`author:${query.author}`)
+    parts.push(`author:${quoteGitHubSearchValue(query.author)}`)
   }
   if (query.reviewRequested) {
-    parts.push(`review-requested:${query.reviewRequested}`)
+    parts.push(`review-requested:${quoteGitHubSearchValue(query.reviewRequested)}`)
   }
   if (query.reviewedBy) {
-    parts.push(`reviewed-by:${query.reviewedBy}`)
+    parts.push(`reviewed-by:${quoteGitHubSearchValue(query.reviewedBy)}`)
   }
   for (const label of query.labels) {
-    parts.push(`label:${label}`)
+    parts.push(`label:${quoteGitHubSearchValue(label)}`)
   }
   if (query.freeText) {
     parts.push(query.freeText)
   }
   return parts.join(' ')
+}
+
+function quoteGitHubSearchValue(value: string): string {
+  return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value
 }
 
 async function countWorkItemsForQuery(
