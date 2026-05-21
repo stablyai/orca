@@ -297,10 +297,11 @@ function hasLegacyLocalScripts(repo: Repo): boolean {
   )
 }
 
-export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
-  const hooksRoot = worktreePath ?? repo.path
-  const yamlHooks = loadHooks(hooksRoot)
-  const yamlFileExists = hasHooksFile(hooksRoot)
+export function getEffectiveHooksFromConfig(
+  repo: Repo,
+  yamlHooks: OrcaHooks | null,
+  yamlFileExists: boolean
+): OrcaHooks | null {
   const localSetup = repo.hookSettings?.scripts.setup
   const localArchive = repo.hookSettings?.scripts.archive
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
@@ -327,6 +328,11 @@ export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks 
       ...(archive ? { archive } : {})
     }
   }
+}
+
+export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+  const hooksRoot = worktreePath ?? repo.path
+  return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot), hasHooksFile(hooksRoot))
 }
 
 export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
@@ -399,7 +405,7 @@ function getGitPath(cwd: string, relativePath: string): string {
   }).trim()
 }
 
-function buildWindowsRunnerScript(script: string): string {
+export function buildWindowsRunnerScript(script: string): string {
   const lines = script.replace(/\r?\n/g, '\n').split('\n')
   const runnerLines = ['@echo off', 'setlocal EnableExtensions']
 
@@ -428,6 +434,14 @@ export function createSetupRunnerScript(
   script: string
 ): WorktreeSetupLaunch {
   return createWorktreeRunnerScript(repo, worktreePath, script, 'setup-runner')
+}
+
+export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
+  return getSetupEnvVars(repo, worktreePath)
+}
+
+export function buildPosixRunnerScript(script: string): string {
+  return `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
 }
 
 export function createIssueCommandRunnerScript(

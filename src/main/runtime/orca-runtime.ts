@@ -6261,6 +6261,7 @@ export class OrcaRuntimeService {
       workspaceStatus?: string
       sparseCheckout?: { directories: string[]; presetId?: string }
       pushTarget?: GitPushTarget
+      runHooks?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
       createdWithAgent?: TuiAgent
       startup?: WorktreeStartupLaunch
@@ -6285,7 +6286,8 @@ export class OrcaRuntimeService {
         ...(args.displayName ? { displayName: args.displayName } : {}),
         ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
         ...(args.branchNameOverride ? { branchNameOverride: args.branchNameOverride } : {}),
-        ...(args.setupDecision ? { setupDecision: args.setupDecision } : {}),
+        ...(args.runHooks ? { setupDecision: 'run' as const } : {}),
+        ...(!args.runHooks && args.setupDecision ? { setupDecision: args.setupDecision } : {}),
         ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
         ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),

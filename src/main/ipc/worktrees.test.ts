@@ -19,7 +19,12 @@ const {
   getEffectiveHooksMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
+  getEffectiveHooksFromConfigMock,
+  parseOrcaYamlMock,
   shouldRunSetupForCreateMock,
+  buildPosixRunnerScriptMock,
+  buildWindowsRunnerScriptMock,
+  getSetupRunnerEnvVarsMock,
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
@@ -27,6 +32,7 @@ const {
   ensurePathWithinWorkspaceMock,
   gitExecFileAsyncMock,
   getSshGitProviderMock,
+  getSshFilesystemProviderMock,
   getActiveMultiplexerMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -46,7 +52,12 @@ const {
   getEffectiveHooksMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
+  getEffectiveHooksFromConfigMock: vi.fn(),
+  parseOrcaYamlMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
+  buildPosixRunnerScriptMock: vi.fn(),
+  buildWindowsRunnerScriptMock: vi.fn(),
+  getSetupRunnerEnvVarsMock: vi.fn(),
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
@@ -54,6 +65,7 @@ const {
   ensurePathWithinWorkspaceMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn(),
   getActiveMultiplexerMock: vi.fn()
 }))
 
@@ -105,15 +117,24 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   }
 }))
 
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
+
 vi.mock('./ssh', () => ({
   getActiveMultiplexer: getActiveMultiplexerMock
 }))
 
 vi.mock('../hooks', () => ({
+  buildPosixRunnerScript: buildPosixRunnerScriptMock,
+  buildWindowsRunnerScript: buildWindowsRunnerScriptMock,
   createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock,
   loadHooks: loadHooksMock,
+  parseOrcaYaml: parseOrcaYamlMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
@@ -202,8 +223,13 @@ describe('registerWorktreeHandlers', () => {
       getWorkItemMock,
       getPullRequestPushTargetMock,
       getEffectiveHooksMock,
+      getEffectiveHooksFromConfigMock,
+      parseOrcaYamlMock,
       createIssueCommandRunnerScriptMock,
       createSetupRunnerScriptMock,
+      buildPosixRunnerScriptMock,
+      buildWindowsRunnerScriptMock,
+      getSetupRunnerEnvVarsMock,
       shouldRunSetupForCreateMock,
       runHookMock,
       hasHooksFileMock,
@@ -212,6 +238,7 @@ describe('registerWorktreeHandlers', () => {
       ensurePathWithinWorkspaceMock,
       gitExecFileAsyncMock,
       getSshGitProviderMock,
+      getSshFilesystemProviderMock,
       getActiveMultiplexerMock,
       mainWindow.webContents.send,
       store.getRepos,
@@ -277,7 +304,22 @@ describe('registerWorktreeHandlers', () => {
     // don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getEffectiveHooksMock.mockReturnValue(null)
+    getEffectiveHooksFromConfigMock.mockReturnValue(null)
+    parseOrcaYamlMock.mockReturnValue(null)
     shouldRunSetupForCreateMock.mockReturnValue(false)
+    buildPosixRunnerScriptMock.mockImplementation(
+      (script: string) => `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
+    )
+    buildWindowsRunnerScriptMock.mockImplementation((script: string) => script)
+    getSetupRunnerEnvVarsMock.mockImplementation(
+      (repoArg: { path: string }, worktreePath: string) => ({
+        ORCA_ROOT_PATH: repoArg.path,
+        ORCA_WORKTREE_PATH: worktreePath,
+        ORCA_WORKSPACE_NAME: worktreePath.split('/').at(-1) ?? '',
+        CONDUCTOR_ROOT_PATH: repoArg.path,
+        GHOSTX_ROOT_PATH: repoArg.path
+      })
+    )
     createSetupRunnerScriptMock.mockReturnValue({
       runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
       envVars: {
@@ -814,6 +856,94 @@ describe('registerWorktreeHandlers', () => {
         linkedLinearIssue: 'ENG-123'
       })
     })
+  })
+
+  it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          return {
+            stdout: '/remote/repo/.git/worktrees/improve-dashboard/orca/setup-runner.sh\n',
+            stderr: ''
+          }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  setup: pnpm install\n',
+        isBinary: false
+      }),
+      createDir: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    parseOrcaYamlMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard',
+      setupDecision: 'run'
+    })
+
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/improve-dashboard/orca.yaml')
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+      '/remote/improve-dashboard'
+    )
+    expect(fsProvider.createDir).toHaveBeenCalledWith(
+      '/remote/repo/.git/worktrees/improve-dashboard/orca'
+    )
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/remote/repo/.git/worktrees/improve-dashboard/orca/setup-runner.sh',
+      '#!/usr/bin/env bash\nset -e\npnpm install\n'
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        setup: {
+          runnerScriptPath: '/remote/repo/.git/worktrees/improve-dashboard/orca/setup-runner.sh',
+          envVars: expect.objectContaining({
+            ORCA_ROOT_PATH: '/remote/repo',
+            ORCA_WORKTREE_PATH: '/remote/improve-dashboard'
+          })
+        }
+      })
+    )
   })
 
   it('does not create an SSH worktree when remote-tracking base refresh fails', async () => {

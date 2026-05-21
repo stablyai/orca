@@ -8,7 +8,7 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
-import { join } from 'path'
+import { join, posix, win32 } from 'path'
 import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
@@ -29,11 +29,22 @@ import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
+import {
+  buildPosixRunnerScript,
+  buildWindowsRunnerScript,
+  createSetupRunnerScript,
+  getEffectiveHooks,
+  getEffectiveHooksFromConfig,
+  getSetupRunnerEnvVars,
+  parseOrcaYaml,
+  shouldRunSetupForCreate
+} from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
@@ -47,6 +58,8 @@ import {
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import type { IFilesystemProvider } from '../providers/types'
 
 async function findRemoteForUrl(repoPath: string, remoteUrl: string): Promise<string | null> {
   const target = parseGitHubOwnerRepo(remoteUrl)
@@ -282,6 +295,48 @@ async function configureCreatedWorktreePushTargetSsh(
   return target
 }
 
+async function readRemoteEffectiveHooks(
+  repo: Repo,
+  fsProvider: IFilesystemProvider,
+  hooksRootPath: string
+): Promise<ReturnType<typeof getEffectiveHooksFromConfig>> {
+  try {
+    const result = await fsProvider.readFile(joinWorktreeRelativePath(hooksRootPath, 'orca.yaml'))
+    const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
+    return getEffectiveHooksFromConfig(repo, yamlHooks, true)
+  } catch {
+    return getEffectiveHooksFromConfig(repo, null, false)
+  }
+}
+
+async function createRemoteSetupRunnerScript(
+  repo: Repo,
+  worktreePath: string,
+  script: string,
+  gitProvider: SshGitProvider,
+  fsProvider: IFilesystemProvider
+): Promise<CreateWorktreeResult['setup']> {
+  const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
+  const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
+  const { stdout } = await gitProvider.exec(
+    ['rev-parse', '--git-path', runnerRelativePath],
+    worktreePath
+  )
+  const runnerScriptPath = stdout.trim()
+  const runnerDir = useWindowsFormat
+    ? win32.dirname(runnerScriptPath)
+    : posix.dirname(runnerScriptPath)
+  await fsProvider.createDir(runnerDir)
+  await fsProvider.writeFile(
+    runnerScriptPath,
+    useWindowsFormat ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
+  )
+  return {
+    runnerScriptPath,
+    envVars: getSetupRunnerEnvVars(repo, worktreePath)
+  }
+}
+
 async function resolveRemoteTrackingBaseSsh(
   provider: SshGitProvider,
   repoPath: string,
@@ -440,6 +495,14 @@ export async function createRemoteWorktree(
     }
   }
 
+  const fsProvider = getSshFilesystemProvider(repo.connectionId!)
+  if (fsProvider) {
+    const primaryHooks = await readRemoteEffectiveHooks(repo, fsProvider, repo.path)
+    if (primaryHooks?.scripts.setup) {
+      shouldRunSetupForCreate(repo, args.setupDecision)
+    }
+  }
+
   let preparedPushTarget: GitPushTarget | undefined
   if (args.pushTarget) {
     // Why: fork-PR SSH worktrees need the same contributor-remote setup as
@@ -551,8 +614,41 @@ export async function createRemoteWorktree(
   // local-only until that protocol work is in scope. Remote repos with
   // `symlinkPaths` configured have them silently ignored here.
 
+  let setup: CreateWorktreeResult['setup']
+  if (fsProvider) {
+    const hooks = await readRemoteEffectiveHooks(repo, fsProvider, created.path)
+    const setupScript = hooks?.scripts.setup
+    let shouldLaunchSetup = false
+    if (setupScript) {
+      try {
+        shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+      } catch (error) {
+        // Why: the remote worktree already exists. If the created branch adds
+        // a setup hook without a renderer decision, skip setup instead of
+        // reporting successful git creation as failed.
+        console.warn(`[hooks] setup hook skipped for ${created.path}:`, error)
+      }
+    }
+    if (setupScript && shouldLaunchSetup) {
+      try {
+        setup = await createRemoteSetupRunnerScript(
+          repo,
+          created.path,
+          setupScript,
+          provider,
+          fsProvider
+        )
+      } catch (error) {
+        console.error(`[hooks] Failed to prepare setup runner for ${created.path}:`, error)
+      }
+    }
+  }
+
   notifyWorktreesChanged(mainWindow, repo.id)
-  return { worktree }
+  return {
+    worktree,
+    ...(setup ? { setup } : {})
+  }
 }
 
 export async function createLocalWorktree(
