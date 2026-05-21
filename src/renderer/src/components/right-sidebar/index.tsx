@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+import { Cable, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
+import PortsPanel from './PortsPanel'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import {
   ActivityBarButton,
@@ -26,6 +27,7 @@ import {
   type ActivityBarItem
 } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
+import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -69,6 +71,13 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     title: 'Checks',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
     gitOnly: true
+  },
+  {
+    id: 'ports',
+    icon: Cable,
+    title: 'Ports',
+    shortcut: '',
+    sshOnly: true
   }
 ]
 
@@ -88,16 +97,11 @@ function RightSidebarInner(): React.JSX.Element {
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+  const isSshRepo = Boolean(activeRepo?.connectionId)
 
   const visibleItems = useMemo(
-    () =>
-      ACTIVITY_ITEMS.filter((item) => {
-        if (item.gitOnly && isFolder) {
-          return false
-        }
-        return true
-      }),
-    [isFolder]
+    () => getVisibleRightSidebarActivityItems(ACTIVITY_ITEMS, { isFolder, isSshRepo }),
+    [isFolder, isSshRepo]
   )
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
@@ -137,6 +141,12 @@ function RightSidebarInner(): React.JSX.Element {
         {effectiveTab === 'search' && <SearchPanel />}
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}
+        {/* Why: SSH port forwarding still depends on the raw ports.detect data,
+            which the workspace-scoped status bar popover intentionally does not
+            expose. Keep this panel reachable only for SSH worktrees. */}
+        {effectiveTab === 'ports' && (
+          <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
+        )}
       </div>
     </div>
   )
