@@ -1985,6 +1985,172 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('drops retained PTY transcript memory when a background terminal exits', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    runtime.onPtyData(
+      'pty-bg',
+      `${Array.from({ length: 20 }, (_, i) => `line-${i}`).join('\n')}`,
+      100
+    )
+    await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
+      status: 'running',
+      tail: expect.arrayContaining(['line-0'])
+    })
+
+    runtime.onPtyExit('pty-bg', 0)
+
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<
+          string,
+          {
+            tailBuffer: string[]
+            tailPartialLine: string
+            tailLinesTotal: number
+            tailTruncated: boolean
+          }
+        >
+      }
+    ).ptysById.get('pty-bg')
+    expect(pty).toMatchObject({
+      tailBuffer: [],
+      tailPartialLine: '',
+      tailLinesTotal: 0,
+      tailTruncated: false
+    })
+    await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
+      status: 'exited',
+      tail: []
+    })
+  })
+
+  it('keeps retained PTY transcript memory when controller refresh omits a record', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('daemon-pty-1', TEST_WORKTREE_ID)
+    runtime.onPtyData('daemon-pty-1', 'still live\npartial', 100)
+
+    await runtime.listTerminals()
+
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<
+          string,
+          {
+            connected: boolean
+            tailBuffer: string[]
+            tailPartialLine: string
+            tailLinesTotal: number
+          }
+        >
+      }
+    ).ptysById.get('daemon-pty-1')
+    expect(pty).toMatchObject({
+      connected: false,
+      tailBuffer: ['still live'],
+      tailPartialLine: 'partial',
+      tailLinesTotal: 1
+    })
+  })
+
+  it('keeps retained PTY transcript memory when controller refresh fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        throw new Error('controller unavailable')
+      }
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('daemon-pty-1', TEST_WORKTREE_ID)
+    runtime.onPtyData('daemon-pty-1', 'still live\npartial', 100)
+
+    await runtime.listTerminals()
+
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<
+          string,
+          {
+            connected: boolean
+            tailBuffer: string[]
+            tailPartialLine: string
+            tailLinesTotal: number
+          }
+        >
+      }
+    ).ptysById.get('daemon-pty-1')
+    expect(pty).toMatchObject({
+      connected: true,
+      tailBuffer: ['still live'],
+      tailPartialLine: 'partial',
+      tailLinesTotal: 1
+    })
+  })
+
+  it('keeps retained PTY transcript memory when controller refresh times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: () => new Promise(() => {})
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.registerPty('daemon-pty-1', TEST_WORKTREE_ID)
+      runtime.onPtyData('daemon-pty-1', 'still live\npartial', 100)
+
+      const terminals = runtime.listTerminals()
+      await vi.advanceTimersByTimeAsync(3_000)
+      await terminals
+
+      const pty = (
+        runtime as unknown as {
+          ptysById: Map<
+            string,
+            {
+              connected: boolean
+              tailBuffer: string[]
+              tailPartialLine: string
+              tailLinesTotal: number
+            }
+          >
+        }
+      ).ptysById.get('daemon-pty-1')
+      expect(pty).toMatchObject({
+        connected: true,
+        tailBuffer: ['still live'],
+        tailPartialLine: 'partial',
+        tailLinesTotal: 1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves tui-idle for adopted background PTY handles from the renderer title', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -2737,6 +2903,11 @@ describe('OrcaRuntimeService', () => {
     expect(firstPage.limited).toBe(true)
     expect(firstPage.truncated).toBe(false)
 
+    const fractionalPage = await runtime.readTerminal(terminal.handle, { cursor: 0, limit: 0.5 })
+    expect(fractionalPage.tail).toEqual(['line-0'])
+    expect(fractionalPage.nextCursor).toBe('1')
+    expect(fractionalPage.limited).toBe(true)
+
     const secondPage = await runtime.readTerminal(terminal.handle, {
       cursor: Number(firstPage.nextCursor),
       limit: 200
@@ -2768,6 +2939,44 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.tail).toEqual([])
     expect(futureCursorRead.nextCursor).toBe('2250')
     expect(futureCursorRead.limited).toBe(false)
+  })
+
+  it('bounds preview reads by characters for long partial terminal output', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const longPartialLine = `${'x'.repeat(40_000)}tail-marker`
+    runtime.onPtyData('pty-1', longPartialLine, 100)
+
+    const preview = await runtime.readTerminal(terminal.handle)
+    expect(preview.tail).toHaveLength(1)
+    expect(preview.tail[0]).toHaveLength(32 * 1024)
+    expect(preview.tail[0].endsWith('tail-marker')).toBe(true)
+    expect(preview.limited).toBe(true)
+    expect(preview.truncated).toBe(true)
+    expect(preview.nextCursor).toBe('0')
   })
 
   it('delivers pending orchestration messages to an already-idle agent', async () => {

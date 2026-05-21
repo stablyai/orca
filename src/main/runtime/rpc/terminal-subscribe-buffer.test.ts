@@ -7,6 +7,7 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
   decodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
 
@@ -22,6 +23,208 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal subscribe buffering', () => {
+  it('marks scrollback-only subscribed previews truncated when the uncursored read is limited', async () => {
+    const messages: string[] = []
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      readTerminal: vi
+        .fn()
+        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
+      (msg) => messages.push(msg)
+    )
+
+    expect(messages.map((msg) => JSON.parse(msg).result)).toEqual([
+      {
+        type: 'subscribed',
+        streamId: null,
+        lines: ['line 120'],
+        truncated: true
+      },
+      { type: 'end' }
+    ])
+  })
+
+  it('marks legacy scrollback previews truncated when the uncursored read is limited', async () => {
+    const messages: string[] = []
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi
+        .fn()
+        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        cleanups.get(id)?.()
+        cleanups.delete(id)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' }
+      }),
+      (msg) => messages.push(msg)
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'scrollback')).toBe(true)
+    )
+    const scrollback = messages
+      .map((msg) => JSON.parse(msg).result)
+      .find((result) => result?.type === 'scrollback')
+    expect(scrollback).toMatchObject({
+      type: 'scrollback',
+      lines: ['line 120'],
+      truncated: true
+    })
+
+    runtime.cleanupSubscription('terminal-1:desktop-1')
+    await dispatchPromise
+  })
+
+  it('marks binary subscribed previews truncated when the uncursored read is limited', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi
+        .fn()
+        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        cleanups.get(id)?.()
+        cleanups.delete(id)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateMobileViewport: vi.fn().mockResolvedValue(false)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' },
+        capabilities: { terminalBinaryStream: 1 }
+      }),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-binary-limited',
+        sendBinary: (bytes) => binaryFrames.push(bytes)
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    const subscribed = messages
+      .map((msg) => JSON.parse(msg).result)
+      .find((result) => result?.type === 'subscribed')
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      lines: ['line 120'],
+      truncated: true
+    })
+    const snapshotStart = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
+      truncated: true
+    })
+
+    runtime.cleanupSubscription('terminal-1:desktop-1')
+    await dispatchPromise
+  })
+
+  it('does not mark binary snapshot frames truncated from a limited read when serialized data is available', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi
+        .fn()
+        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({
+        data: 'serialized snapshot\r\n',
+        cols: 100,
+        rows: 30
+      }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        cleanups.get(id)?.()
+        cleanups.delete(id)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateMobileViewport: vi.fn().mockResolvedValue(false)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' },
+        capabilities: { terminalBinaryStream: 1 }
+      }),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-binary-serialized-limited',
+        sendBinary: (bytes) => binaryFrames.push(bytes)
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    const snapshotStart = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
+      cols: 100,
+      rows: 30,
+      truncated: false,
+      truncatedByByteBudget: false
+    })
+
+    runtime.cleanupSubscription('terminal-1:desktop-1')
+    await dispatchPromise
+  })
+
   it('bounds legacy binary output queued while the initial snapshot is serializing', async () => {
     vi.useFakeTimers()
     try {

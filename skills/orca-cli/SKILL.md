@@ -197,7 +197,7 @@ Use selectors to discover terminals, then use the returned handle for repeated l
 orca terminal list --worktree id:<worktreeId> --json
 orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
-orca terminal read --terminal <handle> --cursor <nextCursor> --limit 1000 --json
+orca terminal read --terminal <handle> --cursor <oldestCursor> --limit 1000 --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
@@ -216,7 +216,7 @@ orca terminal read --json
 
 Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree (same as browser commands target the active tab). Use explicit `--terminal <handle>` when operating on a specific pane.
 
-Why: long terminal transcripts should be read with cursors. Save `nextCursor` from a JSON read, then call `terminal read --cursor <nextCursor> --limit <n>` to page forward. Cursor reads default to the retained transcript size; `--limit` can request a smaller page. If `limited` is true, keep reading with the returned `nextCursor`. If `truncated` is true, older output has already fallen out of the retained buffer; use `oldestCursor` as the earliest available cursor.
+Why: long terminal transcripts should be read with cursors. After a limited tail preview without an input cursor, page retained transcript from `oldestCursor`; in that case `nextCursor` already equals `latestCursor` and would skip omitted output. After a cursor read, if `limited` remains true and `nextCursor !== latestCursor`, continue with the returned `nextCursor`. Cursor reads default to the retained transcript size; `--limit` can request a smaller page. If `truncated` is true, older output has already fallen out of the retained buffer; use `oldestCursor` as the earliest available cursor.
 
 Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca returns `terminal_handle_stale`, reacquire a fresh handle with `terminal list`.
 
@@ -241,7 +241,7 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 - Orca only injects `ORCA_WORKTREE_PATH`-style variables for some setup-hook flows, so they are not a general detection contract for agents.
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
-- For long agent responses, use `terminal read --json` with `nextCursor`, `--cursor`, and `--limit` instead of relying on the default human preview. Continue paging while `limited` is true; treat `truncated` as a signal that the requested cursor was older than the retained output.
+- For long agent responses, use `terminal read --json` with `oldestCursor`, `nextCursor`, `--cursor`, and `--limit` instead of relying on the default human preview. After a limited tail preview, start at `oldestCursor`; after a cursor read, continue with `nextCursor` only while `limited` is true and `nextCursor !== latestCursor`. Treat `truncated` as a signal that the requested cursor was older than the retained output.
 - Use `terminal wait --terminal <handle> --for exit` only when the task actually depends on process completion.
 - Use `terminal wait --terminal <handle> --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
 - Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup (e.g. `--command "claude"` to launch Claude Code) and `--title` for labeling. In local Orca sessions, `--command "codex"` is routed through Orca's visible terminal path automatically so Codex does not start as a headless/background PTY. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
@@ -625,7 +625,7 @@ When `orca tab create` opens a new tab, it is automatically set as the active ta
 - `terminal wait` supports `--for exit` (wait for process exit) and `--for tui-idle` (wait for a recognized agent CLI like Claude Code, Gemini, or Codex to finish its current task, detected via OSC title transitions). `tui-idle` defaults to a 5-minute timeout if `--timeout-ms` is not specified. Real coding tasks routinely take 15-60 minutes — always pass `--timeout-ms` explicitly.
 - Orca is the source of truth for worktree/terminal state; do not duplicate that state with manual assumptions.
 - The public `orca` command is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
-- The 120-line terminal output buffer (`terminal read`) is for status monitoring, not result extraction.
+- The default bounded `terminal read` preview is for status monitoring. For retained transcript extraction, use `terminal read --json` with `oldestCursor`/`nextCursor`, `--cursor`, and `--limit`.
 
 ## References
 

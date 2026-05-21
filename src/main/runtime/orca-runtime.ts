@@ -2989,6 +2989,7 @@ export class OrcaRuntimeService {
       pty.connected = false
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
+      this.pruneDisconnectedPtyTranscript(pty)
     }
 
     for (const leaf of this.leaves.values()) {
@@ -8436,11 +8437,15 @@ export class OrcaRuntimeService {
     if (!this.ptyController?.listProcesses) {
       return
     }
-    const sessions = await withTimeout(
+    const sessionsResult = await withTimeoutResult(
       this.ptyController.listProcesses(),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS,
-      []
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
+    if (!sessionsResult.ok) {
+      // Why: a transient controller failure is not evidence that retained PTYs exited.
+      return
+    }
+    const sessions = sessionsResult.value
     const livePtyIds = new Set(sessions.map((session) => session.id))
     for (const session of sessions) {
       const worktreeId =
@@ -8455,6 +8460,18 @@ export class OrcaRuntimeService {
         pty.connected = false
       }
     }
+  }
+
+  private pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
+    if (pty.connected) {
+      return
+    }
+    // Why: disconnected PTY records can stay addressable for status/exit reads,
+    // but their retained transcripts must not accumulate after the process dies.
+    pty.tailBuffer = []
+    pty.tailPartialLine = ''
+    pty.tailTruncated = false
+    pty.tailLinesTotal = 0
   }
 
   private leafExistsForPty(ptyId: string): boolean {
@@ -10098,6 +10115,7 @@ const MAX_TAIL_LINES = 2000
 const MAX_TAIL_CHARS = 256 * 1024
 const DEFAULT_TERMINAL_READ_LIMIT = 120
 const MAX_TERMINAL_READ_LIMIT = 2000
+const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
@@ -10137,6 +10155,24 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Pr
     promise.then(
       (value) => resolve(value),
       () => resolve(fallback)
+    )
+  }).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  })
+}
+
+function withTimeoutResult<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<{ ok: true; value: T } | { ok: false }> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return new Promise<{ ok: true; value: T } | { ok: false }>((resolve) => {
+    timeout = setTimeout(() => resolve({ ok: false }), timeoutMs)
+    promise.then(
+      (value) => resolve({ ok: true, value }),
+      () => resolve({ ok: false })
     )
   }).finally(() => {
     if (timeout) {
@@ -10219,7 +10255,32 @@ function terminalReadLimit(limit: number | undefined, defaultLimit: number): num
   if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
     return defaultLimit
   }
-  return Math.min(Math.floor(limit), MAX_TERMINAL_READ_LIMIT)
+  return Math.min(Math.max(1, Math.floor(limit)), MAX_TERMINAL_READ_LIMIT)
+}
+
+function trimTerminalPreviewToCharacterBudget(
+  lines: string[],
+  characterBudget: number
+): { tail: string[]; limited: boolean; omittedLineCount: number; slicedFirstLine: boolean } {
+  let totalCharacters = lines.reduce((sum, line) => sum + line.length, 0)
+  if (totalCharacters <= characterBudget) {
+    return { tail: lines, limited: false, omittedLineCount: 0, slicedFirstLine: false }
+  }
+
+  const tail = [...lines]
+  let omittedLineCount = 0
+  while (tail.length > 0 && totalCharacters - tail[0].length >= characterBudget) {
+    totalCharacters -= tail.shift()!.length
+    omittedLineCount += 1
+  }
+
+  let slicedFirstLine = false
+  if (tail.length > 0 && totalCharacters > characterBudget) {
+    tail[0] = tail[0].slice(totalCharacters - characterBudget)
+    slicedFirstLine = true
+  }
+
+  return { tail, limited: true, omittedLineCount, slicedFirstLine }
 }
 
 function readTerminalTail(args: {
@@ -10276,17 +10337,30 @@ function readTerminalTail(args: {
   // through cursor reads plus --limit.
   const limit = terminalReadLimit(args.limit, DEFAULT_TERMINAL_READ_LIMIT)
   const allLines = buildTailLines(args.completedLines, args.partialLine)
-  const tail = allLines.slice(-limit)
+  const lineBoundedTail = allLines.slice(-limit)
+  const charBoundedTail = trimTerminalPreviewToCharacterBudget(
+    lineBoundedTail,
+    MAX_TERMINAL_PREVIEW_CHARS
+  )
+  const lineBoundedStartIndex = Math.max(0, allLines.length - lineBoundedTail.length)
+  const charBoundedStartIndex = lineBoundedStartIndex + charBoundedTail.omittedLineCount
+  const hasPageableOmittedCompletedLines =
+    Math.min(args.completedLineCount, charBoundedStartIndex) > 0 ||
+    (charBoundedTail.slicedFirstLine && charBoundedStartIndex < args.completedLineCount)
+  // Why: a long unterminated partial line can exceed the preview character
+  // budget, but cursor reads only page completed lines, so the trimmed bytes
+  // cannot be recovered by asking for nextCursor again.
+  const truncatedByNonPageablePartial = charBoundedTail.limited && !hasPageableOmittedCompletedLines
   return {
     handle: args.handle,
     status: args.status,
-    tail,
-    truncated: args.bufferTruncated,
-    limited: tail.length < allLines.length,
+    tail: charBoundedTail.tail,
+    truncated: args.bufferTruncated || truncatedByNonPageablePartial,
+    limited: lineBoundedTail.length < allLines.length || charBoundedTail.limited,
     oldestCursor: String(oldestCursor),
     nextCursor: String(latestCursor),
     latestCursor: String(latestCursor),
-    returnedLineCount: tail.length
+    returnedLineCount: charBoundedTail.tail.length
   }
 }
 

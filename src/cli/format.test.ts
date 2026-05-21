@@ -91,7 +91,7 @@ describe('formatWorktreeList', () => {
 })
 
 describe('formatTerminalRead', () => {
-  it('prints cursor metadata and limit warnings when the runtime returns them', () => {
+  it('warns limited cursor reads to continue with the next cursor', () => {
     const output = formatTerminalRead({
       terminal: {
         handle: 'term_1',
@@ -109,7 +109,52 @@ describe('formatTerminalRead', () => {
     expect(output).toContain('cursor: 50')
     expect(output).toContain('oldest cursor: 0')
     expect(output).toContain('latest cursor: 150')
-    expect(output).toContain('warning: output limited; read again with the returned cursor')
+    expect(output).toContain('warning: output limited; continue with --cursor 50')
+  })
+
+  it('warns limited tail previews to page retained output from the oldest cursor', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: ['line 100'],
+        truncated: false,
+        limited: true,
+        oldestCursor: '0',
+        nextCursor: '150',
+        latestCursor: '150',
+        returnedLineCount: 1
+      }
+    })
+
+    expect(output).toContain('cursor: 150')
+    expect(output).toContain('oldest cursor: 0')
+    expect(output).toContain('latest cursor: 150')
+    expect(output).toContain(
+      'warning: output limited; page retained output with --cursor 0 --limit <count>'
+    )
+  })
+
+  it('uses a generic limited warning when only partial output is retained', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: [],
+        truncated: false,
+        limited: true,
+        oldestCursor: '150',
+        nextCursor: '150',
+        latestCursor: '150',
+        returnedLineCount: 0
+      }
+    })
+
+    expect(output).toContain('cursor: 150')
+    expect(output).toContain('oldest cursor: 150')
+    expect(output).toContain('latest cursor: 150')
+    expect(output).toContain('warning: output limited')
+    expect(output).not.toContain('page retained output')
   })
 
   it('keeps older runtime read responses readable', () => {
