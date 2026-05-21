@@ -4,6 +4,7 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  Cable,
   ChevronDown,
   ChevronRight,
   RefreshCw,
@@ -34,6 +35,7 @@ import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
+import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
@@ -818,6 +820,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
+  const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
@@ -899,6 +902,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {petEnabled && <PetStatusSegment />}
         {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showPorts && <PortsStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showFloatingTerminalToggle && (
           <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
@@ -984,6 +988,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           >
             <Activity className="size-3.5" />
             Resource Manager
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('ports')}
+            onCheckedChange={() => toggleStatusBarItem('ports')}
+          >
+            <Cable className="size-3.5" />
+            Ports
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

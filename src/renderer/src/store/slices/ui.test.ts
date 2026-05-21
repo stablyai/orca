@@ -135,6 +135,41 @@ describe('createUISlice hydratePersistedUI', () => {
     ])
   })
 
+  it('adds the default-on Ports status item once for older persisted UI', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'resource-usage'],
+        _portsStatusBarDefaultAdded: false
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(setUI).toHaveBeenCalledWith({
+      statusBarItems: ['claude', 'resource-usage', 'ports'],
+      _portsStatusBarDefaultAdded: true
+    })
+  })
+
+  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'resource-usage'],
+        _portsStatusBarDefaultAdded: true
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
   it('restores compact workspace board mode only from an explicit true', () => {
     const store = createUIStore()
 

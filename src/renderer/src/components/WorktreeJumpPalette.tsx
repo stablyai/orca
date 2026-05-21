@@ -28,6 +28,7 @@ import {
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
   isBlankBrowserUrl,
   searchBrowserPages,
@@ -169,6 +170,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
+  const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -302,8 +304,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const worktreeMatches = useMemo(
-    () => searchWorktrees(sortedWorktrees, deferredQuery.trim(), repoMap, prCache, issueCache),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache]
+    () =>
+      searchWorktrees(
+        sortedWorktrees,
+        deferredQuery.trim(),
+        repoMap,
+        prCache,
+        issueCache,
+        getWorkspacePortsByWorktreeId(workspacePortScan)
+      ),
+    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -796,7 +806,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if ((hasAnyWorktrees || hasAnyBrowserPages) && hasQuery) {
       return {
         title: 'No results match your search',
-        subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+        subtitle: 'Try a name, branch, repo, port, comment, PR, page title, or URL.'
       }
     }
     // Why: empty-query rows exclude the current worktree, so a single-worktree

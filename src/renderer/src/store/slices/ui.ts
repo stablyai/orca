@@ -46,6 +46,7 @@ import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -394,6 +395,10 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
+  workspacePortScanRefreshing: boolean
+  setWorkspacePortScan: (scan: { key: string; result: WorkspacePortScanResult } | null) => void
+  setWorkspacePortScanRefreshing: (refreshing: boolean) => void
   /** Whether the experimental pet overlay is currently visible. Persisted
    *  so "Hide pet" from the status-bar menu survives reload. Independent
    *  of the experimentalPet settings flag — the feature flag gates
@@ -868,6 +873,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
   },
+  workspacePortScan: null,
+  workspacePortScanRefreshing: false,
+  setWorkspacePortScan: (scan) => set({ workspacePortScan: scan }),
+  setWorkspacePortScanRefreshing: (refreshing) => set({ workspacePortScanRefreshing: refreshing }),
 
   // Why: default true so a user who enables experimentalPet sees the
   // pet immediately. Hide pet from the status-bar menu flips this
@@ -970,6 +979,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       //     flag — not here — so that users who intentionally select the new
       //     'recent' sort keep it across restarts.
       const sortBy = ui.sortBy
+      const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
+      const statusBarItems =
+        ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
+          ? migratedStatusBarItems
+          : [...migratedStatusBarItems, 'ports' as const]
+      if (!ui._portsStatusBarDefaultAdded && typeof window !== 'undefined') {
+        window.api.ui
+          .set({ statusBarItems, _portsStatusBarDefaultAdded: true })
+          .catch(console.error)
+      }
       return {
         // Why: persisted UI data comes from disk and may be stale, corrupted,
         // or manually edited. Clamp widths during hydration so invalid values
@@ -1001,7 +1020,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
-        statusBarItems: migrateStatusBarItems(ui.statusBarItems),
+        statusBarItems,
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet

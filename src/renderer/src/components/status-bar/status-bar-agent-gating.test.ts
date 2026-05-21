@@ -8,6 +8,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('ssh', null)).toBe(true)
     expect(isStatusBarItemAvailable('ssh', [])).toBe(true)
     expect(isStatusBarItemAvailable('resource-usage', [])).toBe(true)
+    expect(isStatusBarItemAvailable('ports', [])).toBe(true)
     expect(isStatusBarItemAvailable('opencode-go', [])).toBe(true)
   })
 

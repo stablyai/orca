@@ -57,6 +57,7 @@ import {
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { DictationController } from './components/dictation/DictationController'
+import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
@@ -1121,16 +1122,6 @@ function App(): React.JSX.Element {
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
-        return
-      }
-
-      // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
-      // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
-      // intercepting it would break an essential developer tool.
-      if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
-        e.preventDefault()
-        actions.setRightSidebarTab('ports')
-        actions.setRightSidebarOpen(true)
       }
     }
 
@@ -1358,6 +1349,7 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
+          <WorkspacePortScanner />
           {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
           <RetainedAgentsSyncGate />

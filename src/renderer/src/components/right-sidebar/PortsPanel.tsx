@@ -18,13 +18,14 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+  addressForPort,
+  killWorkspacePortForTarget,
+  openWorkspacePortInBrowser,
+  scanWorkspacePortsForTarget,
+  workspacePortRuntimeTargetKey
+} from '@/lib/workspace-port-actions'
 import {
   Dialog,
   DialogContent,
@@ -43,11 +44,14 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-types'
-import type {
-  WorkspacePort,
-  WorkspacePortKillResult,
-  WorkspacePortScanResult
-} from '../../../../shared/workspace-ports'
+import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+
+export {
+  browserUrlForPort,
+  killWorkspacePortForTarget,
+  openWorkspacePortInBrowser,
+  scanWorkspacePortsForTarget
+} from '@/lib/workspace-port-actions'
 
 const LOCAL_PORT_SCAN_INTERVAL_MS = 5_000
 const LOCAL_PORT_MENU_CONTENT_CLASS =
@@ -67,127 +71,14 @@ function safeLocalPort(remotePort: number): number {
 
 const HTTPS_PORTS = new Set([443, 8443])
 
-// Why: the scanner reports numeric addresses (127.0.0.1, 0.0.0.0, ::1, ::)
-// while forwards typically use "localhost". Normalize all loopback/wildcard
-// variants to "localhost" so dedup matching works regardless of representation.
+// Why: forwarded SSH ports and detected remote ports may report the same loopback
+// endpoint using different textual hosts. Normalize for deduping only.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
 function normalizeHost(host: string | undefined): string {
   if (!host || LOOPBACK_HOSTS.has(host)) {
     return 'localhost'
   }
   return host
-}
-
-function hostForLocalAction(host: string): string {
-  if (!host) {
-    return 'localhost'
-  }
-  return host.includes(':') ? `[${host}]` : host
-}
-
-function addressForPort(port: WorkspacePort): string {
-  return `${hostForLocalAction(port.connectHost)}:${port.port}`
-}
-
-export function browserUrlForPort(port: WorkspacePort): string {
-  const protocol = port.protocol === 'https' ? 'https' : 'http'
-  return `${protocol}://${addressForPort(port)}`
-}
-
-type BrowserTabCreator = ReturnType<typeof useAppStore.getState>['createBrowserTab']
-type RemoteBrowserPageHandleSetter = ReturnType<
-  typeof useAppStore.getState
->['setRemoteBrowserPageHandle']
-
-export async function openWorkspacePortInBrowser(args: {
-  port: WorkspacePort
-  activeWorktreeId?: string | null
-  runtimeTarget: RuntimeClientTarget
-  createBrowserTab: BrowserTabCreator
-  setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const worktreeId =
-    args.port.kind === 'workspace' ? args.port.owner.worktreeId : args.activeWorktreeId
-  if (!worktreeId) {
-    return { ok: false, reason: 'No workspace selected for the browser.' }
-  }
-  const url = browserUrlForPort(args.port)
-  activateAndRevealWorktree(worktreeId)
-  if (args.runtimeTarget.kind === 'environment') {
-    try {
-      const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
-        args.runtimeTarget,
-        'browser.tabCreate',
-        { worktree: `id:${worktreeId}`, url },
-        { timeoutMs: 30_000 }
-      )
-      const tab = args.createBrowserTab(worktreeId, url, { activate: true })
-      if (!tab.activePageId) {
-        return { ok: false, reason: 'Failed to create a browser page.' }
-      }
-      args.setRemoteBrowserPageHandle(tab.activePageId, {
-        environmentId: args.runtimeTarget.environmentId,
-        remotePageId: remotePage.browserPageId
-      })
-      return { ok: true }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Failed to open remote browser.' }
-    }
-  }
-  args.createBrowserTab(worktreeId, url, { activate: true })
-  return { ok: true }
-}
-
-function runtimeTargetKey(target: RuntimeClientTarget): string {
-  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
-}
-
-export async function scanWorkspacePortsForTarget(
-  target: RuntimeClientTarget,
-  repoId: string
-): Promise<WorkspacePortScanResult> {
-  const params = { repoId }
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.scan(params)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortScanResult>(target, 'workspacePorts.scan', params, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        platform: 'unknown',
-        scannedAt: Date.now(),
-        ports: [],
-        unavailableReason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
-}
-
-export async function killWorkspacePortForTarget(
-  target: RuntimeClientTarget,
-  args: { repoId: string; pid: number; port: number }
-): Promise<WorkspacePortKillResult> {
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.kill(args)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortKillResult>(target, 'workspacePorts.kill', args, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        ok: false,
-        reason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
 }
 
 type PortForwardDialogState =
@@ -227,7 +118,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   const scanGenerationRef = useRef(0)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${runtimeTargetKey(runtimeTarget)}:${activeRepo?.id ?? ''}`
+  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:${activeRepo?.id ?? ''}`
 
   const refresh = useCallback(() => {
     if (!activeRepo) {

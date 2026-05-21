@@ -187,4 +187,33 @@ describe('worktree-palette-search', () => {
       matchRange: { start: 7, end: 10 }
     })
   })
+
+  it('matches workspace ports by port number before issue and PR numbers', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ id: 'wt-port', linkedIssue: 3000 })],
+      '3000',
+      repoMap,
+      null,
+      null,
+      new Map([
+        [
+          'wt-port',
+          [
+            {
+              port: 3000,
+              processName: 'vite'
+            }
+          ]
+        ]
+      ])
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].matchedField).toBe('port')
+    expect(results[0].supportingText).toEqual({
+      label: 'Port',
+      text: ':3000 vite',
+      matchRange: { start: 1, end: 5 }
+    })
+  })
 })

@@ -3,10 +3,17 @@ import type { Repo, Worktree } from '../../../shared/types'
 
 export type MatchRange = { start: number; end: number }
 
-export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'comment' | 'pr' | 'issue'
+export type PaletteMatchedField =
+  | 'displayName'
+  | 'branch'
+  | 'repo'
+  | 'comment'
+  | 'pr'
+  | 'issue'
+  | 'port'
 
 export type PaletteSupportingText = {
-  label: 'Comment' | 'PR' | 'Issue'
+  label: 'Comment' | 'PR' | 'Issue' | 'Port'
   text: string
   matchRange: MatchRange | null
 }
@@ -76,7 +83,8 @@ export function searchWorktrees(
   query: string,
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
-  issueCache: Record<string, IssueCacheEntry> | null
+  issueCache: Record<string, IssueCacheEntry> | null,
+  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>
 ): PaletteSearchResult[] {
   if (!query) {
     return worktrees.map((worktree) => makeResult(worktree.id, null))
@@ -171,6 +179,33 @@ export function searchWorktrees(
     }
 
     if (!numericQuery) {
+      continue
+    }
+
+    const workspacePorts = workspacePortsByWorktreeId?.get(worktree.id) ?? []
+    let matchedPort = false
+    for (const port of workspacePorts) {
+      const portText = String(port.port)
+      const portIndex = portText.indexOf(numericQuery)
+      if (portIndex !== -1) {
+        const label = `:${portText}${port.processName ? ` ${port.processName}` : ''}`
+        results.push(
+          makeResult(worktree.id, 'port', {
+            supportingText: {
+              label: 'Port',
+              text: label,
+              matchRange: {
+                start: 1 + portIndex,
+                end: 1 + portIndex + numericQuery.length
+              }
+            }
+          })
+        )
+        matchedPort = true
+        break
+      }
+    }
+    if (matchedPort) {
       continue
     }
 

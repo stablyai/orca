@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Files, Search, GitBranch, ListChecks, Cable, PanelRight } from 'lucide-react'
+import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,6 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
-import PortsPanel from './PortsPanel'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import {
   ActivityBarButton,
@@ -94,14 +93,6 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     title: 'Checks',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
     gitOnly: true
-  },
-  {
-    id: 'ports',
-    icon: Cable,
-    title: 'Ports',
-    // Why: Ctrl+Shift+I is the DevTools accelerator on Windows/Linux, so this
-    // shortcut is macOS-only. On other platforms the tooltip omits it.
-    shortcut: isMac ? `\u21E7${mod}I` : ''
   }
 ]
 
@@ -170,7 +161,6 @@ function RightSidebarInner(): React.JSX.Element {
         {effectiveTab === 'search' && <SearchPanel />}
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}
-        {effectiveTab === 'ports' && <PortsPanel isVisible={rightSidebarOpen} />}
       </div>
     </div>
   )

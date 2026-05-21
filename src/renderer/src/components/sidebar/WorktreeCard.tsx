@@ -31,8 +31,10 @@ import {
   WorktreeCardMetaBadges,
   hasWorktreeCardDetails
 } from './WorktreeCardMeta'
+import { WorktreeCardPorts } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -51,6 +53,8 @@ type WorktreeCardProps = {
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   nativeDragEnabled?: boolean
 }
+
+const EMPTY_WORKSPACE_PORTS = []
 
 function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
@@ -118,6 +122,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
+  const workspacePorts = useAppStore(
+    (s) =>
+      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
+      EMPTY_WORKSPACE_PORTS
+  )
 
   // SSH disconnected state
   const sshStatus = useAppStore((s) => {
@@ -587,30 +596,35 @@ const WorktreeCard = React.memo(function WorktreeCard({
             <CacheTimer worktreeId={worktree.id} />
           </div>
 
-          {hasDetails ? (
-            <WorktreeCardDetailsHover
-              issue={metaIssue}
-              linearIssue={metaLinearIssue}
-              review={metaReview}
-              comment={metaComment}
-              onEditIssue={handleEditIssue}
-              onEditComment={handleEditComment}
-            >
+          <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">
+            {hasDetails ? (
+              <WorktreeCardDetailsHover
+                issue={metaIssue}
+                linearIssue={metaLinearIssue}
+                review={metaReview}
+                comment={metaComment}
+                onEditIssue={handleEditIssue}
+                onEditComment={handleEditComment}
+              >
+                <WorktreeCardMetaBadges
+                  issue={metaIssue}
+                  linearIssue={metaLinearIssue}
+                  review={metaReview}
+                  comment={metaComment}
+                  className="ml-0 pr-0"
+                />
+              </WorktreeCardDetailsHover>
+            ) : (
               <WorktreeCardMetaBadges
                 issue={metaIssue}
                 linearIssue={metaLinearIssue}
                 review={metaReview}
                 comment={metaComment}
+                className="ml-0 pr-0"
               />
-            </WorktreeCardDetailsHover>
-          ) : (
-            <WorktreeCardMetaBadges
-              issue={metaIssue}
-              linearIssue={metaLinearIssue}
-              review={metaReview}
-              comment={metaComment}
-            />
-          )}
+            )}
+            <WorktreeCardPorts ports={workspacePorts} />
+          </div>
         </div>
 
         {remoteBranchConflict && (

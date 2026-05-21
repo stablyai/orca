@@ -96,6 +96,14 @@ const STATUS_BAR_TOGGLES: readonly {
     keywords: ['status bar', 'resource', 'manager', 'memory', 'cpu', 'terminal', 'disk', 'space'],
     toggleDescription:
       'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
+  },
+  {
+    id: 'ports',
+    title: 'Ports',
+    description: 'Show live workspace ports in the status bar.',
+    keywords: ['status bar', 'ports', 'localhost', 'server', 'workspace'],
+    toggleDescription:
+      'Show live workspace ports. Click it for workspace-scoped ports and external listeners.'
   }
 ]
 
