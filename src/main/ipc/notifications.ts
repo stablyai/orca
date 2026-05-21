@@ -111,21 +111,25 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { delivered: false, reason: 'suppressed-focus' }
       }
 
-      // Dedupe by worktree, not by source — an agent finishing and a terminal bell
-      // often fire within the same data chunk so only the first one should surface.
-      const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-      const now = Date.now()
-      const lastSentAt = recentNotifications.get(dedupeKey) ?? 0
-      if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
-        return { delivered: false, reason: 'cooldown' }
-      }
-      recentNotifications.set(dedupeKey, now)
+      // Why: the Settings test button is an explicit user action, often
+      // clicked repeatedly while tuning sounds, so it must bypass burst dedupe.
+      if (args.source !== 'test') {
+        // Dedupe by worktree, not by source — an agent finishing and a terminal bell
+        // often fire within the same data chunk so only the first one should surface.
+        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+        const now = Date.now()
+        const lastSentAt = recentNotifications.get(dedupeKey) ?? 0
+        if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
+          return { delivered: false, reason: 'cooldown' }
+        }
+        recentNotifications.set(dedupeKey, now)
 
-      // Evict stale entries so the map doesn't grow unbounded.
-      if (recentNotifications.size > 50) {
-        for (const [key, ts] of recentNotifications) {
-          if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
-            recentNotifications.delete(key)
+        // Evict stale entries so the map doesn't grow unbounded.
+        if (recentNotifications.size > 50) {
+          for (const [key, ts] of recentNotifications) {
+            if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
+              recentNotifications.delete(key)
+            }
           }
         }
       }

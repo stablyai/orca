@@ -704,6 +704,25 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
+  it('does not cooldown explicit test notifications', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(2)
+  })
+
   it('loads allowed custom sound files for preload playback', async () => {
     const soundPath = join(tempDir, 'sound.ogg')
     writeFileSync(soundPath, Buffer.from([1, 2, 3]))
