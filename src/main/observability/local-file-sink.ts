@@ -164,26 +164,20 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     }
     const lines = buffer
     buffer = []
-    for (const line of lines) {
-      const lineBytes = Buffer.byteLength(line, 'utf8')
-      if (lineBytes > maxBytes) {
-        // A single pathological span should not violate the documented
-        // maxFiles × maxBytes disk envelope. Drop only that record, not the
-        // rest of the buffered batch.
-        continue
+    let pendingChunk: string[] = []
+    let pendingChunkBytes = 0
+
+    function writeChunk(chunkLines: string[], chunkBytes: number): void {
+      if (chunkLines.length === 0) {
+        return
       }
-      // Rotation point: if writing this line would exceed the cap and we
-      // already have something in the file, rotate first. Empty-file rotations
-      // are skipped (would just produce zero-byte `.N` files on a new install).
-      if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
-        rotate()
-      }
+      const chunk = chunkLines.join('')
       try {
-        writeSync(fd, line)
-        currentBytes += lineBytes
+        writeSync(fd, chunk)
+        currentBytes += chunkBytes
       } catch {
         // Reopen and retry once. If the second write also fails, drop this
-        // line — the error-tracking lane must never crash main.
+        // chunk — the error-tracking lane must never crash main.
         try {
           // Best-effort close of the prior fd to prevent fd-leak on transient errors.
           try {
@@ -192,13 +186,41 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
             /* swallow — best effort */
           }
           fd = openAppend(filePath)
-          writeSync(fd, line)
+          writeSync(fd, chunk)
           currentBytes = safeFstatSize(fd)
         } catch {
           /* swallow — telemetry must never crash main */
         }
       }
     }
+
+    function flushPendingChunk(): void {
+      writeChunk(pendingChunk, pendingChunkBytes)
+      pendingChunk = []
+      pendingChunkBytes = 0
+    }
+
+    for (const line of lines) {
+      const lineBytes = Buffer.byteLength(line, 'utf8')
+      if (lineBytes > maxBytes) {
+        // A single pathological span should not violate the documented
+        // maxFiles × maxBytes disk envelope. Drop only that record, not the
+        // rest of the buffered batch.
+        continue
+      }
+      if (pendingChunkBytes > 0 && currentBytes + pendingChunkBytes + lineBytes > maxBytes) {
+        flushPendingChunk()
+      }
+      // Rotation point: if writing this line would exceed the cap and we
+      // already have something in the file, rotate first. Empty-file rotations
+      // are skipped (would just produce zero-byte `.N` files on a new install).
+      if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
+        rotate()
+      }
+      pendingChunk.push(line)
+      pendingChunkBytes += lineBytes
+    }
+    flushPendingChunk()
   }
 
   function ensureTimer(): void {

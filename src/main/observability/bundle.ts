@@ -70,6 +70,22 @@ type BundleHeader = {
   readonly schema_version: 1
 }
 
+function* readLinesNewestFirst(text: string): Iterable<string> {
+  let end = text.length
+  while (end > 0) {
+    const start = text.lastIndexOf('\n', end - 1)
+    const rawLine = text.slice(start + 1, end)
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+    if (line.length > 0) {
+      yield line
+    }
+    if (start === -1) {
+      break
+    }
+    end = start
+  }
+}
+
 /**
  * Read the last N minutes of NDJSON across the rotated family and produce
  * a redacted bundle payload. Caller renders this as preview text; main keeps
@@ -127,7 +143,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
     // NDJSON parsing — one record per line. Process each file newest-first
     // so the size cap preserves the spans closest to the support action.
     // Skip malformed lines silently; a crash can leave a half-line.
-    for (const raw of text.split('\n').filter(Boolean).reverse()) {
+    for (const raw of readLinesNewestFirst(text)) {
       let parsed: unknown
       try {
         parsed = JSON.parse(raw)

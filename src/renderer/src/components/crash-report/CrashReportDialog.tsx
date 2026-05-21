@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -27,9 +27,12 @@ export function CrashReportDialog(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
+  const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
-    () => (report ? formatCrashReportText(report, notes) : ''),
-    [notes, report]
+    // Why: formatting applies redaction and truncation over the full crash
+    // payload. Keep that preview update out of the textarea keystroke path.
+    () => (report ? formatCrashReportText(report, deferredNotes) : ''),
+    [deferredNotes, report]
   )
 
   const loadCrashReport = async (promptIfPresent: boolean): Promise<void> => {
