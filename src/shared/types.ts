@@ -644,11 +644,11 @@ export type GitHubPRRefreshAlias = {
   branch: string
   worktreeId?: string
   connectionId?: string | null
+  linkedPRNumber?: number | null
+  fallbackPRNumber?: number | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
-  linkedPRNumber?: number | null
-  fallbackPRNumber?: number | null
   repoKind: RepoKind
   repoId: string
   isBare?: boolean
