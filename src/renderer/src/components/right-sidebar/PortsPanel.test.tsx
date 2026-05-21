@@ -15,6 +15,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 import {
+  addressForPort,
   browserUrlForPort,
   getLocalWorkspacePortSections,
   killWorkspacePortForTarget,
@@ -260,5 +261,6 @@ describe('PortsPanel runtime routing', () => {
       advertisedUrl: 'https://local.getmontecarlo.com:63468'
     }
     expect(browserUrlForPort(advertised)).toBe('https://local.getmontecarlo.com:63468')
+    expect(addressForPort(advertised)).toBe('local.getmontecarlo.com:63468')
   })
 })

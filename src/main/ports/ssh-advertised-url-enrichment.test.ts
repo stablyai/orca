@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DetectedPort, PortForwardEntry } from '../../shared/ssh-types'
-import { enrichSshDetectedPorts, enrichSshForwardEntries } from './ssh-advertised-url-enrichment'
+import {
+  enrichSshDetectedPorts,
+  enrichSshForwardEntries,
+  getConnectionIdsForWorktree,
+  getWorktreeIdsForConnection
+} from './ssh-advertised-url-enrichment'
 import type { AdvertisedUrl, AdvertisedUrlWatcher } from './advertised-url-watcher'
 
 function watcherWith(
@@ -28,6 +33,42 @@ function watcherWith(
     }
   }
 }
+
+describe('getConnectionIdsForWorktree', () => {
+  it('maps a watcher worktreeId back to its SSH connection', () => {
+    const store = {
+      getRepos: () => [{ id: 'local-repo' }, { id: 'remote-repo', connectionId: 'ssh-1' }]
+    } as Parameters<typeof getConnectionIdsForWorktree>[0]
+
+    expect(getConnectionIdsForWorktree(store, 'remote-repo::/repo')).toEqual(['ssh-1'])
+    expect(getConnectionIdsForWorktree(store, 'local-repo::/repo')).toEqual([])
+    expect(getConnectionIdsForWorktree(store, 'invalid')).toEqual([])
+  })
+})
+
+describe('getWorktreeIdsForConnection', () => {
+  it('maps an SSH connection to every attached worktree', () => {
+    const store = {
+      getRepos: () => [
+        { id: 'local-repo' },
+        { id: 'remote-repo', connectionId: 'ssh-1' },
+        { id: 'other-remote', connectionId: 'ssh-2' }
+      ],
+      getAllWorktreeMeta: () => ({
+        'remote-repo::/repo': { displayName: 'repo' },
+        'remote-repo::/repo/feature': { displayName: 'feature' },
+        'other-remote::/repo': { displayName: 'other' },
+        'local-repo::/repo': { displayName: 'local' },
+        invalid: { displayName: 'invalid' }
+      })
+    } as unknown as Parameters<typeof getWorktreeIdsForConnection>[0]
+
+    expect(getWorktreeIdsForConnection(store, 'ssh-1').sort()).toEqual([
+      'remote-repo::/repo',
+      'remote-repo::/repo/feature'
+    ])
+  })
+})
 
 describe('enrichSshForwardEntries', () => {
   it('returns input untouched when there are no worktrees', () => {
@@ -82,5 +123,31 @@ describe('enrichSshDetectedPorts', () => {
     expect(enriched[0].advertisedUrl).toBe('https://local.example.com:3001')
     expect(enriched[0].advertisedProtocol).toBe('https')
     expect(enriched[1].advertisedUrl).toBeUndefined()
+  })
+
+  it('passes detected listener PID through to watcher lookup', () => {
+    const calls: unknown[][] = []
+    const watcher = {
+      lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
+        calls.push([...args])
+        return {
+          origin: 'https://local.example.com:3001',
+          host: 'local.example.com',
+          hostKind: 'custom',
+          protocol: 'https',
+          port: 3001,
+          ptyId: 'pty',
+          lastSeenAt: 0
+        }
+      }
+    }
+
+    enrichSshDetectedPorts(
+      [{ port: 3001, host: '127.0.0.1', pid: 4242, processName: 'node' }],
+      ['wt'],
+      watcher
+    )
+
+    expect(calls).toEqual([[['wt'], 3001, 4242]])
   })
 })

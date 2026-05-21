@@ -47,6 +47,7 @@ import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-type
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
 export {
+  addressForPort,
   browserUrlForPort,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,

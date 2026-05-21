@@ -21,10 +21,12 @@ import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { registerSshBrowseHandler } from './ssh-browse'
 import {
+  getConnectionIdsForWorktree,
   enrichSshDetectedPorts,
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
 import {
   clearProviderPtyState,
@@ -40,6 +42,7 @@ let portForwardManager: SshPortForwardManager | null = null
 let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 let persistedStore: Store | null = null
+let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
@@ -267,6 +270,29 @@ async function restorePortForwards(
   broadcastPortForwards(getMainWindow, targetId)
 }
 
+function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null): void {
+  advertisedUrlWatcherUnsubscribe?.()
+  // Why: SSH port scans only emit when raw host/port/PID data changes. A
+  // terminal can print the advertised URL after the raw port row is already
+  // visible, so the watcher must also trigger a renderer refresh.
+  advertisedUrlWatcherUnsubscribe = advertisedUrlWatcher.onDidChange(({ worktreeId }) => {
+    if (!persistedStore) {
+      return
+    }
+    for (const targetId of getConnectionIdsForWorktree(persistedStore, worktreeId)) {
+      const session = activeSessions.get(targetId)
+      if (!session) {
+        continue
+      }
+      const scanner = session.getPortScanner()
+      if (scanner) {
+        broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId))
+      }
+      broadcastPortForwards(getMainWindow, targetId)
+    }
+  })
+}
+
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
@@ -299,6 +325,7 @@ export function registerSshHandlers(
 
   sshStore = new SshConnectionStore(store)
   persistedStore = store
+  registerAdvertisedUrlRefresh(getMainWindow)
 
   registerCredentialHandler(getMainWindow)
 

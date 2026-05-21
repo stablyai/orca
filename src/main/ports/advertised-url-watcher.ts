@@ -53,6 +53,11 @@ export type AdvertisedUrl = {
   validatedListenerPid?: number
 }
 
+export type AdvertisedUrlChangeEvent = {
+  worktreeId: string
+  port: number
+}
+
 type CacheKey = string
 
 function cacheKey(worktreeId: string, port: number): CacheKey {
@@ -241,12 +246,20 @@ export class AdvertisedUrlWatcher {
   private readonly ptyToWorktree = new Map<string, string>()
   private readonly pending = new Map<string, string>()
   private readonly cache = new Map<CacheKey, AdvertisedUrl>()
+  private readonly listeners = new Set<(event: AdvertisedUrlChangeEvent) => void>()
   private readonly now: () => number
   private readonly maxCacheEntries: number
 
   constructor(options: AdvertisedUrlWatcherOptions = {}) {
     this.now = options.now ?? Date.now
     this.maxCacheEntries = options.maxCacheEntries ?? MAX_CACHE_ENTRIES
+  }
+
+  onDidChange(listener: (event: AdvertisedUrlChangeEvent) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
   bindPty(ptyId: string, worktreeId: string): void {
@@ -340,9 +353,22 @@ export class AdvertisedUrlWatcher {
     if (!existing || shouldReplace(existing, candidate)) {
       this.cache.set(key, candidate)
       this.enforceCacheLimit()
+      if (!existing || existing.origin !== candidate.origin) {
+        this.emitChange({ worktreeId, port })
+      }
     } else {
       // Refresh recency on the existing entry so it isn't evicted by LRU.
       existing.lastSeenAt = timestamp
+    }
+  }
+
+  private emitChange(event: AdvertisedUrlChangeEvent): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.warn('[advertised-url-watcher] listener failed', error)
+      }
     }
   }
 
@@ -374,6 +400,7 @@ export class AdvertisedUrlWatcher {
         // process is now listening on the port. Drop the cached URL — the
         // new listener may be unrelated to the captured banner.
         this.cache.delete(key)
+        this.emitChange({ worktreeId, port })
         return undefined
       }
     }
@@ -384,7 +411,9 @@ export class AdvertisedUrlWatcher {
    *  the listener PID on a port changes, indicating the advertised URL was
    *  produced by a no-longer-running process. */
   invalidate(worktreeId: string, port: number): void {
-    this.cache.delete(cacheKey(worktreeId, port))
+    if (this.cache.delete(cacheKey(worktreeId, port))) {
+      this.emitChange({ worktreeId, port })
+    }
   }
 
   /** Find the best advertised URL for `port` across multiple worktrees. SSH
@@ -416,6 +445,7 @@ export class AdvertisedUrlWatcher {
           candidate.validatedListenerPid = currentListenerPid
         } else if (candidate.validatedListenerPid !== currentListenerPid) {
           this.cache.delete(key)
+          this.emitChange({ worktreeId, port })
           continue
         }
       }

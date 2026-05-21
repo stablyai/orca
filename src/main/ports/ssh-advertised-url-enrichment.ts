@@ -36,6 +36,18 @@ export function getWorktreeIdsForConnection(
   })
 }
 
+export function getConnectionIdsForWorktree(
+  store: Pick<Store, 'getRepos'>,
+  worktreeId: string
+): string[] {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed) {
+    return []
+  }
+  const connectionId = store.getRepos().find((repo) => repo.id === parsed.repoId)?.connectionId
+  return connectionId ? [connectionId] : []
+}
+
 type EnrichmentTarget = { advertisedUrl?: string; advertisedProtocol?: 'http' | 'https' }
 
 function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: AdvertisedUrl): T {

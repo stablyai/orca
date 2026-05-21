@@ -216,6 +216,23 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3000)).toBeUndefined()
   })
 
+  it('notifies listeners when the visible advertised URL changes', () => {
+    const watcher = bindFresh()
+    const events: { worktreeId: string; port: number }[] = []
+    const unsubscribe = watcher.onDidChange((event) => events.push(event))
+
+    watcher.ingest(PTY, 'Local: http://localhost:3001/\n')
+    watcher.ingest(PTY, 'Network: https://custom.example.com:3001/\n')
+    watcher.ingest(PTY, 'Local: http://localhost:3001/\n')
+    unsubscribe()
+    watcher.ingest(PTY, 'Network: https://other.example.com:3001/\n')
+
+    expect(events).toEqual([
+      { worktreeId: WORKTREE, port: 3001 },
+      { worktreeId: WORKTREE, port: 3001 }
+    ])
+  })
+
   it('caps the pre-bind pending buffer at 32 distinct PTY IDs', () => {
     const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
     // 33 distinct unbound IDs; the first should be evicted before bind.
@@ -265,6 +282,8 @@ describe('AdvertisedUrlWatcher.lookupBest', () => {
   it('evicts the stale candidate when the listener PID changed', () => {
     const watcher = bindFresh()
     watcher.bindPty('pty-2', 'repo::/wt2')
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
     watcher.ingest(PTY, 'A: http://localhost:3001/\n')
     watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
     // Pin both candidates to PID 4242.
@@ -275,6 +294,8 @@ describe('AdvertisedUrlWatcher.lookupBest', () => {
     // evicted, so the search now finds nothing.
     expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 9999)).toBeUndefined()
     expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)).toBeUndefined()
+    expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
+    expect(events).toContainEqual({ worktreeId: 'repo::/wt2', port: 3001 })
   })
 
   it('falls through to a still-valid candidate when one entry was reassigned', () => {
@@ -304,12 +325,15 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
 
   it('evicts the entry when the listener PID changes', () => {
     const watcher = bindFresh()
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
     expect(watcher.lookup(WORKTREE, 3001, 4242)?.validatedListenerPid).toBe(4242)
     // Different PID → port was reused by another process.
     expect(watcher.lookup(WORKTREE, 3001, 9999)).toBeUndefined()
     // Entry is gone.
     expect(watcher.lookup(WORKTREE, 3001, 4242)).toBeUndefined()
+    expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
   })
 
   it('skips validation when no PID is provided', () => {
