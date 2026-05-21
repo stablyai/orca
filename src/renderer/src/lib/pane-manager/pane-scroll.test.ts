@@ -50,6 +50,11 @@ function createMarker(line: number): IMarker {
   } as unknown as IMarker
 }
 
+function setMarkerLine(marker: IMarker, line: number): void {
+  const mutableMarker = marker as unknown as { line: number }
+  mutableMarker.line = line
+}
+
 describe('scroll state', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -141,6 +146,47 @@ describe('scroll state', () => {
 
     expect(terminal.buffer.active.viewportY).toBe(42)
     expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
+  })
+
+  it('keeps the visible line marker alive across deferred layout restores', () => {
+    vi.useFakeTimers()
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const terminal = createTerminal({ viewportY: 10, baseY: 300 })
+    const marker = createMarker(160)
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100,
+      firstVisibleLineMarker: marker
+    }
+
+    restoreScrollStateAfterLayout(terminal, state)
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(160)
+    expect(marker.dispose).not.toHaveBeenCalled()
+
+    setMarkerLine(marker, 175)
+    const activeBuffer = terminal.buffer.active as { viewportY: number }
+    activeBuffer.viewportY = 0
+    rafCallbacks.shift()?.(0)
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(175)
+    expect(marker.dispose).not.toHaveBeenCalled()
+
+    setMarkerLine(marker, 190)
+    activeBuffer.viewportY = 0
+    vi.advanceTimersByTime(80)
+
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(190)
+    expect(terminal.buffer.active.viewportY).toBe(190)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('does not run stale animation-frame restores after the timeout restore completes', () => {
