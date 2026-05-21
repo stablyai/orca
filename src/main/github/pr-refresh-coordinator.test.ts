@@ -342,6 +342,7 @@ describe('pr-refresh-coordinator', () => {
       '/repo',
       'feature/test',
       null,
+      null,
       null
     )
     expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
@@ -349,7 +350,8 @@ describe('pr-refresh-coordinator', () => {
       '/repo',
       'feature/test',
       null,
-      'ssh-1'
+      'ssh-1',
+      null
     )
   })
 
