@@ -36,7 +36,7 @@ export function registerHooksHandlers(store: Store): void {
         return { hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
       try {
-        const result = await fsProvider.readFile(join(repo.path, '.orca.yaml'))
+        const result = await fsProvider.readFile(join(repo.path, 'orca.yaml'))
         if (result.isBinary) {
           return { hasHooks: false, hooks: null, mayNeedUpdate: false }
         }

@@ -1021,7 +1021,7 @@ describe('OrcaRuntimeService', () => {
       unregisterSshFilesystemProvider('ssh-1')
     }
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\.orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\orca.yaml')
     expect(hasHooksFile).not.toHaveBeenCalled()
     expect(getEffectiveHooks).not.toHaveBeenCalled()
   })
@@ -1042,7 +1042,7 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => ({
-        content: filePath.includes('.orca.yaml')
+        content: filePath.endsWith('orca.yaml')
           ? 'scripts:\n  setup: pnpm install\n'
           : filePath.endsWith('.gitignore')
             ? 'node_modules\n'
@@ -1073,7 +1073,7 @@ describe('OrcaRuntimeService', () => {
       unregisterSshFilesystemProvider('ssh-1')
     }
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\.orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\orca.yaml')
     expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\.orca\\issue-command')
     expect(fsProvider.createDir).toHaveBeenCalledWith('C:\\remote\\repo\\.orca')
     expect(fsProvider.writeFile).toHaveBeenCalledWith(

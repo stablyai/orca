@@ -5568,7 +5568,7 @@ export class OrcaRuntimeService {
         }
       }
       try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, '.orca.yaml'))
+        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
         const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
         return {
           hasHooksFile: Boolean(hooks),
@@ -5608,7 +5608,7 @@ export class OrcaRuntimeService {
         return { hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
       try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, '.orca.yaml'))
+        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
         if (result.isBinary) {
           return { hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
