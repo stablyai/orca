@@ -441,10 +441,9 @@ jobs:
             --generate-notes \
             --prerelease="$is_rc"
 
-  # Why: E2E runs alongside the release for visibility (failures surface as a
-  # red check on the tag), but is NOT in `publish-release`'s needs list.
-  # Releases already take a while and the suite is already a required check
-  # on PRs, so gating here would mostly delay shipping without adding signal.
+  # Why: release-cut is the last gate before a tag becomes public. PR checks
+  # catch most regressions, but tag-scoped E2E must pass before publish-release
+  # flips the draft visible.
   e2e:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -695,6 +694,7 @@ jobs:
     needs:
       - cut
       - build
+      - e2e
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -3,6 +3,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import {
   sendToTerminal,
+  waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -116,33 +117,6 @@ async function getAgentStatuses(page: Page): Promise<
   })
 }
 
-async function getActivePaneDescriptor(
-  page: Page
-): Promise<{ paneKey: string; worktreeId: string }> {
-  return page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    const worktreeId = state.activeWorktreeId
-    if (!worktreeId) {
-      throw new Error('No active worktree')
-    }
-    const tabId = state.activeTabIdByWorktree[worktreeId] ?? state.activeTabId
-    if (!tabId) {
-      throw new Error('No active tab')
-    }
-    const manager = window.__paneManagers?.get(tabId)
-    const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-    const leafId = activePane ? manager?.getLeafIdMap?.().get(activePane.id) : null
-    if (!leafId) {
-      throw new Error('No active pane leaf id')
-    }
-    return { paneKey: `${tabId}:${leafId}`, worktreeId }
-  })
-}
-
 test.describe('Droid notifications', () => {
   test('Codex hook completion dispatches while its worktree is inactive', async ({
     orcaPage,
@@ -162,7 +136,7 @@ test.describe('Droid notifications', () => {
     await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
     await waitForTerminalOutput(orcaPage, readyMarker)
 
-    const { paneKey, worktreeId } = await getActivePaneDescriptor(orcaPage)
+    const { paneKey, worktreeId } = await waitForActivePaneHookDescriptor(orcaPage)
     const prompt = `codex-hook-notify-${Date.now()}`
     await emitCodexHookStatus(endpoint, {
       paneKey,

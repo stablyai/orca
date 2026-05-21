@@ -126,7 +126,11 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
 }
 
 async function openImportedSetupSettingsFromToast(page: Page, repoId: string): Promise<Locator> {
-  await page.getByRole('button', { name: 'View in Settings' }).click()
+  const viewInSettings = page.getByRole('button', { name: 'View in Settings' })
+  await expect(viewInSettings).toBeAttached({ timeout: 10_000 })
+  // Why: in hidden Electron CI windows, the Sonner action can be laid out just
+  // outside Playwright's viewport even though the action is mounted and wired.
+  await viewInSettings.evaluate((button) => (button as HTMLButtonElement).click())
   const localCommands = page.locator(`[id="repo-${repoId}-local-commands"]`)
   await expect(localCommands).toBeVisible({ timeout: 10_000 })
   await expect(localCommands.getByText('Local Settings Commands').first()).toBeVisible()

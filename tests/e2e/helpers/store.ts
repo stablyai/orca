@@ -277,26 +277,6 @@ export async function switchToWorktree(page: Page, worktreeId: string): Promise<
  * hidden-window mode and avoids racing that initial auto-create step.
  */
 export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-
-    const state = store.getState()
-    if (state.activeWorktreeId) {
-      const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-      if (tabs.length === 0) {
-        // Why: fresh isolated E2E profiles may not have finished the UI-driven
-        // auto-create effect yet. Use the same store action to create the first
-        // terminal tab so terminal-focused specs start from a stable baseline.
-        state.createTab(state.activeWorktreeId)
-      }
-    }
-    if (state.activeTabType !== 'terminal') {
-      state.setActiveTabType('terminal')
-    }
-  })
   await expect
     .poll(
       async () =>
@@ -305,12 +285,41 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
           if (!store) {
             return false
           }
-          const state = store.getState()
-          if (state.activeTabType !== 'terminal' || !state.activeWorktreeId) {
+          let state = store.getState()
+          let worktreeId = state.activeWorktreeId
+          if (!worktreeId) {
+            const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+            if (!firstWorktree) {
+              return false
+            }
+            // Why: reload-based specs can briefly clear the active worktree
+            // after session readiness while worktrees are already loaded.
+            state.setActiveWorktree(firstWorktree.id)
+            state = store.getState()
+            worktreeId = state.activeWorktreeId ?? firstWorktree.id
+          }
+
+          const tabs = state.tabsByWorktree[worktreeId] ?? []
+          const activeTab =
+            tabs.find((tab) => tab.id === state.activeTabIdByWorktree[worktreeId]) ??
+            tabs.find((tab) => tab.id === state.activeTabId) ??
+            tabs[0] ??
+            // Why: fresh isolated E2E profiles may not have finished the UI-driven
+            // auto-create effect yet. Use the same store action to create the first
+            // terminal tab so terminal-focused specs start from a stable baseline.
+            state.createTab(worktreeId)
+          state.setActiveTab(activeTab.id)
+          if (state.activeTabType !== 'terminal') {
+            state.setActiveTabType('terminal')
+          }
+
+          state = store.getState()
+          if (state.activeTabType !== 'terminal' || state.activeWorktreeId !== worktreeId) {
             return false
           }
-          const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-          return tabs.some((tab) => tab.id === state.activeTabId)
+          return (state.tabsByWorktree[worktreeId] ?? []).some(
+            (tab) => tab.id === state.activeTabId
+          )
         }),
       { timeout: timeoutMs, message: 'No active terminal tab found for current worktree' }
     )
