@@ -81,6 +81,9 @@ import {
 export { resolveZoomTarget } from './resolve-zoom-target'
 
 const ZOOM_STEP = 0.5
+const PENDING_AGENT_STATUS_RETRY_MS = 100
+const PENDING_AGENT_STATUS_TTL_MS = 15_000
+const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
@@ -491,6 +494,13 @@ function getActiveRuntimeEnvironmentId(): string | null {
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
+    type PendingAgentStatusEvent = {
+      data: AgentStatusIpcPayload
+      firstSeenAt: number
+    }
+    type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
+    const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
+    let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -1806,13 +1816,55 @@ export function useIpcEvents(): void {
     // hook callback or an OSC fallback path. Startup pushes are ignored until
     // workspace session hydration finishes; the snapshot pull below replays the
     // main-process cache after tab identity is available.
+    function schedulePendingAgentStatusFlush(): void {
+      if (pendingAgentStatusRetryTimer !== null || pendingAgentStatusEvents.length === 0) {
+        return
+      }
+      pendingAgentStatusRetryTimer = globalThis.setTimeout(() => {
+        pendingAgentStatusRetryTimer = null
+        flushPendingAgentStatuses()
+      }, PENDING_AGENT_STATUS_RETRY_MS)
+    }
+
+    function enqueuePendingAgentStatus(data: AgentStatusIpcPayload): void {
+      pendingAgentStatusEvents.push({ data, firstSeenAt: Date.now() })
+      while (pendingAgentStatusEvents.length > MAX_PENDING_AGENT_STATUS_EVENTS) {
+        pendingAgentStatusEvents.shift()
+      }
+      schedulePendingAgentStatusFlush()
+    }
+
+    function flushPendingAgentStatuses(): void {
+      if (pendingAgentStatusEvents.length === 0) {
+        return
+      }
+      const now = Date.now()
+      const remaining: PendingAgentStatusEvent[] = []
+      for (const event of pendingAgentStatusEvents) {
+        if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
+          continue
+        }
+        const result = applyAgentStatus(event.data, { retry: true })
+        if (result === 'pending') {
+          remaining.push(event)
+        }
+      }
+      pendingAgentStatusEvents.length = 0
+      pendingAgentStatusEvents.push(...remaining)
+      if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
+        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+        pendingAgentStatusRetryTimer = null
+      }
+      schedulePendingAgentStatusFlush()
+    }
+
     const applyAgentStatus = (
       data: AgentStatusIpcPayload,
-      options?: { replay?: boolean }
-    ): void => {
+      options?: { replay?: boolean; retry?: boolean }
+    ): AgentStatusApplyResult => {
       const store = useAppStore.getState()
       if (!store.workspaceSessionReady) {
-        return
+        return 'dropped'
       }
       const payload = normalizeAgentStatusPayload({
         state: data.state,
@@ -1824,7 +1876,7 @@ export function useIpcEvents(): void {
         interrupted: data.interrupted
       })
       if (!payload) {
-        return
+        return 'dropped'
       }
       const { exists, title, repoConnectionId, repoConnectionResolved, owningWorktreeId } =
         resolvePaneKey(store, data.paneKey)
@@ -1836,9 +1888,23 @@ export function useIpcEvents(): void {
         // include entries whose tabs were closed before this session — that
         // reconciliation miss is not a regression signal.
         if (options?.replay !== true) {
-          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+          if (options?.retry !== true) {
+            track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+            // Why: live hook IPC can beat the renderer's tab/layout hydration.
+            // Main already cached the event; retry locally so a transient
+            // pane-key miss does not drop Droid/Codex completion state.
+            enqueuePendingAgentStatus(data)
+          }
+          return 'pending'
         }
-        return
+        return 'dropped'
+      }
+      if (options?.replay !== true && options?.retry !== true) {
+        for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+          if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
+            pendingAgentStatusEvents.splice(index, 1)
+          }
+        }
       }
       // Why: drop in-flight events from a connection that no longer owns
       // this pane. After an SSH disconnect (or tab destroy/recreate during
@@ -1865,7 +1931,7 @@ export function useIpcEvents(): void {
         data.connectionId !== repoConnectionId &&
         !canAcceptPendingRemoteOwnership
       ) {
-        return
+        return 'dropped'
       }
       store.setAgentStatus(data.paneKey, payload, title, {
         updatedAt: data.receivedAt,
@@ -1882,6 +1948,7 @@ export function useIpcEvents(): void {
           payload
         })
       }
+      return 'applied'
     }
 
     let snapshotRequestedForReadyWindow = false
@@ -1977,6 +2044,7 @@ export function useIpcEvents(): void {
     unsubs.push(
       useAppStore.subscribe(() => {
         requestAgentStatusSnapshotIfReady()
+        flushPendingAgentStatuses()
         syncAgentHookCompletionNotificationSettings()
       })
     )
@@ -2089,6 +2157,10 @@ export function useIpcEvents(): void {
     }
 
     return () => {
+      if (pendingAgentStatusRetryTimer !== null) {
+        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+      }
+      pendingAgentStatusEvents.length = 0
       unsubs.forEach((fn) => fn())
       resetAgentHookCompletionNotificationCoordinators()
     }

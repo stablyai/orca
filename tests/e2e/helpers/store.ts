@@ -166,58 +166,43 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
 
 /** Wait until a worktree is active and return its ID. */
 export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Promise<string> {
-  const existingId = await getActiveWorktreeId(page)
-  if (existingId) {
-    return existingId
-  }
-
-  const activatedFromStore = await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      return false
-    }
-
-    const state = store.getState()
-    if (state.activeWorktreeId) {
-      return true
-    }
-
-    const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
-    if (!firstWorktree) {
-      return false
-    }
-
-    // Why: the sidebar no longer guarantees a role="option" worktree row
-    // during hydration, so DOM-click fallback can miss the only selectable
-    // worktree and leave fresh E2E sessions stuck with activeWorktreeId=null.
-    // Activating the first loaded worktree through the store matches the app's
-    // real selection path and keeps setup independent from sidebar markup.
-    state.setActiveWorktree(firstWorktree.id)
-    return true
-  })
-
-  if (!activatedFromStore) {
-    const primaryWorktreeOption = page.getByRole('option', { name: /primary/i }).first()
-    const anyWorktreeOption = page.getByRole('option').first()
-    const optionToClick =
-      (await primaryWorktreeOption.count()) > 0 ? primaryWorktreeOption : anyWorktreeOption
-
-    if ((await optionToClick.count()) > 0) {
-      // Why: isolated E2E sessions can finish hydrating with worktrees loaded but
-      // no selection restored. Clicking the sidebar option matches the real user
-      // path and drives the same activation logic the app relies on in production.
-      await optionToClick.click()
-    }
-  }
-
+  let activeWorktreeId: string | null = null
   await expect
-    .poll(async () => getActiveWorktreeId(page), {
-      timeout: timeoutMs,
-      message: 'activeWorktreeId did not become available'
-    })
+    .poll(
+      async () => {
+        activeWorktreeId = await page.evaluate(() => {
+          const store = window.__store
+          if (!store) {
+            return null
+          }
+
+          let state = store.getState()
+          if (state.activeWorktreeId) {
+            return state.activeWorktreeId
+          }
+
+          const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+          if (!firstWorktree) {
+            return null
+          }
+
+          // Why: isolated E2E sessions can hydrate worktree rows without
+          // restoring a selection. Re-try store activation as worktrees load
+          // instead of relying on sidebar option click hit targets.
+          state.setActiveWorktree(firstWorktree.id)
+          state = store.getState()
+          return state.activeWorktreeId
+        })
+        return activeWorktreeId
+      },
+      {
+        timeout: timeoutMs,
+        message: 'activeWorktreeId did not become available'
+      }
+    )
     .not.toBeNull()
 
-  return (await getActiveWorktreeId(page))!
+  return activeWorktreeId!
 }
 
 /** Get all worktree IDs across all repos. */
