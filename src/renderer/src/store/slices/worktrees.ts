@@ -113,6 +113,18 @@ function toRuntimeWorktreeIdSelector(worktreeId: string): string {
   return `id:${worktreeId}`
 }
 
+function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
+  if (force) {
+    return false
+  }
+  const protectedRemovalMessages = [
+    'Refusing to delete unregistered worktree path:',
+    'Refusing to delete protected worktree path:',
+    'Refusing to delete worktree because it contains another registered worktree:'
+  ]
+  return !protectedRemovalMessages.some((message) => error.includes(message))
+}
+
 type WorktreeWithLineage = Worktree & {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
@@ -969,7 +981,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           [worktreeId]: {
             isDeleting: false,
             error,
-            canForceDelete: !(force ?? false)
+            canForceDelete: canRetryWorktreeRemovalWithForce(error, force)
           }
         }
       }))

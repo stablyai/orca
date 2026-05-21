@@ -199,6 +199,65 @@ describe('removeWorktree cascade', () => {
     })
   })
 
+  it('does not offer force delete for protected worktree removal failures', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child'
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child'
+    })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child',
+      canForceDelete: false
+    })
+  })
+
+  it('does not offer force delete when Electron wraps protected removal failures', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'worktrees:remove': Error: Refusing to delete worktree because it contains another registered worktree: /path/wt1/child"
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
+  })
+
   it('does NOT affect other worktrees', async () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'

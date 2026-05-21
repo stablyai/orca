@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import type { Worktree } from '../../../../shared/types'
 
 type WorktreeBatchDeleteOptions = {
@@ -23,7 +24,7 @@ function viewWorktreeDiff(worktreeId: string): void {
 }
 
 export async function runWorktreeDeletesInParallel(
-  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId'>[]
+  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[]
 ): Promise<string[]> {
   // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
   // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
@@ -38,6 +39,12 @@ export async function runWorktreeDeletesInParallel(
     } else {
       groups.set(target.repoId, [target])
     }
+  }
+  for (const group of groups.values()) {
+    // Why: selected parent+child workspace deletes must remove nested children
+    // first. Otherwise the parent delete is correctly rejected because it still
+    // contains another registered worktree.
+    group.sort((a, b) => b.path.length - a.path.length)
   }
   const groupResults = await Promise.all(
     Array.from(groups.values()).map(async (group) => {
@@ -163,12 +170,18 @@ export function runWorktreeDelete(worktreeId: string): void {
     return
   }
   state.clearWorktreeDeleteState(worktreeId)
+  const hasLineageChildren =
+    getWorkspaceDeleteLineage(target, state.allWorktrees(), state.worktreeLineageById).descendants
+      .length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
-  if (skipConfirm) {
+  if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(worktreeId, target.displayName)
     return
   }
-  state.openModal('delete-worktree', { worktreeId })
+  state.openModal('delete-worktree', {
+    worktreeId,
+    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
+  })
 }
 
 export function runWorktreeBatchDelete(
@@ -194,9 +207,14 @@ export function runWorktreeBatchDelete(
 
   // Why: bulk cleanup can destroy many directories at once, so batch deletes
   // and Space-triggered deletes must keep an explicit confirmation step.
+  const singleTargetHasLineageChildren =
+    targets.length === 1 &&
+    getWorkspaceDeleteLineage(targets[0], state.allWorktrees(), state.worktreeLineageById)
+      .descendants.length > 0
   const skipConfirm =
     !options.forceConfirm &&
     targets.length === 1 &&
+    !singleTargetHasLineageChildren &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
     void runWorktreeDeletesInParallel(targets).then((deletedIds) => {
@@ -210,7 +228,9 @@ export function runWorktreeBatchDelete(
   if (targets.length === 1) {
     state.openModal('delete-worktree', {
       worktreeId: targets[0].id,
-      ...(options.forceConfirm ? { allowSkipConfirm: false } : {}),
+      ...(options.forceConfirm || singleTargetHasLineageChildren
+        ? { allowSkipConfirm: false }
+        : {}),
       ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
     })
     return true

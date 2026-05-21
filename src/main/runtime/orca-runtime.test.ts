@@ -5947,6 +5947,46 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('rejects CLI worktree removal when the target contains another registered worktree', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: TEST_REPO_PATH,
+        head: 'main',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: TEST_WORKTREE_PATH,
+        head: 'parent',
+        branch: 'refs/heads/parent',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: `${TEST_WORKTREE_PATH}/child`,
+        head: 'child',
+        branch: 'refs/heads/child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, true)).rejects.toThrow(
+      `Refusing to delete worktree because it contains another registered worktree: ${TEST_WORKTREE_PATH}/child`
+    )
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
   it('fails dirty non-force deletes before PTY teardown', async () => {
     const runtime = new OrcaRuntimeService(store)
     const killSpy = vi.fn().mockReturnValue(true)
