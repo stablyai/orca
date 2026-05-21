@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates forwarded list, detected list, modal form, and
 per-entry actions in one file to keep the data flow straightforward. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   ExternalLink,
   Copy,
@@ -44,7 +44,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-types'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
 export {
   browserUrlForPort,
@@ -53,7 +53,54 @@ export {
   scanWorkspacePortsForTarget
 } from '@/lib/workspace-port-actions'
 
-const LOCAL_PORT_SCAN_INTERVAL_MS = 5_000
+export function getLocalWorkspacePortSections(
+  scan: { ports: WorkspacePort[] } | null | undefined,
+  activeRepoId: string | null | undefined,
+  activeWorktreeId: string | null | undefined
+): {
+  activePorts: WorkspacePort[]
+  otherWorkspacePorts: WorkspacePort[]
+  externalPorts: WorkspacePort[]
+} {
+  const ports = scan?.ports ?? []
+  return {
+    activePorts: ports.filter(
+      (port) =>
+        port.kind === 'workspace' &&
+        port.owner.repoId === activeRepoId &&
+        port.owner.worktreeId === activeWorktreeId
+    ),
+    otherWorkspacePorts: ports.filter(
+      (port) =>
+        port.kind === 'workspace' &&
+        port.owner.repoId === activeRepoId &&
+        port.owner.worktreeId !== activeWorktreeId
+    ),
+    // Why: the old repo-scoped scan showed listeners from other repos as
+    // External, without workspace-only actions or cross-worktree activation.
+    // Keep that behavior now that the shared scan can attribute them globally.
+    externalPorts: ports.flatMap((port) => {
+      if (port.kind !== 'workspace') {
+        return [port]
+      }
+      return port.owner.repoId === activeRepoId ? [] : [workspacePortAsExternal(port)]
+    })
+  }
+}
+
+function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): WorkspacePort {
+  return {
+    id: port.id,
+    bindHost: port.bindHost,
+    connectHost: port.connectHost,
+    port: port.port,
+    pid: port.pid,
+    processName: port.processName,
+    protocol: port.protocol,
+    kind: 'external'
+  }
+}
+
 const LOCAL_PORT_MENU_CONTENT_CLASS =
   '!rounded-md !border-border/60 !bg-popover !text-popover-foreground !shadow-[0_10px_24px_rgba(0,0,0,0.18)] !backdrop-blur-none'
 const LOCAL_PORT_MENU_ITEM_CLASS =
@@ -106,90 +153,42 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const [scan, setScan] = useState<{ key: string; result: WorkspacePortScanResult } | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const scan = useAppStore((s) => s.workspacePortScan)
+  const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
+  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     other: true,
     external: true
   })
-  const inFlightScanRef = useRef<Promise<void> | null>(null)
-  const inFlightScanKeyRef = useRef<string | null>(null)
-  const scanGenerationRef = useRef(0)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:${activeRepo?.id ?? ''}`
+  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
 
   const refresh = useCallback(() => {
     if (!activeRepo) {
-      setScan(null)
       return Promise.resolve()
     }
-    if (inFlightScanRef.current && inFlightScanKeyRef.current === scanKey) {
-      return inFlightScanRef.current
-    }
-    const generation = scanGenerationRef.current
-    setRefreshing(true)
-    const promise = scanWorkspacePortsForTarget(runtimeTarget, activeRepo.id)
+    setWorkspacePortScanRefreshing(true)
+    const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((nextScan) => {
-        if (generation === scanGenerationRef.current) {
-          setScan({ key: scanKey, result: nextScan })
-        }
+        setWorkspacePortScan({ key: scanKey, result: nextScan })
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        toast.error('Failed to refresh ports', {
+          description: message || 'Workspace port scan failed.'
+        })
       })
       .finally(() => {
-        if (inFlightScanRef.current === promise) {
-          inFlightScanRef.current = null
-          inFlightScanKeyRef.current = null
-        }
-        if (generation === scanGenerationRef.current) {
-          setRefreshing(false)
-        }
+        setWorkspacePortScanRefreshing(false)
       })
-    inFlightScanRef.current = promise
-    inFlightScanKeyRef.current = scanKey
     return promise
-  }, [activeRepo, runtimeTarget, scanKey])
+  }, [activeRepo, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
 
-  useEffect(() => {
-    let cancelled = false
-    scanGenerationRef.current += 1
-
-    if (!isVisible) {
-      inFlightScanRef.current = null
-      inFlightScanKeyRef.current = null
-      setScan(null)
-      setRefreshing(false)
-      return () => {
-        cancelled = true
-        scanGenerationRef.current += 1
-      }
-    }
-
-    async function run(): Promise<void> {
-      try {
-        await refresh()
-      } catch {
-        // Why: a transient RPC failure must not halt the poll loop.
-      }
-      if (!cancelled) {
-        timeout = setTimeout(() => void run(), LOCAL_PORT_SCAN_INTERVAL_MS)
-      }
-    }
-
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    setScan(null)
-    void run()
-    return () => {
-      cancelled = true
-      scanGenerationRef.current += 1
-      inFlightScanRef.current = null
-      inFlightScanKeyRef.current = null
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-    }
-  }, [isVisible, refresh])
-
+  // Why: WorkspacePortScanner already owns the 5s all-worktree poll. The
+  // panel scopes that shared result instead of starting a second scan loop.
   const displayScan = scan?.key === scanKey && isVisible ? scan.result : null
 
   const toggleSection = useCallback((sectionId: string) => {
@@ -232,23 +231,9 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle]
   )
 
-  const activePorts = useMemo(
-    () =>
-      (displayScan?.ports ?? []).filter(
-        (port) => port.kind === 'workspace' && port.owner.worktreeId === activeWorktree?.id
-      ),
-    [activeWorktree?.id, displayScan?.ports]
-  )
-  const otherWorkspacePorts = useMemo(
-    () =>
-      (displayScan?.ports ?? []).filter(
-        (port) => port.kind === 'workspace' && port.owner.worktreeId !== activeWorktree?.id
-      ),
-    [activeWorktree?.id, displayScan?.ports]
-  )
-  const externalPorts = useMemo(
-    () => (displayScan?.ports ?? []).filter((port) => port.kind !== 'workspace'),
-    [displayScan?.ports]
+  const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
+    () => getLocalWorkspacePortSections(displayScan, activeRepo?.id, activeWorktree?.id),
+    [activeRepo?.id, activeWorktree?.id, displayScan]
   )
 
   if (!activeRepo) {

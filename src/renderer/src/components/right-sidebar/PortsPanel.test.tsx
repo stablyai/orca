@@ -16,6 +16,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 import {
   browserUrlForPort,
+  getLocalWorkspacePortSections,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget
@@ -93,6 +94,87 @@ describe('PortsPanel runtime routing', () => {
     expect(localScan).toHaveBeenCalledWith({ repoId: 'repo' })
     expect(localKill).toHaveBeenCalledWith({ repoId: 'repo', pid: 1234, port: 63468 })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('coalesces concurrent local scans for the same runtime target and repo', async () => {
+    let resolveScan: (scan: WorkspacePortScanResult) => void = () => {}
+    localScan.mockReturnValueOnce(
+      new Promise<WorkspacePortScanResult>((resolve) => {
+        resolveScan = resolve
+      })
+    )
+
+    const first = scanWorkspacePortsForTarget({ kind: 'local' }, 'repo')
+    const second = scanWorkspacePortsForTarget({ kind: 'local' }, 'repo')
+
+    expect(localScan).toHaveBeenCalledTimes(1)
+    expect(localScan).toHaveBeenCalledWith({ repoId: 'repo' })
+
+    resolveScan(emptyScan)
+    await expect(Promise.all([first, second])).resolves.toEqual([emptyScan, emptyScan])
+  })
+
+  it('keeps separate scan keys for different repos', async () => {
+    localScan.mockResolvedValue(emptyScan)
+
+    await Promise.all([
+      scanWorkspacePortsForTarget({ kind: 'local' }, 'repo-a'),
+      scanWorkspacePortsForTarget({ kind: 'local' }, 'repo-b')
+    ])
+
+    expect(localScan).toHaveBeenCalledTimes(2)
+    expect(localScan).toHaveBeenNthCalledWith(1, { repoId: 'repo-a' })
+    expect(localScan).toHaveBeenNthCalledWith(2, { repoId: 'repo-b' })
+  })
+
+  it('keeps other repos visible as external when the panel consumes the shared scan', () => {
+    const sameRepoOtherWorktree: WorkspacePort = {
+      ...workspacePort,
+      id: '127.0.0.1:5174:1235',
+      port: 5174,
+      pid: 1235,
+      owner: {
+        ...workspacePort.owner,
+        worktreeId: 'repo::/workspace/other'
+      }
+    }
+    const otherRepoWorkspace: WorkspacePort = {
+      ...workspacePort,
+      id: '127.0.0.1:5175:1236',
+      port: 5175,
+      pid: 1236,
+      owner: {
+        ...workspacePort.owner,
+        repoId: 'other-repo',
+        worktreeId: 'other-repo::/workspace/other-repo',
+        displayName: 'other repo',
+        path: '/workspace/other-repo'
+      }
+    }
+    const unassignedPort: WorkspacePort = {
+      id: '127.0.0.1:5176:1237',
+      bindHost: '127.0.0.1',
+      connectHost: '127.0.0.1',
+      port: 5176,
+      pid: 1237,
+      processName: 'node',
+      protocol: 'unknown',
+      kind: 'external'
+    }
+
+    const sections = getLocalWorkspacePortSections(
+      {
+        ...emptyScan,
+        ports: [workspacePort, sameRepoOtherWorktree, otherRepoWorkspace, unassignedPort]
+      },
+      'repo',
+      'repo::/workspace/app'
+    )
+
+    expect(sections.activePorts.map((port) => port.port)).toEqual([63468])
+    expect(sections.otherWorkspacePorts.map((port) => port.port)).toEqual([5174])
+    expect(sections.externalPorts.map((port) => port.port)).toEqual([5175, 5176])
+    expect(sections.externalPorts.map((port) => port.kind)).toEqual(['external', 'external'])
   })
 
   it('routes remote scans through runtime RPC and degrades on older runtimes', async () => {

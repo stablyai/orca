@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { getHasAnyWorktreesFromState } from '@/store/selectors'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   scanWorkspacePortsForTarget,
@@ -20,9 +21,7 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
 
 export function WorkspacePortScanner(): null {
   const settings = useAppStore((s) => s.settings)
-  const hasWorktrees = useAppStore((s) =>
-    Object.values(s.worktreesByRepo).some((worktrees) => worktrees.length > 0)
-  )
+  const hasWorktrees = useAppStore(getHasAnyWorktreesFromState)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)

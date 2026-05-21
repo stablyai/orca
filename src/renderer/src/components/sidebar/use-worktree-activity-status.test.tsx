@@ -94,4 +94,36 @@ describe('useWorktreeActivityStatus', () => {
       '<span>working</span>'
     )
   })
+
+  it('scopes cached agent summaries to the matching worktree', () => {
+    const firstWorktreeId = 'repo1::/path/wt1'
+    const secondWorktreeId = 'repo1::/path/wt2'
+    const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      tabsByWorktree: {
+        [firstWorktreeId]: [makeTab('tab-1', firstWorktreeId)],
+        [secondWorktreeId]: [makeTab('tab-2', secondWorktreeId)]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1'],
+        'tab-2': []
+      },
+      agentStatusByPaneKey: {
+        [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' })
+      },
+      retainedAgentsByPaneKey: {
+        'tab-2:0': {
+          worktreeId: secondWorktreeId
+        }
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={firstWorktreeId} />)).toBe(
+      '<span>working</span>'
+    )
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={secondWorktreeId} />)).toBe(
+      '<span>done</span>'
+    )
+  })
 })

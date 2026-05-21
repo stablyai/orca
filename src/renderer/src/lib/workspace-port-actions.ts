@@ -84,7 +84,13 @@ export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): stri
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-export async function scanWorkspacePortsForTarget(
+const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResult>>()
+
+function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: string): string {
+  return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
+}
+
+async function runWorkspacePortScanForTarget(
   target: RuntimeClientTarget,
   repoId?: string
 ): Promise<WorkspacePortScanResult> {
@@ -107,6 +113,28 @@ export async function scanWorkspacePortsForTarget(
     }
     throw error
   }
+}
+
+export async function scanWorkspacePortsForTarget(
+  target: RuntimeClientTarget,
+  repoId?: string
+): Promise<WorkspacePortScanResult> {
+  const key = workspacePortScanRequestKey(target, repoId)
+  const existing = inFlightWorkspacePortScans.get(key)
+  if (existing) {
+    return existing
+  }
+
+  // Why: visible surfaces can request the same scan on the same tick
+  // (focus refresh, status bar, side panel, stop refresh). Share it so one
+  // UI burst cannot fan out into duplicate lsof/netstat/RPC work.
+  const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
+    if (inFlightWorkspacePortScans.get(key) === promise) {
+      inFlightWorkspacePortScans.delete(key)
+    }
+  })
+  inFlightWorkspacePortScans.set(key, promise)
+  return promise
 }
 
 export async function killWorkspacePortForTarget(
