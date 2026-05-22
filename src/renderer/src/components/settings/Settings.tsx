@@ -671,7 +671,10 @@ function Settings(): React.JSX.Element {
       navSections.filter((section) =>
         section.id === 'git' && hasUnsavedCommitPromptChanges
           ? true
-          : matchesSettingsSearch(settingsSearchQuery, section.searchEntries)
+          : matchesSettingsSearch(settingsSearchQuery, [
+              { title: section.title, description: section.description },
+              ...section.searchEntries
+            ])
       ),
     [hasUnsavedCommitPromptChanges, navSections, settingsSearchQuery]
   )
