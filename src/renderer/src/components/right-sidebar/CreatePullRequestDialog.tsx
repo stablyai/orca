@@ -142,12 +142,6 @@ export function CreatePullRequestDialog({
         worktreePath
       })
       if (result.ok) {
-        toast.success(`Pull request #${result.number} created`, {
-          action: {
-            label: 'Open on GitHub',
-            onClick: () => window.api.shell.openUrl(result.url)
-          }
-        })
         await onCreated(result)
         onOpenChange(false)
         return
