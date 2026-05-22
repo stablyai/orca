@@ -165,7 +165,9 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     worktreeId: candidate.worktreeId,
     connectionId: candidate.connectionId ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
-    fallbackPRNumber: candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null
+    fallbackPRNumber:
+      candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    fallbackPRSource: candidate.linkedPRNumber == null ? (candidate.fallbackPRSource ?? null) : null
   }
 }
 

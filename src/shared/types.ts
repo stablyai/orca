@@ -646,6 +646,7 @@ export type GitHubPRRefreshAlias = {
   connectionId?: string | null
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
+  fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
