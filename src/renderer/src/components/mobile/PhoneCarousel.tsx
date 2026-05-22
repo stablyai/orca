@@ -4,7 +4,7 @@ import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
 
-const DWELL_MS = 3000
+const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
 const SLIDE_TRANSITION_MS = 320
 

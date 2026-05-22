@@ -2,6 +2,13 @@
    1:1 design spec for the in-app Mobile page; styles are scoped under
    .mobile-page-root so they don't leak into the rest of the app shell. */
 
+.mobile-page-root .mp-close-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+}
+
 .mobile-page-root {
   /* Real mobile-app tokens (from mobile/src/theme/mobile-theme.ts) — used
      inside .mp-device-screen so simulated screens match the app exactly. */
@@ -40,45 +47,58 @@
   height: 100%;
   overflow: auto;
   scrollbar-width: thin;
+  /* Why: layer four large soft radial blobs across the whole hero so the
+     blue/indigo glow fills the dead space the corner-pinned blobs used to
+     leave empty. Each blob is animated below for slow drift. */
+  background-color: transparent;
+  background-image:
+    radial-gradient(
+      ellipse 40% 35% at 90% 10%,
+      rgba(99, 102, 241, 0.28) 0%,
+      rgba(99, 102, 241, 0.08) 30%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 38% 32% at 10% 95%,
+      rgba(59, 130, 246, 0.22) 0%,
+      rgba(59, 130, 246, 0.06) 35%,
+      transparent 60%
+    ),
+    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1.2px);
+  background-size:
+    200% 200%,
+    200% 200%,
+    5px 5px;
+  background-position:
+    90% 10%,
+    10% 95%,
+    0 0;
+  background-repeat: no-repeat, no-repeat, repeat;
+  /* Why: animating background-position drifts the four blobs slowly across
+     the hero. The dot grid (last layer) stays fixed at 0 0. */
+  animation: mp-hero-bg-drift 32s ease-in-out infinite alternate;
+  will-change: background-position;
 }
 
-.mobile-page-root .mp-hero::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 0;
-  width: 1200px;
-  height: 1000px;
-  background: radial-gradient(
-    ellipse at top right,
-    rgba(99, 102, 241, 0.65) 0%,
-    rgba(99, 102, 241, 0.32) 25%,
-    rgba(99, 102, 241, 0.12) 50%,
-    transparent 75%
-  );
-  filter: blur(40px);
-  opacity: 1;
-  content: '';
-  pointer-events: none;
+@keyframes mp-hero-bg-drift {
+  0% {
+    background-position:
+      90% 10%,
+      10% 95%,
+      0 0;
+  }
+  100% {
+    background-position:
+      75% 25%,
+      25% 80%,
+      0 0;
+  }
 }
 
-.mobile-page-root .mp-hero::after {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  z-index: 0;
-  width: 900px;
-  height: 800px;
-  background: radial-gradient(
-    ellipse at bottom left,
-    rgba(59, 130, 246, 0.45) 0%,
-    rgba(59, 130, 246, 0.18) 35%,
-    transparent 70%
-  );
-  filter: blur(50px);
-  opacity: 1;
-  content: '';
-  pointer-events: none;
+@media (prefers-reduced-motion: reduce) {
+  .mobile-page-root .mp-hero {
+    animation: none;
+  }
 }
 
 .mobile-page-root .mp-hero-copy {
@@ -799,6 +819,11 @@
   overflow: hidden;
   border-radius: 41px;
   background: var(--m-bg-base);
+  /* Why: Chromium occasionally fails to clip transformed children to a
+     rounded-corner overflow:hidden ancestor. Forcing a paint containment
+     boundary guarantees the off-screen slide can't leak past the bezel. */
+  contain: paint;
+  isolation: isolate;
 }
 
 .mobile-page-root .mp-screen-slide {

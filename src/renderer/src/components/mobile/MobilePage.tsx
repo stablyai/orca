@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
 import { PhoneCarousel } from './PhoneCarousel'
 import {
   HeroFlow,
@@ -61,6 +65,7 @@ export default function MobilePage(): React.JSX.Element {
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
+  const closeMobilePage = useAppStore((s) => s.closeMobilePage)
 
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
     try {
@@ -283,8 +288,53 @@ export default function MobilePage(): React.JSX.Element {
     }
   }
 
+  // Why: mirror Automations/Tasks — Esc first exits field focus, then closes the page.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      const target = event.target
+      if (!(target instanceof HTMLElement)) {
+        return
+      }
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target.isContentEditable
+      ) {
+        event.preventDefault()
+        target.blur()
+        return
+      }
+      event.preventDefault()
+      closeMobilePage()
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [closeMobilePage])
+
   return (
     <div className="mobile-page-root">
+      <div className="mp-close-button">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 rounded-full"
+              onClick={closeMobilePage}
+              aria-label="Close Orca Mobile"
+            >
+              <X className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            Close · Esc
+          </TooltipContent>
+        </Tooltip>
+      </div>
       <section className="mp-hero">
         <div className="mp-hero-copy">
           {stage === null ? null : stage === 'intro' ? (
