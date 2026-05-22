@@ -2197,7 +2197,74 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('buffers ready push events until the pane leaf resolves in renderer layout', async () => {
+  it('applies ready push events for an unmounted inactive terminal tab', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Inactive Tab' }]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'done',
+      prompt: 'inactive prompt',
+      agentType: 'codex',
+      lastAssistantMessage: 'inactive completion',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'done',
+        prompt: 'inactive prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'inactive completion'
+      }),
+      'Inactive Tab',
+      { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 }
+    )
+  })
+
+  it('buffers ready push events until a mounted tab contains the pane leaf', async () => {
     const setAgentStatus = vi.fn()
     const track = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
@@ -2212,7 +2279,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
       },
-      terminalLayoutsByTabId: {}
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: STALE_LEAF_ID },
+          activeLeafId: STALE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
     })
 
     stubReactSyncEffect()
