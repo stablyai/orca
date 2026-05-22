@@ -986,6 +986,86 @@ export function normalizeKeybindingArrayForAction(
   return normalizeKeybindingArrayWithOptions(input, normalizeOptionsForAction(actionId))
 }
 
+const MODIFIER_KEYS = new Set([
+  'Alt',
+  'AltGraph',
+  'Control',
+  'Meta',
+  'Shift',
+  'OS',
+  'Fn',
+  'FnLock',
+  'Hyper',
+  'Super',
+  'Symbol',
+  'SymbolLock'
+])
+
+function keyTokenFromInput(input: KeybindingInput): string | null {
+  const code = input.code ?? ''
+  const key = input.key ?? ''
+
+  if (MODIFIER_KEYS.has(key)) {
+    return null
+  }
+  if (code.startsWith('Key') && code.length === 4) {
+    return code.slice(3).toUpperCase()
+  }
+  if (code.startsWith('Digit') && code.length === 6) {
+    return code.slice(5)
+  }
+
+  return normalizeKeyToken(key) ?? normalizeKeyToken(code)
+}
+
+function keybindingFromInputWithOptions(
+  input: KeybindingInput,
+  platform: NodeJS.Platform,
+  options: NormalizeKeybindingOptions = {}
+): KeybindingValidationResult {
+  const key = keyTokenFromInput(input)
+  if (!key) {
+    return { ok: false, error: 'Press a key, not only a modifier.' }
+  }
+
+  const isMac = getKeybindingPlatform(platform) === 'darwin'
+  const parts: string[] = []
+  const primaryModifierPressed = isMac ? hasModifier(input, 'meta') : hasModifier(input, 'control')
+  if (primaryModifierPressed) {
+    parts.push('Mod')
+  }
+  if (isMac && hasModifier(input, 'control')) {
+    parts.push('Ctrl')
+  }
+  if (!isMac && hasModifier(input, 'meta')) {
+    parts.push('Cmd')
+  }
+  if (hasModifier(input, 'alt')) {
+    parts.push('Alt')
+  }
+  if (hasModifier(input, 'shift')) {
+    parts.push('Shift')
+  }
+  parts.push(key)
+
+  return normalizeKeybindingWithOptions(parts.join('+'), options)
+}
+
+export function keybindingFromInput(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): KeybindingValidationResult {
+  return keybindingFromInputWithOptions(input, platform)
+}
+
+export function keybindingFromInputForAction(
+  actionId: KeybindingActionId,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): KeybindingValidationResult {
+  return keybindingFromInputWithOptions(input, platform, normalizeOptionsForAction(actionId))
+}
+
 function getDefaultBindings(definition: KeybindingDefinition, platform: NodeJS.Platform): string[] {
   return definition.defaultBindings[getKeybindingPlatform(platform)].map((binding) => {
     const normalized = normalizeKeybindingWithOptions(binding, {

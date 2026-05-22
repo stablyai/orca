@@ -3,6 +3,8 @@ import {
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
+  keybindingFromInput,
+  keybindingFromInputForAction,
   keybindingMatchesAction,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
@@ -32,6 +34,41 @@ describe('keybindings', () => {
     expect(normalizeKeybindingListForAction('fileExplorer.delete', 'Delete')).toEqual(['Delete'])
     expect(normalizeKeybindingListForAction('fileExplorer.delete', 'x')).toMatchObject({
       ok: false
+    })
+  })
+
+  it('captures key events into canonical editable shortcuts', () => {
+    expect(
+      keybindingFromInput(
+        { key: 'j', code: 'KeyJ', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toEqual({ ok: true, value: 'Mod+J' })
+    expect(
+      keybindingFromInput(
+        { key: 'J', code: 'KeyJ', control: true, meta: false, alt: true, shift: true },
+        'linux'
+      )
+    ).toEqual({ ok: true, value: 'Mod+Alt+Shift+J' })
+    expect(
+      keybindingFromInput({ key: 'Control', code: 'ControlLeft', control: true }, 'linux')
+    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+  })
+
+  it('applies per-action bare-key rules while capturing shortcuts', () => {
+    const deleteEvent = {
+      key: 'Delete',
+      code: 'Delete',
+      control: false,
+      meta: false,
+      alt: false,
+      shift: false
+    }
+
+    expect(keybindingFromInput(deleteEvent, 'linux')).toMatchObject({ ok: false })
+    expect(keybindingFromInputForAction('fileExplorer.delete', deleteEvent, 'linux')).toEqual({
+      ok: true,
+      value: 'Delete'
     })
   })
 
