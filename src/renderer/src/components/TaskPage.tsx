@@ -92,6 +92,7 @@ import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFi
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
+import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
@@ -4132,7 +4133,15 @@ export default function TaskPage(): React.JSX.Element {
             cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
             too low, breaking the visual band across the top chrome. */}
         <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
-          <div className="flex-none flex flex-col gap-3">
+          <div
+            className={cn(
+              'flex-none flex flex-col gap-3',
+              // Why: GitHub detail views (PR + Issue) fill the entire right
+              // pane — the list filter row above them is not relevant and
+              // would visually duplicate the detail page's own breadcrumb.
+              taskSource === 'github' && dialogWorkItem && 'hidden'
+            )}
+          >
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
@@ -4740,20 +4749,36 @@ export default function TaskPage(): React.JSX.Element {
           </div>
 
           {taskSource === 'github' && dialogWorkItem ? (
-            <GitHubItemDialog
-              workItem={dialogWorkItem}
-              initialTab={dialogInitialTab}
-              repoPath={dialogRepoPath}
-              repoId={dialogWorkItem.repoId}
-              variant="page"
-              backLabel="GitHub list"
-              onUse={(item) => {
-                setDialogWorkItem(null)
-                handleUseWorkItem(item)
-              }}
-              onReviewRequestsChange={handleDialogReviewRequestsChange}
-              onClose={closeTaskDetailPage}
-            />
+            dialogWorkItem.type === 'pr' ? (
+              <PullRequestPage
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                backLabel="Pull requests"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            ) : (
+              <GitHubItemDialog
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                variant="page"
+                backLabel="GitHub list"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            )
           ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
               <ProjectViewWrapper />
