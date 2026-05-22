@@ -20,6 +20,10 @@ import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
+import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
+import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
+import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
+import type { GitPushTarget } from '../shared/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -61,6 +65,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
+    this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
@@ -294,6 +299,16 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
 
     try {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        return await getPublishTargetStatus(
+          ((args) => this.git(args, worktreePath)) as GitCommandRunner,
+          pushTarget,
+          (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+        )
+      }
       return await getEffectiveGitUpstreamStatus(
         (args) => this.git(args, worktreePath),
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
@@ -331,6 +346,13 @@ export class GitHandler {
   private async fetch(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     try {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        await this.git(['fetch', '--prune', pushTarget.remoteName], worktreePath)
+        return
+      }
       await this.git(['fetch', '--prune'], worktreePath)
     } catch (error) {
       // Why: mirror the local gitFetch normalization so SSH users see the same
@@ -405,6 +427,13 @@ export class GitHandler {
     // Why: plain `git pull` uses the user's configured pull strategy (merge by
     // default) so diverged branches reconcile instead of erroring out.
     try {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        await this.git(['pull', pushTarget.remoteName, pushTarget.branchName], worktreePath)
+        return
+      }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may still track origin/main while pushes
@@ -416,6 +445,20 @@ export class GitHandler {
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same
       // actionable messages instead of raw git stderr.
+      throw new Error(normalizeGitErrorMessage(error, 'pull'))
+    }
+  }
+
+  private async rebaseFromBase(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const baseRef = params.baseRef as string
+    try {
+      const source = await resolveGitRemoteRebaseSource(
+        ((args) => this.git(args, worktreePath)) as GitCommandRunner,
+        baseRef
+      )
+      await this.git(['pull', '--rebase', source.remoteName, source.branchName], worktreePath)
+    } catch (error) {
       throw new Error(normalizeGitErrorMessage(error, 'pull'))
     }
   }

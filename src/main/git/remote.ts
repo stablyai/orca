@@ -1,5 +1,6 @@
 import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
+import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
 import type { GitPushTarget } from '../../shared/types'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
@@ -75,11 +76,18 @@ export async function gitPush(
   }
 }
 
-export async function gitPull(worktreePath: string): Promise<void> {
+export async function gitPull(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
   try {
+    if (pushTarget) {
+      const target = await validateGitPushTarget(worktreePath, pushTarget)
+      await gitExecFileAsync(['pull', target.remoteName, target.branchName], {
+        cwd: worktreePath
+      })
+      return
+    }
     const upstream = await resolveEffectiveGitUpstream((args) =>
       gitExecFileAsync(args, { cwd: worktreePath })
     )
@@ -98,8 +106,27 @@ export async function gitPull(worktreePath: string): Promise<void> {
   }
 }
 
-export async function gitFetch(worktreePath: string): Promise<void> {
+export async function gitPullRebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
   try {
+    const source = await resolveGitRemoteRebaseSource(
+      (args) => gitExecFileAsync(args, { cwd: worktreePath }),
+      baseRef
+    )
+    await gitExecFileAsync(['pull', '--rebase', source.remoteName, source.branchName], {
+      cwd: worktreePath
+    })
+  } catch (error) {
+    throw new Error(normalizeGitErrorMessage(error, 'pull'))
+  }
+}
+
+export async function gitFetch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+  try {
+    if (pushTarget) {
+      const target = await validateGitPushTarget(worktreePath, pushTarget)
+      await gitExecFileAsync(['fetch', '--prune', target.remoteName], { cwd: worktreePath })
+      return
+    }
     await gitExecFileAsync(['fetch', '--prune'], { cwd: worktreePath })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'fetch'))

@@ -54,6 +54,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetchRemoteTrackingRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
+    expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
@@ -625,6 +626,36 @@ describe('GitHandler', () => {
 
         // FETCH_HEAD is created by any successful fetch, confirming the
         // remote was actually contacted (not just silently no-op'd).
+        await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fetches the explicit publish target remote', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-fork-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        execFileSync('git', ['remote', 'add', 'fork', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', 'fork', 'HEAD:feature/fix'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        await expect(
+          dispatcher.callRequest('git.fetch', {
+            worktreePath: tmpDir,
+            pushTarget: { remoteName: 'fork', branchName: 'feature/fix' }
+          })
+        ).resolves.not.toThrow()
+
         await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })

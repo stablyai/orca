@@ -168,15 +168,16 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
-  getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
+  getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
   pushBranch(
     worktreePath: string,
     publish?: boolean,
     pushTarget?: GitPushTarget,
     options?: { forceWithLease?: boolean }
   ): Promise<void>
-  pullBranch(worktreePath: string): Promise<void>
-  fetchRemote(worktreePath: string): Promise<void>
+  pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
+  fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,

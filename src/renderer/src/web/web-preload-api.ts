@@ -875,21 +875,25 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
     },
-    upstreamStatus: async ({ worktreePath }) => {
+    upstreamStatus: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.upstreamStatus', { worktree: worktree.id })
+      return callRuntimeResult('git.upstreamStatus', { worktree: worktree.id, pushTarget })
     },
-    fetch: async ({ worktreePath }) => {
+    fetch: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.fetch', { worktree: worktree.id })
+      await callRuntimeResult('git.fetch', { worktree: worktree.id, pushTarget })
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.push', { worktree: worktree.id, publish, pushTarget })
     },
-    pull: async ({ worktreePath }) => {
+    pull: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.pull', { worktree: worktree.id })
+      await callRuntimeResult('git.pull', { worktree: worktree.id, pushTarget })
+    },
+    rebaseFromBase: async ({ worktreePath, baseRef }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.rebaseFromBase', { worktree: worktree.id, baseRef })
     },
     branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
