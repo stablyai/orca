@@ -580,8 +580,7 @@ function Settings(): React.JSX.Element {
               description: 'Control terminals and agents from your phone.',
               icon: Smartphone,
               searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
-              group: 'remote',
-              badge: 'Beta'
+              group: 'remote'
             },
             {
               id: 'computer-use' as const,

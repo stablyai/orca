@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, CalendarClock, Github, Gitlab, List, Search } from 'lucide-react'
+import { Bell, CalendarClock, Github, Gitlab, List, Search, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openActivityPage = useAppStore((s) => s.openActivityPage)
+  const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
@@ -116,6 +117,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const tasksActive = activeView === 'tasks'
   const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
+  const mobileActive = activeView === 'mobile'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
 
   return (
@@ -242,6 +244,23 @@ const SidebarNav = React.memo(function SidebarNav() {
           ) : null}
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={openMobilePage}
+        aria-current={mobileActive ? 'page' : undefined}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+          mobileActive
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+        )}
+      >
+        <Smartphone
+          className={cn('size-4 shrink-0', !mobileActive && 'text-sidebar-foreground/30')}
+          strokeWidth={mobileActive ? 2.25 : 1.75}
+        />
+        <span className="flex-1">Orca Mobile</span>
+      </button>
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
