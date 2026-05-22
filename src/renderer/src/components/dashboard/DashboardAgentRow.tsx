@@ -6,6 +6,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Badge } from '@/components/ui/badge'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -184,10 +185,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const isInterrupted = agent.entry.interrupted === true
   // Why: interrupted is a terminal outcome the user needs to scan in the
-  // leading state column; rendering it as right-side text competes with the
-  // timestamp and makes the row read like the old design.
-  const dotState: AgentDotState = agent.entry.interrupted ? 'interrupted' : asDotState(agent.state)
+  // leading state column; the secondary-line badge below provides the text
+  // explanation without competing with the prompt or timestamp.
+  const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
 
   // Why: always show the chevron to keep the row's right edge stable — a
@@ -440,38 +442,55 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           expand animation lives on the CommentMarkdown itself (height +
           interpolate-size) so the body reveals smoothly instead of snapping
           open. When the message is empty we still render a placeholder in
-          the collapsed view to preserve the reserved line height. */}
-      {lastAssistantMessage ? (
-        <CommentMarkdown
-          content={lastAssistantMessage}
-          // Why: animate between a 1-line clipped height and the content's
-          // natural height using Chromium's `interpolate-size: allow-keywords`
-          // so the message body expands/collapses smoothly instead of
-          // snapping. Height transition + overflow-hidden keeps the inline-
-          // flattened preview clipped during the interpolation. Render the
-          // markdown in both states; in the collapsed view we force every
-          // nested element inline so `truncate` can ellipsize the whole
-          // thing on one line. The [&_*]:inline descendant selector flattens
-          // the markdown tree (lists, pre, headings, blockquotes) into inline
-          // flow; block margins and list markers are suppressed by
-          // [&_*]:!m-0 / [&_ul]:list-none so the preview reads as a single
-          // clean line.
-          className={cn(
-            'mt-0.5 overflow-hidden pl-5 text-[10px] leading-snug text-muted-foreground/80',
-            'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-            expanded ? 'h-auto' : 'h-[1lh]',
-            // Why: in collapsed mode we need a single truncated line. Markdown
-            // blocks (pre, lists, headings) are flattened inline and forced
-            // to inherit `white-space: nowrap` so <pre>/<code>'s preserved
-            // newlines don't break out of the truncation container. The
-            // `!` prefixes override CommentMarkdown's own layout styles so
-            // nothing (margins, list markers, block line-breaks) can push
-            // the preview onto a second line.
-            !expanded &&
-              'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
+          the collapsed view to preserve the reserved line height.
+
+          Interrupted gets its visible text on this secondary line, where the
+          agent response normally appears. That keeps the prompt line clean
+          while making the red status dot's meaning visible without hover. */}
+      {isInterrupted || lastAssistantMessage ? (
+        <div className="mt-0.5 flex min-w-0 items-start gap-1 pl-5">
+          {isInterrupted && (
+            <Badge
+              variant="destructive"
+              className="h-4 px-1.5 py-0 text-[9px] leading-none"
+              aria-label="Interrupted by user"
+            >
+              interrupted
+            </Badge>
           )}
-          title={!expanded ? lastAssistantMessage : undefined}
-        />
+          {lastAssistantMessage && (
+            <CommentMarkdown
+              content={lastAssistantMessage}
+              // Why: animate between a 1-line clipped height and the content's
+              // natural height using Chromium's `interpolate-size: allow-keywords`
+              // so the message body expands/collapses smoothly instead of
+              // snapping. Height transition + overflow-hidden keeps the inline-
+              // flattened preview clipped during the interpolation. Render the
+              // markdown in both states; in the collapsed view we force every
+              // nested element inline so `truncate` can ellipsize the whole
+              // thing on one line. The [&_*]:inline descendant selector flattens
+              // the markdown tree (lists, pre, headings, blockquotes) into inline
+              // flow; block margins and list markers are suppressed by
+              // [&_*]:!m-0 / [&_ul]:list-none so the preview reads as a single
+              // clean line.
+              className={cn(
+                'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',
+                'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
+                expanded ? 'h-auto' : 'h-[1lh]',
+                // Why: in collapsed mode we need a single truncated line. Markdown
+                // blocks (pre, lists, headings) are flattened inline and forced
+                // to inherit `white-space: nowrap` so <pre>/<code>'s preserved
+                // newlines don't break out of the truncation container. The
+                // `!` prefixes override CommentMarkdown's own layout styles so
+                // nothing (margins, list markers, block line-breaks) can push
+                // the preview onto a second line.
+                !expanded &&
+                  'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
+              )}
+              title={!expanded ? lastAssistantMessage : undefined}
+            />
+          )}
+        </div>
       ) : (
         !expanded && (
           <div className="mt-0.5 pl-5 text-[10px] leading-snug text-muted-foreground/70"> </div>
