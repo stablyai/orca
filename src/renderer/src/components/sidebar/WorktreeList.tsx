@@ -2809,6 +2809,9 @@ const WorktreeList = React.memo(function WorktreeList({
   // new numbering but the shortcut cache still points at the previous order.
   useLayoutEffect(() => {
     setVisibleWorktreeIds(renderedWorktreeIds)
+    // Why: collapsed/full-page sidebar states unmount the list. Clear the
+    // rendered-order cache so shortcuts fall back to the live store snapshot.
+    return () => setVisibleWorktreeIds([])
   }, [renderedWorktreeIds])
 
   const handleCreateForRepo = useCallback(

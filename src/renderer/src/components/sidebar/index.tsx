@@ -64,26 +64,32 @@ function Sidebar({
         ref={containerRef}
         className="relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
       >
-        {/* Fixed controls */}
-        <SidebarNav />
-        <SidebarHeader />
+        {sidebarOpen && (
+          <>
+            {/* Fixed controls */}
+            <SidebarNav />
+            <SidebarHeader />
 
-        <WorktreeList
-          scrollOffsetRef={worktreeScrollOffsetRef}
-          scrollAnchorRef={worktreeScrollAnchorRef}
-        />
+            <WorktreeList
+              scrollOffsetRef={worktreeScrollOffsetRef}
+              scrollAnchorRef={worktreeScrollAnchorRef}
+            />
 
-        <SetupScriptPromptCard />
+            <SetupScriptPromptCard />
 
-        {/* Fixed bottom toolbar */}
-        <SidebarToolbar />
+            {/* Fixed bottom toolbar */}
+            <SidebarToolbar />
+          </>
+        )}
 
         {/* Resize handle */}
-        <div
-          data-sidebar-resize-handle=""
-          className="absolute top-0 right-0 z-10 h-full w-px cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30"
-          onMouseDown={onResizeStart}
-        />
+        {sidebarOpen && (
+          <div
+            data-sidebar-resize-handle=""
+            className="absolute top-0 right-0 z-10 h-full w-px cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30"
+            onMouseDown={onResizeStart}
+          />
+        )}
       </div>
 
       {/* Dialog (rendered outside sidebar to avoid clipping) */}
