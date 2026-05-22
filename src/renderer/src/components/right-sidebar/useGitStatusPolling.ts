@@ -7,6 +7,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { createCoalescedPollRunner } from './coalesced-poll-runner'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -115,24 +116,9 @@ export function useGitStatusPolling(): void {
   fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
-    void fetchStatus()
-    // Why: skip IPC-heavy git status calls when the window is not focused.
-    // These intervals run at the App root level regardless of which sidebar tab
-    // is open, so gating on document.hasFocus() prevents wasted CPU and IPC
-    // traffic while the user is working in another application.
-    const intervalId = setInterval(() => {
-      if (document.hasFocus()) {
-        void fetchStatus()
-      }
-    }, POLL_INTERVAL_MS)
-    // Why: when the user returns to the window, poll immediately so the sidebar
-    // shows up-to-date status without waiting up to POLL_INTERVAL_MS.
-    const onFocus = (): void => void fetchStatus()
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(intervalId)
-      window.removeEventListener('focus', onFocus)
-    }
+    // Why: this root-level poll should pause while hidden, but visible
+    // unfocused windows still need fresh status for second-display workflows.
+    return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
   }, [fetchStatus])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
@@ -169,18 +155,15 @@ export function useGitStatusPolling(): void {
     // flight and coalesce skipped ticks into one trailing pass so stale badges
     // catch up without stacking SSH/RPC work.
     const pollRunner = createCoalescedPollRunner(pollStale)
-    pollRunner.run()
-    const intervalId = setInterval(() => {
-      if (document.hasFocus()) {
-        pollRunner.run()
-      }
-    }, POLL_INTERVAL_MS)
-    const onFocus = (): void => pollRunner.run()
-    window.addEventListener('focus', onFocus)
+    // Why: conflict badges are visible sidebar state; keep them fresh in
+    // visible unfocused windows, but do not poll disconnected hidden windows.
+    const stopVisiblePoll = installWindowVisibilityInterval({
+      run: () => pollRunner.run(),
+      intervalMs: POLL_INTERVAL_MS
+    })
     return () => {
       pollRunner.dispose()
-      clearInterval(intervalId)
-      window.removeEventListener('focus', onFocus)
+      stopVisiblePoll()
     }
   }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

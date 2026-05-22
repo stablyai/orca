@@ -90,7 +90,12 @@ async function usePollingOnce(
     removeEventListener: vi.fn()
   })
 
-  vi.stubGlobal('document', { hasFocus: () => true })
+  vi.stubGlobal('document', {
+    visibilityState: 'visible',
+    hasFocus: () => true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })
   vi.stubGlobal('setInterval', vi.fn())
   vi.stubGlobal('clearInterval', vi.fn())
 
@@ -161,7 +166,7 @@ describe('useGitStatusPolling', () => {
     expect(state.setGitStatus).not.toHaveBeenCalled()
   })
 
-  it('does not overlap slow git status polls and runs one trailing refresh', async () => {
+  it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
     vi.resetModules()
     let intervalCallback: (() => void) | null = null
     let resolveFirst!: (value: GitStatusResult) => void
@@ -219,7 +224,12 @@ describe('useGitStatusPolling', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
-    vi.stubGlobal('document', { hasFocus: () => true })
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      hasFocus: () => false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
     vi.stubGlobal(
       'setInterval',
       vi.fn((callback: () => void) => {
