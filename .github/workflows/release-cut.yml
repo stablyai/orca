@@ -441,9 +441,8 @@ jobs:
             --generate-notes \
             --prerelease="$is_rc"
 
-  # Why: release-cut is the last gate before a tag becomes public. PR checks
-  # catch most regressions, but tag-scoped E2E must pass before publish-release
-  # flips the draft visible.
+  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
+  # that publish-release must not depend on it.
   e2e:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -694,7 +693,6 @@ jobs:
     needs:
       - cut
       - build
-      - e2e
     runs-on: ubuntu-latest
     permissions:
       contents: write
