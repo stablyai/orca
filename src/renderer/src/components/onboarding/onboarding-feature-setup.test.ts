@@ -11,7 +11,10 @@ import {
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
-import { ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY } from '@/lib/orchestration-setup-state'
+import {
+  ORCHESTRATION_ENABLED_STORAGE_KEY,
+  ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
+} from '@/lib/orchestration-setup-state'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   buildOnboardingFeatureSetupClipboardText,
@@ -184,6 +187,7 @@ describe('onboarding feature setup runner', () => {
     expect(deps.getComputerUsePermissionStatus).toHaveBeenCalledTimes(1)
     expect(deps.openComputerUsePermissionSetup).toHaveBeenCalledTimes(1)
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('1')
+    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
     expect(deps.removeStorageItem).toHaveBeenCalledWith(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
     expect(deps.notifyOrchestrationStateChanged).toHaveBeenCalledTimes(1)
     expect(deps.clipboardWrites).toEqual([ALL_SKILL_INSTALL_COMMAND])
@@ -208,6 +212,7 @@ describe('onboarding feature setup runner', () => {
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
+    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
     expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
   })
 
@@ -228,6 +233,7 @@ describe('onboarding feature setup runner', () => {
       warnings: []
     })
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
+    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.getCliStatus).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.clipboardWrites).toEqual([])

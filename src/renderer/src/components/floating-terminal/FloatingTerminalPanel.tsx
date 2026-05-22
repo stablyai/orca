@@ -35,6 +35,11 @@ import {
   isOrchestrationSetupDismissed,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  hasInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
@@ -356,8 +361,16 @@ export function FloatingTerminalPanel({
       return
     }
     try {
-      const status = await window.api.cli.getInstallStatus()
-      setShowOrchestrationSetup(status.state !== 'installed')
+      const [status, skillDiscovery] = await Promise.all([
+        window.api.cli.getInstallStatus(),
+        window.api.skills.discover()
+      ])
+      const skillInstalled = hasInstalledAgentSkill(
+        skillDiscovery.skills,
+        ORCHESTRATION_SKILL_NAME,
+        { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+      )
+      setShowOrchestrationSetup(status.state !== 'installed' || !skillInstalled)
     } catch {
       setShowOrchestrationSetup(true)
     }
@@ -368,6 +381,18 @@ export function FloatingTerminalPanel({
       void refreshOrchestrationSetupVisibility()
     }
   }, [open, refreshOrchestrationSetupVisibility])
+
+  useEffect(() => {
+    if (!open || !showOrchestrationSetup) {
+      return
+    }
+    // Why: the skill install command runs in a terminal outside React state.
+    // Poll while the prompt is visible so it disappears after the user runs it.
+    const timer = window.setInterval(() => {
+      void refreshOrchestrationSetupVisibility()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [open, refreshOrchestrationSetupVisibility, showOrchestrationSetup])
 
   useEffect(() => {
     const handleSetupStateChange = (): void => {

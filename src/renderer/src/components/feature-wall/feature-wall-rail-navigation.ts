@@ -1,5 +1,5 @@
 // List-navigation for the workflow rail. Replaced the prior grid helper when
-// the modal switched from a 12-tile grid to a 5-row workflow split view.
+// the modal switched from a 12-tile grid to a workflow split view.
 
 export type FeatureWallRailNavigationKey = 'ArrowUp' | 'ArrowDown' | 'Home' | 'End'
 

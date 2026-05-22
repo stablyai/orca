@@ -12,19 +12,6 @@ export type FeatureWallWorkflowId =
   | 'workbench'
   | 'review'
 
-// Renderer-only action discriminator. Resolved to a real store call in
-// FeatureWallModal — kept as an ID here so this module stays import-safe
-// from the main process and tests.
-export type FeatureWallInAppActionId =
-  | 'open-tasks'
-  | 'open-integrations-settings'
-  | 'open-agent-settings'
-  | 'focus-terminal'
-
-export type FeatureWallPrimaryCta =
-  | { kind: 'in-app'; action: FeatureWallInAppActionId; label: string }
-  | { kind: 'docs'; label: string; url: string }
-
 // Bullets can be a plain sentence or a {leadIn, body} pair so workflows that
 // want a short bold "headline" segment (e.g. workbench → "Splits, by keystroke
 // or right-click.") can render it inline before the rest of the bullet copy.
@@ -43,10 +30,6 @@ export type FeatureWallWorkflow = {
   bullets: readonly FeatureWallWorkflowBullet[]
   primaryTileId: FeatureWallMediaTileId
   relatedTileIds: readonly FeatureWallMediaTileId[]
-  primaryCta: FeatureWallPrimaryCta
-  // Always present; rendered as the secondary action even when the primary
-  // CTA is itself a docs link, so users always have an "open the docs page"
-  // affordance and the analytics signal stays clean.
   docsUrl: string
 }
 
@@ -63,11 +46,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     ],
     primaryTileId: 'tile-01',
     relatedTileIds: ['tile-10'],
-    primaryCta: {
-      kind: 'docs',
-      label: 'Read workspace docs',
-      url: 'https://www.onorca.dev/docs/model/worktrees'
-    },
     docsUrl: 'https://www.onorca.dev/docs/model/worktrees'
   },
   {
@@ -82,7 +60,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     ],
     primaryTileId: 'tile-03',
     relatedTileIds: [],
-    primaryCta: { kind: 'in-app', action: 'open-tasks', label: 'Open tasks' },
     docsUrl: 'https://www.onorca.dev/docs/review/linear'
   },
   {
@@ -97,11 +74,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     ],
     primaryTileId: 'tile-04',
     relatedTileIds: ['tile-11', 'tile-09'],
-    primaryCta: {
-      kind: 'in-app',
-      action: 'open-agent-settings',
-      label: 'Open agent settings'
-    },
     docsUrl: 'https://www.onorca.dev/docs/agents/supported'
   },
   {
@@ -121,7 +93,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     ],
     primaryTileId: 'tile-02',
     relatedTileIds: ['tile-07', 'tile-05', 'tile-12'],
-    primaryCta: { kind: 'in-app', action: 'focus-terminal', label: 'Open terminal' },
     docsUrl: 'https://www.onorca.dev/docs/terminal'
   },
   {
@@ -136,15 +107,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     ],
     primaryTileId: 'tile-08',
     relatedTileIds: [],
-    // Why: there is no clean store action that opens "review mode" — the
-    // SourceControl sidebar surfaces automatically when a worktree has
-    // changes. Falling back to docs keeps the CTA honest; the helper text
-    // below the bullets explains the in-app path.
-    primaryCta: {
-      kind: 'docs',
-      label: 'Read review docs',
-      url: 'https://www.onorca.dev/docs/review/annotate-ai-diff'
-    },
     docsUrl: 'https://www.onorca.dev/docs/review/annotate-ai-diff'
   }
 ] as const

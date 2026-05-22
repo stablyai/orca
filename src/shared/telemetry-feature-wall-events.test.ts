@@ -47,7 +47,7 @@ describe('feature wall schemas', () => {
   it('accepts the workflow group telemetry payload', () => {
     expect(
       eventSchemas.feature_wall_group_selected.safeParse({
-        group_id: 'tasks',
+        group_id: 'review',
         source: 'help_menu'
       }).success
     ).toBe(true)
@@ -71,23 +71,6 @@ describe('feature wall schemas', () => {
       eventSchemas.feature_wall_feature_selected.safeParse({
         group_id: 'workbench',
         tile_id: 'tile-02'
-      }).success
-    ).toBe(false)
-  })
-
-  it('accepts only the in-app/docs primary CTA actions', () => {
-    expect(
-      eventSchemas.feature_wall_primary_cta_clicked.safeParse({
-        group_id: 'tasks',
-        action: 'in-app',
-        source: 'popup'
-      }).success
-    ).toBe(true)
-    expect(
-      eventSchemas.feature_wall_primary_cta_clicked.safeParse({
-        group_id: 'tasks',
-        action: 'external',
-        source: 'popup'
       }).success
     ).toBe(false)
   })
