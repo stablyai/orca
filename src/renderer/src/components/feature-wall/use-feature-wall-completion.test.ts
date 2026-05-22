@@ -5,7 +5,8 @@ import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 import {
   getFeatureWallCompletionProgress,
-  normalizeFeatureWallVisitedAgentSteps
+  normalizeFeatureWallVisitedAgentSteps,
+  normalizeFeatureWallVisitedReviewSteps
 } from './use-feature-wall-completion'
 
 type CompletionInput = Parameters<typeof getFeatureWallCompletionProgress>[0]
@@ -72,6 +73,18 @@ describe('getFeatureWallCompletionProgress', () => {
       }).workflowDone['agents-orchestration']
     ).toBe(true)
   })
+
+  it('keeps the review workflow complete after the notes visit is restored', () => {
+    expect(
+      getFeatureWallCompletionProgress(
+        completionInput({
+          visitedReviewSteps: new Set<ReviewStepId>(['notes']),
+          githubConfigured: true,
+          aiCommitPrConfigured: true
+        })
+      ).workflowDone.review
+    ).toBe(true)
+  })
 })
 
 describe('normalizeFeatureWallVisitedAgentSteps', () => {
@@ -85,5 +98,13 @@ describe('normalizeFeatureWallVisitedAgentSteps', () => {
         'bogus'
       ])
     ).toEqual(['orchestration'])
+  })
+})
+
+describe('normalizeFeatureWallVisitedReviewSteps', () => {
+  it('keeps persisted review notes visits and drops setup-backed or unknown steps', () => {
+    expect(
+      normalizeFeatureWallVisitedReviewSteps(['notes', 'pr-view', 'ship', 'notes', 'bogus'])
+    ).toEqual(['notes'])
   })
 })

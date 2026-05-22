@@ -16,6 +16,8 @@ import { useAppStore } from '@/store'
 const VIEW_TO_COMPLETE_WORKFLOWS = new Set<FeatureWallWorkflowId>(['workspaces'])
 const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['orchestration'])
 const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
+const PERSISTED_REVIEW_STEP_IDS = new Set<ReviewStepId>(['notes'])
+const VISITED_REVIEW_STEPS_STORAGE_KEY = 'orca.featureWall.visitedReviewSteps.v1'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -46,6 +48,19 @@ export function normalizeFeatureWallVisitedAgentSteps(value: unknown): AgentsSte
   return [...seen]
 }
 
+export function normalizeFeatureWallVisitedReviewSteps(value: unknown): ReviewStepId[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<ReviewStepId>()
+  for (const item of value) {
+    if (typeof item === 'string' && PERSISTED_REVIEW_STEP_IDS.has(item as ReviewStepId)) {
+      seen.add(item as ReviewStepId)
+    }
+  }
+  return [...seen]
+}
+
 function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
   if (typeof localStorage === 'undefined') {
     return new Set()
@@ -61,6 +76,21 @@ function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
   }
 }
 
+function readPersistedVisitedReviewSteps(): Set<ReviewStepId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedReviewSteps(
+        JSON.parse(localStorage.getItem(VISITED_REVIEW_STEPS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 function persistVisitedAgentStep(id: AgentsStepId): void {
   if (!PERSISTED_AGENT_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
     return
@@ -69,6 +99,20 @@ function persistVisitedAgentStep(id: AgentsStepId): void {
     const next = readPersistedVisitedAgentSteps()
     next.add(id)
     localStorage.setItem(VISITED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
+
+function persistVisitedReviewStep(id: ReviewStepId): void {
+  if (!PERSISTED_REVIEW_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedVisitedReviewSteps()
+    next.add(id)
+    localStorage.setItem(VISITED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
     // localStorage can be unavailable in hardened browser contexts; completion
     // still works for the current open modal from React state.
@@ -171,7 +215,9 @@ export function useFeatureWallCompletion(
   const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(
     new Set()
   )
-  const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(new Set())
+  const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(() =>
+    readPersistedVisitedReviewSteps()
+  )
 
   // Reset transient view-only steps when the modal closes. Persisted setup
   // steps stay done across reopens once the matching setup signal is true.
@@ -180,7 +226,7 @@ export function useFeatureWallCompletion(
       setVisitedWorkflows(new Set())
       setVisitedAgentSteps(readPersistedVisitedAgentSteps())
       setVisitedWorkbenchSteps(new Set())
-      setVisitedReviewSteps(new Set())
+      setVisitedReviewSteps(readPersistedVisitedReviewSteps())
     }
   }, [isOpen])
 
@@ -251,6 +297,7 @@ export function useFeatureWallCompletion(
     })
   }
   const markReviewStepVisited = (id: ReviewStepId): void => {
+    persistVisitedReviewStep(id)
     setVisitedReviewSteps((prev) => {
       if (prev.has(id)) {
         return prev
