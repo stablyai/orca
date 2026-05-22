@@ -24,7 +24,12 @@ export function runQuickCommandInNewTab({
   command,
   worktreeId,
   groupId
-}: RunQuickCommandInNewTabArgs): { tabId: string } {
+}: RunQuickCommandInNewTabArgs): { tabId: string } | null {
+  // Why: a whitespace-only command would still spawn a terminal but feed it an
+  // empty string, leaving the user with an unexplained blank tab. Refuse early.
+  if (!command.command.trim()) {
+    return null
+  }
   const store = useAppStore.getState()
   const tab = store.createTab(worktreeId, groupId)
 

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import type {
   GlobalSettings,
   Repo,
@@ -14,17 +14,19 @@ import {
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { Command, CommandItem, CommandList } from '../ui/command'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import RepoDotLabel from '../repo/RepoDotLabel'
+import { cn } from '@/lib/utils'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-type ScopeFilter = 'all' | 'global' | 'repo'
+const GLOBAL_SCOPE_KEY = '__global__'
 
 type EditorState =
   | {
@@ -49,7 +51,7 @@ function getScopeLabel(
     return 'Global'
   }
   const repo = repoById.get(scope.repoId)
-  return repo ? getRepoLabel(repo) : 'Missing repo'
+  return repo ? getRepoLabel(repo) : 'Missing project'
 }
 
 export function QuickCommandsPane({
@@ -59,76 +61,124 @@ export function QuickCommandsPane({
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const commands = settings.terminalQuickCommands ?? []
+  const confirm = useConfirmationDialog()
 
   const [editor, setEditor] = useState<EditorState>(null)
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
-  const [repoFilterId, setRepoFilterId] = useState(activeRepoId ?? '')
-  const [repoFilterManuallyChanged, setRepoFilterManuallyChanged] = useState(false)
-  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
-  const activeRepoFilterId = activeRepoId && repoById.has(activeRepoId) ? activeRepoId : ''
-  const repoFilterIsValid = repoFilterId !== '' && repoById.has(repoFilterId)
-  const selectedRepoId =
-    activeRepoFilterId && (!repoFilterManuallyChanged || !repoFilterIsValid)
-      ? activeRepoFilterId
-      : repoFilterIsValid
-        ? repoFilterId
-        : (repos[0]?.id ?? '')
+  // Why: `null` means "show all" (sticky-all), independent of the current repo
+  // list — mirrors the tasks-page repo combobox so newly added repos appear
+  // automatically rather than being silently excluded.
+  const [scopeSelection, setScopeSelection] = useState<ReadonlySet<string> | null>(null)
+  const [scopePopoverOpen, setScopePopoverOpen] = useState(false)
+
+  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+
+  const allScopeKeys = useMemo(
+    () => new Set<string>([GLOBAL_SCOPE_KEY, ...repos.map((r) => r.id)]),
+    [repos]
+  )
+  const effectiveSelection: ReadonlySet<string> = scopeSelection ?? allScopeKeys
+  const showAll = scopeSelection === null
 
   const visibleCommands = commands.filter((command) => {
     const scope = getTerminalQuickCommandScope(command)
-    if (scopeFilter === 'global') {
-      return scope.type === 'global'
+    if (showAll) {
+      return true
     }
-    if (scopeFilter === 'repo') {
-      return scope.type === 'repo' && (!selectedRepoId || scope.repoId === selectedRepoId)
+    if (scope.type === 'global') {
+      return effectiveSelection.has(GLOBAL_SCOPE_KEY)
     }
-    return true
+    return effectiveSelection.has(scope.repoId)
   })
 
   const createDraftForCurrentFilter = (): TerminalQuickCommand => {
-    if (scopeFilter === 'repo' && selectedRepoId) {
-      return createTerminalQuickCommandDraft({ type: 'repo', repoId: selectedRepoId })
+    // Why: when the user has narrowed to a single repo scope, the natural
+    // intent for "Add Command" is to create one in that repo. When the filter
+    // is narrowed to Global-only, honor that. Otherwise prefer the active
+    // workspace repo; fall back to global when there's no active repo.
+    if (!showAll) {
+      const selectedRepoIds = [...effectiveSelection].filter((key) => key !== GLOBAL_SCOPE_KEY)
+      if (selectedRepoIds.length === 1 && !effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
+        return createTerminalQuickCommandDraft({ type: 'repo', repoId: selectedRepoIds[0] })
+      }
+      if (selectedRepoIds.length === 0 && effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
+        return createTerminalQuickCommandDraft({ type: 'global' })
+      }
+    }
+    if (activeRepoId && repoById.has(activeRepoId)) {
+      return createTerminalQuickCommandDraft({ type: 'repo', repoId: activeRepoId })
     }
     return createTerminalQuickCommandDraft({ type: 'global' })
   }
 
-  // Why: follow the active worktree until the user picks a repo, and resume
-  // following automatically if the chosen repo disappears (e.g. removed from
-  // the workspace) so the filter never points at nothing.
-  useEffect(() => {
-    if (!activeRepoFilterId) {
-      return
-    }
-
-    if (!repoFilterManuallyChanged) {
-      if (repoFilterId !== activeRepoFilterId) {
-        setRepoFilterId(activeRepoFilterId)
+  const toggleScope = (key: string): void => {
+    const current = new Set(effectiveSelection)
+    if (current.has(key)) {
+      // Why: forbid the empty selection — every command would disappear and
+      // there'd be no signal that the filter caused it.
+      if (current.size <= 1) {
+        return
       }
+      current.delete(key)
+    } else {
+      current.add(key)
+    }
+    setScopeSelection(current.size === allScopeKeys.size ? null : current)
+  }
+
+  const handleSelectAll = (): void => {
+    if (showAll) {
+      // Why: tasks-page parity — clicking "All" while everything is selected
+      // collapses to a single scope rather than emitting an empty set.
+      setScopeSelection(new Set([GLOBAL_SCOPE_KEY]))
       return
     }
+    setScopeSelection(null)
+  }
 
-    if (!repoFilterIsValid) {
-      setRepoFilterId(activeRepoFilterId)
-      setRepoFilterManuallyChanged(false)
+  const renderTriggerLabel = (): React.JSX.Element => {
+    if (showAll) {
+      return <span>All commands</span>
     }
-  }, [activeRepoFilterId, repoFilterId, repoFilterIsValid, repoFilterManuallyChanged])
-
-  const changeRepoFilter = (nextRepoId: string): void => {
-    setRepoFilterManuallyChanged(true)
-    setRepoFilterId(nextRepoId)
+    const includesGlobal = effectiveSelection.has(GLOBAL_SCOPE_KEY)
+    const selectedRepos = repos.filter((r) => effectiveSelection.has(r.id))
+    const parts: string[] = []
+    if (includesGlobal) {
+      parts.push('Global')
+    }
+    if (selectedRepos.length > 0) {
+      const [first, ...rest] = selectedRepos
+      parts.push(rest.length > 0 ? `${first.displayName} +${rest.length}` : first.displayName)
+    }
+    return <span className="truncate">{parts.join(', ') || 'None'}</span>
   }
 
   const saveCommand = (next: TerminalQuickCommand): void => {
-    const isEdit = commands.some((command) => command.id === next.id)
+    // Why: re-read from the store so save lands on the latest list when
+    // multiple edit dialogs fire in quick succession.
+    const latest = useAppStore.getState().settings?.terminalQuickCommands ?? []
+    const isEdit = latest.some((command) => command.id === next.id)
     const nextList = isEdit
-      ? commands.map((command) => (command.id === next.id ? next : command))
-      : [...commands, next]
+      ? latest.map((command) => (command.id === next.id ? next : command))
+      : [...latest, next]
     updateSettings({ terminalQuickCommands: nextList })
   }
 
-  const removeCommand = (id: string): void => {
+  const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
+    const confirmed = await confirm({
+      title: `Delete "${command.label || 'Untitled'}"?`,
+      description: 'This quick command will be removed from your saved list.',
+      confirmLabel: 'Delete',
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+    // Why: re-read latest list from the store at delete time — the await above
+    // can span other settings changes, and a stale closure would resurrect
+    // commands that were removed concurrently.
+    const latest = useAppStore.getState().settings?.terminalQuickCommands ?? []
     updateSettings({
-      terminalQuickCommands: commands.filter((command) => command.id !== id)
+      terminalQuickCommands: latest.filter((c) => c.id !== command.id)
     })
   }
 
@@ -138,8 +188,8 @@ export function QuickCommandsPane({
         <div className="space-y-1">
           <Label>Saved Commands</Label>
           <p className="text-xs text-muted-foreground">
-            Commands are sent as plain terminal input to the active pane. Use Global commands for
-            tools that work everywhere, or Repository commands for project-specific scripts.
+            Run them from the Quick Commands button in the tab bar, or right-click inside any
+            terminal.
           </p>
         </div>
         <Button
@@ -154,49 +204,95 @@ export function QuickCommandsPane({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <ToggleGroup
-          type="single"
-          value={scopeFilter}
-          onValueChange={(value) => {
-            if (value === 'all' || value === 'global' || value === 'repo') {
-              setScopeFilter(value)
-            }
-          }}
-          className="justify-start"
-        >
-          <ToggleGroupItem value="all">All</ToggleGroupItem>
-          <ToggleGroupItem value="global">Global</ToggleGroupItem>
-          <ToggleGroupItem value="repo" disabled={repos.length === 0}>
-            Repository
-          </ToggleGroupItem>
-        </ToggleGroup>
-        {scopeFilter === 'repo' && repos.length > 0 ? (
-          <Select value={selectedRepoId} onValueChange={changeRepoFilter}>
-            <SelectTrigger size="sm" className="min-w-52">
-              <SelectValue placeholder="Choose repository" />
-            </SelectTrigger>
-            <SelectContent>
-              {repos.map((repo) => (
-                <SelectItem key={repo.id} value={repo.id}>
-                  <RepoDotLabel
-                    name={getRepoLabel(repo)}
-                    color={repo.badgeColor}
-                    className="max-w-full"
+        <Popover open={scopePopoverOpen} onOpenChange={setScopePopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={scopePopoverOpen}
+              className="h-8 min-w-52 justify-between px-3 text-xs font-normal"
+            >
+              {renderTriggerLabel()}
+              <ChevronsUpDown className="size-3.5 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
+          >
+            <Command>
+              <div className="border-b border-border">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  onMouseDown={(event) => event.preventDefault()}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                    showAll && 'opacity-80'
+                  )}
+                >
+                  <Check
+                    className={cn(
+                      'size-3 text-muted-foreground',
+                      showAll ? 'opacity-70' : 'opacity-0'
+                    )}
                   />
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
+                  <span>All commands</span>
+                </button>
+              </div>
+              <CommandList>
+                <CommandItem
+                  value={GLOBAL_SCOPE_KEY}
+                  onSelect={() => toggleScope(GLOBAL_SCOPE_KEY)}
+                  className="items-center gap-2 px-3 py-1.5 text-xs"
+                >
+                  <Check
+                    className={cn(
+                      'size-3 text-muted-foreground',
+                      effectiveSelection.has(GLOBAL_SCOPE_KEY) ? 'opacity-70' : 'opacity-0'
+                    )}
+                  />
+                  <span>Global</span>
+                </CommandItem>
+                {repos.map((repo) => {
+                  const isSelected = effectiveSelection.has(repo.id)
+                  return (
+                    <CommandItem
+                      key={repo.id}
+                      value={repo.id}
+                      onSelect={() => toggleScope(repo.id)}
+                      className="items-center gap-2 px-3 py-1.5 text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          'size-3 text-muted-foreground',
+                          isSelected ? 'opacity-70' : 'opacity-0'
+                        )}
+                      />
+                      <RepoDotLabel
+                        name={getRepoLabel(repo)}
+                        color={repo.badgeColor}
+                        className="max-w-full"
+                      />
+                    </CommandItem>
+                  )
+                })}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border/50">
         {visibleCommands.length === 0 ? (
           <div className="px-3 py-6 text-sm text-muted-foreground">
-            {commands.length === 0 ? 'No quick commands saved.' : 'No commands match this scope.'}
+            {commands.length === 0
+              ? 'No quick commands saved.'
+              : 'No commands in the selected scopes.'}
           </div>
         ) : (
-          <div className="divide-y divide-border/50">
+          <div className="max-h-[60vh] divide-y divide-border/50 overflow-y-auto scrollbar-sleek">
             {visibleCommands.map((command) => {
               const scope = getTerminalQuickCommandScope(command)
               return (
@@ -206,8 +302,21 @@ export function QuickCommandsPane({
                       <div className="truncate text-sm font-medium">
                         {command.label || 'Untitled'}
                       </div>
-                      <Badge variant="outline" className="max-w-44">
-                        <span className="truncate">{getScopeLabel(scope, repoById)}</span>
+                      <Badge variant="outline" className="max-w-44 gap-1.5">
+                        {scope.type === 'repo' ? (
+                          <>
+                            <span
+                              aria-hidden
+                              className="size-1.5 shrink-0 rounded-full"
+                              style={{
+                                backgroundColor: repoById.get(scope.repoId)?.badgeColor
+                              }}
+                            />
+                            <span className="truncate">{getScopeLabel(scope, repoById)}</span>
+                          </>
+                        ) : (
+                          <span className="truncate">{getScopeLabel(scope, repoById)}</span>
+                        )}
                       </Badge>
                     </div>
                     <div className="truncate font-mono text-xs text-muted-foreground">
@@ -231,7 +340,7 @@ export function QuickCommandsPane({
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`Remove ${command.label || 'quick command'}`}
-                    onClick={() => removeCommand(command.id)}
+                    onClick={() => void removeCommand(command)}
                     className="text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 />
@@ -243,14 +352,16 @@ export function QuickCommandsPane({
         )}
       </div>
 
-      <TerminalQuickCommandDialog
-        open={editor !== null}
-        mode={editor?.mode ?? 'add'}
-        command={editor?.command ?? createTerminalQuickCommandDraft()}
-        repos={repos}
-        onOpenChange={(open) => !open && setEditor(null)}
-        onSave={saveCommand}
-      />
+      {editor !== null ? (
+        <TerminalQuickCommandDialog
+          open
+          mode={editor.mode}
+          command={editor.command}
+          repos={repos}
+          onOpenChange={(open) => !open && setEditor(null)}
+          onSave={saveCommand}
+        />
+      ) : null}
     </div>
   )
 }

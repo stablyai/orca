@@ -184,8 +184,8 @@ export type TerminalSlice = {
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   /** Most recently run quick-command id per tab group. In-memory only; resets
-   *  on app restart so a stale id from a deleted/renamed command can't surface
-   *  as the split-button label after a settings change. */
+   *  on app restart so a stale id from a deleted command can't surface as the
+   *  split-button label across sessions. */
   recentQuickCommandIdByGroup: Record<string, string>
   setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
   pendingStartupByTabId: Record<

@@ -905,10 +905,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupId,
         remainingGroups[0]?.id ?? null
       )
+      // Why: drop the dead group's recent-quick-command entry so the in-memory
+      // map can't grow unbounded as users open/close groups.
+      const { [groupId]: _droppedRecent, ...remainingRecent } = current.recentQuickCommandIdByGroup
       return {
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
         layoutByWorktree: collapsedState.layoutByWorktree,
         activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
+        recentQuickCommandIdByGroup: remainingRecent,
         ...(current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {

@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, Pencil, Play, Plus } from 'lucide-react'
+import { ChevronDown, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Command,
   CommandEmpty,
-  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator
@@ -21,33 +20,37 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
   groupId: string
 }
 
-function matchesQuery(command: TerminalQuickCommand, query: string): boolean {
-  if (!query) {
-    return true
-  }
-  return (
-    command.label.toLowerCase().includes(query) || command.command.toLowerCase().includes(query)
-  )
-}
-
 export function TabBarQuickCommandsButton({
   worktreeId,
   groupId
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
-  const repoId = useMemo(() => getRepoIdFromWorktreeId(worktreeId), [worktreeId])
   const allCommands = useAppStore((s) => s.settings?.terminalQuickCommands)
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const repos = useAppStore((s) => s.repos)
+  const confirm = useConfirmationDialog()
+  // Why: floating terminals share a synthetic worktree id (`global-floating-terminal`)
+  // that has no separator, so naive `getRepoIdFromWorktreeId` would return that
+  // sentinel as a "repo id" and the button would point at a repo that doesn't
+  // exist. Resolve to a real repo from the workspace; otherwise hide the button.
+  const repoId = useMemo(() => {
+    if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return null
+    }
+    const candidate = getRepoIdFromWorktreeId(worktreeId)
+    return repos.some((r) => r.id === candidate) ? candidate : null
+  }, [worktreeId, repos])
 
   const { repoCommands, globalCommands } = useMemo(() => {
     const repoList: TerminalQuickCommand[] = []
@@ -83,7 +86,6 @@ export function TabBarQuickCommandsButton({
   }, [repoCommands, globalCommands, recentId])
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
   const [editor, setEditor] = useState<
     | { mode: 'add'; command: TerminalQuickCommand }
@@ -91,23 +93,12 @@ export function TabBarQuickCommandsButton({
     | null
   >(null)
 
-  const filteredRepo = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return repoCommands.filter((c) => matchesQuery(c, q))
-  }, [repoCommands, query])
-
-  const filteredGlobal = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return globalCommands.filter((c) => matchesQuery(c, q))
-  }, [globalCommands, query])
-
-  const totalVisible = filteredRepo.length + filteredGlobal.length
-  const hasAnyCommands = repoCommands.length + globalCommands.length > 0
+  const totalVisible = repoCommands.length + globalCommands.length
+  const hasAnyCommands = totalVisible > 0
 
   const handleOpenChange = (next: boolean): void => {
     setMenuOpen(next)
     if (!next) {
-      setQuery('')
       setCommandValue('')
     }
   }
@@ -122,6 +113,21 @@ export function TabBarQuickCommandsButton({
     const isEdit = current.some((c) => c.id === next.id)
     const nextList = isEdit ? current.map((c) => (c.id === next.id ? next : c)) : [...current, next]
     void updateSettings({ terminalQuickCommands: nextList })
+  }
+
+  const handleDeleteCommand = async (command: TerminalQuickCommand): Promise<void> => {
+    setMenuOpen(false)
+    const confirmed = await confirm({
+      title: `Delete "${command.label}"?`,
+      description: 'This quick command will be removed from your saved list.',
+      confirmLabel: 'Delete',
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+    const current = useAppStore.getState().settings?.terminalQuickCommands ?? []
+    void updateSettings({ terminalQuickCommands: current.filter((c) => c.id !== command.id) })
   }
 
   // Why: hidden in folder-mode worktrees (no repoId) and floating terminals.
@@ -170,9 +176,9 @@ export function TabBarQuickCommandsButton({
   }
 
   const splitButtonClass =
-    'my-auto flex h-7 shrink-0 items-stretch rounded-md text-muted-foreground'
+    'my-auto flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-border/60 text-muted-foreground'
   const innerButtonBase =
-    'flex items-center bg-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+    'flex items-center bg-transparent leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
 
   const renderItem = (command: TerminalQuickCommand): React.JSX.Element => (
     <CommandItem
@@ -188,18 +194,31 @@ export function TabBarQuickCommandsButton({
           {command.command}
         </span>
       </span>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation()
-          setMenuOpen(false)
-          setEditor({ mode: 'edit', command })
-        }}
-        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100"
-        aria-label={`Edit ${command.label}`}
-      >
-        <Pencil className="size-3" />
-      </button>
+      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            setMenuOpen(false)
+            setEditor({ mode: 'edit', command })
+          }}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={`Edit ${command.label}`}
+        >
+          <Pencil className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            void handleDeleteCommand(command)
+          }}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+          aria-label={`Remove ${command.label}`}
+        >
+          <Trash2 className="size-3" />
+        </button>
+      </span>
     </CommandItem>
   )
 
@@ -231,7 +250,10 @@ export function TabBarQuickCommandsButton({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className={cn(innerButtonBase, 'justify-center rounded-l-none rounded-r-md px-1')}
+              className={cn(
+                innerButtonBase,
+                'justify-center rounded-l-none rounded-r-md border-l border-border/60 px-1'
+              )}
               aria-label="More quick commands"
             >
               <ChevronDown className="size-3" strokeWidth={2.5} />
@@ -244,27 +266,15 @@ export function TabBarQuickCommandsButton({
               onValueChange={setCommandValue}
               className="bg-transparent"
             >
-              <CommandInput
-                autoFocus
-                placeholder="Filter commands..."
-                value={query}
-                onValueChange={setQuery}
-                onKeyDown={(event) => event.stopPropagation()}
-                className="h-8 py-2 text-xs"
-                wrapperClassName="m-1 rounded-[7px] border border-border/70 px-2"
-                iconClassName="h-3.5 w-3.5"
-              />
               <CommandList className="max-h-72 py-1">
                 {totalVisible === 0 ? (
-                  <CommandEmpty className="py-4 text-center text-[11px]">
-                    No commands match
-                  </CommandEmpty>
+                  <CommandEmpty className="py-4 text-center text-[11px]">No commands</CommandEmpty>
                 ) : null}
-                {filteredRepo.map(renderItem)}
-                {filteredRepo.length > 0 && filteredGlobal.length > 0 ? (
+                {repoCommands.map(renderItem)}
+                {repoCommands.length > 0 && globalCommands.length > 0 ? (
                   <CommandSeparator className="my-1" />
                 ) : null}
-                {filteredGlobal.map(renderItem)}
+                {globalCommands.map(renderItem)}
               </CommandList>
               <div className="border-t border-border/50 p-1">
                 <button

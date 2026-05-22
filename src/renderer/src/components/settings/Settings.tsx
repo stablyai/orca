@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   Network,
   PanelsTopLeft,
+  Play,
   ShieldCheck,
   Palette,
   Server,
@@ -24,8 +25,7 @@ import {
   Mic,
   SquareTerminal,
   TextCursorInput,
-  UserCog,
-  Zap
+  UserCog
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -532,8 +532,8 @@ function Settings(): React.JSX.Element {
       {
         id: 'quick-commands',
         title: 'Quick Commands',
-        description: 'Saved terminal commands, scoped globally or per repository.',
-        icon: Zap,
+        description: 'Saved terminal commands, scoped globally or per project.',
+        icon: Play,
         searchEntries: QUICK_COMMANDS_PANE_SEARCH_ENTRIES,
         group: 'workflows'
       },
@@ -1121,7 +1121,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="quick-commands"
                   title="Quick Commands"
-                  description="Saved terminal commands, scoped globally or per repository."
+                  description="Saved terminal commands, scoped globally or per project."
                   searchEntries={QUICK_COMMANDS_PANE_SEARCH_ENTRIES}
                 >
                   {isSectionMounted('quick-commands') ? (

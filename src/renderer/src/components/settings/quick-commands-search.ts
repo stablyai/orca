@@ -4,7 +4,7 @@ export const QUICK_COMMANDS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Quick Commands',
     description:
-      'Saved terminal commands that can be launched from any terminal, scoped globally or to a specific repository.',
+      'Saved terminal commands that can be launched from any terminal, scoped globally or to a specific project.',
     keywords: [
       'quick',
       'command',
@@ -13,6 +13,7 @@ export const QUICK_COMMANDS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'shortcut',
       'snippet',
       'global',
+      'project',
       'repo',
       'repository',
       'run',

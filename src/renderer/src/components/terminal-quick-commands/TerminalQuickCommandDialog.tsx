@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -94,6 +95,7 @@ export function TerminalQuickCommandDialog({
   }
 
   const canSave = draft.label.trim().length > 0 && draft.command.trimEnd().length > 0
+  const submitShortcutLabel = isMacUserAgent() ? '⌘↵' : 'Ctrl+Enter'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,7 +109,18 @@ export function TerminalQuickCommandDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          onKeyDown={(event) => {
+            // Why: cross-platform submit shortcut — Cmd+Enter on Mac, Ctrl+Enter
+            // elsewhere. Falls through to native textarea/Input newline insertion
+            // when the modifier isn't held.
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && canSave) {
+              event.preventDefault()
+              saveDraft()
+            }
+          }}
+        >
           <div className="space-y-2">
             <Label>Label</Label>
             <Input
@@ -115,7 +128,7 @@ export function TerminalQuickCommandDialog({
               onChange={(event) =>
                 setDraft((current) => ({ ...current, label: event.target.value }))
               }
-              placeholder="Restart server"
+              placeholder="Start dev server"
             />
           </div>
 
@@ -155,7 +168,7 @@ export function TerminalQuickCommandDialog({
               >
                 <ToggleGroupItem value="global">Global</ToggleGroupItem>
                 <ToggleGroupItem value="repo" disabled={repos.length === 0}>
-                  Repository
+                  Project
                 </ToggleGroupItem>
               </ToggleGroup>
               {selectedScope.type === 'repo' && repos.length > 0 ? (
@@ -168,9 +181,7 @@ export function TerminalQuickCommandDialog({
                   >
                     <SelectTrigger size="sm" className="min-w-48">
                       <SelectValue
-                        placeholder={
-                          selectedRepoMissing ? 'Repository not in list' : 'Choose repository'
-                        }
+                        placeholder={selectedRepoMissing ? 'Project not in list' : 'Choose project'}
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -187,7 +198,7 @@ export function TerminalQuickCommandDialog({
                   </Select>
                   {selectedRepoMissing ? (
                     <p className="max-w-48 text-xs text-muted-foreground">
-                      Saving keeps the existing repo scope unless you choose another.
+                      Saving keeps the existing project scope unless you choose another.
                     </p>
                   ) : null}
                 </div>
@@ -227,8 +238,14 @@ export function TerminalQuickCommandDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" onClick={saveDraft} disabled={!canSave}>
+          <Button
+            type="button"
+            onClick={saveDraft}
+            disabled={!canSave}
+            title={`Save (${submitShortcutLabel})`}
+          >
             Save
+            <span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
           </Button>
         </DialogFooter>
       </DialogContent>
