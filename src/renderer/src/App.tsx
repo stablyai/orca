@@ -121,7 +121,6 @@ import {
 } from '../../shared/keybindings'
 import { isGitRepoKind } from '../../shared/repo-kind'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { FEATURE_WALL_ENABLED } from '../../shared/feature-wall-build-flag'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -213,16 +212,10 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
-// Why: the feature wall is intentionally compile-time gated until rollout.
-// Do not remove this when the flag is temporarily true for product testing.
-const FeatureWallModal = FEATURE_WALL_ENABLED
-  ? lazy(() => import('./components/feature-wall/FeatureWallModal'))
-  : null
-const FeatureTourNudge = FEATURE_WALL_ENABLED
-  ? lazy(async () => ({
-      default: (await import('./components/feature-wall/FeatureTourNudge')).FeatureTourNudge
-    }))
-  : null
+const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
+const FeatureTourNudge = lazy(async () => ({
+  default: (await import('./components/feature-wall/FeatureTourNudge')).FeatureTourNudge
+}))
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
@@ -1693,9 +1686,7 @@ function App(): React.JSX.Element {
           <Suspense fallback={null}>
             {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
             {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
-            {FeatureWallModal && mountedLazyModalIds.has('feature-wall') ? (
-              <FeatureWallModal />
-            ) : null}
+            {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
             {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
           </Suspense>
           {/* Why: mount PetOverlay only when the experimental flag is on AND

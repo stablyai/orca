@@ -5,7 +5,6 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../shared/keybindings'
-import { FEATURE_WALL_ENABLED } from '../../shared/feature-wall-build-flag'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -268,16 +267,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
-  // Why: this tour still needs telemetry before release; disabled builds must
-  // not expose even the Help-menu entry.
-  const featureTourItems: Electron.MenuItemConstructorOptions[] = FEATURE_WALL_ENABLED
-    ? [{ type: 'separator' }, featureTourItem]
-    : []
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: 'Help',
     submenu: [
       crashReportItem,
-      ...featureTourItems,
+      { type: 'separator' },
+      featureTourItem,
       ...(isMac
         ? []
         : ([

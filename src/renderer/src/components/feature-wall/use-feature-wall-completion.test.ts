@@ -4,10 +4,11 @@ import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-work
 import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 import {
-  getFeatureWallCompletionProgress,
   normalizeFeatureWallVisitedAgentSteps,
-  normalizeFeatureWallVisitedReviewSteps
-} from './use-feature-wall-completion'
+  normalizeFeatureWallVisitedReviewSteps,
+  normalizeFeatureWallVisitedWorkbenchSteps
+} from './feature-wall-completion-persistence'
+import { getFeatureWallCompletionProgress } from './use-feature-wall-completion'
 
 type CompletionInput = Parameters<typeof getFeatureWallCompletionProgress>[0]
 
@@ -85,6 +86,16 @@ describe('getFeatureWallCompletionProgress', () => {
       ).workflowDone.review
     ).toBe(true)
   })
+
+  it('keeps the workbench workflow complete after all sub-step visits are restored', () => {
+    expect(
+      getFeatureWallCompletionProgress(
+        completionInput({
+          visitedWorkbenchSteps: new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
+        })
+      ).workflowDone.workbench
+    ).toBe(true)
+  })
 })
 
 describe('normalizeFeatureWallVisitedAgentSteps', () => {
@@ -98,6 +109,20 @@ describe('normalizeFeatureWallVisitedAgentSteps', () => {
         'bogus'
       ])
     ).toEqual(['orchestration'])
+  })
+})
+
+describe('normalizeFeatureWallVisitedWorkbenchSteps', () => {
+  it('keeps persisted workbench visits and drops duplicates or unknown steps', () => {
+    expect(
+      normalizeFeatureWallVisitedWorkbenchSteps([
+        'terminal',
+        'editor',
+        'browser',
+        'editor',
+        'bogus'
+      ])
+    ).toEqual(['terminal', 'editor', 'browser'])
   })
 })
 

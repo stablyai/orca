@@ -49,7 +49,6 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
-import { FEATURE_WALL_ENABLED } from '../../../../shared/feature-wall-build-flag'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
@@ -856,12 +855,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   activeModal: 'none',
   modalData: {},
   openModal: (modal, data = {}) => {
-    // Why: the feature wall is intentionally behind a compile-time rollout
-    // flag. It may be flipped on for local testing, but false builds must not
-    // expose it through direct store calls or stale IPC events.
-    if (modal === 'feature-wall' && !FEATURE_WALL_ENABLED) {
-      return
-    }
     set((state) => ({
       activeModal: modal,
       modalData: data,
@@ -893,11 +886,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
   featureTourNudgeVisible: false,
   showFeatureTourNudge: () => {
-    // Why: keep the first-agent nudge under the same compile-time rollout gate
-    // as Help > Explore Orca.
-    if (!FEATURE_WALL_ENABLED) {
-      return
-    }
     const activeModal = get().activeModal
     if (activeModal !== 'feature-wall' && activeModal !== 'feature-tips') {
       set({ featureTourNudgeVisible: true })

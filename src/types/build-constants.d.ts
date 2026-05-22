@@ -9,11 +9,7 @@
 // the substitution happens at compile time so a curious contributor cannot
 // spoof transmission with a shell export.
 //
-// `ORCA_FEATURE_WALL_ENABLED` is a temporary gate for the feature wall until
-// its release telemetry lands.
-
 declare const ORCA_BUILD_IDENTITY: 'stable' | 'rc' | null
-declare const ORCA_FEATURE_WALL_ENABLED: boolean
 declare const ORCA_POSTHOG_WRITE_KEY: string | null
 
 // Diagnostic-bundle upload endpoint for Mode 3 (telemetry-error-tracking.md

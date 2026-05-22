@@ -63,7 +63,6 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import type { AppState } from '../store/types'
-import { FEATURE_WALL_ENABLED } from '../../../shared/feature-wall-build-flag'
 import {
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
@@ -599,22 +598,17 @@ export function useIpcEvents(): void {
       })
     )
 
-    // Why: the feature wall is intentionally behind a compile-time rollout
-    // flag. Product testing may flip it to true locally, but false builds must
-    // ignore stale main-process nudges/menu events instead of showing the tour.
-    if (FEATURE_WALL_ENABLED) {
-      unsubs.push(
-        window.api.ui.onOpenFeatureTour(() => {
-          useAppStore.getState().openModal('feature-wall', { source: 'help_menu' })
-        })
-      )
+    unsubs.push(
+      window.api.ui.onOpenFeatureTour(() => {
+        useAppStore.getState().openModal('feature-wall', { source: 'help_menu' })
+      })
+    )
 
-      unsubs.push(
-        window.api.ui.onShowFeatureTourNudge(() => {
-          useAppStore.getState().showFeatureTourNudge()
-        })
-      )
-    }
+    unsubs.push(
+      window.api.ui.onShowFeatureTourNudge(() => {
+        useAppStore.getState().showFeatureTourNudge()
+      })
+    )
 
     // Why: the View > Appearance menu toggles settings directly in main (so
     // checkbox state reflects the persisted value without a round-trip) and

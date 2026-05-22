@@ -10,11 +10,12 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/types'
+import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
 
 type ConnectAction = 'idle' | 'adding'
 
-function ConnectionPill(props: { connected: boolean; count: number }): JSX.Element {
-  const { connected, count } = props
+function ConnectionPill(props: { connected: boolean; label: string }): JSX.Element {
+  const { connected, label } = props
   return (
     <span
       className={cn(
@@ -30,7 +31,7 @@ function ConnectionPill(props: { connected: boolean; count: number }): JSX.Eleme
           connected ? 'bg-emerald-500' : 'bg-muted-foreground'
         )}
       />
-      {connected ? `Connected · ${count}` : 'Tracking not set up'}
+      {label}
     </span>
   )
 }
@@ -40,12 +41,11 @@ function ProviderRow(props: {
   name: string
   description: string
   connected: boolean
-  count: number
+  connectionLabel: string
   isAdding: boolean
   onSignIn: () => void
-  onManage: () => void
 }): JSX.Element {
-  const { icon, name, description, connected, count, isAdding, onSignIn, onManage } = props
+  const { icon, name, description, connected, connectionLabel, isAdding, onSignIn } = props
   return (
     <div className="rounded-lg border border-border bg-muted/20">
       <div className="flex items-center gap-3 px-3 py-2">
@@ -55,18 +55,14 @@ function ProviderRow(props: {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-[13px] font-semibold leading-tight text-foreground">{name}</h3>
-            <ConnectionPill connected={connected} count={count} />
+            <ConnectionPill connected={connected} label={connectionLabel} />
           </div>
           <p className="mt-0.5 truncate text-[11.5px] leading-snug text-muted-foreground">
             {description}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {connected ? (
-            <Button variant="outline" size="sm" onClick={onManage}>
-              Manage
-            </Button>
-          ) : (
+          {connected ? null : (
             <Button size="sm" onClick={onSignIn} disabled={isAdding}>
               {isAdding ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -83,10 +79,9 @@ function ProviderRow(props: {
 }
 
 export function UsageAccountsCard(): JSX.Element {
-  const closeModal = useAppStore((s) => s.closeModal)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const rateLimits = useAppStore((s) => s.rateLimits)
+  const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
 
   const [claudeAccounts, setClaudeAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
@@ -104,6 +99,7 @@ export function UsageAccountsCard(): JSX.Element {
   // fetch is enough — sign-in flows refresh state inline below.
   useEffect(() => {
     let stale = false
+    void fetchRateLimits()
     void (async () => {
       try {
         const next = await window.api.claudeAccounts.list()
@@ -127,13 +123,16 @@ export function UsageAccountsCard(): JSX.Element {
     return () => {
       stale = true
     }
-  }, [])
+  }, [fetchRateLimits])
 
-  const openAccountsSettings = (sectionId?: string): void => {
-    closeModal()
-    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId })
-    openSettingsPage()
-  }
+  const claudeConnection = getFeatureWallUsageProviderConnection({
+    managedAccountCount: claudeAccounts.accounts.length,
+    provider: rateLimits.claude
+  })
+  const codexConnection = getFeatureWallUsageProviderConnection({
+    managedAccountCount: codexAccounts.accounts.length,
+    provider: rateLimits.codex
+  })
 
   const handleClaudeSignIn = async (): Promise<void> => {
     if (claudeAction !== 'idle') {
@@ -179,21 +178,19 @@ export function UsageAccountsCard(): JSX.Element {
         icon={<ClaudeIcon size={16} />}
         name="Claude"
         description="Track session and weekly usage."
-        connected={claudeAccounts.accounts.length > 0}
-        count={claudeAccounts.accounts.length}
+        connected={claudeConnection.connected}
+        connectionLabel={claudeConnection.label}
         isAdding={claudeAction === 'adding'}
         onSignIn={() => void handleClaudeSignIn()}
-        onManage={() => openAccountsSettings('accounts-claude')}
       />
       <ProviderRow
         icon={<OpenAIIcon size={16} />}
         name="Codex"
         description="Surface rate limits and swap accounts inline."
-        connected={codexAccounts.accounts.length > 0}
-        count={codexAccounts.accounts.length}
+        connected={codexConnection.connected}
+        connectionLabel={codexConnection.label}
         isAdding={codexAction === 'adding'}
         onSignIn={() => void handleCodexSignIn()}
-        onManage={() => openAccountsSettings('accounts-codex')}
       />
     </div>
   )

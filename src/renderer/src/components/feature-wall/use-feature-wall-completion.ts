@@ -9,15 +9,20 @@ import {
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
 import { useAppStore } from '@/store'
+import {
+  persistVisitedAgentStep,
+  persistVisitedReviewStep,
+  persistVisitedWorkbenchStep,
+  readPersistedVisitedAgentSteps,
+  readPersistedVisitedReviewSteps,
+  readPersistedVisitedWorkbenchSteps
+} from './feature-wall-completion-persistence'
+import { hasFeatureWallUsageTracking } from './feature-wall-usage-tracking'
 
 // Workflows the user can mark complete just by viewing them. The rest (tasks,
 // agents-orchestration, workbench, review) wait on a real signal — connection,
 // setup completion, or visiting every sub-step.
 const VIEW_TO_COMPLETE_WORKFLOWS = new Set<FeatureWallWorkflowId>(['workspaces'])
-const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['orchestration'])
-const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
-const PERSISTED_REVIEW_STEP_IDS = new Set<ReviewStepId>(['notes'])
-const VISITED_REVIEW_STEPS_STORAGE_KEY = 'orca.featureWall.visitedReviewSteps.v1'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -34,90 +39,6 @@ export type FeatureWallCompletionProgress = Pick<
   FeatureWallCompletionState,
   'workflowDone' | 'agentStepDone' | 'workbenchStepDone' | 'reviewStepDone'
 >
-
-export function normalizeFeatureWallVisitedAgentSteps(value: unknown): AgentsStepId[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  const seen = new Set<AgentsStepId>()
-  for (const item of value) {
-    if (typeof item === 'string' && PERSISTED_AGENT_STEP_IDS.has(item as AgentsStepId)) {
-      seen.add(item as AgentsStepId)
-    }
-  }
-  return [...seen]
-}
-
-export function normalizeFeatureWallVisitedReviewSteps(value: unknown): ReviewStepId[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  const seen = new Set<ReviewStepId>()
-  for (const item of value) {
-    if (typeof item === 'string' && PERSISTED_REVIEW_STEP_IDS.has(item as ReviewStepId)) {
-      seen.add(item as ReviewStepId)
-    }
-  }
-  return [...seen]
-}
-
-function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
-  if (typeof localStorage === 'undefined') {
-    return new Set()
-  }
-  try {
-    return new Set(
-      normalizeFeatureWallVisitedAgentSteps(
-        JSON.parse(localStorage.getItem(VISITED_AGENT_STEPS_STORAGE_KEY) ?? '[]')
-      )
-    )
-  } catch {
-    return new Set()
-  }
-}
-
-function readPersistedVisitedReviewSteps(): Set<ReviewStepId> {
-  if (typeof localStorage === 'undefined') {
-    return new Set()
-  }
-  try {
-    return new Set(
-      normalizeFeatureWallVisitedReviewSteps(
-        JSON.parse(localStorage.getItem(VISITED_REVIEW_STEPS_STORAGE_KEY) ?? '[]')
-      )
-    )
-  } catch {
-    return new Set()
-  }
-}
-
-function persistVisitedAgentStep(id: AgentsStepId): void {
-  if (!PERSISTED_AGENT_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
-    return
-  }
-  try {
-    const next = readPersistedVisitedAgentSteps()
-    next.add(id)
-    localStorage.setItem(VISITED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
-  } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
-  }
-}
-
-function persistVisitedReviewStep(id: ReviewStepId): void {
-  if (!PERSISTED_REVIEW_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
-    return
-  }
-  try {
-    const next = readPersistedVisitedReviewSteps()
-    next.add(id)
-    localStorage.setItem(VISITED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
-  } catch {
-    // localStorage can be unavailable in hardened browser contexts; completion
-    // still works for the current open modal from React state.
-  }
-}
 
 export function getFeatureWallCompletionProgress(input: {
   visitedWorkflows: ReadonlySet<FeatureWallWorkflowId>
@@ -190,6 +111,8 @@ export function useFeatureWallCompletion(
 ): FeatureWallCompletionState {
   const settings = useAppStore((s) => s.settings)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const rateLimits = useAppStore((s) => s.rateLimits)
+  const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
   const notificationsConfigured =
     settings?.notifications.enabled === true && settings?.notifications.agentTaskComplete === true
   const githubConfigured =
@@ -212,20 +135,20 @@ export function useFeatureWallCompletion(
   const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(() =>
     readPersistedVisitedAgentSteps()
   )
-  const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(
-    new Set()
+  const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(() =>
+    readPersistedVisitedWorkbenchSteps()
   )
   const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(() =>
     readPersistedVisitedReviewSteps()
   )
 
-  // Reset transient view-only steps when the modal closes. Persisted setup
-  // steps stay done across reopens once the matching setup signal is true.
+  // Reset transient view-only steps when the modal closes. Persisted completion
+  // signals stay done across reopens once the matching signal is true.
   useEffect(() => {
     if (!isOpen) {
       setVisitedWorkflows(new Set())
       setVisitedAgentSteps(readPersistedVisitedAgentSteps())
-      setVisitedWorkbenchSteps(new Set())
+      setVisitedWorkbenchSteps(readPersistedVisitedWorkbenchSteps())
       setVisitedReviewSteps(readPersistedVisitedReviewSteps())
     }
   }, [isOpen])
@@ -233,6 +156,12 @@ export function useFeatureWallCompletion(
   // Pull current account state once when the modal opens, then refresh on
   // window focus — keeps the checkmark current after a sign-in flow that
   // happens outside the modal.
+  useEffect(() => {
+    if (isOpen) {
+      void fetchRateLimits()
+    }
+  }, [fetchRateLimits, isOpen])
+
   useEffect(() => {
     if (!isOpen) {
       return
@@ -248,7 +177,14 @@ export function useFeatureWallCompletion(
       }
       const claudeCount = claude?.accounts.length ?? 0
       const codexCount = codex?.accounts.length ?? 0
-      setHasUsageAccount(claudeCount + codexCount > 0)
+      setHasUsageAccount(
+        hasFeatureWallUsageTracking({
+          claudeManagedAccountCount: claudeCount,
+          codexManagedAccountCount: codexCount,
+          claudeRateLimits: rateLimits.claude,
+          codexRateLimits: rateLimits.codex
+        })
+      )
     }
     void refresh()
     const onFocus = (): void => void refresh()
@@ -257,7 +193,7 @@ export function useFeatureWallCompletion(
       stale = true
       window.removeEventListener('focus', onFocus)
     }
-  }, [isOpen])
+  }, [isOpen, rateLimits.claude, rateLimits.codex])
 
   const markWorkflowVisited = (id: FeatureWallWorkflowId): void => {
     if (!VIEW_TO_COMPLETE_WORKFLOWS.has(id)) {
@@ -287,6 +223,7 @@ export function useFeatureWallCompletion(
     })
   }
   const markWorkbenchStepVisited = (id: WorkbenchStepId): void => {
+    persistVisitedWorkbenchStep(id)
     setVisitedWorkbenchSteps((prev) => {
       if (prev.has(id)) {
         return prev
