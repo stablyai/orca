@@ -64,7 +64,13 @@
       rgba(59, 130, 246, 0.06) 35%,
       transparent 60%
     ),
-    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1.2px);
+    /* Why: theme-aware so dots are visible in light mode too — hardcoded
+       white dots disappear on the light background. */
+    radial-gradient(
+        circle,
+        color-mix(in srgb, var(--foreground) 8%, transparent) 1px,
+        transparent 1.2px
+      );
   background-size:
     200% 200%,
     200% 200%,
