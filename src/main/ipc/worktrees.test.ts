@@ -2670,6 +2670,38 @@ describe('registerWorktreeHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects concurrent deletes for the same worktree id with different options', async () => {
+    mockKnownFeatureWorktree()
+    let removalStarted!: () => void
+    let finishRemoval!: () => void
+    const started = new Promise<void>((resolve) => {
+      removalStarted = resolve
+    })
+    removeWorktreeMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          removalStarted()
+          finishRemoval = resolve
+        })
+    )
+
+    const first = handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    }) as Promise<void>
+
+    await started
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        force: true
+      })
+    ).rejects.toThrow('Worktree deletion already in progress')
+
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
+    finishRemoval()
+    await expect(first).resolves.toBeUndefined()
+  })
+
   it('still rejects forced unregistered delete paths that exist on disk', async () => {
     mockKnownFeatureWorktree('/workspace/real-feature')
 

@@ -105,6 +105,17 @@ async function isAlreadyRemovedWorktreePath(repo: Repo, worktreePath: string): P
   return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
 }
 
+function getWorktreeRemovalOptionsKey(args: { force?: boolean; skipArchive?: boolean }): string {
+  const forceKey = args.force === true ? 'force' : 'normal'
+  const archiveKey = args.skipArchive === true ? 'skip-archive' : 'run-archive'
+  return `${forceKey}:${archiveKey}`
+}
+
+type WorktreeRemovalInFlight = {
+  optionsKey: string
+  promise: Promise<void>
+}
+
 const loggedUnavailableSshGitProviders = new Set<string>()
 const loggedWorktreeListFailures = new Set<string>()
 const loggedMalformedWorktreeMetaKeys = new Set<string>()
@@ -522,14 +533,18 @@ export function registerWorktreeHandlers(
     }
   )
 
-  const worktreeRemovalsInFlight = new Map<string, Promise<void>>()
+  const worktreeRemovalsInFlight = new Map<string, WorktreeRemovalInFlight>()
 
   ipcMain.handle(
     'worktrees:remove',
     async (_event, args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => {
+      const optionsKey = getWorktreeRemovalOptionsKey(args)
       const inFlightRemoval = worktreeRemovalsInFlight.get(args.worktreeId)
       if (inFlightRemoval) {
-        return inFlightRemoval
+        if (inFlightRemoval.optionsKey === optionsKey) {
+          return inFlightRemoval.promise
+        }
+        throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
       }
 
       // Why: stale toast actions, double-clicks, and Space/sidebar races can
@@ -718,11 +733,11 @@ export function registerWorktreeHandlers(
 
         notifyWorktreesChanged(mainWindow, repoId)
       })()
-      worktreeRemovalsInFlight.set(args.worktreeId, removal)
+      worktreeRemovalsInFlight.set(args.worktreeId, { optionsKey, promise: removal })
       try {
         await removal
       } finally {
-        if (worktreeRemovalsInFlight.get(args.worktreeId) === removal) {
+        if (worktreeRemovalsInFlight.get(args.worktreeId)?.promise === removal) {
           worktreeRemovalsInFlight.delete(args.worktreeId)
         }
       }
