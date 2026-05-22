@@ -1254,6 +1254,7 @@ export type PreloadApi = {
   }
   keybindings: {
     get: () => Promise<KeybindingFileSnapshot>
+    ensureFile: () => Promise<KeybindingFileSnapshot>
     setAction: (args: {
       actionId: KeybindingActionId
       bindings: string[] | null

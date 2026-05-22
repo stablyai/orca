@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 
 type ShortcutBindingRowProps = {
@@ -37,10 +38,14 @@ function BindingPreview({
   platform: NodeJS.Platform
 }): React.JSX.Element {
   if (bindings.length === 0) {
-    return <span className="text-xs text-muted-foreground">Unassigned</span>
+    return (
+      <div className="flex min-h-7 items-center">
+        <span className="text-xs text-muted-foreground">Unassigned</span>
+      </div>
+    )
   }
   return (
-    <div className="flex flex-wrap justify-start gap-1.5">
+    <div className="flex min-h-7 flex-wrap items-center justify-start gap-1.5">
       {bindings.map((binding) => (
         <ShortcutKeyCombo key={binding} keys={formatKeybinding(binding, platform)} />
       ))}
@@ -71,6 +76,10 @@ export function ShortcutBindingRow({
       recordButtonRef.current?.focus()
     }
   }, [recording])
+
+  const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
+  const recordingMessage = recording ? 'Listening for shortcut. Esc cancels recording.' : ''
+  const helperMessage = statusMessage || recordingMessage
 
   const handleRecordKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
     if (!recording) {
@@ -106,9 +115,9 @@ export function ShortcutBindingRow({
       title={item.title}
       description={`${groupTitle} shortcut`}
       keywords={[...item.searchKeywords]}
-      className="grid grid-cols-1 items-start gap-3 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)] lg:gap-4"
+      className="grid grid-cols-1 gap-x-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_10rem_4rem] lg:items-center"
     >
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm text-foreground">{item.title}</span>
           {modified ? (
@@ -117,51 +126,78 @@ export function ShortcutBindingRow({
             </Badge>
           ) : null}
         </div>
-        <BindingPreview bindings={effective} platform={platform} />
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
-        {warnings.map((warning) => (
-          <p key={warning} className="text-xs text-muted-foreground">
-            {warning}
-          </p>
-        ))}
       </div>
 
-      <div className="min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button
-            ref={recordButtonRef}
-            type="button"
-            variant={recording ? 'secondary' : 'outline'}
-            size="sm"
-            aria-invalid={Boolean(error)}
-            aria-pressed={recording}
-            onClick={() => {
-              if (recording) {
-                return
-              }
-              onStartRecording(item.id)
-            }}
-            onKeyDown={handleRecordKeyDown}
-            className={cn(
-              'h-8 min-w-36 justify-start px-2.5 text-xs',
-              recording && 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-            )}
-          >
-            <Keyboard className="size-3.5" />
-            <span className="truncate">{recording ? 'Press keys...' : 'Change shortcut'}</span>
-          </Button>
-          <Button type="button" variant="ghost" size="xs" onClick={() => onDisable(item.id)}>
-            <Ban className="size-3" />
+      <div className="mt-1 min-w-0 lg:mt-0">
+        <BindingPreview bindings={effective} platform={platform} />
+      </div>
+
+      <Button
+        ref={recordButtonRef}
+        type="button"
+        variant={recording ? 'secondary' : 'outline'}
+        size="sm"
+        aria-invalid={Boolean(error)}
+        aria-pressed={recording}
+        onClick={() => {
+          if (recording) {
+            return
+          }
+          onStartRecording(item.id)
+        }}
+        onKeyDown={handleRecordKeyDown}
+        className={cn(
+          'mt-2 h-8 w-full justify-start px-2.5 text-xs lg:mt-0 lg:w-40',
+          recording && 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
+        )}
+      >
+        <Keyboard className="size-3.5" />
+        <span className="truncate">{recording ? 'Press keys...' : 'Change shortcut'}</span>
+      </Button>
+
+      <div className="mt-2 flex items-center gap-1 lg:mt-0 lg:justify-end">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Disable ${item.title}`}
+              onClick={() => onDisable(item.id)}
+            >
+              <Ban className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
             Disable
-          </Button>
-          <Button type="button" variant="ghost" size="xs" onClick={() => onReset(item.id)}>
-            <RotateCcw className="size-3" />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Reset ${item.title}`}
+              onClick={() => onReset(item.id)}
+            >
+              <RotateCcw className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
             Reset
-          </Button>
-        </div>
-        {recording ? (
-          <p className="text-right text-[11px] text-muted-foreground">Esc cancels recording.</p>
-        ) : null}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      <div
+        className={cn(
+          'h-[18px] overflow-hidden pt-0.5 text-[11px] leading-4 lg:col-span-4',
+          error ? 'text-destructive' : 'text-muted-foreground'
+        )}
+        aria-live="polite"
+      >
+        {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
       </div>
     </SearchableSetting>
   )

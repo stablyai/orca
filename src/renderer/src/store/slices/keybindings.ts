@@ -13,6 +13,7 @@ export type KeybindingsSlice = {
   keybindingSnapshot: KeybindingFileSnapshot | null
   fetchKeybindings: () => Promise<void>
   setKeybindingSnapshot: (snapshot: KeybindingFileSnapshot) => void
+  ensureKeybindingsFile: () => Promise<KeybindingFileSnapshot | null>
   setKeybindingOverride: (actionId: KeybindingActionId, bindings: string[]) => Promise<void>
   resetKeybindingOverride: (actionId: KeybindingActionId) => Promise<void>
   disableKeybindingAction: (actionId: KeybindingActionId) => Promise<void>
@@ -35,6 +36,20 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
   keybindingSnapshot: null,
 
   setKeybindingSnapshot: (snapshot) => set(applySnapshot(snapshot)),
+
+  ensureKeybindingsFile: async () => {
+    if (!window.api.keybindings) {
+      return null
+    }
+    try {
+      const snapshot = await window.api.keybindings.ensureFile()
+      set(applySnapshot(snapshot))
+      return snapshot
+    } catch (error) {
+      console.error('Failed to prepare keybindings file:', error)
+      throw error
+    }
+  },
 
   fetchKeybindings: async () => {
     if (!window.api.keybindings) {

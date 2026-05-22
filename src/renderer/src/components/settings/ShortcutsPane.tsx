@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react'
-import { FileText, FolderOpen, RefreshCw } from 'lucide-react'
 import type { CtrlTabOrderMode } from '../../../../shared/types'
 import {
   KEYBINDING_DEFINITIONS,
@@ -15,9 +14,9 @@ import {
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
 import { useAppStore } from '../../store'
-import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SearchableSetting } from './SearchableSetting'
 import { ShortcutBindingRow } from './ShortcutBindingRow'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -93,9 +92,6 @@ export function ShortcutsPane(): React.JSX.Element {
   const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
-  const reloadKeybindings = useAppStore((state) => state.reloadKeybindings)
-  const openKeybindingsFile = useAppStore((state) => state.openKeybindingsFile)
-  const revealKeybindingsFile = useAppStore((state) => state.revealKeybindingsFile)
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
 
@@ -269,61 +265,7 @@ export function ShortcutsPane(): React.JSX.Element {
           </SearchableSetting>
         ) : null}
 
-        <div className="space-y-3 rounded-md border border-border bg-card p-3 text-card-foreground shadow-xs">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-xs font-medium">Keybindings File</p>
-              <p className="truncate font-mono text-xs text-muted-foreground">
-                {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => void openKeybindingsFile()}
-              >
-                <FileText className="size-3" />
-                Open File
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => void revealKeybindingsFile()}
-              >
-                <FolderOpen className="size-3" />
-                Reveal
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => void reloadKeybindings()}
-              >
-                <RefreshCw className="size-3" />
-                Reload
-              </Button>
-            </div>
-          </div>
-          {keybindingSnapshot?.diagnostics.length ? (
-            <div className="space-y-1 border-t border-border/50 pt-2">
-              {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
-                <p
-                  key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
-                  className={
-                    diagnostic.severity === 'error'
-                      ? 'text-xs text-destructive'
-                      : 'text-xs text-muted-foreground'
-                  }
-                >
-                  {diagnostic.message}
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <KeybindingsFileActions />
 
         <div className="grid gap-8">
           {groups
