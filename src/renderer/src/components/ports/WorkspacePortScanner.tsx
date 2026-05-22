@@ -9,7 +9,7 @@ import {
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
-const WORKSPACE_PORT_SCAN_INTERVAL_MS = 5_000
+const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
   return {
@@ -42,7 +42,6 @@ export function WorkspacePortScanner(): null {
     }
 
     const generation = generationRef.current
-    setWorkspacePortScanRefreshing(true)
     const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((result) => {
         if (generation === generationRef.current) {
@@ -62,9 +61,6 @@ export function WorkspacePortScanner(): null {
       .finally(() => {
         if (inFlightRef.current === promise) {
           inFlightRef.current = null
-        }
-        if (generation === generationRef.current) {
-          setWorkspacePortScanRefreshing(false)
         }
       })
     inFlightRef.current = promise

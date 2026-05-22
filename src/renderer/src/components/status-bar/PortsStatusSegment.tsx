@@ -224,19 +224,50 @@ function WorkspaceGroupRows({
 }
 
 export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
   const workspacePortCount = workspaceGroups.reduce((count, group) => count + group.ports.length, 0)
   const totalCount = workspacePortCount + externalPorts.length
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        return
+      }
+      // Why: the 30s background poll is intentionally quiet; opening the
+      // popover should still collapse that stale window without flashing icons.
+      void scanWorkspacePortsForTarget(runtimeTarget)
+        .then((result) => {
+          setWorkspacePortScan({ key: scanKey, result })
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          setWorkspacePortScan({
+            key: scanKey,
+            result: {
+              platform: 'unknown',
+              scannedAt: Date.now(),
+              ports: [],
+              unavailableReason: message || 'Workspace port scan failed.'
+            }
+          })
+        })
+    },
+    [runtimeTarget, scanKey, setWorkspacePortScan]
+  )
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <Tooltip delayDuration={150}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

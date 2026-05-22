@@ -190,7 +190,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     return promise
   }, [activeRepo, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
 
-  // Why: WorkspacePortScanner already owns the 5s all-worktree poll. The
+  // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
   // panel scopes that shared result instead of starting a second scan loop.
   const displayScan = scan?.key === scanKey && isVisible ? scan.result : null
 
