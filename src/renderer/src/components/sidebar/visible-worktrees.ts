@@ -84,7 +84,7 @@ export function computeVisibleWorktreeIds(
   opts: {
     filterRepoIds: string[]
     showSleepingWorkspaces: boolean
-    tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
+    tabsByWorktree: Record<string, TerminalTab[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds

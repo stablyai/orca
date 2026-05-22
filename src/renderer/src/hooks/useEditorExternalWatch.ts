@@ -2,8 +2,8 @@
    target diffing, fs:changed dispatch, tombstone coalescing, and rename
    correlation so the end-to-end event-to-store mutation contract stays
    readable in one file. */
-import { useEffect, useRef } from 'react'
-import { useAppStore, type AppState } from '@/store'
+import { useEffect, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
 import { basename, joinPath } from '@/lib/path'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -71,86 +71,11 @@ type ExternalWatchNotification = {
   relativePath: string
 }
 
-type WatchedTargetsSnapshot = {
-  targets: WatchedTarget[]
-  targetsKey: string
-}
-
-type EditorExternalWatchTargetState = Pick<
-  AppState,
-  'openFiles' | 'worktreesByRepo' | 'repos' | 'activeWorktreeId' | 'settings'
->
-
-let cachedOpenFiles: AppState['openFiles'] | null = null
-let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
-let cachedRepos: AppState['repos'] | null = null
-let cachedActiveWorktreeId: string | null = null
-let cachedRuntimeEnvironmentId: string | undefined
-let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
-
 export function getWatchedTargetKey(target: WatchedTarget): string {
   // Why: SSH worktrees can exist in the store before their remote filesystem
   // provider is ready. Include connectionId so a local/unknown placeholder
   // watch is replaced by the real SSH watch when the repo metadata hydrates.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
-}
-
-export function getEditorExternalWatchTargets(
-  state: EditorExternalWatchTargetState
-): WatchedTargetsSnapshot {
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
-  if (
-    cachedOpenFiles === state.openFiles &&
-    cachedWorktreesByRepo === state.worktreesByRepo &&
-    cachedRepos === state.repos &&
-    cachedActiveWorktreeId === state.activeWorktreeId &&
-    cachedRuntimeEnvironmentId === runtimeEnvironmentId
-  ) {
-    return cachedWatchedTargetsSnapshot
-  }
-
-  const ids = new Set<string>()
-  // Why: only the set of worktree IDs matters for watcher ownership. Dirty
-  // flags and editor metadata can churn while typing/saving, but should not
-  // re-render App or rebuild watch subscriptions.
-  for (const f of state.openFiles) {
-    ids.add(f.worktreeId)
-  }
-  if (state.activeWorktreeId) {
-    ids.add(state.activeWorktreeId)
-  }
-
-  const nextTargets: WatchedTarget[] = []
-  const parts: string[] = []
-  for (const id of Array.from(ids).sort()) {
-    const wt = findWorktreeById(state.worktreesByRepo, id)
-    if (!wt) {
-      continue
-    }
-    const repo = state.repos.find((r) => r.id === wt.repoId)
-    const target = {
-      worktreeId: id,
-      worktreePath: wt.path,
-      connectionId: repo?.connectionId ?? undefined,
-      runtimeEnvironmentId
-    }
-    nextTargets.push(target)
-    parts.push(getWatchedTargetKey(target))
-  }
-
-  const targetsKey = parts.join('|')
-  cachedOpenFiles = state.openFiles
-  cachedWorktreesByRepo = state.worktreesByRepo
-  cachedRepos = state.repos
-  cachedActiveWorktreeId = state.activeWorktreeId
-  cachedRuntimeEnvironmentId = runtimeEnvironmentId
-
-  if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
-    return cachedWatchedTargetsSnapshot
-  }
-
-  cachedWatchedTargetsSnapshot = { targets: nextTargets, targetsKey }
-  return cachedWatchedTargetsSnapshot
 }
 
 // Why: macOS atomic writes (Claude Code Edit, vim :w, VSCode save) deliver a
@@ -183,7 +108,47 @@ type PendingDeleteTimer = {
  * regardless of which UI panel is visible.
  */
 export function useEditorExternalWatch(): void {
-  const { targets, targetsKey } = useAppStore(getEditorExternalWatchTargets)
+  const openFiles = useAppStore((s) => s.openFiles)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const repos = useAppStore((s) => s.repos)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
+
+  // Why: unify the target computation and the dependency key into one memo so
+  // there's a single source of truth. The derived string key drives the
+  // watch-diff effect; the array itself is what the effect actually iterates.
+  const { targets, targetsKey } = useMemo(() => {
+    const ids = new Set<string>()
+    // Why: watch every worktree that has an editor tab open, so terminal edits
+    // in any of those roots reach the editor. Also watch the active worktree
+    // even when it has no open files — otherwise the File Explorer's tree
+    // reconciliation loses its event stream the moment the last tab for that
+    // worktree is closed.
+    for (const f of openFiles) {
+      ids.add(f.worktreeId)
+    }
+    if (activeWorktreeId) {
+      ids.add(activeWorktreeId)
+    }
+    const nextTargets: WatchedTarget[] = []
+    const parts: string[] = []
+    for (const id of Array.from(ids).sort()) {
+      const wt = findWorktreeById(worktreesByRepo, id)
+      if (!wt) {
+        continue
+      }
+      const repo = repos.find((r) => r.id === wt.repoId)
+      const target = {
+        worktreeId: id,
+        worktreePath: wt.path,
+        connectionId: repo?.connectionId ?? undefined,
+        runtimeEnvironmentId: runtimeEnvironmentId?.trim() || undefined
+      }
+      nextTargets.push(target)
+      parts.push(getWatchedTargetKey(target))
+    }
+    return { targets: nextTargets, targetsKey: parts.join('|') }
+  }, [openFiles, worktreesByRepo, repos, activeWorktreeId, runtimeEnvironmentId])
 
   const targetsRef = useRef<WatchedTarget[]>([])
   const latestTargetsRef = useRef<WatchedTarget[]>(targets)

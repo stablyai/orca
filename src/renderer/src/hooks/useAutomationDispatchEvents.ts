@@ -6,9 +6,9 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
-import { getAutomationAgentCompletionObservation } from '@/lib/automation-agent-completion'
 import { useAppStore } from '@/store'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   createAutomationRunOutputSnapshotBuffer,
   selectAutomationRunOutputSnapshot
@@ -195,35 +195,35 @@ export function useAutomationDispatchEvents(): void {
           void markCompletionResult()
         }
         const observeAgentStatus = (
-          paneKey: string,
+          tabId: string,
           startedAfter: number,
           options?: { requireWorkingAfterStart?: boolean }
         ): void => {
           let sawWorkingAfterStart = false
           const checkCurrentStatus = (): void => {
-            const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-            const observation = getAutomationAgentCompletionObservation({
-              entry,
-              startedAfter,
-              sawWorkingAfterStart,
-              requireWorkingAfterStart: options?.requireWorkingAfterStart
-            })
-            sawWorkingAfterStart = observation.sawWorkingAfterStart
-            latestAssistantMessage = observation.latestAssistantMessage || latestAssistantMessage
-            if (observation.done) {
-              handleAgentDone()
+            const { agentStatusByPaneKey } = useAppStore.getState()
+            for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+              const parsed = parsePaneKey(paneKey)
+              if (parsed?.tabId !== tabId || entry.updatedAt < startedAfter) {
+                continue
+              }
+              if (entry.state === 'working') {
+                sawWorkingAfterStart = true
+              }
+              if (
+                entry.state === 'done' &&
+                (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
+              ) {
+                latestAssistantMessage =
+                  entry.lastAssistantMessage?.trim() || latestAssistantMessage
+                handleAgentDone()
+                return
+              }
             }
           }
           // Why: Codex/Claude completion normally arrives through the global
           // hook IPC listener, not the hidden PTY OSC fallback.
-          unsubscribeAgentStatus = useAppStore.subscribe((state, previousState) => {
-            if (
-              state.agentStatusByPaneKey[paneKey] === previousState.agentStatusByPaneKey[paneKey]
-            ) {
-              return
-            }
-            checkCurrentStatus()
-          })
+          unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
           checkCurrentStatus()
         }
         const dispatchStartedAt = Date.now()
@@ -282,7 +282,7 @@ export function useAutomationDispatchEvents(): void {
                       void markExitResult(code)
                     }
                   })
-                  observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
+                  observeAgentStatus(reusableSession.tabId, reuseCompletionStartedAt, {
                     requireWorkingAfterStart: true
                   })
                   await markDispatchResult({
@@ -338,7 +338,7 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.paneKey, dispatchStartedAt)
+        observeAgentStatus(result.tabId, dispatchStartedAt)
         try {
           await markDispatchResult({
             runId: run.id,

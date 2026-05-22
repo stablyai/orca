@@ -87,11 +87,6 @@ import {
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
-import {
-  advanceSyntheticTitleSpinnerEntries,
-  type SyntheticTitleSpinnerEntry
-} from './synthetic-title-spinner'
-import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { isCrashReportReason } from '../shared/crash-reporting'
 
 let mainWindow: BrowserWindow | null = null
@@ -420,11 +415,14 @@ function openMainWindow(): BrowserWindow {
     // window recreations instead of stacking on top of stale listeners.
     agentHookServer.setListener(null)
     setMigrationUnsupportedPtyListener(null)
-    // Why: any running synthesized-title spinner timer would fire into a
-    // destroyed webContents; stop it here instead of deferring to per-pane
-    // teardown, which may never run for restored-but-never-torn-down panes
-    // when the window goes away.
-    stopAllSyntheticTitleSpinners()
+    // Why: any running synthesized-title spinner intervals would fire into a
+    // destroyed webContents; stop them all here instead of deferring to
+    // per-pane teardown, which may never run for restored-but-never-torn-down
+    // panes when the window goes away. stopSyntheticTitleSpinner deletes only
+    // the current entry, which the Map iterator handles safely.
+    for (const paneKey of syntheticTitleSpinnerByPaneKey.keys()) {
+      stopSyntheticTitleSpinner(paneKey)
+    }
   })
   mainWindow = window
   agentHookServer.setListener(
@@ -629,9 +627,8 @@ const SYNTHETIC_TITLE_PROFILES: Record<string, SyntheticTitleProfile> = {
 
 const syntheticTitleSpinnerByPaneKey = new Map<
   string,
-  SyntheticTitleSpinnerEntry<SyntheticTitleProfile>
+  { timer: ReturnType<typeof setInterval>; frame: number; profile: SyntheticTitleProfile }
 >()
-let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
 
 type ServeOptions = {
   json: boolean
@@ -744,93 +741,27 @@ function installServeSignalHandlers(): void {
   process.once('SIGTERM', quit)
 }
 
-// Why: on PTY teardown the paneKey mapping is dropped, so the spinner tick
-// would keep firing but sendSyntheticTitle would no-op forever. Drop the
-// entry explicitly so the shared timer shuts down once no panes are active.
+// Why: on PTY teardown the paneKey→ptyId mapping is dropped, so the spinner
+// interval would keep firing but sendSyntheticTitle would no-op forever.
+// Stop the interval explicitly so the process doesn't carry a timer per dead
+// pane.
 registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
 })
 
-function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
+function sendSyntheticTitle(ptyId: string, data: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    return
-  }
-  // Why: repeated working-spinner frames are decorative and can arrive every
-  // 80ms per agent. Final/permission frames are forced because they drive BEL.
-  if (
-    !shouldSendSyntheticTitleFrame({
-      force: options.force === true,
-      windowVisible: mainWindow.isVisible(),
-      windowFocused: mainWindow.isFocused()
-    })
-  ) {
     return
   }
   mainWindow.webContents.send('pty:data', { id: ptyId, data })
 }
 
-function canSendDecorativeSyntheticTitle(): boolean {
-  return (
-    mainWindow !== null &&
-    !mainWindow.isDestroyed() &&
-    shouldSendSyntheticTitleFrame({
-      force: false,
-      windowVisible: mainWindow.isVisible(),
-      windowFocused: mainWindow.isFocused()
-    })
-  )
-}
-
 function stopSyntheticTitleSpinner(paneKey: string): void {
-  if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
-    stopSyntheticTitleSpinnerTimerIfIdle()
+  const entry = syntheticTitleSpinnerByPaneKey.get(paneKey)
+  if (entry) {
+    clearInterval(entry.timer)
+    syntheticTitleSpinnerByPaneKey.delete(paneKey)
   }
-}
-
-function stopAllSyntheticTitleSpinners(): void {
-  syntheticTitleSpinnerByPaneKey.clear()
-  stopSyntheticTitleSpinnerTimer()
-}
-
-function stopSyntheticTitleSpinnerTimer(): void {
-  if (!syntheticTitleSpinnerTimer) {
-    return
-  }
-  clearInterval(syntheticTitleSpinnerTimer)
-  syntheticTitleSpinnerTimer = null
-}
-
-function stopSyntheticTitleSpinnerTimerIfIdle(): void {
-  if (syntheticTitleSpinnerByPaneKey.size === 0) {
-    stopSyntheticTitleSpinnerTimer()
-  }
-}
-
-function tickSyntheticTitleSpinners(): void {
-  if (!canSendDecorativeSyntheticTitle()) {
-    return
-  }
-  const ticks = advanceSyntheticTitleSpinnerEntries({
-    entries: syntheticTitleSpinnerByPaneKey,
-    frameCount: SPINNER_FRAMES.length,
-    getPtyIdForPaneKey
-  })
-  for (const tick of ticks) {
-    sendSyntheticTitle(
-      tick.ptyId,
-      `\x1b]0;${SPINNER_FRAMES[tick.frame]} ${tick.profile.workingLabel}\x07`
-    )
-  }
-  stopSyntheticTitleSpinnerTimerIfIdle()
-}
-
-function ensureSyntheticTitleSpinnerTimer(): void {
-  if (syntheticTitleSpinnerTimer) {
-    return
-  }
-  // Why: a single process timer covers all synthesized title spinners; per-pane
-  // intervals multiplied idle wakeups when several retained agents were working.
-  syntheticTitleSpinnerTimer = setInterval(tickSyntheticTitleSpinners, SPINNER_INTERVAL_MS)
 }
 
 function driveSyntheticTitleFromHook(
@@ -856,8 +787,23 @@ function driveSyntheticTitleFromHook(
       existing.profile = profile
       return
     }
-    syntheticTitleSpinnerByPaneKey.set(paneKey, { frame, profile })
-    ensureSyntheticTitleSpinnerTimer()
+    const timer = setInterval(() => {
+      const ptyIdNow = getPtyIdForPaneKey(paneKey)
+      if (!ptyIdNow) {
+        stopSyntheticTitleSpinner(paneKey)
+        return
+      }
+      const cur = syntheticTitleSpinnerByPaneKey.get(paneKey)
+      if (!cur) {
+        return
+      }
+      cur.frame = (cur.frame + 1) % SPINNER_FRAMES.length
+      sendSyntheticTitle(
+        ptyIdNow,
+        `\x1b]0;${SPINNER_FRAMES[cur.frame]} ${cur.profile.workingLabel}\x07`
+      )
+    }, SPINNER_INTERVAL_MS)
+    syntheticTitleSpinnerByPaneKey.set(paneKey, { timer, frame, profile })
     return
   }
   // Why: leaving the spinner running after a `blocked`/`waiting`/`done` event
@@ -873,7 +819,7 @@ function driveSyntheticTitleFromHook(
   stopSyntheticTitleSpinner(paneKey)
   const label =
     state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
-  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07\x07`, { force: true })
+  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07\x07`)
 }
 
 app.whenReady().then(async () => {

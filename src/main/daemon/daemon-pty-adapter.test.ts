@@ -523,37 +523,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('clears a pending checkpoint timer when the last dirty session closes', async () => {
-      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
-      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
-
-      try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        const { id } = await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: 'close-dirty-checkpoint'
-        })
-        const internals = historyAdapter as unknown as {
-          dirtySessionVersions: Map<string, number>
-        }
-
-        lastSubprocess._simulateData('dirty before close\r\n')
-        await waitFor(() => internals.dirtySessionVersions.has(id))
-        const callsBeforeClose = clearTimeoutSpy.mock.calls.length
-
-        await historyAdapter.shutdown(id, { immediate: true })
-
-        expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(callsBeforeClose)
-      } finally {
-        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-        clearTimeoutSpy.mockRestore()
-      }
-    })
-
     it('writes meta.json with endedAt on exit', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 

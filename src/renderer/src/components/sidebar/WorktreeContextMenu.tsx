@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: this menu keeps row targeting, batch actions, and ctrl-click event guards together so nested worktree menus share one event policy. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,17 +101,6 @@ function hasSleepableWorkspaceActivity(
   return hasLiveTerminal || hasBrowser
 }
 
-function getSleepableWorkspaceIds(
-  worktreeIds: readonly string[],
-  tabsByWorktree: Record<string, { id: string }[]>,
-  ptyIdsByTabId: Record<string, string[]>,
-  browserTabsByWorktree: Record<string, { id: string }[]>
-): string[] {
-  return worktreeIds.filter((worktreeId) =>
-    hasSleepableWorkspaceActivity(worktreeId, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
-  )
-}
-
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
   return (
     Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
@@ -191,38 +179,26 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
-  const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
-  const activeContextWorktreeIds = useMemo(
-    () => activeContextWorktrees.map((item) => item.id),
-    [activeContextWorktrees]
-  )
   const isDeleting = deleteState?.isDeleting ?? false
   const isFolder = repo ? isFolderRepo(repo) : false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const sleepableWorktreeIds = useAppStore(
-    useShallow((s) =>
-      getSleepableWorkspaceIds(
-        activeContextWorktreeIds,
-        s.tabsByWorktree,
-        s.ptyIdsByTabId,
-        s.browserTabsByWorktree
-      )
-    )
-  )
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
+  const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
-  const sleepableWorktreeIdSet = useMemo(
-    () => new Set(sleepableWorktreeIds),
-    [sleepableWorktreeIds]
-  )
   const sleepableWorktrees = useMemo(
-    () => activeContextWorktrees.filter((item) => sleepableWorktreeIdSet.has(item.id)),
-    [activeContextWorktrees, sleepableWorktreeIdSet]
+    () =>
+      activeContextWorktrees.filter((item) =>
+        hasSleepableWorkspaceActivity(item.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+      ),
+    [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
   )
   const deletingContext = useMemo(
     () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
@@ -604,7 +580,6 @@ export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
-  getSleepableWorkspaceIds,
   hasSleepableWorkspaceActivity,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,

@@ -30,14 +30,6 @@ export function checksLabel(status: CheckStatus): string {
   }
 }
 
-export function shouldRefreshWorktreeCardDecoration(args: {
-  documentVisible: boolean
-  windowFocused: boolean
-}): boolean {
-  void args.windowFocused
-  return args.documentVisible
-}
-
 export const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>, string> = {
   merge: 'Merging',
   rebase: 'Rebasing',

@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileSessionTabSnapshots,
-  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
@@ -24,8 +23,6 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     browserPagesByWorkspace: {},
     openFiles: [],
     editorDrafts: {},
-    agentStatusByPaneKey: {},
-    agentStatusEpoch: 0,
     activeTabId: null,
     ...overrides
   } as AppState
@@ -52,14 +49,9 @@ function makeSharedOverrides(): Partial<AppState> {
     activeFileIdByWorktree: {},
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    agentStatusByPaneKey: {},
-    agentStatusEpoch: 0
+    browserPagesByWorkspace: {}
   }
 }
-
-type BrowserWorkspaceForTest = AppState['browserTabsByWorktree'][string][number]
-type BrowserPageForTest = AppState['browserPagesByWorkspace'][string][number]
 
 describe('getRuntimeMobileSessionSyncKey', () => {
   it('changes when mobile markdown tab state changes', () => {
@@ -248,114 +240,21 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
-  it('changes when explicit agent status epoch changes', () => {
+  it('changes when explicit agent status changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
-        agentStatusEpoch: 0
+        agentStatusByPaneKey: {}
       })
     )
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
-        agentStatusEpoch: 1
-      })
-    )
-
-    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
-  })
-
-  it('changes when mobile browser workspace projection fields change', () => {
-    const sharedOverrides = makeSharedOverrides()
-    const workspace: BrowserWorkspaceForTest = {
-      id: 'browser-1',
-      worktreeId: 'wt-1',
-      sessionProfileId: null,
-      activePageId: 'page-1',
-      pageIds: ['page-1'],
-      url: 'https://example.com',
-      title: 'Example',
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null,
-      createdAt: 1
-    }
-    const baseKey = getRuntimeMobileSessionSyncKey(
-      makeState({
-        ...sharedOverrides,
-        browserTabsByWorktree: { 'wt-1': [workspace] }
-      })
-    )
-
-    for (const changedWorkspace of [
-      { ...workspace, title: 'Changed' },
-      { ...workspace, url: 'https://changed.example.com' },
-      { ...workspace, loading: true },
-      { ...workspace, canGoBack: true },
-      { ...workspace, canGoForward: true }
-    ]) {
-      const changedKey = getRuntimeMobileSessionSyncKey(
-        makeState({
-          ...sharedOverrides,
-          browserTabsByWorktree: { 'wt-1': [changedWorkspace] }
-        })
-      )
-      expect(runtimeMobileSessionSyncKeysEqual(baseKey, changedKey)).toBe(false)
-    }
-  })
-
-  it('changes when mobile browser page projection fields change', () => {
-    const sharedOverrides = makeSharedOverrides()
-    const page: BrowserPageForTest = {
-      id: 'page-1',
-      workspaceId: 'browser-1',
-      worktreeId: 'wt-1',
-      url: 'https://example.com',
-      title: 'Example',
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null,
-      createdAt: 1
-    }
-    const baseKey = getRuntimeMobileSessionSyncKey(
-      makeState({
-        ...sharedOverrides,
-        browserPagesByWorkspace: { 'browser-1': [page] }
-      })
-    )
-
-    for (const changedPage of [
-      { ...page, title: 'Changed' },
-      { ...page, url: 'https://changed.example.com' },
-      { ...page, loading: true },
-      { ...page, canGoBack: true },
-      { ...page, canGoForward: true }
-    ]) {
-      const changedKey = getRuntimeMobileSessionSyncKey(
-        makeState({
-          ...sharedOverrides,
-          browserPagesByWorkspace: { 'browser-1': [changedPage] }
-        })
-      )
-      expect(runtimeMobileSessionSyncKeysEqual(baseKey, changedKey)).toBe(false)
-    }
-  })
-
-  it('changes for same-state agent prompt/tool updates because mobile publishes details', () => {
-    const sharedOverrides = makeSharedOverrides()
-    const before = getRuntimeMobileSessionSyncKey(
-      makeState({
-        ...sharedOverrides,
-        agentStatusEpoch: 1,
         agentStatusByPaneKey: {
           'term-1:11111111-1111-4111-8111-111111111111': {
             state: 'working',
-            prompt: 'first prompt',
+            prompt: 'fix parity',
             updatedAt: 1_700_000_000_000,
             stateStartedAt: 1_699_999_999_000,
             agentType: 'codex',
@@ -366,66 +265,8 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         }
       })
     )
-    const after = getRuntimeMobileSessionSyncKey(
-      makeState({
-        ...sharedOverrides,
-        agentStatusEpoch: 1,
-        agentStatusByPaneKey: {
-          'term-1:11111111-1111-4111-8111-111111111111': {
-            state: 'working',
-            prompt: 'updated prompt preview',
-            toolName: 'Edit',
-            updatedAt: 1_700_000_001_000,
-            stateStartedAt: 1_699_999_999_000,
-            agentType: 'codex',
-            paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
-            terminalTitle: 'codex [working]',
-            stateHistory: []
-          }
-        }
-      })
-    )
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
-  })
-
-  it('does not skip the App subscriber gate for same-epoch agent detail updates', () => {
-    const sharedOverrides = makeSharedOverrides()
-    const before = makeState({
-      ...sharedOverrides,
-      agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        'term-1:11111111-1111-4111-8111-111111111111': {
-          state: 'working',
-          prompt: 'first prompt',
-          updatedAt: 1_700_000_000_000,
-          stateStartedAt: 1_699_999_999_000,
-          agentType: 'codex',
-          paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
-          terminalTitle: 'codex [working]',
-          stateHistory: []
-        }
-      }
-    })
-    const after = makeState({
-      ...sharedOverrides,
-      agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        'term-1:11111111-1111-4111-8111-111111111111': {
-          state: 'working',
-          prompt: 'updated prompt preview',
-          toolName: 'Edit',
-          updatedAt: 1_700_000_001_000,
-          stateStartedAt: 1_699_999_999_000,
-          agentType: 'codex',
-          paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
-          terminalTitle: 'codex [working]',
-          stateHistory: []
-        }
-      }
-    })
-
-    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
   })
 })
 

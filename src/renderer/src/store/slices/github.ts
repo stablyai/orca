@@ -930,10 +930,6 @@ function evictStaleEntries<T>(
   return pruned
 }
 
-function shouldRefreshIssueDecorations(state: AppState): boolean {
-  return (state.worktreeCardProperties ?? []).includes('issue')
-}
-
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 function debouncedSaveCache(state: AppState): void {
@@ -2501,7 +2497,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const now = Date.now()
     const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
-    const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
     const isPRStatusGrouping = state.groupBy === 'pr-status'
     const rightSidebarShowsPR =
       state.rightSidebarOpen &&
@@ -2535,7 +2530,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             }
           }
         }
-        if (shouldRefreshIssues && wt.linkedIssue) {
+        if (wt.linkedIssue) {
           const issueKey = repoScopedCacheKey(repo.path, repo.id, String(wt.linkedIssue))
           const issueEntry = state.issueCache[issueKey]
           if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
@@ -2617,7 +2612,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       }
     }
-    if (shouldRefreshIssueDecorations(state) && worktree.linkedIssue) {
+    if (worktree.linkedIssue) {
       void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
     }
   },
@@ -2800,7 +2795,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
     }
 
-    if (shouldRefreshIssueDecorations(state) && worktree.linkedIssue) {
+    if (worktree.linkedIssue) {
       const issueKey = repoScopedCacheKey(repo.path, repo.id, String(worktree.linkedIssue))
       const issueEntry = state.issueCache[issueKey]
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {

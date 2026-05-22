@@ -1897,7 +1897,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     stateStartedAt: number
   }
   type StoreLike = Record<string, unknown>
-  type StoreSubscribeListener = (state: StoreLike, previousState?: StoreLike) => void
+  type StoreSubscribeListener = (state: StoreLike) => void
 
   function buildStoreState(overrides: StoreLike): StoreLike {
     // Why: copy the defensive set of getState() fields the hook touches during
@@ -2512,85 +2512,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
     expect(getSnapshot).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).not.toHaveBeenCalled()
-  })
-
-  it('gates snapshot and notification-settings work to the store fields they consume', async () => {
-    const getSnapshot = vi.fn(() => Promise.resolve([]))
-    const syncAgentHookCompletionNotificationSettings = vi.fn(() => true)
-    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
-    const notifications = { enabled: true, agentTaskComplete: true }
-
-    let storeState: StoreLike = buildStoreState({
-      workspaceSessionReady: true,
-      settings: { terminalFontSize: 13, notifications }
-    })
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn((listener: StoreSubscribeListener) => {
-          subscribeListenerRef.current = listener
-          return () => {
-            subscribeListenerRef.current = null
-          }
-        }),
-        getState: () => storeState
-      }
-    }))
-    vi.doMock('./agent-hook-completion-notifications', () => ({
-      observeAgentHookCompletionForNotification: vi.fn(),
-      syncAgentHookCompletionNotificationSettings
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        getSnapshot,
-        onSet: () => () => {}
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-
-    useIpcEvents()
-    await Promise.resolve()
-    expect(getSnapshot).toHaveBeenCalledTimes(1)
-    expect(syncAgentHookCompletionNotificationSettings).toHaveBeenCalledTimes(1)
-
-    if (typeof subscribeListenerRef.current !== 'function') {
-      throw new Error('Expected useAppStore.subscribe listener to be registered')
-    }
-
-    let previousState = storeState
-    storeState = { ...storeState, activeView: 'tasks' }
-    subscribeListenerRef.current(storeState, previousState)
-    expect(getSnapshot).toHaveBeenCalledTimes(1)
-    expect(syncAgentHookCompletionNotificationSettings).toHaveBeenCalledTimes(1)
-
-    previousState = storeState
-    storeState = {
-      ...storeState,
-      settings: {
-        ...(storeState.settings as Record<string, unknown>),
-        notifications: { enabled: true, agentTaskComplete: false }
-      }
-    }
-    subscribeListenerRef.current(storeState, previousState)
-    expect(getSnapshot).toHaveBeenCalledTimes(1)
-    expect(syncAgentHookCompletionNotificationSettings).toHaveBeenCalledTimes(2)
-
-    previousState = storeState
-    storeState = { ...storeState, workspaceSessionReady: false }
-    subscribeListenerRef.current(storeState, previousState)
-    expect(getSnapshot).toHaveBeenCalledTimes(1)
-    expect(syncAgentHookCompletionNotificationSettings).toHaveBeenCalledTimes(2)
-
-    previousState = storeState
-    storeState = { ...storeState, workspaceSessionReady: true }
-    subscribeListenerRef.current(storeState, previousState)
-    await Promise.resolve()
-    expect(getSnapshot).toHaveBeenCalledTimes(2)
-    expect(syncAgentHookCompletionNotificationSettings).toHaveBeenCalledTimes(2)
   })
 
   it('waits for the remote workspace client id before dropping self notifications', async () => {

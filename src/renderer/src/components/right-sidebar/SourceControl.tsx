@@ -107,7 +107,6 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { installFocusedVisibilityInterval } from '@/lib/focused-visibility-interval'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -143,6 +142,7 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
+  GitUpstreamStatus,
   GlobalSettings,
   SourceControlViewMode,
   TuiAgent
@@ -160,9 +160,6 @@ import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commi
 
 export type SourceControlScope = 'all' | 'uncommitted'
 type RemoteActionError = { kind: RemoteOpKind; message: string }
-
-const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
-const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
@@ -767,27 +764,11 @@ function SourceControlInner(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const entries = useAppStore((s) =>
-    activeWorktreeId
-      ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
-      : EMPTY_GIT_STATUS_ENTRIES
-  )
-  const branchEntries = useAppStore((s) =>
-    activeWorktreeId
-      ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
-      : EMPTY_BRANCH_CHANGE_ENTRIES
-  )
-  const branchSummary = useAppStore((s) =>
-    activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
-  )
-  const conflictOperation = useAppStore((s) =>
-    activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
-  )
-  // Why: leave undefined until fetchUpstreamStatus resolves for this worktree.
-  // A synthetic "no upstream" flashes "Publish Branch" during worktree switches.
-  const remoteStatus = useAppStore((s) =>
-    activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
-  )
+  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
+  const gitBranchCompareSummaryByWorktree = useAppStore((s) => s.gitBranchCompareSummaryByWorktree)
+  const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
@@ -1054,6 +1035,27 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+  const entries = useMemo(
+    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitStatusByWorktree]
+  )
+  const branchEntries = useMemo(
+    () => (activeWorktreeId ? (gitBranchChangesByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitBranchChangesByWorktree]
+  )
+  const branchSummary = activeWorktreeId
+    ? (gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null)
+    : null
+  const conflictOperation = activeWorktreeId
+    ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
+    : 'unknown'
+  // Why: leave undefined until fetchUpstreamStatus resolves for this worktree.
+  // Substituting a synthetic { hasUpstream: false } flashes "Publish Branch"
+  // on every worktree switch — resolvePrimaryAction treats it as an
+  // unpublished branch until the real status lands a moment later.
+  const remoteStatus: GitUpstreamStatus | undefined = activeWorktreeId
+    ? remoteStatusesByWorktree[activeWorktreeId]
+    : undefined
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -2808,12 +2810,7 @@ function SourceControlInner(): React.JSX.Element {
     refreshActiveGitStatusAfterMutation
   ])
 
-  const branchCompareInFlightRef = useRef(false)
-  const branchCompareRerunRef = useRef(false)
-  const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
-  const refreshBranchCompareRef = useRef<() => Promise<void>>(async () => {})
-
-  const runBranchCompare = useCallback(async () => {
+  const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
       return
     }
@@ -2879,38 +2876,7 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
-  const refreshBranchCompare = useCallback(async () => {
-    if (branchCompareInFlightRef.current) {
-      branchCompareRerunRef.current = true
-      return branchCompareRunPromiseRef.current ?? undefined
-    }
-
-    branchCompareInFlightRef.current = true
-    const runPromise = (async (): Promise<void> => {
-      // Why: branch compare shells out to git on a timer and can exceed the
-      // 5s poll interval on large repos. Keep one compare chain in flight and
-      // collapse skipped ticks into one trailing refresh instead of stacking
-      // subprocesses while preserving the await contract for direct callers.
-      try {
-        await runBranchCompare()
-      } finally {
-        branchCompareInFlightRef.current = false
-        if (branchCompareRerunRef.current) {
-          branchCompareRerunRef.current = false
-          await refreshBranchCompareRef.current()
-        }
-      }
-    })()
-    branchCompareRunPromiseRef.current = runPromise
-    try {
-      await runPromise
-    } finally {
-      if (branchCompareRunPromiseRef.current === runPromise) {
-        branchCompareRunPromiseRef.current = null
-      }
-    }
-  }, [runBranchCompare])
-
+  const refreshBranchCompareRef = useRef(refreshBranchCompare)
   refreshBranchCompareRef.current = refreshBranchCompare
 
   const refreshGitHistory = useCallback(async (): Promise<void> => {
@@ -2972,13 +2938,21 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
+    void refreshBranchCompareRef.current()
+    const refreshIfFocused = (): void => {
+      if (document.hasFocus()) {
+        void refreshBranchCompareRef.current()
+      }
+    }
     // Why: branch compare shells out to git every tick. The panel only needs
-    // background freshness while Orca is visible; hidden-window time should not
-    // burn subprocess work or timer wakeups.
-    return installFocusedVisibilityInterval({
-      run: () => void refreshBranchCompareRef.current(),
-      intervalMs: BRANCH_REFRESH_INTERVAL_MS
-    })
+    // background freshness while Orca is focused; on focus we refresh
+    // immediately so hidden-window time does not burn subprocess work.
+    const intervalId = window.setInterval(refreshIfFocused, BRANCH_REFRESH_INTERVAL_MS)
+    window.addEventListener('focus', refreshIfFocused)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refreshIfFocused)
+    }
   }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {

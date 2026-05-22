@@ -1358,29 +1358,6 @@ describe('setActiveWorktree', () => {
     })
   })
 
-  it('preserves terminal and unified tab map references when a live title repeats', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      }
-    })
-
-    const first = store.getState().createTab(wt)
-    store.getState().updateTabTitle(first.id, 'Claude Code')
-    const tabsByWorktree = store.getState().tabsByWorktree
-    const unifiedTabsByWorktree = store.getState().unifiedTabsByWorktree
-    const sortEpoch = store.getState().sortEpoch
-
-    store.getState().updateTabTitle(first.id, 'Claude Code')
-
-    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
-    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
-    expect(store.getState().sortEpoch).toBe(sortEpoch)
-  })
-
   it('clears stale background browser tab type when closing the last browser tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

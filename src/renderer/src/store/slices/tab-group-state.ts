@@ -208,12 +208,6 @@ export function patchTab(
   if (!found) {
     return null
   }
-  const patchChangesTab = (Object.keys(patch) as (keyof Tab)[]).some(
-    (key) => found.tab[key] !== patch[key]
-  )
-  if (!patchChangesTab) {
-    return null
-  }
   const { worktreeId } = found
   const tabs = tabsByWorktree[worktreeId] ?? []
   return {

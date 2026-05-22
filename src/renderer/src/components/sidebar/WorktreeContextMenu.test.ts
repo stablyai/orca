@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getSleepableWorkspaceIds,
   hasSleepableWorkspaceActivity,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
@@ -112,27 +111,5 @@ describe('hasSleepableWorkspaceActivity', () => {
     expect(hasSleepableWorkspaceActivity('wt-1', {}, {}, { 'wt-1': [{ id: 'browser-1' }] })).toBe(
       true
     )
-  })
-})
-
-describe('getSleepableWorkspaceIds', () => {
-  it('selects only requested worktrees with live activity', () => {
-    expect(
-      getSleepableWorkspaceIds(
-        ['wt-1', 'wt-2'],
-        {
-          'wt-1': [{ id: 'tab-1' }],
-          'wt-3': [{ id: 'tab-3' }]
-        },
-        {
-          'tab-1': ['pty-1'],
-          'tab-3': ['pty-3']
-        },
-        {
-          'wt-2': [],
-          'wt-4': [{ id: 'browser-4' }]
-        }
-      )
-    ).toEqual(['wt-1'])
   })
 })

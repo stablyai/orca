@@ -8,7 +8,6 @@ import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   buildWorktreeAgentRows,
-  selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree
 } from './useWorktreeAgentRows'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -141,49 +140,6 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
     // records preserves element identity for useShallow.
     expect(first).toEqual([unsupported])
     expect(second).toEqual([unsupported])
-    expect(first).toBe(second)
     expect(first[0]).toBe(second[0])
-  })
-})
-
-describe('selectLiveAgentStatusEntriesForWorktree', () => {
-  it('reuses unaffected worktree arrays when another worktree receives a same-state ping', () => {
-    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'first' })
-    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'first' })
-    const state = {
-      tabsByWorktree: {
-        'wt-1': [makeTab('tab-1')],
-        'wt-2': [makeTab('tab-2')]
-      },
-      agentStatusByPaneKey: {
-        [PANE_KEY_1]: wt1Entry,
-        [PANE_KEY_2]: wt2Entry
-      },
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
-    }
-
-    const firstWt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
-    const firstWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
-    const nextState = {
-      ...state,
-      agentStatusByPaneKey: {
-        [PANE_KEY_1]: wt1Entry,
-        [PANE_KEY_2]: {
-          ...wt2Entry,
-          prompt: 'updated prompt preview',
-          updatedAt: 1100
-        }
-      }
-    }
-
-    const secondWt1 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')
-    const secondWt2 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')
-
-    // Why: WorktreeCard mounts one selector per visible card. A same-state
-    // hook ping for wt-2 must not make wt-1 pay a fresh array/render cost.
-    expect(secondWt1).toBe(firstWt1)
-    expect(secondWt2).not.toBe(firstWt2)
-    expect(secondWt2[0]?.prompt).toBe('updated prompt preview')
   })
 })

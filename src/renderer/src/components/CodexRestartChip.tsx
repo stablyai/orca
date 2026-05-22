@@ -1,22 +1,6 @@
 import { RefreshCw } from 'lucide-react'
-import { useShallow } from 'zustand/react/shallow'
+import { useMemo } from 'react'
 import { useAppStore } from '../store'
-
-const EMPTY_TABS: { id: string }[] = []
-
-export function collectStalePtyIdsForTabs({
-  tabs,
-  ptyIdsByTabId,
-  codexRestartNoticeByPtyId
-}: {
-  tabs: { id: string }[]
-  ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, unknown>
-}): string[] {
-  return tabs.flatMap((tab) =>
-    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
-  )
-}
 
 export function collectStaleWorktreePtyIds({
   tabsByWorktree,
@@ -29,11 +13,9 @@ export function collectStaleWorktreePtyIds({
   codexRestartNoticeByPtyId: Record<string, unknown>
   worktreeId: string
 }): string[] {
-  return collectStalePtyIdsForTabs({
-    tabs: tabsByWorktree[worktreeId] ?? EMPTY_TABS,
-    ptyIdsByTabId,
-    codexRestartNoticeByPtyId
-  })
+  return (tabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
+    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
+  )
 }
 
 export function dismissStaleWorktreePtyIds(
@@ -53,17 +35,22 @@ export default function CodexRestartChip({
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
-  const staleWorktreePtyIds = useAppStore(
-    useShallow((s) =>
-      collectStalePtyIdsForTabs({
-        tabs: s.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
-        ptyIdsByTabId: s.ptyIdsByTabId,
-        codexRestartNoticeByPtyId: s.codexRestartNoticeByPtyId
-      })
-    )
-  )
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
   const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
+
+  const staleWorktreePtyIds = useMemo(
+    () =>
+      collectStaleWorktreePtyIds({
+        tabsByWorktree,
+        ptyIdsByTabId,
+        codexRestartNoticeByPtyId,
+        worktreeId
+      }),
+    [codexRestartNoticeByPtyId, ptyIdsByTabId, tabsByWorktree, worktreeId]
+  )
 
   if (staleWorktreePtyIds.length === 0) {
     return null

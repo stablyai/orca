@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
-import { useActiveTerminalTabs } from './store/selectors'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
@@ -77,7 +76,6 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import {
-  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
@@ -292,7 +290,7 @@ function App(): React.JSX.Element {
   // that remount so the left workspace list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
-  const tabs = useActiveTerminalTabs()
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const floatingUnifiedTabCount = useAppStore(
     (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0
   )
@@ -757,7 +755,24 @@ function App(): React.JSX.Element {
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
+      if (
+        state.tabsByWorktree === previousState.tabsByWorktree &&
+        state.groupsByWorktree === previousState.groupsByWorktree &&
+        state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
+        state.layoutByWorktree === previousState.layoutByWorktree &&
+        state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
+        state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
+        state.activeFileId === previousState.activeFileId &&
+        state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
+        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
+        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
+        state.openFiles === previousState.openFiles &&
+        state.editorDrafts === previousState.editorDrafts &&
+        state.activeTabId === previousState.activeTabId &&
+        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
+        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
+      ) {
         return
       }
       const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
@@ -942,6 +957,7 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
+  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const hasTabBar = tabs.length >= 2
   const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
   const activeTabCanExpand = effectiveActiveTabId

@@ -71,33 +71,4 @@ describe('DaemonStreamDataBatcher', () => {
       vi.useRealTimers()
     }
   })
-
-  it('flushes interactive output for one session while another session has large pending output', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const background = 'x'.repeat(2048)
-
-      batcher.enqueue('client-1', 'session-background', background)
-      batcher.enqueue('client-1', 'session-interactive', 'echo', {
-        flushImmediately: true,
-        flushMaxChars: 1024
-      })
-
-      expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(
-        '"sessionId":"session-interactive"'
-      )
-      expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
-
-      vi.advanceTimersByTime(8)
-      expect(streamSocket.write).toHaveBeenCalledTimes(2)
-      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(
-        '"sessionId":"session-background"'
-      )
-      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(`"data":"${background}"`)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 })

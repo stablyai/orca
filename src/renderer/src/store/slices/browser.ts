@@ -317,26 +317,6 @@ function mirrorWorkspaceFromActivePage(
   }
 }
 
-function browserWorkspaceMirrorFieldsEqual(
-  workspace: BrowserWorkspace,
-  mirrored: BrowserWorkspace
-): boolean {
-  const workspacePageIds = workspace.pageIds ?? []
-  const mirroredPageIds = mirrored.pageIds ?? []
-  return (
-    workspace.activePageId === mirrored.activePageId &&
-    workspacePageIds.length === mirroredPageIds.length &&
-    workspacePageIds.every((pageId, index) => pageId === mirroredPageIds[index]) &&
-    workspace.url === mirrored.url &&
-    workspace.title === mirrored.title &&
-    workspace.loading === mirrored.loading &&
-    workspace.faviconUrl === mirrored.faviconUrl &&
-    workspace.canGoBack === mirrored.canGoBack &&
-    workspace.canGoForward === mirrored.canGoForward &&
-    workspace.loadError === mirrored.loadError
-  )
-}
-
 function getFallbackTabTypeForWorktree(
   worktreeId: string,
   openFiles: AppState['openFiles'],
@@ -355,46 +335,26 @@ function getFallbackTabTypeForWorktree(
   return 'terminal'
 }
 
-const browserWorkspaceByIdCache = new WeakMap<
-  Record<string, BrowserWorkspace[]>,
-  Map<string, BrowserWorkspace>
->()
-const browserPageByIdCache = new WeakMap<Record<string, BrowserPage[]>, Map<string, BrowserPage>>()
-
 function findWorkspace(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
   workspaceId: string
 ): BrowserWorkspace | null {
-  const cached = browserWorkspaceByIdCache.get(browserTabsByWorktree)
-  if (cached) {
-    return cached.get(workspaceId) ?? null
-  }
-  const workspaceById = new Map<string, BrowserWorkspace>()
-  for (const workspaces of Object.values(browserTabsByWorktree)) {
-    for (const workspace of workspaces) {
-      workspaceById.set(workspace.id, workspace)
-    }
-  }
-  browserWorkspaceByIdCache.set(browserTabsByWorktree, workspaceById)
-  return workspaceById.get(workspaceId) ?? null
+  return (
+    Object.values(browserTabsByWorktree)
+      .flat()
+      .find((workspace) => workspace.id === workspaceId) ?? null
+  )
 }
 
 function findPage(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   pageId: string
 ): BrowserPage | null {
-  const cached = browserPageByIdCache.get(browserPagesByWorkspace)
-  if (cached) {
-    return cached.get(pageId) ?? null
-  }
-  const pageById = new Map<string, BrowserPage>()
-  for (const pages of Object.values(browserPagesByWorkspace)) {
-    for (const page of pages) {
-      pageById.set(page.id, page)
-    }
-  }
-  browserPageByIdCache.set(browserPagesByWorkspace, pageById)
-  return pageById.get(pageId) ?? null
+  return (
+    Object.values(browserPagesByWorkspace)
+      .flat()
+      .find((page) => page.id === pageId) ?? null
+  )
 }
 
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
@@ -1134,67 +1094,24 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
-      const nextPage = {
-        ...page,
-        title:
-          updates.title === undefined ? page.title : normalizeBrowserTitle(updates.title, page.url),
-        loading: updates.loading ?? page.loading,
-        faviconUrl: updates.faviconUrl === undefined ? page.faviconUrl : updates.faviconUrl,
-        canGoBack: updates.canGoBack ?? page.canGoBack,
-        canGoForward: updates.canGoForward ?? page.canGoForward,
-        loadError: updates.loadError === undefined ? page.loadError : updates.loadError
-      }
-      const unifiedTabs = s.unifiedTabsByWorktree[workspace.worktreeId] ?? []
-      const unifiedIndex =
-        workspace.activePageId === pageId && updates.title !== undefined
-          ? unifiedTabs.findIndex(
-              (entry) => entry.contentType === 'browser' && entry.entityId === workspace.id
-            )
-          : -1
-      const unifiedLabelNeedsRepair =
-        unifiedIndex !== -1 && unifiedTabs[unifiedIndex]?.label !== nextPage.title
-      const pageStateUnchanged =
-        nextPage.title === page.title &&
-        nextPage.loading === page.loading &&
-        nextPage.faviconUrl === page.faviconUrl &&
-        nextPage.canGoBack === page.canGoBack &&
-        nextPage.canGoForward === page.canGoForward &&
-        nextPage.loadError === page.loadError
-      const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
-      const mirroredWorkspace = pageStateUnchanged
-        ? mirrorWorkspaceFromActivePage(workspace, currentPages)
-        : null
-      const workspaceNeedsRepair =
-        mirroredWorkspace !== null &&
-        !browserWorkspaceMirrorFieldsEqual(workspace, mirroredWorkspace)
-      if (pageStateUnchanged && !unifiedLabelNeedsRepair && !workspaceNeedsRepair) {
-        return s
-      }
-      if (pageStateUnchanged) {
-        const nextState: Partial<AppState> = {}
-        if (workspaceNeedsRepair && mirroredWorkspace) {
-          nextState.browserTabsByWorktree = {
-            ...s.browserTabsByWorktree,
-            [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
-              (tab) => (tab.id === workspace.id ? mirroredWorkspace : tab)
-            )
-          }
-        }
-        if (unifiedLabelNeedsRepair) {
-          nextState.unifiedTabsByWorktree = {
-            ...s.unifiedTabsByWorktree,
-            [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
-              index === unifiedIndex ? { ...entry, label: nextPage.title } : entry
-            )
-          }
-        }
-        return nextState
-      }
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
-        entry.id === pageId ? nextPage : entry
+        entry.id === pageId
+          ? {
+              ...entry,
+              title:
+                updates.title === undefined
+                  ? entry.title
+                  : normalizeBrowserTitle(updates.title, entry.url),
+              loading: updates.loading ?? entry.loading,
+              faviconUrl: updates.faviconUrl === undefined ? entry.faviconUrl : updates.faviconUrl,
+              canGoBack: updates.canGoBack ?? entry.canGoBack,
+              canGoForward: updates.canGoForward ?? entry.canGoForward,
+              loadError: updates.loadError === undefined ? entry.loadError : updates.loadError
+            }
+          : entry
       )
       const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-      const nextState: Partial<AppState> = {
+      return {
         browserPagesByWorkspace: {
           ...s.browserPagesByWorkspace,
           [workspace.id]: nextPages
@@ -1206,18 +1123,19 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           )
         }
       }
-      if (workspace.activePageId === pageId && updates.title !== undefined && unifiedIndex !== -1) {
-        if (unifiedLabelNeedsRepair || unifiedTabs[unifiedIndex]?.label !== nextWorkspace.title) {
-          nextState.unifiedTabsByWorktree = {
-            ...s.unifiedTabsByWorktree,
-            [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
-              index === unifiedIndex ? { ...entry, label: nextWorkspace.title } : entry
-            )
-          }
-        }
-      }
-      return nextState
     })
+
+    const page = findPage(get().browserPagesByWorkspace, pageId)
+    if (!page) {
+      return
+    }
+    const workspace = findWorkspace(get().browserTabsByWorktree, page.workspaceId)
+    const item = Object.values(get().unifiedTabsByWorktree)
+      .flat()
+      .find((entry) => entry.contentType === 'browser' && entry.entityId === page.workspaceId)
+    if (item && workspace && workspace.activePageId === pageId && updates.title) {
+      get().setTabLabel(item.id, workspace.title)
+    }
   },
 
   setBrowserTabUrl: (pageId, url) => get().setBrowserPageUrl(pageId, url),

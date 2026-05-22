@@ -231,7 +231,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const closeAutomationsPage = useAppStore((s) => s.closeAutomationsPage)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const settings = useAppStore((s) => s.settings)
@@ -549,11 +549,6 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [refresh])
 
   useEffect(() => {
-    // Why: completion detection only changes on agent state transitions.
-    // Same-state prompt/tool pings clone agentStatusByPaneKey frequently but
-    // cannot mark an automation complete; agentStatusEpoch is the cheap signal.
-    void agentStatusEpoch
-    const { agentStatusByPaneKey } = useAppStore.getState()
     const inFlight = completionInFlightRef.current
     const completedRuns = runs.filter((run) => {
       if (run.status !== 'dispatched' || !run.terminalSessionId) {
@@ -609,7 +604,7 @@ export default function AutomationsPage(): React.JSX.Element {
           inFlight.delete(run.id)
         }
       })
-  }, [agentStatusEpoch, retainedAgentsByPaneKey, refresh, runs])
+  }, [agentStatusByPaneKey, retainedAgentsByPaneKey, refresh, runs])
 
   useEffect(() => {
     if (!draft.projectId) {

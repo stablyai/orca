@@ -6,21 +6,9 @@ import {
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
-import { installFocusedVisibilityInterval } from '@/lib/focused-visibility-interval'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 5_000
-
-export function shouldRunWorkspacePortScan({
-  documentVisible,
-  windowFocused
-}: {
-  documentVisible: boolean
-  windowFocused: boolean
-}): boolean {
-  void windowFocused
-  return documentVisible
-}
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
   return {
@@ -83,21 +71,42 @@ export function WorkspacePortScanner(): null {
   }, [hasWorktrees, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
 
   useEffect(() => {
+    let cancelled = false
+    let timeout: ReturnType<typeof setTimeout> | null = null
     generationRef.current += 1
     setWorkspacePortScan(null)
 
-    // Why: workspace port scans can cross runtime IPC or shell out remotely.
-    // Keep the timer stopped while no UI can display the result; visibility
-    // changes run one immediate refresh on return.
-    const stopFocusedInterval = installFocusedVisibilityInterval({
-      run: () => void refresh(),
-      intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
-    })
+    const run = async (): Promise<void> => {
+      try {
+        if (document.visibilityState === 'visible') {
+          await refresh()
+        }
+      } finally {
+        if (!cancelled) {
+          timeout = setTimeout(() => void run(), WORKSPACE_PORT_SCAN_INTERVAL_MS)
+        }
+      }
+    }
+
+    void run()
+
+    const refreshWhenVisible = (): void => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        void refresh()
+      }
+    }
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
+      cancelled = true
       generationRef.current += 1
       inFlightRef.current = null
-      stopFocusedInterval()
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [refresh, setWorkspacePortScan])
 

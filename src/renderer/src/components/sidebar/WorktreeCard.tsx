@@ -33,12 +33,7 @@ import type {
   IssueInfo,
   LinearIssue
 } from '../../../../shared/types'
-import {
-  branchDisplayName,
-  CONFLICT_OPERATION_LABELS,
-  FilledBellIcon,
-  shouldRefreshWorktreeCardDecoration
-} from './WorktreeCardHelpers'
+import { branchDisplayName, CONFLICT_OPERATION_LABELS, FilledBellIcon } from './WorktreeCardHelpers'
 import {
   WorktreeCardDetailsHover,
   WorktreeCardMetaBadges,
@@ -50,11 +45,9 @@ import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
-import { installFocusedVisibilityInterval } from '@/lib/focused-visibility-interval'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktree } from './sleep-worktree-flow'
 import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
-import { useMacOptionKeyPressed } from './mac-option-key-state'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -167,7 +160,26 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const isMacOptionPressed = useMacOptionKeyPressed()
+  const [isMacOptionPressed, setIsMacOptionPressed] = useState(false)
+
+  useEffect(() => {
+    const isMac = navigator.userAgent.includes('Mac')
+    if (!isMac) {
+      return
+    }
+    const handleKeyChange = (event: KeyboardEvent): void => {
+      setIsMacOptionPressed(event.altKey)
+    }
+    const handleWindowBlur = (): void => setIsMacOptionPressed(false)
+    window.addEventListener('keydown', handleKeyChange, true)
+    window.addEventListener('keyup', handleKeyChange, true)
+    window.addEventListener('blur', handleWindowBlur)
+    return () => {
+      window.removeEventListener('keydown', handleKeyChange, true)
+      window.removeEventListener('keyup', handleKeyChange, true)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [])
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -270,34 +282,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
     if (isWebClient()) {
       return
     }
-    if (!repo || isFolder || worktree.isBare || !hostedReviewCacheKey || !showPR) {
-      return
-    }
-    const refreshHostedReviewIfVisible = (): void => {
-      if (
-        !shouldRefreshWorktreeCardDecoration({
-          documentVisible: document.visibilityState === 'visible',
-          windowFocused: document.hasFocus()
-        })
-      ) {
-        return
-      }
+    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && showPR) {
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
       // number from metadata or the visible cache whenever we have one.
-      void fetchHostedReviewForBranch(repo.path, branch, {
+      fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null,
         staleWhileRevalidate: true
       })
-    }
-    refreshHostedReviewIfVisible()
-    window.addEventListener('focus', refreshHostedReviewIfVisible)
-    document.addEventListener('visibilitychange', refreshHostedReviewIfVisible)
-    return () => {
-      window.removeEventListener('focus', refreshHostedReviewIfVisible)
-      document.removeEventListener('visibilitychange', refreshHostedReviewIfVisible)
     }
   }, [
     repo,
@@ -329,51 +323,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
 
-    const issueNumber = worktree.linkedIssue
-    const refreshIssueIfVisible = (): void => {
-      if (
-        !shouldRefreshWorktreeCardDecoration({
-          documentVisible: document.visibilityState === 'visible',
-          windowFocused: document.hasFocus()
-        })
-      ) {
-        return
-      }
-      void fetchIssue(repo.path, issueNumber, { repoId: repo.id })
-    }
+    fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
 
-    // Background poll as fallback (activity triggers handle the fast path).
-    // The interval itself is stopped while hidden so issue cards do not keep
-    // long-lived workspaces waking just to skip their fetch.
-    return installFocusedVisibilityInterval({
-      run: refreshIssueIfVisible,
-      intervalMs: 5 * 60_000
-    })
+    // Background poll as fallback (activity triggers handle the fast path)
+    const interval = setInterval(() => {
+      fetchIssue(repo.path, worktree.linkedIssue!, { repoId: repo.id })
+    }, 5 * 60_000) // 5 minutes
+
+    return () => clearInterval(interval)
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
     if (!worktree.linkedLinearIssue || !showIssue) {
       return
     }
-    const linearIssueId = worktree.linkedLinearIssue
-    const refreshLinearIssueIfVisible = (): void => {
-      if (
-        !shouldRefreshWorktreeCardDecoration({
-          documentVisible: document.visibilityState === 'visible',
-          windowFocused: document.hasFocus()
-        })
-      ) {
-        return
-      }
-      void fetchLinearIssue(linearIssueId)
-    }
-    refreshLinearIssueIfVisible()
-    window.addEventListener('focus', refreshLinearIssueIfVisible)
-    document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    return () => {
-      window.removeEventListener('focus', refreshLinearIssueIfVisible)
-      document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    }
+    void fetchLinearIssue(worktree.linkedLinearIssue)
   }, [worktree.linkedLinearIssue, fetchLinearIssue, showIssue])
 
   // Stable click handler – ignore clicks that are really text selections.

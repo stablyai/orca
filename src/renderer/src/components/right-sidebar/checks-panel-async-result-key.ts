@@ -25,11 +25,3 @@ export function shouldCommitChecksPanelAsyncResult(
 ): boolean {
   return currentKey === requestKey
 }
-
-export function shouldPollChecksPanel(args: {
-  documentVisible: boolean
-  windowFocused: boolean
-}): boolean {
-  void args.windowFocused
-  return args.documentVisible
-}

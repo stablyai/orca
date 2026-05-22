@@ -38,7 +38,6 @@ export type LaunchAgentBackgroundSessionArgs = {
 export type LaunchAgentBackgroundSessionResult = {
   tabId: string
   ptyId: string
-  paneKey: string
   startupPlan: AgentStartupPlan
 }
 
@@ -253,5 +252,5 @@ export async function launchAgentBackgroundSession(
     })
   }
 
-  return { tabId: tab.id, ptyId, paneKey, startupPlan }
+  return { tabId: tab.id, ptyId, startupPlan }
 }

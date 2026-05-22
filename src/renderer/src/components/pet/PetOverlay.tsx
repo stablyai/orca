@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
 import type { CustomPet } from '../../../../shared/types'
@@ -9,23 +9,21 @@ import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state
 type Sprite = NonNullable<CustomPet['sprite']>
 
 function usePetAnimationName(dragging: boolean): PetAnimationName {
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
 
-  return useMemo(() => {
-    // Why: same-state prompt/tool pings clone agentStatusByPaneKey at PTY-event
-    // frequency, but they cannot change the coarse pet animation. Recompute on
-    // agentStatusEpoch instead, which also ticks when freshness boundaries pass.
-    void agentStatusEpoch
-    const { agentStatusByPaneKey } = useAppStore.getState()
-    return selectPetAnimationName({
-      entries: Object.values(agentStatusByPaneKey),
-      retainedCount: Object.keys(retainedAgentsByPaneKey).length,
-      dragging,
-      now: Date.now(),
-      staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
-    })
-  }, [agentStatusEpoch, dragging, retainedAgentsByPaneKey])
+  // Re-render when the freshness scheduler ticks so stale live states stop
+  // driving pet animations even if no other store value changes.
+  void agentStatusEpoch
+
+  return selectPetAnimationName({
+    entries: Object.values(agentStatusByPaneKey),
+    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
+    dragging,
+    now: Date.now(),
+    staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
+  })
 }
 
 // Why: pet bundles ship a sprite sheet — animate by stepping a CSS background

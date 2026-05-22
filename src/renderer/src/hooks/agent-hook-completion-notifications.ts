@@ -24,7 +24,7 @@ function isAgentTaskCompleteNotificationEnabled(): boolean {
 
 export function syncAgentHookCompletionNotificationSettings(): boolean {
   const enabled = isAgentTaskCompleteNotificationEnabled()
-  if (enabled !== wasAgentTaskCompleteNotificationEnabled) {
+  if (!enabled || (!wasAgentTaskCompleteNotificationEnabled && enabled)) {
     requireFreshWorkingForNewCoordinators = true
     for (const [paneKey, entry] of coordinatorsByPaneKey) {
       paneKeysRequiringFreshWorking.add(paneKey)

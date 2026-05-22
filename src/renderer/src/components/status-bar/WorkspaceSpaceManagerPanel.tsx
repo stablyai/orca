@@ -1063,6 +1063,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const worktreeMap = useAppStore((state) => getWorktreeMapFromState(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
+  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
@@ -1107,10 +1108,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Why: active-agent freshness is time-based. The epoch bumps when fresh
     // hook entries cross the stale boundary so delete readiness recomputes.
-    // Same-state prompt/tool pings clone the live status map but cannot change
-    // whether a workspace is safe to delete, so read the map only on epoch.
     void agentStatusEpoch
-    const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey
     const details = new Map<string, WorkspaceDecisionDetails>()
     const now = Date.now()
     for (const worktree of sourceRows) {
@@ -1142,6 +1140,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [
     activeWorktreeId,
     agentStatusEpoch,
+    agentStatusByPaneKey,
     browserTabsByWorktree,
     editorDrafts,
     gitStatusByWorktree,
@@ -1699,7 +1698,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                         worktreeMap,
                         tabsByWorktree,
                         ptyIdsByTabId,
-                        agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+                        agentStatusByPaneKey,
                         migrationUnsupportedByPtyId,
                         runtimePaneTitlesByTabId,
                         retainedAgentsByPaneKey,

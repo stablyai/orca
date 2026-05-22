@@ -78,13 +78,6 @@ type BrowserSelection = {
   page: BrowserPage
 }
 
-type PaletteFocusSnapshot = {
-  worktreeId: string | null
-  tabType: 'browser' | 'editor' | 'terminal'
-  browserPageId: string | null
-  browserFocusTarget: 'webview' | 'address-bar'
-}
-
 function HighlightedText({
   text,
   matchRange
@@ -147,40 +140,8 @@ function findBrowserSelection(
   return { page, workspace, worktree }
 }
 
-function getPaletteFocusSnapshot(): PaletteFocusSnapshot {
-  const state = useAppStore.getState()
-  const browserPageId =
-    state.activeWorktreeId && state.activeTabType === 'browser'
-      ? ((state.browserTabsByWorktree[state.activeWorktreeId] ?? []).find(
-          (workspace) => workspace.id === state.activeBrowserTabId
-        )?.activePageId ?? null)
-      : null
-
-  return {
-    worktreeId: state.activeWorktreeId,
-    tabType: state.activeTabType,
-    browserPageId,
-    // Why: capture during render, before the portaled Dialog moves focus, so
-    // closing Cmd+J can restore the exact browser target that opened it.
-    browserFocusTarget:
-      state.activeTabType === 'browser' &&
-      typeof document !== 'undefined' &&
-      document.activeElement instanceof HTMLElement &&
-      document.activeElement.closest('[data-orca-browser-address-bar="true"]')
-        ? 'address-bar'
-        : 'webview'
-  }
-}
-
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
-  // Why: App keeps lazily loaded modals mounted after first use. The palette's
-  // search indexes subscribe to broad workspace slices, so drop the heavy
-  // content while closed to avoid rebuilding hidden jump results on hot ticks.
-  return visible ? <WorktreeJumpPaletteContent /> : null
-}
-
-function WorktreeJumpPaletteContent(): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -200,9 +161,10 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
@@ -215,20 +177,11 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
-  const initialFocusSnapshotRef = useRef<PaletteFocusSnapshot | null>(null)
-  if (initialFocusSnapshotRef.current === null) {
-    initialFocusSnapshotRef.current = getPaletteFocusSnapshot()
-  }
-  const previousWorktreeIdRef = useRef<string | null>(initialFocusSnapshotRef.current.worktreeId)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>(
-    initialFocusSnapshotRef.current.tabType
-  )
-  const previousBrowserPageIdRef = useRef<string | null>(
-    initialFocusSnapshotRef.current.browserPageId
-  )
-  const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>(
-    initialFocusSnapshotRef.current.browserFocusTarget
-  )
+  const previousWorktreeIdRef = useRef<string | null>(null)
+  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>('terminal')
+  const previousBrowserPageIdRef = useRef<string | null>(null)
+  const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
+  const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const prevQueryRef = useRef('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -293,35 +246,33 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
 
   // Why: typed queries still route through sortWorktreesSmart — switcher
   // ranking only diverges from smart-sort on the empty-query branch.
-  const sortedWorktrees = useMemo(() => {
-    // Why: same-state prompt/tool pings cannot change smart-sort order; the
-    // epoch is the cheap invalidation signal for state/freshness changes.
-    void agentStatusEpoch
-    const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey
-    return hasQuery
-      ? sortWorktreesSmart(
-          visibleWorktrees,
-          tabsByWorktree,
-          repoMap,
-          agentStatusByPaneKey,
-          runtimePaneTitlesByTabId,
-          ptyIdsByTabId,
-          migrationUnsupportedByPtyId,
-          terminalLayoutsByTabId
-        )
-      : switchableWorktreesForRows
-  }, [
-    agentStatusEpoch,
-    hasQuery,
-    visibleWorktrees,
-    switchableWorktreesForRows,
-    tabsByWorktree,
-    repoMap,
-    runtimePaneTitlesByTabId,
-    ptyIdsByTabId,
-    migrationUnsupportedByPtyId,
-    terminalLayoutsByTabId
-  ])
+  const sortedWorktrees = useMemo(
+    () =>
+      hasQuery
+        ? sortWorktreesSmart(
+            visibleWorktrees,
+            tabsByWorktree,
+            repoMap,
+            agentStatusByPaneKey,
+            runtimePaneTitlesByTabId,
+            ptyIdsByTabId,
+            migrationUnsupportedByPtyId,
+            terminalLayoutsByTabId
+          )
+        : switchableWorktreesForRows,
+    [
+      hasQuery,
+      visibleWorktrees,
+      switchableWorktreesForRows,
+      tabsByWorktree,
+      repoMap,
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
+    ]
+  )
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is explicitly cross-worktree, so it must keep
@@ -330,8 +281,6 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
     // tab on the default-branch worktree before toggling hide-on should still
     // be able to Cmd+J back to it — the setting hides the *workspace row*,
     // not the browser tabs that live inside it.
-    void agentStatusEpoch
-    const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey
     return sortWorktreesSmart(
       allWorktrees,
       tabsByWorktree,
@@ -344,9 +293,9 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
     )
   }, [
     allWorktrees,
-    agentStatusEpoch,
     tabsByWorktree,
     repoMap,
+    agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     migrationUnsupportedByPtyId,
@@ -537,6 +486,37 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
   const hasAnyBrowserPages = browserPageEntries.length > 0
 
   useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      previousWorktreeIdRef.current = activeWorktreeId
+      previousActiveTabTypeRef.current = activeTabType
+      previousBrowserPageIdRef.current =
+        activeWorktreeId && activeTabType === 'browser'
+          ? ((browserTabsByWorktree[activeWorktreeId] ?? []).find(
+              (workspace) => workspace.id === activeBrowserTabId
+            )?.activePageId ?? null)
+          : null
+      // Why: capture which browser surface had focus *before* Radix Dialog
+      // steals it. By onOpenAutoFocus time, document.activeElement has already
+      // moved to the dialog content, so address-bar detection must happen here.
+      previousBrowserFocusTargetRef.current =
+        activeTabType === 'browser' &&
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.closest('[data-orca-browser-address-bar="true"]')
+          ? 'address-bar'
+          : 'webview'
+      skipRestoreFocusRef.current = false
+      prevQueryRef.current = ''
+      setQuery('')
+      setSelectedItemId('')
+    }
+
+    wasVisibleRef.current = visible
+  }, [activeBrowserTabId, activeTabType, activeWorktreeId, browserTabsByWorktree, visible])
+
+  useEffect(() => {
+    if (!visible) {
+      return
+    }
     const queryChanged = deferredQuery !== prevQueryRef.current
     prevQueryRef.current = deferredQuery
 
@@ -567,7 +547,7 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
     ) {
       setSelectedItemId(firstSelectableId ?? selectableItems[0].id)
     }
-  }, [deferredQuery, selectedItemId, showCreateAction, selectableItems])
+  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectableItems])
 
   const focusFallbackSurface = useCallback(() => {
     requestAnimationFrame(() => {
@@ -862,7 +842,7 @@ function WorktreeJumpPaletteContent(): React.JSX.Element {
 
   return (
     <CommandDialog
-      open={true}
+      open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
       onOpenAutoFocus={handleOpenAutoFocus}

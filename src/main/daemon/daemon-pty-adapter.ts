@@ -66,7 +66,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
-  private checkpointTimer: ReturnType<typeof setTimeout> | null = null
+  private checkpointInterval: ReturnType<typeof setInterval> | null = null
   private checkpointInFlight: Promise<void> | null = null
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
   // Legacy daemons reject it, causing noisy log spam every 5 seconds.
@@ -246,7 +246,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
-    this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
     // path. Sleep also calls shutdown but expects scrollback to survive — wake
@@ -408,7 +407,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.dirtySessionVersions.clear()
-    this.stopCheckpointTimer()
     for (const id of ids) {
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
@@ -464,7 +462,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
-    this.stopCheckpointTimer()
+    if (this.checkpointInterval) {
+      clearInterval(this.checkpointInterval)
+      this.checkpointInterval = null
+    }
     this.dirtySessionVersions.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
@@ -486,7 +487,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // We write a final checkpoint before disconnecting so that if the daemon
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
-    this.stopCheckpointTimer()
+    if (this.checkpointInterval) {
+      clearInterval(this.checkpointInterval)
+      this.checkpointInterval = null
+    }
     // Why: wait for any in-flight timer pass to finish before starting
     // the final checkpoint. Otherwise both passes race on the shared tmp
     // file, risking ENOENT on rename and disabling future writes.
@@ -508,47 +512,23 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private async ensureConnected(): Promise<void> {
     await this.client.ensureConnected()
     this.setupEventRouting()
-    this.scheduleCheckpointTimer()
+    this.startCheckpointTimer()
   }
 
-  private stopCheckpointTimer(): void {
-    if (!this.checkpointTimer) {
+  private startCheckpointTimer(): void {
+    if (this.checkpointInterval || !this.historyManager || !this.supportsCheckpoints) {
       return
     }
-    clearTimeout(this.checkpointTimer)
-    this.checkpointTimer = null
-  }
-
-  private stopCheckpointTimerIfIdle(): void {
-    if (this.dirtySessionVersions.size === 0) {
-      this.stopCheckpointTimer()
-    }
-  }
-
-  private scheduleCheckpointTimer(): void {
-    if (
-      this.checkpointTimer ||
-      !this.historyManager ||
-      !this.supportsCheckpoints ||
-      this.dirtySessionVersions.size === 0
-    ) {
-      return
-    }
-    // Why: checkpointing is only needed after terminal data/resize/write marks
-    // a session dirty. A permanent interval woke the main process every 5s for
-    // idle daemon-backed terminals just to discover there was nothing to write.
-    this.checkpointTimer = setTimeout(() => {
-      this.checkpointTimer = null
+    this.checkpointInterval = setInterval(() => {
       // Why: if the previous pass is still in-flight (slow RPC or disk),
-      // retry later instead of overlapping checkpoint() writes to the same tmp
-      // file, which can lose a rename and disable future history writes.
+      // skip this tick. Overlapping passes race on the shared tmp file
+      // in checkpoint(), and a lost rename triggers handleWriteError which
+      // permanently disables the session's history writes.
       if (this.checkpointInFlight) {
-        this.scheduleCheckpointTimer()
         return
       }
       this.checkpointInFlight = this.checkpointDirtySessions().finally(() => {
         this.checkpointInFlight = null
-        this.scheduleCheckpointTimer()
       })
     }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
   }
@@ -558,7 +538,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return
     }
     this.dirtySessionVersions.set(sessionId, (this.dirtySessionVersions.get(sessionId) ?? 0) + 1)
-    this.scheduleCheckpointTimer()
   }
 
   private async checkpointDirtySessions(): Promise<void> {
@@ -573,8 +552,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
       [...this.dirtySessionVersions].filter(([sessionId]) => this.activeSessionIds.has(sessionId))
     )
     if (versions.size === 0) {
-      this.dirtySessionVersions.clear()
-      this.stopCheckpointTimer()
       return
     }
     const completed = await this.checkpointSessions(versions.keys())
@@ -583,7 +560,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.dirtySessionVersions.delete(sessionId)
       }
     }
-    this.stopCheckpointTimerIfIdle()
   }
 
   // Why: the adapter runs in the Electron main process and does not have direct
@@ -674,7 +650,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
-        this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager
             .closeSession(event.sessionId, event.payload.code)

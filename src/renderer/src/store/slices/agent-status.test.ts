@@ -148,7 +148,7 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('cursor')
   })
 
-  it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {
+  it('keeps global epochs stable for fresh same-state pings while updating the entry', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     store
@@ -177,8 +177,8 @@ describe('agent status tool + assistant fields', () => {
     expect(sameStateEntry.updatedAt).toBe(2_000)
     // Why: same-state hook pings are high-frequency and already update the
     // owning row through agentStatusByPaneKey. The global epochs are reserved
-    // for state/freshness/final-done changes that can affect aggregate
-    // dashboard/sidebar calculations.
+    // for state/freshness changes that can affect aggregate dashboard/sidebar
+    // calculations.
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch)
 
@@ -190,39 +190,6 @@ describe('agent status tool + assistant fields', () => {
       })
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps the status epoch, not sort epoch, for same-state done updates', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
-        updatedAt: 1_000,
-        stateStartedAt: 1_000
-      })
-    const firstEpoch = store.getState().agentStatusEpoch
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'done',
-        prompt: 'p1',
-        agentType: 'claude',
-        lastAssistantMessage: 'final answer'
-      },
-      'claude',
-      { updatedAt: 2_000, stateStartedAt: 1_000 }
-    )
-
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage).toBe(
-      'final answer'
-    )
-    // Why: retained rows need the final done snapshot, but done->done does not
-    // change smart-sort class, so only the status/retention epoch should tick.
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch)
   })
 
   it('bumps global epochs when a stale same-state entry refreshes', () => {

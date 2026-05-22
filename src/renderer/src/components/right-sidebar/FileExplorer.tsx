@@ -29,10 +29,6 @@ import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
-import { getActiveWorktreeOpenFiles } from '@/components/terminal/active-worktree-open-files'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-
-const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -48,12 +44,8 @@ function FileExplorerInner(): React.JSX.Element {
   const openFile = useAppStore((s) => s.openFile)
   const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
-  const entries = useAppStore((s) =>
-    activeWorktreeId
-      ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
-      : EMPTY_GIT_STATUS_ENTRIES
-  )
-  const openFiles = useAppStore((s) => getActiveWorktreeOpenFiles(s.openFiles, activeWorktreeId))
+  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
   const worktreePath = activeWorktree?.path ?? null
@@ -119,6 +111,10 @@ function FileExplorerInner(): React.JSX.Element {
     }
   }, [])
 
+  const entries = useMemo(
+    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitStatusByWorktree]
+  )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 

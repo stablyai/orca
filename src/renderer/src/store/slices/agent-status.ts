@@ -259,12 +259,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           interrupted: payload.interrupted
         }
         // Why: broad freshness-aware subscribers only need a global tick when
-        // an entry appears, changes state, crosses stale->fresh, or receives
-        // a same-state `done` update that may carry the final assistant
-        // message for retained rows. Same-state working prompt/tool pings
-        // still update agentStatusByPaneKey for the owning row, but they must
-        // not fan out through dashboard/sidebar aggregate work across every
-        // card. Sort-relevant inputs are:
+        // an entry appears, changes state, or crosses stale->fresh. Same-state
+        // tool/prompt pings still update agentStatusByPaneKey for the owning
+        // row, but they must not fan out through dashboard/sidebar aggregate
+        // work across every card. Sort-relevant inputs are:
         //   1. `state` transitions — smart-sort class is a function of state.
         //   2. Freshness transitions (stale → fresh) — `resolveAttention` in
         //      smart-attention.ts filters entries through
@@ -278,11 +276,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
         const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
-        const retentionRelevantChange =
-          sortRelevantChange ||
-          (existing?.state === 'done' &&
-            payload.state === 'done' &&
-            updatedAt !== existing.updatedAt)
         // Why: a new status event means the agent is live again — lift any
         // one-shot retention suppressor so the row can be retained normally
         // on its next disappearance. setAgentStatus fires on every PTY status
@@ -305,7 +298,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           agentStatusEpoch:
-            retentionRelevantChange || migrationUnsupported.changed
+            sortRelevantChange || migrationUnsupported.changed
               ? s.agentStatusEpoch + 1
               : s.agentStatusEpoch,
           sortEpoch:

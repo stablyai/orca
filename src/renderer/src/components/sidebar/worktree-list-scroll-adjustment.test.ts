@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  countRecordKeysByReference,
   resolvePendingSidebarReveal,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
@@ -16,21 +15,6 @@ const makeHeaderRow = (key: string) =>
   }) as const
 
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
-  it('counts record keys once per object reference', () => {
-    const keysSpy = vi.spyOn(Object, 'keys')
-    const first = { a: 1, b: 2 }
-    const second = { ...first, c: 3 }
-
-    try {
-      expect(countRecordKeysByReference(first)).toBe(2)
-      expect(countRecordKeysByReference(first)).toBe(2)
-      expect(countRecordKeysByReference(second)).toBe(3)
-      expect(keysSpy).toHaveBeenCalledTimes(2)
-    } finally {
-      keysSpy.mockRestore()
-    }
-  })
-
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({

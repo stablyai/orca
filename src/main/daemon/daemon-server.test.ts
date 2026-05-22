@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: daemon server RPC, auth, stream batching, and shutdown behavior share one socket/client harness; splitting would duplicate setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Socket } from 'net'
 import { tmpdir } from 'os'
@@ -16,7 +15,6 @@ function createTestDir(): string {
 
 function createMockSubprocess(): SubprocessHandle & {
   _simulateData: (data: string) => void
-  _simulateExit: (code: number) => void
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
@@ -36,9 +34,6 @@ function createMockSubprocess(): SubprocessHandle & {
     dispose: vi.fn(),
     _simulateData(data: string) {
       onDataCb?.(data)
-    },
-    _simulateExit(code: number) {
-      onExitCb?.(code)
     }
   }
 }
@@ -281,53 +276,6 @@ describe('DaemonServer', () => {
         expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
         vi.advanceTimersByTime(8)
         expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('flushes pending batched stream output before the exit event', async () => {
-      vi.useFakeTimers()
-      try {
-        let subprocess: ReturnType<typeof createMockSubprocess>
-        server = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => {
-            subprocess = createMockSubprocess()
-            return subprocess
-          }
-        })
-        const daemon = server as unknown as DaemonServerPrivate
-        const controlSocket = { destroy: vi.fn() } as unknown as Socket
-        const streamSocket = {
-          destroyed: false,
-          destroy: vi.fn(),
-          write: vi.fn()
-        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
-
-        daemon.clients.set('client-1', {
-          clientId: 'client-1',
-          controlSocket,
-          streamSocket
-        })
-
-        await daemon.routeRequest('client-1', {
-          id: 'req-1',
-          type: 'createOrAttach',
-          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
-
-        subprocess!._simulateData('final-output')
-        subprocess!._simulateExit(42)
-
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"event":"data"')
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"final-output"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"event":"exit"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"code":42')
-        vi.advanceTimersByTime(8)
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
       } finally {
         vi.useRealTimers()
       }

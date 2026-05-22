@@ -2036,30 +2036,11 @@ export function useIpcEvents(): void {
     // can be safely ignored instead of buffered against partially hydrated
     // renderer state.
     requestAgentStatusSnapshotIfReady()
-    syncAgentHookCompletionNotificationSettings()
     unsubs.push(
-      useAppStore.subscribe((state, previousState) => {
-        if (!previousState || state.workspaceSessionReady !== previousState.workspaceSessionReady) {
-          requestAgentStatusSnapshotIfReady()
-        }
-        // Why: pending hook events only become resolvable when pane routing
-        // inputs change; avoid scanning the queue on high-rate terminal updates.
-        if (
-          !previousState ||
-          state.workspaceSessionReady !== previousState.workspaceSessionReady ||
-          state.terminalLayoutsByTabId !== previousState.terminalLayoutsByTabId ||
-          state.tabsByWorktree !== previousState.tabsByWorktree ||
-          state.worktreesByRepo !== previousState.worktreesByRepo ||
-          state.repos !== previousState.repos
-        ) {
-          flushPendingAgentStatuses()
-        }
-        if (
-          !previousState ||
-          state.settings?.notifications !== previousState.settings?.notifications
-        ) {
-          syncAgentHookCompletionNotificationSettings()
-        }
+      useAppStore.subscribe(() => {
+        requestAgentStatusSnapshotIfReady()
+        flushPendingAgentStatuses()
+        syncAgentHookCompletionNotificationSettings()
       })
     )
 

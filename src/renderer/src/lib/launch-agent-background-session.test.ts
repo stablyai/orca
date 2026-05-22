@@ -154,7 +154,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
-    expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
+    expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
   })
 
   it('pre-marks trust for agents with first-launch trust prompts', async () => {
@@ -329,6 +329,6 @@ describe('launchAgentBackgroundSession', () => {
       }),
       expect.any(Object)
     )
-    expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'remote:env-1@@terminal-1', paneKey })
+    expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'remote:env-1@@terminal-1' })
   })
 })
