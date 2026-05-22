@@ -6,7 +6,6 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Badge } from '@/components/ui/badge'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -187,7 +186,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   // Why: interrupted is a terminal outcome the user needs to scan in the
-  // leading state column; the secondary-line badge below provides the text
+  // leading state column; the secondary-line text below provides the
   // explanation without competing with the prompt or timestamp.
   const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
@@ -448,15 +447,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           agent response normally appears. That keeps the prompt line clean
           while making the red status dot's meaning visible without hover. */}
       {isInterrupted || lastAssistantMessage ? (
-        <div className="mt-0.5 flex min-w-0 items-start gap-1 pl-5">
+        <div className="mt-0.5 flex min-w-0 items-start gap-1.5 pl-5">
           {isInterrupted && (
-            <Badge
-              variant="destructive"
-              className="h-4 px-1.5 py-0 text-[9px] leading-none"
+            <span
+              className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
               aria-label="Interrupted by user"
             >
               interrupted
-            </Badge>
+            </span>
           )}
           {lastAssistantMessage && (
             <CommentMarkdown

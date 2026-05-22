@@ -147,7 +147,7 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
-  it('renders interrupted done rows with the badge on the secondary line', () => {
+  it('renders interrupted done rows with plain text on the secondary line', () => {
     const markup = renderRow(
       makeAgent(
         { state: 'done', startedAt: 1_000 },
@@ -162,15 +162,15 @@ describe('DashboardAgentRow', () => {
       )
     )
     const promptIndex = markup.indexOf('Give me a quick update')
-    const badgeIndex = markup.indexOf('>interrupted<')
+    const interruptedIndex = markup.indexOf('>interrupted<')
 
-    // Why: interrupted keeps the leading red dot, but the text badge belongs
+    // Why: interrupted keeps the leading red dot, but the plain text belongs
     // on the response line so it does not compete with the user's prompt.
     expect(markup).toContain('data-slot="tooltip-trigger"')
     expect(markup).toContain('aria-label="Interrupted by user"')
     expect(markup).toContain('bg-red-500')
-    expect(markup).toContain('data-slot="badge"')
-    expect(badgeIndex).toBeGreaterThan(promptIndex)
+    expect(markup).not.toContain('data-slot="badge"')
+    expect(interruptedIndex).toBeGreaterThan(promptIndex)
     expect(markup).not.toContain('lucide-circle-check')
   })
 })
