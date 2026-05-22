@@ -53,6 +53,11 @@ const PTY_CONNECT_DIAG_LIMIT = 200
 const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
+let codexRestartNoticePresenceSource: Record<
+  string,
+  { previousAccountLabel: string; nextAccountLabel: string }
+> | null = null
+let codexRestartNoticePresence = false
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
   const notifications = useAppStore.getState().settings?.notifications
@@ -95,6 +100,16 @@ function isSshSessionExpiredError(err: unknown): boolean {
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
+}
+
+function hasCodexRestartNotices(
+  noticesByPtyId: Record<string, { previousAccountLabel: string; nextAccountLabel: string }>
+): boolean {
+  if (codexRestartNoticePresenceSource !== noticesByPtyId) {
+    codexRestartNoticePresenceSource = noticesByPtyId
+    codexRestartNoticePresence = Object.keys(noticesByPtyId).length > 0
+  }
+  return codexRestartNoticePresence
 }
 
 function sshPromptConnectOutcomeForStatus(
@@ -145,15 +160,21 @@ async function waitForSshConnection(connectionId: string): Promise<SshConnectRes
   return promise
 }
 
-function isCodexPaneStale(args: { tabId: string; panePtyId: string | null }): boolean {
+function isCodexPaneStale(args: {
+  tabId: string
+  worktreeId: string
+  panePtyId: string | null
+}): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
+  if (!hasCodexRestartNotices(codexRestartNoticeByPtyId)) {
+    return false
+  }
   if (args.panePtyId && codexRestartNoticeByPtyId[args.panePtyId]) {
     return true
   }
 
-  const tabs = Object.values(state.tabsByWorktree ?? {}).flat()
-  const tab = tabs.find((entry) => entry.id === args.tabId)
+  const tab = (state.tabsByWorktree[args.worktreeId] ?? []).find((entry) => entry.id === args.tabId)
   if (tab?.ptyId && codexRestartNoticeByPtyId[tab.ptyId]) {
     return true
   }
@@ -685,8 +706,10 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
-  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe(() => {
-    syncAgentTaskCompleteNotificationEnabled()
+  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe((state, previousState) => {
+    if (state.settings?.notifications !== previousState?.settings?.notifications) {
+      syncAgentTaskCompleteNotificationEnabled()
+    }
   })
 
   // ─── Agent task-complete: OS notification, not tab attention ──────────
@@ -838,7 +861,13 @@ export function connectPanePty(
     // still says the pane is stale. Fall back to the tab's persisted PTY ID so
     // the block still holds during reconnect races before the live transport has
     // updated its local PTY binding.
-    if (isCodexPaneStale({ tabId: deps.tabId, panePtyId: currentPtyId })) {
+    if (
+      isCodexPaneStale({
+        tabId: deps.tabId,
+        worktreeId: deps.worktreeId,
+        panePtyId: currentPtyId
+      })
+    ) {
       clearPendingTerminalInputIntent()
       return
     }
