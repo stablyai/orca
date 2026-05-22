@@ -14,6 +14,8 @@ import { useAppStore } from '@/store'
 // agents-orchestration, workbench, review) wait on a real signal — connection,
 // setup completion, or visiting every sub-step.
 const VIEW_TO_COMPLETE_WORKFLOWS = new Set<FeatureWallWorkflowId>(['workspaces'])
+const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['orchestration'])
+const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -30,6 +32,48 @@ export type FeatureWallCompletionProgress = Pick<
   FeatureWallCompletionState,
   'workflowDone' | 'agentStepDone' | 'workbenchStepDone' | 'reviewStepDone'
 >
+
+export function normalizeFeatureWallVisitedAgentSteps(value: unknown): AgentsStepId[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<AgentsStepId>()
+  for (const item of value) {
+    if (typeof item === 'string' && PERSISTED_AGENT_STEP_IDS.has(item as AgentsStepId)) {
+      seen.add(item as AgentsStepId)
+    }
+  }
+  return [...seen]
+}
+
+function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedAgentSteps(
+        JSON.parse(localStorage.getItem(VISITED_AGENT_STEPS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+function persistVisitedAgentStep(id: AgentsStepId): void {
+  if (!PERSISTED_AGENT_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedVisitedAgentSteps()
+    next.add(id)
+    localStorage.setItem(VISITED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
 
 export function getFeatureWallCompletionProgress(input: {
   visitedWorkflows: ReadonlySet<FeatureWallWorkflowId>
@@ -121,18 +165,20 @@ export function useFeatureWallCompletion(
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
   const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(new Set())
-  const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(new Set())
+  const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(() =>
+    readPersistedVisitedAgentSteps()
+  )
   const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(
     new Set()
   )
   const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(new Set())
 
-  // Reset visited workflows when the modal closes so reopening gets a fresh
-  // run of "viewed this in this session" checkmarks.
+  // Reset transient view-only steps when the modal closes. Persisted setup
+  // steps stay done across reopens once the matching setup signal is true.
   useEffect(() => {
     if (!isOpen) {
       setVisitedWorkflows(new Set())
-      setVisitedAgentSteps(new Set())
+      setVisitedAgentSteps(readPersistedVisitedAgentSteps())
       setVisitedWorkbenchSteps(new Set())
       setVisitedReviewSteps(new Set())
     }
@@ -184,6 +230,7 @@ export function useFeatureWallCompletion(
     if (id !== 'statuses' && id !== 'orchestration') {
       return
     }
+    persistVisitedAgentStep(id)
     setVisitedAgentSteps((prev) => {
       if (prev.has(id)) {
         return prev

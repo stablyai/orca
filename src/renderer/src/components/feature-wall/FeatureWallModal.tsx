@@ -166,7 +166,6 @@ export default function FeatureWallModal(): JSX.Element | null {
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
       setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
       setReviewStepId(reviewSteps[0]?.id ?? 'notes')
-      setOrchestrationSkillInstalled(false)
     }
   }, [agentsSteps, isOpen, reviewSteps, workbenchSteps])
 

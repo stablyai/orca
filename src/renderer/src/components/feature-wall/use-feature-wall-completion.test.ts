@@ -3,7 +3,10 @@ import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps
 import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-workflows'
 import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
-import { getFeatureWallCompletionProgress } from './use-feature-wall-completion'
+import {
+  getFeatureWallCompletionProgress,
+  normalizeFeatureWallVisitedAgentSteps
+} from './use-feature-wall-completion'
 
 type CompletionInput = Parameters<typeof getFeatureWallCompletionProgress>[0]
 
@@ -68,5 +71,19 @@ describe('getFeatureWallCompletionProgress', () => {
         orchestrationSkillInstalled: true
       }).workflowDone['agents-orchestration']
     ).toBe(true)
+  })
+})
+
+describe('normalizeFeatureWallVisitedAgentSteps', () => {
+  it('keeps persisted orchestration visits and drops transient or unknown steps', () => {
+    expect(
+      normalizeFeatureWallVisitedAgentSteps([
+        'statuses',
+        'orchestration',
+        'usage',
+        'orchestration',
+        'bogus'
+      ])
+    ).toEqual(['orchestration'])
   })
 })
