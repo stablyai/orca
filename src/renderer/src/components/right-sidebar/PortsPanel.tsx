@@ -20,12 +20,17 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  addressForPort,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
+import {
+  addressForPort,
+  advertisedBrowserUrlForDetectedPort,
+  advertisedBrowserUrlForForwardedRow,
+  browserUrlForPortForwardEntry
+} from '@/lib/workspace-port-urls'
 import {
   Dialog,
   DialogContent,
@@ -47,8 +52,6 @@ import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-type
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
 export {
-  addressForPort,
-  browserUrlForPort,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget
@@ -117,8 +120,6 @@ function safeLocalPort(remotePort: number): number {
   return remotePort
 }
 
-const HTTPS_PORTS = new Set([443, 8443])
-
 // Why: forwarded SSH ports and detected remote ports may report the same loopback
 // endpoint using different textual hosts. Normalize for deduping only.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
@@ -127,83 +128,6 @@ function normalizeHost(host: string | undefined): string {
     return 'localhost'
   }
   return host
-}
-
-/** Extract a custom DNS hostname from an advertised URL for reuse with a
- *  local SSH forward port. Returns null for loopback and IP literals — those
- *  printed-from-remote values don't help the local browser, and callers
- *  should fall back to 127.0.0.1 + local port. A DNS hostname only resolves
- *  locally if the user has /etc/hosts (or equivalent) mapping; we trust that
- *  rather than probing DNS here. */
-function customHostFromAdvertised(advertisedUrl: string | undefined): string | null {
-  if (!advertisedUrl) {
-    return null
-  }
-  try {
-    const url = new URL(advertisedUrl)
-    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
-    if (LOOPBACK_HOSTS.has(hostname)) {
-      return null
-    }
-    // IPv4 or IPv6 literals — not portable to the local box.
-    if (/^[0-9.]+$/.test(hostname) || hostname.includes(':')) {
-      return null
-    }
-    return url.hostname
-  } catch {
-    return null
-  }
-}
-
-type AdvertisedPortUrlFields = {
-  advertisedProtocol?: 'http' | 'https'
-  advertisedUrl?: string
-  remotePort: number
-}
-
-function advertisedProtocolForPort(port: AdvertisedPortUrlFields): 'http' | 'https' {
-  if (port.advertisedProtocol) {
-    return port.advertisedProtocol
-  }
-  if (port.advertisedUrl) {
-    try {
-      const protocol = new URL(port.advertisedUrl).protocol.replace(/:$/, '')
-      if (protocol === 'http' || protocol === 'https') {
-        return protocol
-      }
-    } catch {
-      // Fall through to the same port heuristic used for entries without an advertised URL.
-    }
-  }
-  return HTTPS_PORTS.has(port.remotePort) ? 'https' : 'http'
-}
-
-export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
-  // Why: older enriched entries may have advertisedUrl without advertisedProtocol;
-  // derive the URL once so the open action and labels do not drift.
-  const protocol = advertisedProtocolForPort(entry)
-  const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
-  return `${protocol}://${host}:${entry.localPort}`
-}
-
-function advertisedBrowserUrlForForwardedRow(entry: PortForwardEntry): string | null {
-  if (!customHostFromAdvertised(entry.advertisedUrl)) {
-    return null
-  }
-  return browserUrlForPortForwardEntry(entry)
-}
-
-function advertisedBrowserUrlForDetectedPort(port: DetectedPort): string | null {
-  const host = customHostFromAdvertised(port.advertisedUrl)
-  if (!host) {
-    return null
-  }
-  const protocol = advertisedProtocolForPort({
-    advertisedProtocol: port.advertisedProtocol,
-    advertisedUrl: port.advertisedUrl,
-    remotePort: port.port
-  })
-  return `${protocol}://${host}:${port.port}`
 }
 
 type PortForwardDialogState =

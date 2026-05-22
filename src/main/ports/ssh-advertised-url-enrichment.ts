@@ -62,10 +62,19 @@ function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: Advert
 export function enrichSshDetectedPorts(
   ports: readonly DetectedPort[],
   worktreeIds: readonly string[],
-  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest'> = advertisedUrlWatcher,
+  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest' | 'reconcileScan'> = advertisedUrlWatcher,
   options: SshDetectedPortEnrichmentOptions = {}
 ): DetectedPort[] {
-  if (worktreeIds.length === 0 || ports.length === 0) {
+  if (worktreeIds.length === 0) {
+    return [...ports]
+  }
+  // Why: SSH scans are connection-scoped while URLs are worktree-scoped; use
+  // the scan snapshot to invalidate stale same-port candidates before lookup.
+  watcher.reconcileScan(
+    worktreeIds,
+    ports.map((port) => ({ port: port.port, pid: port.pid }))
+  )
+  if (ports.length === 0) {
     return [...ports]
   }
   return ports.map((port) => {

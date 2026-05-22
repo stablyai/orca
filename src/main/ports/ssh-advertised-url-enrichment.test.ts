@@ -10,8 +10,9 @@ import type { AdvertisedUrl, AdvertisedUrlWatcher } from './advertised-url-watch
 
 function watcherWith(
   entries: Record<string, Partial<AdvertisedUrl>>
-): Pick<AdvertisedUrlWatcher, 'lookupBest'> {
+): Pick<AdvertisedUrlWatcher, 'lookupBest' | 'reconcileScan'> {
   return {
+    reconcileScan: () => {},
     lookupBest(worktreeIds, port): AdvertisedUrl | undefined {
       // Why: tests pin URLs to worktreeId+port via the entries map; whichever
       // worktree appears first in the request wins to keep assertions explicit.
@@ -107,6 +108,30 @@ describe('enrichSshForwardEntries', () => {
 })
 
 describe('enrichSshDetectedPorts', () => {
+  it('reconciles an empty scan before returning unchanged ports', () => {
+    const calls: unknown[][] = []
+    const watcher = {
+      reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
+        calls.push(['reconcile', ...args])
+      },
+      lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
+        calls.push(['lookupBest', ...args])
+        return {
+          origin: 'https://local.example.com:3001',
+          host: 'local.example.com',
+          hostKind: 'custom',
+          protocol: 'https',
+          port: 3001,
+          ptyId: 'pty',
+          lastSeenAt: 0
+        }
+      }
+    }
+
+    expect(enrichSshDetectedPorts([], ['wt'], watcher)).toEqual([])
+    expect(calls).toEqual([['reconcile', ['wt'], []]])
+  })
+
   it('attaches advertisedUrl when a worktree has a cached match', () => {
     const watcher = watcherWith({
       'wt::3001': {
@@ -128,8 +153,11 @@ describe('enrichSshDetectedPorts', () => {
   it('passes detected listener PID through to watcher lookup', () => {
     const calls: unknown[][] = []
     const watcher = {
+      reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
+        calls.push(['reconcile', ...args])
+      },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
-        calls.push([...args])
+        calls.push(['lookupBest', ...args])
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -148,14 +176,20 @@ describe('enrichSshDetectedPorts', () => {
       watcher
     )
 
-    expect(calls).toEqual([[['wt'], 3001, 4242]])
+    expect(calls).toEqual([
+      ['reconcile', ['wt'], [{ port: 3001, pid: 4242 }]],
+      ['lookupBest', ['wt'], 3001, 4242]
+    ])
   })
 
   it('can enrich cached scanner rows without validating their PID', () => {
     const calls: unknown[][] = []
     const watcher = {
+      reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
+        calls.push(['reconcile', ...args])
+      },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
-        calls.push([...args])
+        calls.push(['lookupBest', ...args])
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -175,7 +209,10 @@ describe('enrichSshDetectedPorts', () => {
       { validatePid: false }
     )
 
-    expect(calls).toEqual([[['wt'], 3001, undefined]])
+    expect(calls).toEqual([
+      ['reconcile', ['wt'], [{ port: 3001, pid: 4242 }]],
+      ['lookupBest', ['wt'], 3001, undefined]
+    ])
     expect(enriched[0].pid).toBe(4242)
     expect(enriched[0].advertisedUrl).toBe('https://local.example.com:3001')
   })

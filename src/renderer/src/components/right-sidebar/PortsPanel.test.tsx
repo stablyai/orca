@@ -6,6 +6,11 @@ import {
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import {
+  addressForPort,
+  browserUrlForPort,
+  browserUrlForPortForwardEntry
+} from '@/lib/workspace-port-urls'
 
 const { activateAndRevealWorktreeMock } = vi.hoisted(() => ({
   activateAndRevealWorktreeMock: vi.fn()
@@ -15,15 +20,12 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: activateAndRevealWorktreeMock
 }))
 
+import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
-  addressForPort,
-  browserUrlForPortForwardEntry,
-  browserUrlForPort,
-  getLocalWorkspacePortSections,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget
-} from './PortsPanel'
+} from '@/lib/workspace-port-actions'
 
 const workspacePort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',

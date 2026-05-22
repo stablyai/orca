@@ -36,10 +36,11 @@ type ProcessMetadata = {
 
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'> = advertisedUrlWatcher
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
   try {
     const rawPorts = await scanPlatformListeningPorts()
+    reconcileAdvertisedUrls(rawPorts, worktrees, urlWatcher)
     const ports = rawPorts
       .map((port) => enrichPort(port, worktrees, urlWatcher))
       .sort(compareWorkspacePorts)
@@ -388,6 +389,29 @@ function enrichPort(
     return { ...base, kind: 'container' }
   }
   return { ...base, kind: 'external' }
+}
+
+function reconcileAdvertisedUrls(
+  ports: RawListeningPort[],
+  worktrees: WorkspacePortProbe[],
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
+): void {
+  const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
+  for (const worktree of worktrees) {
+    observationsByWorktree.set(worktree.id, [])
+  }
+  for (const port of ports) {
+    const owner = attributePortToWorkspace(port, worktrees)
+    if (!owner) {
+      continue
+    }
+    observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
+  }
+  for (const [worktreeId, observations] of observationsByWorktree) {
+    // Why: the scanner sees port disappearance and PID changes before a lazy
+    // lookup would otherwise pin a stale banner to a new listener.
+    urlWatcher.reconcileScan([worktreeId], observations)
+  }
 }
 
 function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {

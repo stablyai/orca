@@ -8,13 +8,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  addressForPort,
   canStopWorkspacePort,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
+import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 

@@ -46,7 +46,7 @@ export type AdvertisedUrl = {
   ptyId: string
   lastSeenAt: number
   /** PID of the listening process that this advertised URL was validated
-   *  against on a previous scan. Set by `lookup()` when a current PID is
+   *  against on a previous scan. Set by lookup APIs when a current PID is
    *  supplied; a later mismatch evicts the entry. Captured on first scan
    *  rather than at capture time because the PTY shell PID is not the
    *  listener PID. */
@@ -58,7 +58,13 @@ export type AdvertisedUrlChangeEvent = {
   port: number
 }
 
+export type AdvertisedUrlListenerObservation = {
+  port: number
+  pid?: number
+}
+
 type CacheKey = string
+type ListenerScanState = { kind: 'absent' } | { kind: 'present'; pid?: number }
 
 function cacheKey(worktreeId: string, port: number): CacheKey {
   return `${worktreeId}::${port}`
@@ -251,6 +257,8 @@ export class AdvertisedUrlWatcher {
   private readonly ptyToWorktree = new Map<string, string>()
   private readonly pending = new Map<string, string>()
   private readonly cache = new Map<CacheKey, AdvertisedUrl>()
+  private readonly scanSnapshots = new Map<string, Map<number, number | undefined>>()
+  private readonly validationBaselines = new Map<CacheKey, ListenerScanState>()
   private readonly listeners = new Set<(event: AdvertisedUrlChangeEvent) => void>()
   private readonly now: () => number
   private readonly maxCacheEntries: number
@@ -288,6 +296,7 @@ export class AdvertisedUrlWatcher {
       // Why: SSH forward enrichment has no listener PID to validate against,
       // so PTY teardown is the only reliable expiry signal for that cache row.
       this.cache.delete(key)
+      this.validationBaselines.delete(key)
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
       removedEvents.push({ worktreeId, port: entry.port })
     }
@@ -371,6 +380,12 @@ export class AdvertisedUrlWatcher {
     const existing = this.cache.get(key)
     if (!existing || shouldReplace(existing, candidate)) {
       this.cache.set(key, candidate)
+      const baseline = this.currentScanStateFor(worktreeId, port)
+      if (baseline) {
+        this.validationBaselines.set(key, baseline)
+      } else {
+        this.validationBaselines.delete(key)
+      }
       this.enforceCacheLimit()
       if (!existing || existing.origin !== candidate.origin) {
         this.emitChange({ worktreeId, port })
@@ -402,6 +417,7 @@ export class AdvertisedUrlWatcher {
     const overflow = this.cache.size - this.maxCacheEntries
     for (let i = 0; i < overflow; i++) {
       this.cache.delete(entries[i][0])
+      this.validationBaselines.delete(entries[i][0])
     }
   }
 
@@ -419,6 +435,7 @@ export class AdvertisedUrlWatcher {
         // process is now listening on the port. Drop the cached URL — the
         // new listener may be unrelated to the captured banner.
         this.cache.delete(key)
+        this.validationBaselines.delete(key)
         this.emitChange({ worktreeId, port })
         return undefined
       }
@@ -426,13 +443,73 @@ export class AdvertisedUrlWatcher {
     return entry
   }
 
-  /** Drop a single cached entry. Phase 3's scanner enrichment uses this when
-   *  the listener PID on a port changes, indicating the advertised URL was
-   *  produced by a no-longer-running process. */
+  /** Drop a single cached entry. */
   invalidate(worktreeId: string, port: number): void {
-    if (this.cache.delete(cacheKey(worktreeId, port))) {
+    const key = cacheKey(worktreeId, port)
+    this.validationBaselines.delete(key)
+    if (this.cache.delete(key)) {
       this.emitChange({ worktreeId, port })
     }
+  }
+
+  /** Reconcile the URL cache with a scanner snapshot for a worktree scope.
+   *  Unvalidated URLs are tied to the listener state observed around capture,
+   *  so a later absent port or changed PID cannot be lazily blessed. */
+  reconcileScan(
+    worktreeIds: readonly string[],
+    observations: readonly AdvertisedUrlListenerObservation[]
+  ): void {
+    const observedByPort = observedListenersByPort(observations)
+    const worktreeSet = new Set(worktreeIds)
+    const removedEvents: AdvertisedUrlChangeEvent[] = []
+
+    for (const [key, entry] of this.cache) {
+      const worktreeId = worktreeIdFromCacheKey(key, entry.port)
+      if (!worktreeSet.has(worktreeId)) {
+        continue
+      }
+      const current = observedByPort.has(entry.port)
+        ? ({ kind: 'present', pid: observedByPort.get(entry.port) } as const)
+        : ({ kind: 'absent' } as const)
+
+      if (this.shouldEvictAfterScan(key, entry, current)) {
+        this.cache.delete(key)
+        this.validationBaselines.delete(key)
+        removedEvents.push({ worktreeId, port: entry.port })
+      } else if (entry.validatedListenerPid === undefined) {
+        this.validationBaselines.set(key, current)
+      }
+    }
+
+    for (const worktreeId of worktreeSet) {
+      this.scanSnapshots.set(worktreeId, new Map(observedByPort))
+    }
+    for (const event of removedEvents) {
+      this.emitChange(event)
+    }
+  }
+
+  private shouldEvictAfterScan(
+    key: CacheKey,
+    entry: AdvertisedUrl,
+    current: ListenerScanState
+  ): boolean {
+    if (current.kind === 'absent') {
+      return true
+    }
+    if (
+      entry.validatedListenerPid !== undefined &&
+      current.pid !== undefined &&
+      entry.validatedListenerPid !== current.pid
+    ) {
+      return true
+    }
+    const baseline = this.validationBaselines.get(key)
+    return (
+      entry.validatedListenerPid === undefined &&
+      baseline !== undefined &&
+      scanStateChanged(baseline, current)
+    )
   }
 
   /** Find the best advertised URL for `port` across multiple worktrees. SSH
@@ -444,15 +521,14 @@ export class AdvertisedUrlWatcher {
    *  uses on insert.
    *
    *  When `currentListenerPid` is supplied each candidate entry is run
-   *  through the same pin-then-evict logic as `lookup()`: entries whose
-   *  validated PID disagrees with the current one are dropped from the
-   *  cache and skipped, so remote port reuse can't surface a stale URL. */
+   *  through PID filtering first. Already-pinned mismatches are evicted,
+   *  then only the returned winner is pinned to the current listener. */
   lookupBest(
     worktreeIds: readonly string[],
     port: number,
     currentListenerPid?: number
   ): AdvertisedUrl | undefined {
-    let best: AdvertisedUrl | undefined
+    let best: { worktreeId: string; entry: AdvertisedUrl } | undefined
     for (const worktreeId of worktreeIds) {
       const key = cacheKey(worktreeId, port)
       const candidate = this.cache.get(key)
@@ -460,19 +536,25 @@ export class AdvertisedUrlWatcher {
         continue
       }
       if (currentListenerPid !== undefined) {
-        if (candidate.validatedListenerPid === undefined) {
-          candidate.validatedListenerPid = currentListenerPid
-        } else if (candidate.validatedListenerPid !== currentListenerPid) {
+        if (
+          candidate.validatedListenerPid !== undefined &&
+          candidate.validatedListenerPid !== currentListenerPid
+        ) {
           this.cache.delete(key)
+          this.validationBaselines.delete(key)
           this.emitChange({ worktreeId, port })
           continue
         }
       }
-      if (!best || shouldReplace(best, candidate)) {
-        best = candidate
+      if (!best || shouldReplace(best.entry, candidate)) {
+        best = { worktreeId, entry: candidate }
       }
     }
-    return best
+    if (best && currentListenerPid !== undefined && best.entry.validatedListenerPid === undefined) {
+      best.entry.validatedListenerPid = currentListenerPid
+      this.validationBaselines.delete(cacheKey(best.worktreeId, port))
+    }
+    return best?.entry
   }
 
   clear(): void {
@@ -480,6 +562,16 @@ export class AdvertisedUrlWatcher {
     this.ptyToWorktree.clear()
     this.pending.clear()
     this.cache.clear()
+    this.scanSnapshots.clear()
+    this.validationBaselines.clear()
+  }
+
+  private currentScanStateFor(worktreeId: string, port: number): ListenerScanState | undefined {
+    const snapshot = this.scanSnapshots.get(worktreeId)
+    if (!snapshot) {
+      return undefined
+    }
+    return snapshot.has(port) ? { kind: 'present', pid: snapshot.get(port) } : { kind: 'absent' }
   }
 }
 
@@ -504,4 +596,31 @@ function formatHostForOrigin(url: URL): string {
     return `[${h}]`
   }
   return h
+}
+
+function observedListenersByPort(
+  observations: readonly AdvertisedUrlListenerObservation[]
+): Map<number, number | undefined> {
+  const observed = new Map<number, number | undefined>()
+  for (const observation of observations) {
+    const existing = observed.get(observation.port)
+    if (!observed.has(observation.port)) {
+      observed.set(observation.port, observation.pid)
+    } else if (existing !== observation.pid) {
+      // Multiple host-specific listeners on one port make PID attribution
+      // ambiguous for our port-keyed URL cache; preserve presence only.
+      observed.set(observation.port, undefined)
+    }
+  }
+  return observed
+}
+
+function scanStateChanged(previous: ListenerScanState, current: ListenerScanState): boolean {
+  if (previous.kind !== current.kind) {
+    return true
+  }
+  if (previous.kind === 'absent' || current.kind === 'absent') {
+    return false
+  }
+  return previous.pid !== undefined && current.pid !== undefined && previous.pid !== current.pid
 }
