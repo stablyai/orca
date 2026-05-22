@@ -44,12 +44,6 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
 
 type CleanupView = WorkspaceCleanupTier | 'hidden'
 
-const SCAN_LOADING_STATUS = {
-  title: 'Checking workspace safety',
-  detail:
-    'Scanning worktrees and git state, then combining open tab, terminal, live agent, and remote availability signals before suggesting deletions.'
-} as const
-
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'main-worktree': 'Main workspace',
   'folder-repo': 'Folder project',
@@ -488,10 +482,11 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-foreground">
-                    {SCAN_LOADING_STATUS.title}
+                    Checking workspace safety
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {SCAN_LOADING_STATUS.detail}
+                    Scanning worktrees and git state, then combining open tab, terminal, live agent,
+                    and remote availability signals before suggesting deletions.
                   </div>
                 </div>
               </div>
