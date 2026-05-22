@@ -38,6 +38,7 @@ import {
   checksPanelAsyncResultKey,
   shouldCommitChecksPanelAsyncResult
 } from './checks-panel-async-result-key'
+import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
 
 export default function ChecksPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
@@ -51,9 +52,15 @@ export default function ChecksPanel(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
-  const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-  const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
+  const conflictOperation = useAppStore((s) =>
+    activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
+  )
+  const hasUncommittedChanges = useAppStore((s) =>
+    activeWorktreeId ? (s.gitStatusByWorktree[activeWorktreeId]?.length ?? 0) > 0 : false
+  )
+  const remoteStatus = useAppStore((s) =>
+    activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
+  )
   const pushBranch = useAppStore((s) => s.pushBranch)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
@@ -88,7 +95,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const [titleDraft, setTitleDraft] = useState('')
   const [titleSaving, setTitleSaving] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollIntervalRef = useRef(30_000) // start at 30s, backs off to 120s
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
@@ -135,13 +141,6 @@ export default function ChecksPanel(): React.JSX.Element {
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
   )
   const prNumber = pr?.number ?? null
-  const remoteStatus = activeWorktreeId ? remoteStatusesByWorktree[activeWorktreeId] : undefined
-  const hasUncommittedChanges = activeWorktreeId
-    ? (gitStatusByWorktree[activeWorktreeId]?.length ?? 0) > 0
-    : false
-  const conflictOperation = activeWorktreeId
-    ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
-    : 'unknown'
 
   // Why: select only timestamps (not whole cache records) so the entry-refresh
   // effect doesn't re-run on every cache mutation. See
@@ -388,26 +387,12 @@ export default function ChecksPanel(): React.JSX.Element {
     // Reset backoff state on PR change
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
-    let cancelled = false
-    void fetchChecks()
-
-    const schedulePoll = (): void => {
-      pollRef.current = setTimeout(() => {
-        void fetchChecks().then(() => {
-          if (!cancelled) {
-            schedulePoll()
-          }
-        })
-      }, pollIntervalRef.current)
-    }
-    schedulePoll()
-
-    return () => {
-      cancelled = true
-      if (pollRef.current) {
-        clearTimeout(pollRef.current)
-      }
-    }
+    // Why: PR check status is user-visible when the panel is open. Keep visible
+    // unfocused windows fresh, but stop timers and API work while hidden.
+    return installWindowVisibilityTimeoutPoller({
+      run: () => fetchChecks(),
+      getDelayMs: () => pollIntervalRef.current
+    })
   }, [fetchChecks, isPanelVisible, prNumber])
 
   // Fetch comments once when PR changes (no polling — comments change infrequently).
