@@ -391,10 +391,8 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
-  // Why: pre-PR SshPane always persisted relayGracePeriodSeconds (form default
-  // 10800) even when sync was enabled, but pre-PR runtime ignored that field
-  // for sync-enabled targets and used remoteWorkspaceSyncGracePeriodSeconds.
-  // Prefer the legacy synced grace so a user's "unlimited" (0) survives import.
+  // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
+  // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds

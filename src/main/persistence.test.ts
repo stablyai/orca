@@ -364,12 +364,22 @@ describe('Store', () => {
           remoteWorkspaceSyncGracePeriodSeconds: 0
         },
         {
-          id: 'ssh-new-grace-period-wins',
-          label: 'New grace period',
+          id: 'ssh-synced-grace-wins-over-relay',
+          label: 'Synced grace wins',
           host: 'new.example.com',
           port: 22,
           username: 'dev',
           relayGracePeriodSeconds: 120,
+          remoteWorkspaceSyncEnabled: true,
+          remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-form-default-relay-with-unlimited-sync',
+          label: 'Form-default relay with unlimited sync',
+          host: 'unlimited.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: 10800,
           remoteWorkspaceSyncEnabled: true,
           remoteWorkspaceSyncGracePeriodSeconds: 0
         }
@@ -381,7 +391,8 @@ describe('Store', () => {
 
     expect(targets[0]).not.toHaveProperty('relayGracePeriodSeconds')
     expect(targets[1].relayGracePeriodSeconds).toBe(0)
-    expect(targets[2].relayGracePeriodSeconds).toBe(120)
+    expect(targets[2].relayGracePeriodSeconds).toBe(0)
+    expect(targets[3].relayGracePeriodSeconds).toBe(0)
     for (const target of targets) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -391,7 +402,8 @@ describe('Store', () => {
     const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
     expect(persisted.sshTargets?.[0]).not.toHaveProperty('relayGracePeriodSeconds')
     expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
-    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(120)
+    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
+    expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
     for (const target of persisted.sshTargets ?? []) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
