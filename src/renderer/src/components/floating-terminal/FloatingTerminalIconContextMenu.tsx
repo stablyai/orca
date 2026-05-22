@@ -14,12 +14,14 @@ type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
   currentLocation: FloatingTerminalTriggerLocation
   className?: string
+  style?: React.CSSProperties
 }
 
 export function FloatingTerminalIconContextMenu({
   children,
   currentLocation,
-  className
+  className,
+  style
 }: FloatingTerminalIconContextMenuProps): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [open, setOpen] = useState(false)
@@ -44,6 +46,7 @@ export function FloatingTerminalIconContextMenu({
     <>
       <span
         className={className}
+        style={style}
         data-floating-terminal-toggle
         onContextMenuCapture={(event) => {
           // Why: workspace cards use DropdownMenu anchored at the cursor for
