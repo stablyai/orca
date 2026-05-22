@@ -2253,6 +2253,16 @@ const api = {
       ipcRenderer.on('ui:toggleFloatingTerminal', listener)
       return () => ipcRenderer.removeListener('ui:toggleFloatingTerminal', listener)
     },
+    onTerminalShortcutCaptured: (
+      callback: (data: { actionId: KeybindingActionId }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { actionId: KeybindingActionId }
+      ) => callback(data)
+      ipcRenderer.on('ui:terminalShortcutCaptured', listener)
+      return () => ipcRenderer.removeListener('ui:terminalShortcutCaptured', listener)
+    },
     onOpenQuickOpen: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openQuickOpen', listener)
@@ -2662,6 +2672,9 @@ const api = {
     // while the markdown editor owns focus, letting TipTap apply bold instead.
     setMarkdownEditorFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
+    },
+    setTerminalInputFocused: (focused: boolean): void => {
+      ipcRenderer.send('ui:setTerminalInputFocused', focused)
     },
     setFloatingTerminalInputFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setFloatingTerminalInputFocused', focused)

@@ -46,6 +46,13 @@ describe('resolveWindowShortcutAction', () => {
   it('resolves the explicit window shortcut allowlist on macOS', () => {
     expect(
       resolveWindowShortcutAction(
+        { code: 'Comma', key: ',', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toEqual({ type: 'openSettings' })
+
+    expect(
+      resolveWindowShortcutAction(
         { code: 'KeyJ', key: 'j', meta: true, control: false, alt: false, shift: false },
         'darwin'
       )
@@ -64,6 +71,69 @@ describe('resolveWindowShortcutAction', () => {
         'darwin'
       )
     ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+  })
+
+  it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
+    const macWorktreePalette = {
+      code: 'KeyJ',
+      key: 'j',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    expect(
+      resolveWindowShortcutAction(macWorktreePalette, 'darwin', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'orca-first'
+      })
+    ).toEqual({ type: 'toggleWorktreePalette' })
+    expect(
+      resolveWindowShortcutAction(macWorktreePalette, 'darwin', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toEqual({ type: 'switchRecentTab' })
+  })
+
+  it('routes menu-backed actions through the same window shortcut policy', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyE', key: 'e', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toEqual({ type: 'exportPdf' })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },
+        'linux'
+      )
+    ).toEqual({ type: 'forceReload' })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBeNull()
   })
 
   it('requires shift for the non-mac worktree palette shortcut', () => {

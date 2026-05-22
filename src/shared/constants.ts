@@ -217,6 +217,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showTitlebarAppName: true,
     showTasksButton: true,
     ctrlTabOrderMode: 'mru',
+    // Why: switching worktrees and opening command surfaces from a focused
+    // terminal is a core Orca workflow; users who prefer TUI ownership opt in.
+    terminalShortcutPolicy: 'orca-first',
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',

@@ -6,19 +6,23 @@ import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   getKeybindingDefinition,
+  isKeybindingAllowedInTerminal,
+  isKeybindingPotentialTerminalConflict,
   keybindingFromInputForAction,
+  keybindingIsActiveInContext,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingDefinition,
   type KeybindingInput,
-  type KeybindingOverrides
+  type KeybindingOverrides,
+  type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { useAppStore } from '../../store'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SearchableSetting } from './SearchableSetting'
-import { ShortcutBindingRow } from './ShortcutBindingRow'
+import { ShortcutBindingRow, type ShortcutTerminalStatus } from './ShortcutBindingRow'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
 type ShortcutGroup = {
@@ -39,12 +43,29 @@ const CTRL_TAB_BEHAVIOR_SEARCH_ENTRY: SettingsSearchEntry = {
   keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
 }
 
+const TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY: SettingsSearchEntry = {
+  title: 'Shortcuts in Terminal',
+  description: 'Choose whether Orca or the focused terminal wins when shortcuts overlap.',
+  keywords: [
+    'shortcut',
+    'keyboard',
+    'terminal',
+    'tui',
+    'shell',
+    'agent',
+    'conflict',
+    'orca first',
+    'terminal first'
+  ]
+}
+
 export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...KEYBINDING_DEFINITIONS.map((item) => ({
     title: item.title,
     description: `${item.group} shortcut`,
     keywords: [...item.searchKeywords]
   })),
+  TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY,
   CTRL_TAB_BEHAVIOR_SEARCH_ENTRY
 ]
 
@@ -83,9 +104,50 @@ function hasCommonBindingOverride(
   return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
 }
 
+function getShortcutTerminalStatus(
+  definition: KeybindingDefinition,
+  terminalShortcutPolicy: TerminalShortcutPolicy,
+  hasEffectiveBinding: boolean
+): ShortcutTerminalStatus | undefined {
+  if (!hasEffectiveBinding) {
+    return undefined
+  }
+  if (definition.scope === 'terminal') {
+    return {
+      label: 'Terminal',
+      description: 'Runs from terminal panes.'
+    }
+  }
+  if (isKeybindingAllowedInTerminal(definition)) {
+    return {
+      label: 'Terminal active',
+      description: 'Still runs while a terminal has keyboard focus.'
+    }
+  }
+  if (!isKeybindingPotentialTerminalConflict(definition)) {
+    return undefined
+  }
+  const activeInTerminal = keybindingIsActiveInContext(definition, {
+    context: 'terminal',
+    terminalShortcutPolicy
+  })
+  return activeInTerminal
+    ? {
+        label: 'Orca first',
+        description: 'Also runs while a terminal or TUI has keyboard focus.'
+      }
+    : {
+        label: 'Terminal first',
+        description: 'Disabled while a terminal or TUI has keyboard focus.'
+      }
+}
+
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const ctrlTabOrderMode = useAppStore((state) => state.settings?.ctrlTabOrderMode ?? 'mru')
+  const terminalShortcutPolicy = useAppStore(
+    (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
+  )
   const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
@@ -235,6 +297,40 @@ export function ShortcutsPane(): React.JSX.Element {
           </p>
         </div>
 
+        {matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY) ? (
+          <SearchableSetting
+            id="terminal-shortcut-policy"
+            title="Shortcuts in Terminal"
+            description="Choose whether Orca or the focused terminal wins when shortcuts overlap."
+            keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Shortcuts in Terminal</Label>
+              <p className="text-xs text-muted-foreground">
+                Orca first keeps app shortcuts active in TUIs. Terminal first lets shell shortcuts
+                win unless a shortcut is marked terminal-active.
+              </p>
+            </div>
+            <Select
+              value={terminalShortcutPolicy}
+              onValueChange={(value) =>
+                void updateSettings({
+                  terminalShortcutPolicy: value as TerminalShortcutPolicy
+                })
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="orca-first">Orca first</SelectItem>
+                <SelectItem value="terminal-first">Terminal first</SelectItem>
+              </SelectContent>
+            </Select>
+          </SearchableSetting>
+        ) : null}
+
         {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY) ? (
           <SearchableSetting
             title="Recent Tab Order"
@@ -284,6 +380,11 @@ export function ShortcutsPane(): React.JSX.Element {
                     )
                     const modified = hasOwnBindingOverride(keybindings, item.id)
                     const warnings = conflictByAction.get(item.id) ?? []
+                    const terminalStatus = getShortcutTerminalStatus(
+                      item,
+                      terminalShortcutPolicy,
+                      effective.length > 0
+                    )
 
                     return (
                       <ShortcutBindingRow
@@ -296,6 +397,7 @@ export function ShortcutsPane(): React.JSX.Element {
                         error={errors[item.id]}
                         warnings={warnings}
                         recording={recordingActionId === item.id}
+                        terminalStatus={terminalStatus}
                         onStartRecording={(actionId) => {
                           setRecordingActionId(actionId)
                           clearError(actionId)

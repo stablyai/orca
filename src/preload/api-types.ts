@@ -1694,6 +1694,9 @@ export type PreloadApi = {
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
     onToggleFloatingTerminal: (callback: () => void) => () => void
+    onTerminalShortcutCaptured: (
+      callback: (data: { actionId: KeybindingActionId }) => void
+    ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
@@ -1842,6 +1845,7 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
+    setTerminalInputFocused: (focused: boolean) => void
     setFloatingTerminalInputFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void

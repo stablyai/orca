@@ -81,6 +81,7 @@ import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../share
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
+import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -1450,6 +1451,9 @@ export class Store {
             ),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
+            terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
+              parsed.settings?.terminalShortcutPolicy
+            ),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             voice: {
@@ -2343,6 +2347,11 @@ export class Store {
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+    }
+    if ('terminalShortcutPolicy' in updates) {
+      sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
+        updates.terminalShortcutPolicy
+      )
     }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping

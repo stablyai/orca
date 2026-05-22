@@ -16,6 +16,13 @@ export type KeybindingContext = 'app' | 'terminal' | 'browser'
 
 export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 
+export type TerminalShortcutPolicy = 'orca-first' | 'terminal-first'
+
+export type KeybindingMatchOptions = {
+  context?: KeybindingContext
+  terminalShortcutPolicy?: TerminalShortcutPolicy
+}
+
 export type KeybindingActionId =
   | 'worktree.quickOpen'
   | 'worktree.palette'
@@ -787,7 +794,14 @@ function normalizeKeyToken(token: string): string | null {
     BRACKETLEFT: 'BracketLeft',
     BRACKETRIGHT: 'BracketRight',
     NUMPADADD: 'NumpadAdd',
-    NUMPADSUBTRACT: 'NumpadSubtract'
+    NUMPADSUBTRACT: 'NumpadSubtract',
+    COMMA: 'Comma',
+    PERIOD: 'Period',
+    SLASH: 'Slash',
+    BACKSLASH: 'Backslash',
+    SEMICOLON: 'Semicolon',
+    QUOTE: 'Quote',
+    BACKQUOTE: 'Backquote'
   }
 
   return simple[upper] ?? null
@@ -1101,6 +1115,35 @@ export function getKeybindingDefinition(actionId: KeybindingActionId): Keybindin
   return DEFINITIONS_BY_ID.get(actionId) ?? null
 }
 
+export function normalizeTerminalShortcutPolicy(
+  policy: TerminalShortcutPolicy | null | undefined
+): TerminalShortcutPolicy {
+  return policy === 'terminal-first' ? 'terminal-first' : 'orca-first'
+}
+
+export function isKeybindingAllowedInTerminal(definition: KeybindingDefinition): boolean {
+  return definition.scope === 'terminal' || definition.allowInTerminal === true
+}
+
+export function isKeybindingPotentialTerminalConflict(definition: KeybindingDefinition): boolean {
+  return definition.scope !== 'terminal' && definition.allowInTerminal !== true
+}
+
+export function keybindingIsActiveInContext(
+  definition: KeybindingDefinition,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  if (options.context !== 'terminal') {
+    return true
+  }
+  // Why: Orca-first preserves existing app shortcut behavior inside terminals.
+  // Terminal-first is the explicit escape hatch for shells and TUIs.
+  if (normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first') {
+    return true
+  }
+  return isKeybindingAllowedInTerminal(definition)
+}
+
 function platformModifiers(
   parsed: ParsedKeybinding,
   platform: NodeJS.Platform
@@ -1189,10 +1232,13 @@ export function keybindingMatchesAction(
   input: KeybindingInput,
   platform: NodeJS.Platform,
   overrides?: KeybindingOverrides,
-  _options: { context?: KeybindingContext } = {}
+  options: KeybindingMatchOptions = {}
 ): boolean {
   const definition = DEFINITIONS_BY_ID.get(actionId)
   if (!definition) {
+    return false
+  }
+  if (!keybindingIsActiveInContext(definition, options)) {
     return false
   }
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
@@ -1279,6 +1325,13 @@ function formatKeyToken(token: string): string {
     PageDown: 'PageDown',
     NumpadAdd: 'Numpad +',
     NumpadSubtract: 'Numpad -',
+    Comma: ',',
+    Period: '.',
+    Slash: '/',
+    Backslash: '\\',
+    Semicolon: ';',
+    Quote: "'",
+    Backquote: '`',
     Enter: 'Enter',
     Backspace: 'Backspace',
     Delete: 'Delete',

@@ -13,10 +13,17 @@ import {
 } from '../../shared/browser-url'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
+  getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
-  resolveWindowShortcutAction
+  resolveWindowShortcutAction,
+  windowShortcutActionCapturesTerminal
 } from '../../shared/window-shortcut-policy'
-import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  normalizeTerminalShortcutPolicy,
+  type KeybindingMatchOptions,
+  type KeybindingOverrides
+} from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
@@ -44,7 +51,8 @@ function isControlKeyRelease(input: Electron.Input): boolean {
 function nativeZoomCommandMatchesKeybindings(
   direction: 'in' | 'out',
   platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
 ): boolean {
   const primary =
     platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
@@ -66,7 +74,8 @@ function nativeZoomCommandMatchesKeybindings(
       actionId,
       { ...primary, alt: false, ...candidate },
       platform,
-      keybindings
+      keybindings,
+      options
     )
   )
 }
@@ -122,6 +131,7 @@ type CreateMainWindowOptions = {
   deferLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
+  onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -496,6 +506,7 @@ export function createMainWindow(
   // Cmd+B so browser guests and other editable surfaces keep the existing
   // global shortcut behavior.
   let markdownEditorFocused = false
+  let terminalInputFocused = false
   let floatingTerminalInputFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
@@ -512,13 +523,20 @@ export function createMainWindow(
     markdownEditorFocused = focused === true
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
+  const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
+  // Why: before-input-event resolves shortcuts before renderer keydown. Mirror
+  // regular xterm focus so Terminal-first can let shells/TUIs own app chords.
+  const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    terminalInputFocused = focused === true
+  }
+  ipcMain.on(terminalInputFocusChannel, onTerminalInputFocused)
   const floatingTerminalInputFocusChannel = 'ui:setFloatingTerminalInputFocused'
   // Why: main before-input-event runs before renderer keydown handlers. Mirror
   // floating xterm focus so Ctrl+B/L and related shell chords can reach SSH/tmux.
-  const onFloatingTerminalInputFocused = (
-    event: Electron.IpcMainEvent,
-    focused: unknown
-  ): void => {
+  const onFloatingTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
     }
@@ -543,6 +561,9 @@ export function createMainWindow(
   // disable app shortcuts in a later lifecycle state.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+  }
+  const resetTerminalInputFocus = (): void => {
+    terminalInputFocused = false
   }
   const resetFloatingTerminalInputFocus = (): void => {
     floatingTerminalInputFocused = false
@@ -586,6 +607,7 @@ export function createMainWindow(
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
     resetMarkdownEditorFocus()
+    resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
@@ -595,11 +617,13 @@ export function createMainWindow(
   })
   mainWindow.webContents.on('destroyed', () => {
     resetMarkdownEditorFocus()
+    resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
   })
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
+      resetTerminalInputFocus()
       resetFloatingTerminalInputFocus()
     }
   })
@@ -621,7 +645,15 @@ export function createMainWindow(
     }
 
     const keybindings = opts?.getKeybindings?.()
-    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
+    const terminalShortcutContext: KeybindingMatchOptions = {
+      context: terminalInputFocused || floatingTerminalInputFocused ? 'terminal' : 'app',
+      terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
+        store?.getSettings().terminalShortcutPolicy
+      )
+    }
+    if (
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
+    ) {
       // Why: Ctrl+Tab is a held-key interaction. Route both press and release
       // through IPC so renderer keyup suppression from preventDefault cannot
       // leave the switcher overlay stranded.
@@ -659,7 +691,12 @@ export function createMainWindow(
     // Why: keep the main-process interception surface as an explicit allowlist.
     // Anything outside this helper must continue to the renderer/PTTY so
     // readline control chords are not silently stolen above the terminal.
-    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    const action = resolveWindowShortcutAction(
+      input,
+      process.platform,
+      keybindings,
+      terminalShortcutContext
+    )
     if (!action) {
       return
     }
@@ -676,6 +713,13 @@ export function createMainWindow(
     if (input.type !== 'keyDown') {
       return
     }
+
+    const capturedTerminalActionId =
+      terminalShortcutContext.context === 'terminal' &&
+      terminalShortcutContext.terminalShortcutPolicy === 'orca-first' &&
+      windowShortcutActionCapturesTerminal(action)
+        ? getWindowShortcutActionId(action)
+        : null
 
     // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
     // preventDefault() in before-input-event suppresses ALL subsequent DOM
@@ -697,14 +741,43 @@ export function createMainWindow(
         return
       }
       event.preventDefault()
+      if (capturedTerminalActionId) {
+        mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+          actionId: capturedTerminalActionId
+        })
+      }
       mainWindow.webContents.send('ui:dictationKeyDown')
       return
     }
 
     event.preventDefault()
+    if (capturedTerminalActionId) {
+      mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+        actionId: capturedTerminalActionId
+      })
+    }
 
     if (action.type === 'zoom') {
       mainWindow.webContents.send('terminal:zoom', action.direction)
+      return
+    }
+
+    if (action.type === 'openSettings') {
+      mainWindow.webContents.send('ui:openSettings')
+      return
+    }
+
+    if (action.type === 'exportPdf') {
+      mainWindow.webContents.send('export:requestPdf')
+      return
+    }
+
+    if (action.type === 'forceReload') {
+      opts?.onBeforeReload?.({
+        ignoreCache: true,
+        webContentsId: mainWindow.webContents.id
+      })
+      mainWindow.webContents.reloadIgnoringCache()
       return
     }
 
@@ -779,7 +852,13 @@ export function createMainWindow(
       !nativeZoomCommandMatchesKeybindings(
         zoomDirection,
         process.platform,
-        opts?.getKeybindings?.()
+        opts?.getKeybindings?.(),
+        {
+          context: terminalInputFocused || floatingTerminalInputFocused ? 'terminal' : 'app',
+          terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
+            store?.getSettings().terminalShortcutPolicy
+          )
+        }
       )
     ) {
       return
@@ -907,6 +986,7 @@ export function createMainWindow(
     // stale-true flag can't leak past subsequent state transitions. Paired
     // with the webContents lifecycle resets above.
     markdownEditorFocused = false
+    terminalInputFocused = false
     floatingTerminalInputFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
@@ -918,6 +998,7 @@ export function createMainWindow(
     ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed

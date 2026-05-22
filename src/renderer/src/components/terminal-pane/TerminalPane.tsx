@@ -102,6 +102,10 @@ function formatClipboardImagePasteError(error: unknown): string {
   return `Image paste failed: ${detail}`
 }
 
+function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+}
+
 export default function TerminalPane({
   tabId,
   worktreeId,
@@ -970,7 +974,8 @@ export default function TerminalPane({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
-    keybindings
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
 
   useTerminalPaneGlobalEffects({
@@ -992,6 +997,49 @@ export default function TerminalPane({
     isVisibleRef,
     toggleExpandPane
   })
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const syncFocused = (focused: boolean): void => {
+      window.api.ui.setTerminalInputFocused?.(focused)
+    }
+    const onFocusIn = (event: FocusEvent): void => {
+      if (isXtermHelperTextarea(event.target)) {
+        syncFocused(true)
+      }
+    }
+    const onFocusOut = (event: FocusEvent): void => {
+      if (!isXtermHelperTextarea(event.target)) {
+        return
+      }
+      if (isXtermHelperTextarea(event.relatedTarget)) {
+        return
+      }
+      syncFocused(false)
+    }
+
+    if (
+      isXtermHelperTextarea(document.activeElement) &&
+      container.contains(document.activeElement)
+    ) {
+      syncFocused(true)
+    }
+    container.addEventListener('focusin', onFocusIn)
+    container.addEventListener('focusout', onFocusOut)
+    return () => {
+      container.removeEventListener('focusin', onFocusIn)
+      container.removeEventListener('focusout', onFocusOut)
+      if (
+        isXtermHelperTextarea(document.activeElement) &&
+        container.contains(document.activeElement)
+      ) {
+        syncFocused(false)
+      }
+    }
+  }, [])
 
   // Intercept paste at the keydown level (configurable terminal paste chords)
   // AND as a fallback

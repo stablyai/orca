@@ -1,6 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
 import {
-  formatElectronAccelerator,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   type KeybindingActionId,
@@ -58,14 +57,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     )
     return formatKeybindingList(bindings, process.platform)
   }
-  const shortcutAccelerator = (actionId: KeybindingActionId): string | undefined => {
-    const binding = getEffectiveKeybindingsForAction(
-      actionId,
-      process.platform,
-      getKeybindings?.()
-    )[0]
-    return binding ? (formatElectronAccelerator(binding) ?? undefined) : undefined
-  }
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
@@ -101,8 +92,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const settingsItem: Electron.MenuItemConstructorOptions = {
-    label: 'Settings',
-    accelerator: shortcutAccelerator('app.settings'),
+    label: `Settings\t${shortcutLabel('app.settings')}`,
     click: () => onOpenSettings()
   }
 
@@ -117,8 +107,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {
-    label: 'Export as PDF...',
-    accelerator: shortcutAccelerator('file.exportPdf'),
+    label: `Export as PDF...\t${shortcutLabel('file.exportPdf')}`,
     click: () => {
       // Why: fire a one-way event into the focused renderer. The renderer
       // owns the knowledge of whether a markdown surface is active and
@@ -240,8 +229,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         click: () => reloadFocusedWindow(false)
       },
       {
-        label: 'Force Reload',
-        accelerator: shortcutAccelerator('app.forceReload'),
+        label: `Force Reload\t${shortcutLabel('app.forceReload')}`,
         click: () => reloadFocusedWindow(true)
       },
       { role: 'toggleDevTools' },

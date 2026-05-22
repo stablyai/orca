@@ -346,7 +346,13 @@ function openMainWindow(): BrowserWindow {
       }),
     deferLoad: true,
     title: devInstanceIdentity.name,
-    getKeybindings: () => keybindings?.getOverrides()
+    getKeybindings: () => keybindings?.getOverrides(),
+    onBeforeReload: ({ ignoreCache, webContentsId }) => {
+      if (mainWindow?.webContents.id === webContentsId) {
+        markExpectedRendererReload(webContentsId)
+      }
+      recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    }
   })
   recordCrashBreadcrumb('main_window_created')
 
