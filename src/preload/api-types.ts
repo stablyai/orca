@@ -240,7 +240,7 @@ import type {
   SshConnectionState,
   SshTarget,
   PortForwardEntry,
-  DetectedPort
+  EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
@@ -1975,12 +1975,12 @@ export type PreloadApi = {
     }) => Promise<PortForwardEntry>
     removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
     listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
-    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<EnrichedDetectedPort[]>
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
     ) => () => void
     onDetectedPortsChanged: (
-      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+      callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void
     ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]

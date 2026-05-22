@@ -3,7 +3,7 @@ import type { AppState } from '../types'
 import type {
   SshConnectionState,
   PortForwardEntry,
-  DetectedPort,
+  EnrichedDetectedPort,
   SshTarget
 } from '../../../../shared/ssh-types'
 
@@ -40,9 +40,9 @@ export type SshSlice = {
    *  objects. Spreading a Record produces a new reference that Zustand can diff
    *  by identity, whereas Map mutations are easy to get wrong. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
-  /** Detected listening ports on the remote, keyed by connection ID.
-   *  Updated by polling the relay's ports.detect RPC. */
-  detectedPortsByConnection: Record<string, DetectedPort[]>
+  /** Detected remote listening ports after main-process enrichment, keyed by
+   *  connection ID. Updated from SSH IPC snapshots and push events. */
+  detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
@@ -53,7 +53,7 @@ export type SshSlice = {
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
   clearPortForwards: (targetId: string) => void
-  setDetectedPorts: (targetId: string, ports: DetectedPort[]) => void
+  setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({

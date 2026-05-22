@@ -8,6 +8,7 @@ import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import {
   addressForPort,
+  addressForPortForwardEntry,
   browserUrlForPort,
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
@@ -279,6 +280,7 @@ describe('PortsPanel runtime routing', () => {
     }
 
     expect(browserUrlForPortForwardEntry(forward)).toBe('https://local.getmontecarlo.com:63468')
+    expect(addressForPortForwardEntry(forward)).toBe('local.getmontecarlo.com:63468')
     expect(browserUrlForPortForwardEntry({ ...forward, advertisedProtocol: 'http' })).toBe(
       'http://local.getmontecarlo.com:63468'
     )
@@ -289,5 +291,8 @@ describe('PortsPanel runtime routing', () => {
         remotePort: 8443
       })
     ).toBe('https://127.0.0.1:63468')
+    expect(addressForPortForwardEntry({ ...forward, advertisedUrl: undefined })).toBe(
+      '127.0.0.1:63468'
+    )
   })
 })

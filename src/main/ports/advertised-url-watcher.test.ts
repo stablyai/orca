@@ -84,6 +84,21 @@ describe('classifyHost', () => {
     expect(classifyHost('172.15.0.1')).toBe('public-ip') // just outside private range
   })
 
+  it('classifies private IPv6 ranges', () => {
+    expect(classifyHost('fc00::1')).toBe('private-ip')
+    expect(classifyHost('fd12::1')).toBe('private-ip')
+    expect(classifyHost('fe80::1')).toBe('private-ip')
+    expect(classifyHost('fe90::1')).toBe('private-ip')
+    expect(classifyHost('fea0::1')).toBe('private-ip')
+    expect(classifyHost('[febf::1]')).toBe('private-ip')
+  })
+
+  it('classifies IPv6 addresses outside private ranges as public', () => {
+    expect(classifyHost('2001:db8::1')).toBe('public-ip')
+    expect(classifyHost('fe7f::1')).toBe('public-ip')
+    expect(classifyHost('fec0::1')).toBe('public-ip')
+  })
+
   it('classifies DNS hostnames as custom', () => {
     expect(classifyHost('local.getmontecarlo.com')).toBe('custom')
     expect(classifyHost('app.example.dev')).toBe('custom')

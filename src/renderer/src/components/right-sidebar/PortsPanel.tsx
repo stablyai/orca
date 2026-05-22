@@ -27,6 +27,7 @@ import {
 } from '@/lib/workspace-port-actions'
 import {
   addressForPort,
+  addressForPortForwardEntry,
   advertisedBrowserUrlForDetectedPort,
   advertisedBrowserUrlForForwardedRow,
   browserUrlForPortForwardEntry
@@ -48,7 +49,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-types'
+import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
 export {
@@ -678,7 +679,7 @@ function SshPortsPanel(): React.JSX.Element {
   const [detectedCollapsed, setDetectedCollapsed] = useState(false)
   const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
 
-  const handleForwardDetected = useCallback((port: DetectedPort & { targetId: string }) => {
+  const handleForwardDetected = useCallback((port: EnrichedDetectedPort & { targetId: string }) => {
     setDialogState({
       mode: 'add',
       defaults: {
@@ -844,6 +845,7 @@ function ForwardedPortRow({
   onOpenInBrowser: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const forwardedAddress = addressForPortForwardEntry(entry)
 
   const handleRemove = useCallback(async () => {
     setRemoving(true)
@@ -856,11 +858,8 @@ function ForwardedPortRow({
   }, [entry.id])
 
   const handleCopy = useCallback(() => {
-    // Why: use 127.0.0.1 instead of localhost because the local TCP listener
-    // binds to 127.0.0.1 specifically. On systems that resolve localhost to
-    // ::1 first, "localhost:<port>" would fail even though the forward is up.
-    void window.api.ui.writeClipboardText(`127.0.0.1:${entry.localPort}`)
-  }, [entry.localPort])
+    void window.api.ui.writeClipboardText(forwardedAddress)
+  }, [forwardedAddress])
 
   const handleOpenBrowser = useCallback(() => {
     onOpenInBrowser()
@@ -947,7 +946,7 @@ function ForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleCopyButtonClick}
-          title="Copy Address"
+          title={`Copy ${forwardedAddress}`}
         >
           <Copy size={13} />
         </button>
@@ -980,7 +979,7 @@ function DetectedPortRow({
   port,
   onForward
 }: {
-  port: DetectedPort & { targetId: string }
+  port: EnrichedDetectedPort & { targetId: string }
   onForward: () => void
 }): React.JSX.Element {
   const advertisedBrowserUrl = advertisedBrowserUrlForDetectedPort(port)

@@ -97,9 +97,11 @@ export type DetectedPort = {
   host: string
   pid?: number
   processName?: string
-  /** Origin captured from terminal output for this remote port. Populated by
-   *  the local main process; the relay-side scanner does not set this. */
+}
+
+/** A detected SSH port after the main process has mapped terminal-advertised
+ *  URLs onto the raw relay scan row for IPC/UI consumption. */
+export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
-  /** Protocol parsed from the advertised URL. */
   advertisedProtocol?: 'http' | 'https'
 }

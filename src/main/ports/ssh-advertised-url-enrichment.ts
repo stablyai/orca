@@ -5,7 +5,7 @@
 // What the SSH side lacks is the link between a connection's port scan and
 // the worktreeIds the watcher keyed those URLs under.
 
-import type { DetectedPort, PortForwardEntry } from '../../shared/ssh-types'
+import type { DetectedPort, EnrichedDetectedPort, PortForwardEntry } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import {
@@ -53,7 +53,10 @@ type SshDetectedPortEnrichmentOptions = {
   validatePid?: boolean
 }
 
-function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: AdvertisedUrl): T {
+function applyAdvertisedUrl<T extends object>(
+  target: T,
+  found: AdvertisedUrl
+): T & EnrichmentTarget {
   // Spread to keep callers' inputs immutable — important for the broadcast
   // path which sends the same array to multiple subscribers.
   return { ...target, advertisedUrl: found.origin, advertisedProtocol: found.protocol }
@@ -64,16 +67,18 @@ export function enrichSshDetectedPorts(
   worktreeIds: readonly string[],
   watcher: Pick<AdvertisedUrlWatcher, 'lookupBest' | 'reconcileScan'> = advertisedUrlWatcher,
   options: SshDetectedPortEnrichmentOptions = {}
-): DetectedPort[] {
+): EnrichedDetectedPort[] {
   if (worktreeIds.length === 0) {
     return [...ports]
   }
-  // Why: SSH scans are connection-scoped while URLs are worktree-scoped; use
-  // the scan snapshot to invalidate stale same-port candidates before lookup.
-  watcher.reconcileScan(
-    worktreeIds,
-    ports.map((port) => ({ port: port.port, pid: port.pid }))
-  )
+  if (options.validatePid !== false) {
+    // Why: SSH scans are connection-scoped while URLs are worktree-scoped; use
+    // the scan snapshot to invalidate stale same-port candidates before lookup.
+    watcher.reconcileScan(
+      worktreeIds,
+      ports.map((port) => ({ port: port.port, pid: port.pid }))
+    )
+  }
   if (ports.length === 0) {
     return [...ports]
   }

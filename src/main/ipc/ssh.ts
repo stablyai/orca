@@ -9,6 +9,7 @@ import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import {
   type DetectedPort,
+  type EnrichedDetectedPort,
   type SavedPortForward,
   type SshTarget,
   type SshConnectionStatus,
@@ -185,7 +186,7 @@ function enrichDetected(
   targetId: string,
   ports: DetectedPort[],
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
-): DetectedPort[] {
+): EnrichedDetectedPort[] {
   if (!persistedStore) {
     return ports
   }

@@ -1,4 +1,4 @@
-import type { PortForwardEntry, DetectedPort } from '../../../shared/ssh-types'
+import type { PortForwardEntry, EnrichedDetectedPort } from '../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../shared/workspace-ports'
 
 const HTTPS_PORTS = new Set([443, 8443])
@@ -17,7 +17,7 @@ export function addressForPort(port: WorkspacePort): string {
   // Why: when a dev server printed its own URL to the terminal, that origin
   // (e.g. `local.getmontecarlo.com:3001`) is what the user actually wants in
   // the clipboard, not the kernel bind `127.0.0.1:3001`.
-  if (port.advertisedUrl) {
+  if (port.kind === 'workspace' && port.advertisedUrl) {
     try {
       const url = new URL(port.advertisedUrl)
       return url.host || `${hostForLocalAction(port.connectHost)}:${port.port}`
@@ -29,7 +29,7 @@ export function addressForPort(port: WorkspacePort): string {
 }
 
 export function browserUrlForPort(port: WorkspacePort): string {
-  if (port.advertisedUrl) {
+  if (port.kind === 'workspace' && port.advertisedUrl) {
     return port.advertisedUrl
   }
   const protocol = port.protocol === 'https' ? 'https' : 'http'
@@ -93,6 +93,10 @@ export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
   return `${protocol}://${host}:${entry.localPort}`
 }
 
+export function addressForPortForwardEntry(entry: PortForwardEntry): string {
+  return new URL(browserUrlForPortForwardEntry(entry)).host
+}
+
 export function advertisedBrowserUrlForForwardedRow(entry: PortForwardEntry): string | null {
   if (!customHostFromAdvertised(entry.advertisedUrl)) {
     return null
@@ -100,7 +104,7 @@ export function advertisedBrowserUrlForForwardedRow(entry: PortForwardEntry): st
   return browserUrlForPortForwardEntry(entry)
 }
 
-export function advertisedBrowserUrlForDetectedPort(port: DetectedPort): string | null {
+export function advertisedBrowserUrlForDetectedPort(port: EnrichedDetectedPort): string | null {
   const host = customHostFromAdvertised(port.advertisedUrl)
   if (!host) {
     return null

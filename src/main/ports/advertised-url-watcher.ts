@@ -213,7 +213,11 @@ function isIpv6(value: string): boolean {
 
 function isPrivateIpv6(value: string): boolean {
   // fc00::/7 (ULA) and fe80::/10 (link-local)
-  return value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8')
+  if (value.startsWith('fc') || value.startsWith('fd')) {
+    return true
+  }
+  const firstHextet = Number.parseInt(value.split(':', 1)[0], 16)
+  return Number.isFinite(firstHextet) && (firstHextet & 0xffc0) === 0xfe80
 }
 
 function hostKindScore(kind: HostKind): number {

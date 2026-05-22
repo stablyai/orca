@@ -6,7 +6,7 @@ import {
   getConnectionIdsForWorktree,
   getWorktreeIdsForConnection
 } from './ssh-advertised-url-enrichment'
-import type { AdvertisedUrl, AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { AdvertisedUrlWatcher, type AdvertisedUrl } from './advertised-url-watcher'
 
 function watcherWith(
   entries: Record<string, Partial<AdvertisedUrl>>
@@ -209,11 +209,17 @@ describe('enrichSshDetectedPorts', () => {
       { validatePid: false }
     )
 
-    expect(calls).toEqual([
-      ['reconcile', ['wt'], [{ port: 3001, pid: 4242 }]],
-      ['lookupBest', ['wt'], 3001, undefined]
-    ])
+    expect(calls).toEqual([['lookupBest', ['wt'], 3001, undefined]])
     expect(enriched[0].pid).toBe(4242)
     expect(enriched[0].advertisedUrl).toBe('https://local.example.com:3001')
+  })
+
+  it('does not reconcile cached scanner rows during watcher-triggered refreshes', () => {
+    const watcher = new AdvertisedUrlWatcher()
+    watcher.bindPty('pty-1', 'wt')
+    watcher.ingest('pty-1', 'ready at https://local.example.com:3001/\n')
+
+    expect(enrichSshDetectedPorts([], ['wt'], watcher, { validatePid: false })).toEqual([])
+    expect(watcher.lookupBest(['wt'], 3001)?.origin).toBe('https://local.example.com:3001')
   })
 })
