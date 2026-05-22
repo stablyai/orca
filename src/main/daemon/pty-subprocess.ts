@@ -79,6 +79,12 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
+  // Why: the daemon needs ELECTRON_RUN_AS_NODE=1 internally, but user shells
+  // must not inherit it or nested Electron commands run as plain Node.
+  delete env.ELECTRON_RUN_AS_NODE
+}
+
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
@@ -182,6 +188,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
+  removeInheritedElectronRunAsNode(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
