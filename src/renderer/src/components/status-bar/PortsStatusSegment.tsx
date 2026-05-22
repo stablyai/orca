@@ -47,20 +47,24 @@ function PortAction({
   disabled?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const button = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      className="size-5 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/35"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {children}
+    </Button>
+  )
+
   return (
     <Tooltip delayDuration={200}>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="size-5 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/35"
-          aria-label={label}
-          onClick={onClick}
-          disabled={disabled}
-        >
-          {children}
-        </Button>
+        {disabled ? <span className="inline-flex">{button}</span> : button}
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {label}
