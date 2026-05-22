@@ -58,6 +58,31 @@ function settingsWithRuntime(id: string): AppState['settings'] {
   return { activeRuntimeEnvironmentId: id } as AppState['settings']
 }
 
+function seedUnifiedBrowserTab(
+  store: ReturnType<typeof createTestStore>,
+  entityId: string,
+  label: string
+): void {
+  store.setState({
+    unifiedTabsByWorktree: {
+      'wt-1': [
+        {
+          id: 'unified-browser-tab',
+          entityId,
+          groupId: 'group-1',
+          worktreeId: 'wt-1',
+          contentType: 'browser',
+          label,
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+  })
+}
+
 function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotation {
   return {
     id,
@@ -132,6 +157,155 @@ describe('createBrowserSlice annotations', () => {
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('preserves browser map references when a page-state update is unchanged', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
+    if (!page) {
+      throw new Error('Expected page state')
+    }
+    const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
+    const browserTabsByWorktree = store.getState().browserTabsByWorktree
+
+    store.getState().updateBrowserPageState(pageId, {
+      title: page.title,
+      loading: page.loading,
+      faviconUrl: page.faviconUrl,
+      canGoBack: page.canGoBack,
+      canGoForward: page.canGoForward,
+      loadError: page.loadError
+    })
+
+    expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
+    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+  })
+
+  it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    seedUnifiedBrowserTab(store, tab.id, 'Stale label')
+    const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
+    const browserTabsByWorktree = store.getState().browserTabsByWorktree
+
+    store.getState().updateBrowserPageState(pageId, { title: 'Example' })
+
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.label).toBe('Example')
+    expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
+    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+  })
+
+  it('repairs stale active browser workspace metadata on an otherwise unchanged page update', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.setState((state) => ({
+      browserTabsByWorktree: {
+        ...state.browserTabsByWorktree,
+        'wt-1': (state.browserTabsByWorktree['wt-1'] ?? []).map((workspace) =>
+          workspace.id === tab.id
+            ? {
+                ...workspace,
+                title: 'Stale workspace',
+                url: 'https://stale.example.com',
+                loading: false,
+                canGoBack: true,
+                canGoForward: true
+              }
+            : workspace
+        )
+      }
+    }))
+    const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
+
+    store.getState().updateBrowserPageState(pageId, { title: 'Example' })
+
+    const repaired = store
+      .getState()
+      .browserTabsByWorktree['wt-1']?.find((entry) => entry.id === tab.id)
+    expect(repaired).toMatchObject({
+      title: 'Example',
+      url: 'https://example.com',
+      loading: true,
+      canGoBack: false,
+      canGoForward: false
+    })
+    expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
+  })
+
+  it('updates the active browser unified-tab label without a second tab-label write', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    seedUnifiedBrowserTab(store, tab.id, 'Example')
+
+    store.getState().updateBrowserPageState(pageId, { title: 'Next', loading: false })
+
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.label).toBe('Next')
+    expect(store.getState().setTabLabel).not.toHaveBeenCalled()
+  })
+
+  it('updates inactive browser pages without relabeling or rebuilding the workspace map', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const activePageId = tab.activePageId
+    if (!activePageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const inactivePage = store
+      .getState()
+      .createBrowserPage(tab.id, 'https://example.com/inactive', {
+        title: 'Inactive',
+        activate: false
+      })
+    if (!inactivePage) {
+      throw new Error('Expected inactive browser page')
+    }
+    seedUnifiedBrowserTab(store, tab.id, 'Example')
+    const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
+    const browserTabsByWorktree = store.getState().browserTabsByWorktree
+
+    store.getState().updateBrowserPageState(inactivePage.id, {
+      title: 'Inactive next',
+      loading: false
+    })
+
+    expect(store.getState().browserPagesByWorkspace).not.toBe(browserPagesByWorkspace)
+    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+    expect(
+      store.getState().browserPagesByWorkspace[tab.id]?.find((page) => page.id === inactivePage.id)
+    ).toMatchObject({ title: 'Inactive next', loading: false })
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      activePageId,
+      title: 'Example'
+    })
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.label).toBe('Example')
+    expect(store.getState().setTabLabel).not.toHaveBeenCalled()
   })
 
   it('caps stored browser annotations per page', () => {
