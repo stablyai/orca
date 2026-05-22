@@ -1160,7 +1160,60 @@ function letterKeyMatches(input: KeybindingInput, letter: string): boolean {
   return input.code === `Key${letter.toUpperCase()}`
 }
 
-function keyMatches(parsedKey: string, input: KeybindingInput): boolean {
+function semanticPunctuationKey(input: KeybindingInput): string | null {
+  switch (input.key) {
+    case '[':
+    case '{':
+      return 'BracketLeft'
+    case ']':
+    case '}':
+      return 'BracketRight'
+    case '\\':
+    case '|':
+      return 'Backslash'
+    default:
+      return null
+  }
+}
+
+function physicalPunctuationKey(input: KeybindingInput): string | null {
+  switch (input.code) {
+    case 'BracketLeft':
+    case 'BracketRight':
+    case 'Backslash':
+      return input.code
+    default:
+      return null
+  }
+}
+
+function shouldUseSemanticPunctuation(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: Windows/Linux often expose AltGr as Ctrl+Alt. Do not turn ordinary
+  // international text input into Mod+Alt app shortcuts.
+  if (
+    getKeybindingPlatform(platform) !== 'darwin' &&
+    parsed.mod &&
+    parsed.alt &&
+    hasModifier(input, 'control') &&
+    hasModifier(input, 'alt') &&
+    !hasModifier(input, 'meta') &&
+    physicalPunctuationKey(input) === null
+  ) {
+    return false
+  }
+  return true
+}
+
+function keyMatches(
+  parsedKey: string,
+  input: KeybindingInput,
+  parsed: ParsedKeybinding,
+  platform: NodeJS.Platform
+): boolean {
   if (parsedKey.length === 1 && parsedKey >= 'A' && parsedKey <= 'Z') {
     return letterKeyMatches(input, parsedKey)
   }
@@ -1172,15 +1225,16 @@ function keyMatches(parsedKey: string, input: KeybindingInput): boolean {
   const code = input.code ?? ''
   switch (parsedKey) {
     case 'BracketLeft':
-      if (key === ']' || key === '}') {
-        return false
-      }
-      return code === 'BracketLeft' || key === '[' || key === '{'
     case 'BracketRight':
-      if (key === '[' || key === '{') {
-        return false
+    case 'Backslash': {
+      // Why: shortcut labels name logical punctuation, but international
+      // layouts can report the same character from different physical codes.
+      const semanticKey = semanticPunctuationKey(input)
+      if (semanticKey !== null && shouldUseSemanticPunctuation(parsed, input, platform)) {
+        return semanticKey === parsedKey
       }
-      return code === 'BracketRight' || key === ']' || key === '}'
+      return code === parsedKey
+    }
     case 'Minus':
       // Why: shifted "_" is terminal undo/readline input. Users who want it
       // as zoom-out can bind it explicitly instead of having the default steal it.
@@ -1197,11 +1251,6 @@ function keyMatches(parsedKey: string, input: KeybindingInput): boolean {
       return code === 'NumpadSubtract' || key === 'Subtract'
     case 'Enter':
       return key === 'Enter' && (code === 'Enter' || code === 'NumpadEnter' || code === '')
-    case 'Backslash':
-      if (key === ']' || key === '}') {
-        return false
-      }
-      return code === 'Backslash' || key === '\\' || key === '|'
     default:
       return key === parsedKey || code === parsedKey
   }
@@ -1216,7 +1265,9 @@ export function keybindingMatchesInput(
   if (!parsed) {
     return false
   }
-  return modifierStateMatches(parsed, input, platform) && keyMatches(parsed.key, input)
+  return (
+    modifierStateMatches(parsed, input, platform) && keyMatches(parsed.key, input, parsed, platform)
+  )
 }
 
 export function keybindingMatchesAction(
