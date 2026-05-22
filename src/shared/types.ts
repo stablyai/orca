@@ -1276,6 +1276,16 @@ export type FloatingTerminalCwdRequest = {
   path?: string
 }
 
+/**
+ * Per-user color overrides for the file explorer surface. Keys mirror
+ * `FileExplorerColorKey` in `src/renderer/src/lib/file-explorer-themes/types.ts`
+ * but are typed as a free-form record here to keep `src/shared` free of
+ * renderer-only imports (the 3-target typecheck rejects React-y imports in
+ * shared). Each value is a CSS color string; missing keys fall through to the
+ * underlying theme.
+ */
+export type FileExplorerColorOverrides = Record<string, string>
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -1561,6 +1571,22 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** Active icon theme id for the file explorer (`'default'` ⇒ the built-in
+   *  lucide-based set). Optional for profiles saved before the feature landed;
+   *  the persistence merge in `Store.load()` hydrates the default. */
+  fileExplorerIconTheme?: string
+  /** Active color theme id for the file explorer in dark mode. */
+  fileExplorerColorThemeDark?: string
+  /** When false, the dark theme id is used for both modes (mirrors
+   *  `terminalUseSeparateLightTheme`). */
+  fileExplorerUseSeparateLightTheme?: boolean
+  /** Active color theme id for the file explorer in light mode. */
+  fileExplorerColorThemeLight?: string
+  /** Per-key color overrides layered on top of the dark theme. `null` /
+   *  missing ⇒ no overrides. */
+  fileExplorerColorOverridesDark?: FileExplorerColorOverrides | null
+  /** Per-key color overrides layered on top of the light theme. */
+  fileExplorerColorOverridesLight?: FileExplorerColorOverrides | null
 }
 
 export type CommitMessageAiSettings = {

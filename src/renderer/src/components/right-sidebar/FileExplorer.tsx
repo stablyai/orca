@@ -28,6 +28,8 @@ import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
+import { useFileExplorerColors } from '@/hooks/useFileExplorerColors'
+import { buildFileExplorerCssVars } from '@/hooks/useFileExplorerCssVars'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -88,8 +90,16 @@ function FileExplorerInner(): React.JSX.Element {
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { colors: fileExplorerColors } = useFileExplorerColors()
   /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
   const explorerShellRef = useRef<HTMLDivElement>(null)
+  // Why: applied on the shell as inline CSS variables so virtualized rows can
+  // reference `--fe-*` without inline styles per row, and the vars are present
+  // on first paint (an effect-based writer would flash unstyled rows).
+  const fileExplorerCssVars = useMemo(
+    () => buildFileExplorerCssVars(fileExplorerColors),
+    [fileExplorerColors]
+  )
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
@@ -337,7 +347,12 @@ function FileExplorerInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+      <div
+        ref={explorerShellRef}
+        data-orca-explorer-shell
+        className="flex h-full min-h-0 flex-col"
+        style={fileExplorerCssVars}
+      >
         <FileExplorerToolbar
           repoName={repoName}
           refresh={manualRefresh}

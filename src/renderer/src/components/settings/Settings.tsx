@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   Network,
   ShieldCheck,
+  FolderTree,
   Palette,
   Server,
   SlidersHorizontal,
@@ -36,6 +37,7 @@ import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
 import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
 import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
+import { FileExplorerPane, FILE_EXPLORER_PANE_SEARCH_ENTRIES } from './FileExplorerPane'
 import { InputPane, INPUT_PANE_SEARCH_ENTRIES } from './InputPane'
 import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
@@ -437,6 +439,13 @@ function Settings(): React.JSX.Element {
         description: 'Theme and UI scaling.',
         icon: Palette,
         searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'file-explorer',
+        title: 'File Explorer',
+        description: 'Icon themes and color customization for the file tree.',
+        icon: FolderTree,
+        searchEntries: FILE_EXPLORER_PANE_SEARCH_ENTRIES
       },
       {
         id: 'input',
@@ -1050,6 +1059,17 @@ function Settings(): React.JSX.Element {
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
                     />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="file-explorer"
+                  title="File Explorer"
+                  description="Icon themes and color customization for the file tree."
+                  searchEntries={FILE_EXPLORER_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('file-explorer') ? (
+                    <FileExplorerPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 

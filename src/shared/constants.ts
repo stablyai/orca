@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- This file owns every default value for the app's
+   GlobalSettings shape, so growth tracks the shape. Splitting would scatter
+   defaults away from `GlobalSettings` in `src/shared/types.ts`. */
 import type {
   GlobalSettings,
   NotificationSettings,
@@ -286,7 +289,13 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customPrompt: '',
       customAgentCommand: ''
     },
-    voice: getDefaultVoiceSettings()
+    voice: getDefaultVoiceSettings(),
+    fileExplorerIconTheme: 'default',
+    fileExplorerColorThemeDark: 'default-dark',
+    fileExplorerUseSeparateLightTheme: true,
+    fileExplorerColorThemeLight: 'default-light',
+    fileExplorerColorOverridesDark: null,
+    fileExplorerColorOverridesLight: null
   }
 }
 

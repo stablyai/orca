@@ -10,7 +10,6 @@ import {
   FilePlus,
   Files,
   Folder,
-  FolderOpen,
   FolderPlus,
   ListCollapse,
   Loader2,
@@ -28,7 +27,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileIcon } from '@/hooks/useFileIcon'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
@@ -258,7 +257,11 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const FileIcon = getFileTypeIcon(node.relativePath || node.name)
+  const { Icon: ResolvedIcon, monochrome: iconThemeMonochrome } = useFileIcon(
+    node.relativePath || node.name,
+    node.isDirectory,
+    isExpanded
+  )
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
     rowDropDir,
@@ -277,9 +280,10 @@ export function FileExplorerRow({
       <ContextMenuTrigger asChild>
         <button
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors hover:bg-accent hover:text-foreground',
-            isSelected && 'bg-accent text-accent-foreground',
-            isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'text-[var(--fe-text)] hover:bg-[var(--fe-bg-hover)] hover:text-[var(--fe-text)]',
+            isSelected && 'bg-[var(--fe-bg-selected)] text-[var(--fe-text-selected)]',
+            isFlashing && 'bg-[var(--fe-flash-bg)] ring-1 ring-inset ring-[var(--fe-flash-ring)]'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
           data-native-file-drop-dir={rowDropDir}
@@ -303,35 +307,43 @@ export function FileExplorerRow({
             <>
               <ChevronRight
                 className={cn(
-                  'size-3 shrink-0 text-muted-foreground transition-transform',
+                  'size-3 shrink-0 text-[var(--fe-icon-folder)] transition-transform',
                   isExpanded && 'rotate-90'
                 )}
               />
               {isLoading ? (
-                <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-              ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                <Loader2 className="size-3 shrink-0 animate-spin text-[var(--fe-icon-folder)]" />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <ResolvedIcon
+                  className={cn(
+                    'size-3 shrink-0',
+                    iconThemeMonochrome && 'text-[var(--fe-icon-folder)]'
+                  )}
+                />
               )}
             </>
           ) : (
             <>
               <span className="size-3 shrink-0" />
-              <FileIcon className="size-3 shrink-0 text-muted-foreground" />
+              <ResolvedIcon
+                className={cn(
+                  'size-3 shrink-0',
+                  iconThemeMonochrome && 'text-[var(--fe-icon-file)]'
+                )}
+              />
             </>
           )}
           <span
             className={cn(
               'truncate',
-              isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
+              isSelected && !nodeStatus && !isIgnored && 'text-[var(--fe-text-selected)]',
               isIgnored && 'italic'
             )}
             style={
               nodeStatus
                 ? { color: statusColor ?? undefined }
                 : isIgnored
-                  ? { color: 'var(--git-decoration-ignored)' }
+                  ? { color: 'var(--fe-text-ignored)' }
                   : undefined
             }
             onDoubleClick={(e) => {
@@ -356,7 +368,7 @@ export function FileExplorerRow({
             <CircleSlash
               aria-label="Ignored by .gitignore"
               className="ml-auto size-3 shrink-0 mr-2"
-              style={{ color: 'var(--git-decoration-ignored)' }}
+              style={{ color: 'var(--fe-text-ignored)' }}
             />
           ) : null}
         </button>
