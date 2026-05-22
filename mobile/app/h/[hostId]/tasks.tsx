@@ -20,6 +20,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Copy,
   ExternalLink,
@@ -194,6 +195,15 @@ type GitHubRepoSources = {
   prs: GitHubOwnerRepo | null
   upstreamCandidate: GitHubOwnerRepo | null
 }
+
+type TaskRuntimeStatus = {
+  capabilities?: string[]
+}
+
+type TasksSupportState =
+  | { kind: 'unknown'; client: RpcClient | null }
+  | { kind: 'supported'; client: RpcClient }
+  | { kind: 'unsupported'; client: RpcClient }
 
 type GitLabWorkItem = {
   id: string
@@ -844,6 +854,7 @@ const GITHUB_REPO_CONCURRENCY = 3
 const MAX_RENDERED_PR_DIFF_LINES = 400
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const MOBILE_TASKS_CAPABILITY = 'mobile.tasks.v1'
 // Why: task detail drawers can launch child sheets; children must layer above
 // the still-mounted parent while its dismissal animation/state remains alive.
 const TASK_SECONDARY_DRAWER_Z_INDEX = 1100
@@ -2092,6 +2103,10 @@ export default function MobileTasksScreen() {
   const [creatingTask, setCreatingTask] = useState(false)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [tasksSupportState, setTasksSupportState] = useState<TasksSupportState>({
+    kind: 'unknown',
+    client: null
+  })
   const [error, setError] = useState('')
   const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(null)
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
@@ -2253,6 +2268,17 @@ export default function MobileTasksScreen() {
     [taskSource]
   )
   const linearMetadataItem = actionItem?.provider === 'linear' ? actionItem : linearStatusPickerItem
+  const tasksSupported =
+    connState === 'connected' &&
+    client != null &&
+    tasksSupportState.kind === 'supported' &&
+    tasksSupportState.client === client
+  const tasksUnsupported =
+    connState === 'connected' &&
+    client != null &&
+    tasksSupportState.kind === 'unsupported' &&
+    tasksSupportState.client === client
+  const taskUiReady = tasksSupported && taskStateHydrated
   const hostedRepos = useMemo(() => repos.filter(isHostedTaskRepo), [repos])
   const workspaceRepos = useMemo(() => repos.filter((repo) => repo.kind !== 'folder'), [repos])
   const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
@@ -2347,7 +2373,14 @@ export default function MobileTasksScreen() {
   )
 
   useEffect(() => {
-    if (!client || connState !== 'connected' || provider !== 'github' || githubMode !== 'project') {
+    if (
+      !client ||
+      connState !== 'connected' ||
+      !tasksSupported ||
+      !taskStateHydrated ||
+      provider !== 'github' ||
+      githubMode !== 'project'
+    ) {
       return
     }
     const missing = hostedRepos.filter((repo) => {
@@ -2394,7 +2427,16 @@ export default function MobileTasksScreen() {
     return () => {
       cancelled = true
     }
-  }, [client, connState, githubMode, githubRepoSlugCache, hostedRepos, provider])
+  }, [
+    client,
+    connState,
+    githubMode,
+    githubRepoSlugCache,
+    hostedRepos,
+    provider,
+    taskStateHydrated,
+    tasksSupported
+  ])
   const activeGitHubProject = githubProjectSettings.activeProject
   const activeGitHubProjectKey = activeGitHubProject ? githubProjectKey(activeGitHubProject) : null
   const activeGitHubProjectViewId = activeGitHubProjectKey
@@ -2495,14 +2537,14 @@ export default function MobileTasksScreen() {
 
   const persistTaskResumeState = useCallback(
     (updates: Partial<TaskResumeState>) => {
-      if (!client) return
+      if (!client || !taskUiReady) return
       const next = { ...taskResumeRef.current, ...updates }
       taskResumeRef.current = next
       void client.sendRequest('ui.set', { taskResumeState: next }).catch(() => {
         // Best-effort: desktop treats task resume as a convenience preference.
       })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const toggleGitHubProjectFieldVisibility = useCallback(
@@ -2530,17 +2572,17 @@ export default function MobileTasksScreen() {
 
   const persistTaskSource = useCallback(
     (nextProvider: TaskProvider) => {
-      if (!client) return
+      if (!client || !taskUiReady) return
       void client.sendRequest('settings.update', { defaultTaskSource: nextProvider }).catch(() => {
         // Best-effort: a failed settings write should not block switching views.
       })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const persistRepoSelection = useCallback(
     (selection: Set<string>, allRepos: RepoSummary[]) => {
-      if (!client) return
+      if (!client || !taskUiReady) return
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
       defaultRepoSelectionRef.current = nextSelection
@@ -2550,29 +2592,29 @@ export default function MobileTasksScreen() {
           // Best-effort: the in-memory repo picker already reflects the change.
         })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const persistDefaultGitHubPreset = useCallback(
     (preset: GitHubPreset) => {
       setDefaultGitHubPreset(preset)
-      if (!client) return
+      if (!client || !taskUiReady) return
       void client.sendRequest('settings.update', { defaultTaskViewPreset: preset }).catch(() => {
         // Best-effort: the current session still uses the selected preset.
       })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const persistGitHubProjectSettings = useCallback(
     (nextSettings: GitHubProjectSettings) => {
       setGithubProjectSettings(nextSettings)
-      if (!client) return
+      if (!client || !taskUiReady) return
       void client.sendRequest('settings.update', { githubProjects: nextSettings }).catch(() => {
         // Best-effort: project selection can still work for the current session.
       })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const persistSetupHookTrust = useCallback(
@@ -2593,6 +2635,40 @@ export default function MobileTasksScreen() {
     [client, trustedOrcaHooks]
   )
 
+  const resetWorkspaceCreateState = useCallback((): void => {
+    setWorkspaceRepoPickerItem(null)
+    setWorkspaceCreateDraft(null)
+    setWorkspaceNameDraft('')
+    setWorkspaceLastAutoName('')
+    setWorkspaceBranchAutoName('')
+    setWorkspaceBranchNameOverride(undefined)
+    setWorkspaceBaseBranch(null)
+    setWorkspaceBaseBranchQuery('')
+    setWorkspaceBaseBranchResults([])
+    setWorkspaceBaseBranchLoading(false)
+    setWorkspaceBaseBranchError('')
+    setWorkspaceSparsePresets([])
+    setWorkspaceSparsePresetsLoading(false)
+    setWorkspaceSparsePresetsLoaded(false)
+    setWorkspaceSparsePresetsError('')
+    setWorkspaceSparseReloadKey(0)
+    setWorkspaceSparsePresetId(null)
+    setWorkspaceSparseDraft(null)
+    setWorkspaceSparseSaving(false)
+    setWorkspaceAgent(null)
+    setWorkspaceAgentOverridden(false)
+    setWorkspaceDetectedAgentIds(null)
+    setWorkspaceSshState(null)
+    setWorkspaceSshConnecting(false)
+    setShowWorkspaceAgentPicker(false)
+    setShowWorkspaceCreateRepoPicker(false)
+    setShowWorkspaceAdvanced(false)
+    setShowWorkspaceBaseBranchPicker(false)
+    setShowWorkspaceSparsePicker(false)
+    setSetupPrompt(null)
+    setOrcaYamlTrustPrompt(null)
+  }, [])
+
   useEffect(() => {
     if (!client || connState !== 'connected') {
       taskResumeRef.current = {}
@@ -2603,13 +2679,142 @@ export default function MobileTasksScreen() {
       setOrcaYamlTrustPrompt(null)
       setGithubProjectHiddenFieldIdsByView({})
       setTaskStateHydrated(false)
+      setTasksSupportState({ kind: 'unknown', client: null })
+      setShowLinearWorkspacePicker(false)
+      setShowLinearTeamPicker(false)
+      setShowLinearViewPicker(false)
+      setShowLinearGroupPicker(false)
+      setShowLinearOrderPicker(false)
+      setShowLinearDisplayPicker(false)
+      setShowLinearConnect(false)
+      setShowProviderPicker(false)
+      setShowGitHubKindPicker(false)
+      setShowGitHubPresetPicker(false)
+      setShowGitLabViewPicker(false)
+      setShowGitLabFilterPicker(false)
+      setShowLinearFilterPicker(false)
+      setShowSortPicker(false)
+      setShowRepoPicker(false)
+      setShowGitHubIssueSourcePicker(false)
+      setShowGitHubPagePicker(false)
+      setShowGitHubProjectPicker(false)
+      setShowGitHubProjectViewPicker(false)
+      setShowGitHubProjectSortPicker(false)
+      setShowGitHubProjectFieldsPicker(false)
+      setPendingGitHubProjectViewSelection(null)
+      setActionItem(null)
+      setProjectRowItem(null)
+      setProjectRepoNotInOrca(null)
+      setDetailPayload(null)
+      setProjectRowDetail(null)
+      setShowCreateTask(false)
+      setShowCreateTargetPicker(false)
+      setLinearStatusPickerItem(null)
+      setPendingHostedMerge(null)
+      setPendingProjectGitHubMerge(null)
+      setPendingHostedStateChange(null)
+      setMergeMethodTaskItem(null)
+      setMergeMethodProjectRow(null)
+      resetWorkspaceCreateState()
       return
     }
 
     let stale = false
     setTaskStateHydrated(false)
+    setTasksSupportState({ kind: 'unknown', client })
+    setShowLinearWorkspacePicker(false)
+    setShowLinearTeamPicker(false)
+    setShowLinearViewPicker(false)
+    setShowLinearGroupPicker(false)
+    setShowLinearOrderPicker(false)
+    setShowLinearDisplayPicker(false)
+    setShowLinearConnect(false)
+    setShowProviderPicker(false)
+    setShowGitHubKindPicker(false)
+    setShowGitHubPresetPicker(false)
+    setShowGitLabViewPicker(false)
+    setShowGitLabFilterPicker(false)
+    setShowLinearFilterPicker(false)
+    setShowSortPicker(false)
+    setShowRepoPicker(false)
+    setShowGitHubIssueSourcePicker(false)
+    setShowGitHubPagePicker(false)
+    setShowGitHubProjectPicker(false)
+    setShowGitHubProjectViewPicker(false)
+    setShowGitHubProjectSortPicker(false)
+    setShowGitHubProjectFieldsPicker(false)
+    setPendingGitHubProjectViewSelection(null)
+    setActionItem(null)
+    setProjectRowItem(null)
+    setProjectRepoNotInOrca(null)
+    setDetailPayload(null)
+    setProjectRowDetail(null)
+    setShowCreateTask(false)
+    setShowCreateTargetPicker(false)
+    setLinearStatusPickerItem(null)
+    setPendingHostedMerge(null)
+    setPendingProjectGitHubMerge(null)
+    setPendingHostedStateChange(null)
+    setMergeMethodTaskItem(null)
+    setMergeMethodProjectRow(null)
+    resetWorkspaceCreateState()
 
     const hydrateTaskState = async (): Promise<void> => {
+      const statusResponse = await client.sendRequest('status.get')
+      if (stale) return
+      if (!isSuccess(statusResponse)) {
+        throw new Error(statusResponse.error.message)
+      }
+      const status = statusResponse.result as TaskRuntimeStatus
+      if (!status.capabilities?.includes(MOBILE_TASKS_CAPABILITY)) {
+        // Why: Tasks is additive RPC surface, so old desktop builds can still
+        // pair but must not receive the newer task-specific method calls.
+        setTasksSupportState({ kind: 'unsupported', client })
+        setItems([])
+        setGithubPages([])
+        setGithubProjectTable(null)
+        setShowLinearWorkspacePicker(false)
+        setShowLinearTeamPicker(false)
+        setShowLinearViewPicker(false)
+        setShowLinearGroupPicker(false)
+        setShowLinearOrderPicker(false)
+        setShowLinearDisplayPicker(false)
+        setShowLinearConnect(false)
+        setShowProviderPicker(false)
+        setShowGitHubKindPicker(false)
+        setShowGitHubPresetPicker(false)
+        setShowGitLabViewPicker(false)
+        setShowGitLabFilterPicker(false)
+        setShowLinearFilterPicker(false)
+        setShowSortPicker(false)
+        setShowRepoPicker(false)
+        setShowGitHubIssueSourcePicker(false)
+        setShowGitHubPagePicker(false)
+        setShowGitHubProjectPicker(false)
+        setShowGitHubProjectViewPicker(false)
+        setShowGitHubProjectSortPicker(false)
+        setShowGitHubProjectFieldsPicker(false)
+        setPendingGitHubProjectViewSelection(null)
+        setActionItem(null)
+        setProjectRowItem(null)
+        setProjectRepoNotInOrca(null)
+        setDetailPayload(null)
+        setProjectRowDetail(null)
+        setShowCreateTask(false)
+        setShowCreateTargetPicker(false)
+        setLinearStatusPickerItem(null)
+        setPendingHostedMerge(null)
+        setPendingProjectGitHubMerge(null)
+        setPendingHostedStateChange(null)
+        setMergeMethodTaskItem(null)
+        setMergeMethodProjectRow(null)
+        resetWorkspaceCreateState()
+        setError('Update Orca desktop to use Tasks on mobile.')
+        setTaskStateHydrated(false)
+        return
+      }
+      setTasksSupportState({ kind: 'supported', client })
+      setError('')
       const [settingsResponse, uiResponse, preflightResponse, linearStatusResponse] =
         await Promise.all([
           client.sendRequest('settings.get'),
@@ -2702,14 +2907,16 @@ export default function MobileTasksScreen() {
       setTaskStateHydrated(true)
     }
 
-    void hydrateTaskState().catch(() => {
-      if (!stale) setTaskStateHydrated(true)
+    void hydrateTaskState().catch((err) => {
+      if (stale) return
+      setError(err instanceof Error ? err.message : 'Failed to load Tasks settings')
+      setTaskStateHydrated(false)
     })
 
     return () => {
       stale = true
     }
-  }, [client, connState, requestedTaskSource])
+  }, [client, connState, requestedTaskSource, resetWorkspaceCreateState])
 
   useEffect(() => {
     if (visibleProviders.includes(provider)) return
@@ -2740,7 +2947,7 @@ export default function MobileTasksScreen() {
   }, [client, connState])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected' || !tasksSupported) return
     const statusResponse = await client.sendRequest('linear.status')
     if (!isSuccess(statusResponse)) {
       throw new Error(statusResponse.error.message)
@@ -2769,11 +2976,11 @@ export default function MobileTasksScreen() {
     const teams = teamsResponse.result as LinearTeam[]
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
-  }, [client, connState])
+  }, [client, connState, tasksSupported])
 
   const persistLinearTeamSelection = useCallback(
     (teamIds: Set<string>, allTeams: LinearTeam[]) => {
-      if (!client) return
+      if (!client || !taskUiReady) return
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
       void client
@@ -2782,7 +2989,7 @@ export default function MobileTasksScreen() {
           // Best-effort preference persistence; the local picker state already changed.
         })
     },
-    [client]
+    [client, taskUiReady]
   )
 
   const fetchGitHubItemsPage = useCallback(
@@ -2908,7 +3115,7 @@ export default function MobileTasksScreen() {
 
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
-      if (!client || connState !== 'connected') return
+      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
       const requestClient = client
@@ -3109,12 +3316,14 @@ export default function MobileTasksScreen() {
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
-      selectedRepoIds
+      selectedRepoIds,
+      taskStateHydrated,
+      tasksSupported
     ]
   )
 
   const connectLinearAccount = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected' || !taskUiReady) return
     const apiKey = linearApiKeyDraft.trim()
     if (!apiKey || linearConnectState === 'connecting') return
     setLinearConnectState('connecting')
@@ -3141,7 +3350,7 @@ export default function MobileTasksScreen() {
       setLinearConnectState('error')
       setLinearConnectError(err instanceof Error ? err.message : 'Connection failed')
     }
-  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext])
+  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext, taskUiReady])
 
   const retryGitHubIssueSourceFetch = useCallback(
     async (repoPath: string): Promise<void> => {
@@ -3207,6 +3416,7 @@ export default function MobileTasksScreen() {
     async (targetPage: number): Promise<void> => {
       if (
         !client ||
+        !tasksSupported ||
         targetPage < 0 ||
         githubPaginationLoading ||
         selectedHostedRepos.length === 0
@@ -3260,11 +3470,18 @@ export default function MobileTasksScreen() {
         setGithubLoadingTargetPage(null)
       }
     },
-    [client, fetchGitHubItemsPage, githubPages, githubPaginationLoading, selectedHostedRepos]
+    [
+      client,
+      fetchGitHubItemsPage,
+      githubPages,
+      githubPaginationLoading,
+      selectedHostedRepos,
+      tasksSupported
+    ]
   )
 
   const loadGitHubProjects = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected' || !tasksSupported) return
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
     const response = await client.sendRequest('github.project.listAccessible', {})
@@ -3283,11 +3500,11 @@ export default function MobileTasksScreen() {
     }
     setGithubProjects(result.projects)
     setGithubProjectPartialFailures(result.partialFailures ?? [])
-  }, [client, connState])
+  }, [client, connState, tasksSupported])
 
   const loadGitHubProjectViews = useCallback(
     async (project: GitHubProjectRef): Promise<GitHubProjectViewSummary[]> => {
-      if (!client || connState !== 'connected') return []
+      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return []
       const response = await client.sendRequest('github.project.listViews', {
         owner: project.owner,
         ownerType: project.ownerType,
@@ -3305,7 +3522,7 @@ export default function MobileTasksScreen() {
       setGithubProjectViews(result.views)
       return result.views
     },
-    [client, connState]
+    [client, connState, taskStateHydrated, tasksSupported]
   )
 
   const loadGitHubProjectTable = useCallback(
@@ -3313,6 +3530,7 @@ export default function MobileTasksScreen() {
       if (
         !client ||
         connState !== 'connected' ||
+        !tasksSupported ||
         !activeGitHubProject ||
         !activeGitHubProjectViewId
       ) {
@@ -3364,7 +3582,7 @@ export default function MobileTasksScreen() {
         setGithubProjectLoading(false)
       }
     },
-    [activeGitHubProject, activeGitHubProjectViewId, client, connState]
+    [activeGitHubProject, activeGitHubProjectViewId, client, connState, tasksSupported]
   )
 
   const commitGitHubProjectView = useCallback(
@@ -3392,6 +3610,7 @@ export default function MobileTasksScreen() {
 
   const selectGitHubProject = useCallback(
     async (project: GitHubProjectRef, options: { viewNumber?: number } = {}): Promise<void> => {
+      if (!tasksSupported || !taskStateHydrated) return
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
@@ -3441,11 +3660,17 @@ export default function MobileTasksScreen() {
         setGithubProjectLoading(false)
       }
     },
-    [commitGitHubProjectView, githubProjectSettings, loadGitHubProjectViews]
+    [
+      commitGitHubProjectView,
+      githubProjectSettings,
+      loadGitHubProjectViews,
+      taskStateHydrated,
+      tasksSupported
+    ]
   )
 
   const resolveGitHubProjectFromInput = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return
     const input = githubProjectPasteInput.trim()
     if (!parseProjectInput(input)) {
       setGithubProjectPasteError('Expected a project URL or owner/number.')
@@ -3488,7 +3713,14 @@ export default function MobileTasksScreen() {
     } finally {
       setGithubProjectPasteBusy(false)
     }
-  }, [client, connState, githubProjectPasteInput, selectGitHubProject])
+  }, [
+    client,
+    connState,
+    githubProjectPasteInput,
+    selectGitHubProject,
+    taskStateHydrated,
+    tasksSupported
+  ])
 
   useEffect(() => {
     if (!taskStateHydrated) return
@@ -3501,22 +3733,22 @@ export default function MobileTasksScreen() {
   }, [githubKind, provider, query, taskStateHydrated])
 
   useEffect(() => {
-    if (!taskStateHydrated || provider !== 'github' || githubMode !== 'items') return
+    if (!taskUiReady || provider !== 'github' || githubMode !== 'items') return
     const trimmed = appliedQuery.trim()
     persistTaskResumeState({
       githubMode: 'items',
       githubItemsPreset: trimmed === getTaskPresetQuery(githubPreset) ? githubPreset : null,
       githubItemsQuery: trimmed
     })
-  }, [appliedQuery, githubMode, githubPreset, persistTaskResumeState, provider, taskStateHydrated])
+  }, [appliedQuery, githubMode, githubPreset, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
-    if (!taskStateHydrated || provider !== 'linear') return
+    if (!taskUiReady || provider !== 'linear') return
     persistTaskResumeState({
       linearPreset: linearFilter,
       linearQuery: appliedQuery.trim()
     })
-  }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskStateHydrated])
+  }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) return
@@ -3531,7 +3763,7 @@ export default function MobileTasksScreen() {
   }, [linearConnected, loadLinearContext, provider, taskStateHydrated])
 
   useEffect(() => {
-    if (!taskStateHydrated || provider !== 'github' || githubMode !== 'project') return
+    if (!taskUiReady || provider !== 'github' || githubMode !== 'project') return
     persistTaskResumeState({ githubMode: 'project' })
     if (activeGitHubProject && activeGitHubProjectViewId) {
       void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
@@ -3552,18 +3784,18 @@ export default function MobileTasksScreen() {
     persistTaskResumeState,
     provider,
     selectGitHubProject,
-    taskStateHydrated
+    taskUiReady
   ])
 
   useEffect(() => {
-    if (!showGitHubProjectPicker) return
+    if (!taskUiReady || !showGitHubProjectPicker) return
     void loadGitHubProjects().catch((err) => {
       setGithubProjectError(err instanceof Error ? err.message : 'Failed to load projects')
     })
-  }, [loadGitHubProjects, showGitHubProjectPicker])
+  }, [loadGitHubProjects, showGitHubProjectPicker, taskUiReady])
 
   useEffect(() => {
-    if (!showCreateTask) return
+    if (!tasksSupported || !taskStateHydrated || !showCreateTask) return
     setCreatingTask(false)
     if (provider === 'github' || provider === 'gitlab') {
       setCreateRepoId((current) =>
@@ -3598,10 +3830,10 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, hostedRepos, provider, showCreateTask])
+  }, [client, hostedRepos, provider, showCreateTask, taskStateHydrated, tasksSupported])
 
   useEffect(() => {
-    if (!linearMetadataItem || !client) {
+    if (!tasksSupported || !linearMetadataItem || !client) {
       setLinearStates([])
       setLinearCommentDraft('')
       setLinearSubIssueTitle('')
@@ -3636,7 +3868,7 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, linearMetadataItem])
+  }, [client, linearMetadataItem, tasksSupported])
 
   useEffect(() => {
     if (!actionItem) {
@@ -3683,7 +3915,7 @@ export default function MobileTasksScreen() {
   }, [detailPayload])
 
   useEffect(() => {
-    if (!client || actionItem?.provider !== 'github') {
+    if (!tasksSupported || !client || actionItem?.provider !== 'github') {
       setItemAvailableLabels([])
       setItemLabelsLoading(false)
       setItemLabelsError('')
@@ -3755,10 +3987,10 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [actionItem, client])
+  }, [actionItem, client, tasksSupported])
 
   useEffect(() => {
-    if (!actionItem || !client) {
+    if (!tasksSupported || !actionItem || !client) {
       setDetailPayload(null)
       setDetailLoading(false)
       setDetailError('')
@@ -3937,7 +4169,7 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [actionItem, client, detailRefreshSeq])
+  }, [actionItem, client, detailRefreshSeq, tasksSupported])
 
   useEffect(() => {
     if (!projectRowItem) {
@@ -3981,7 +4213,7 @@ export default function MobileTasksScreen() {
     setProjectRowDetail(null)
     setProjectRowDetailError('')
 
-    if (!client || !type || !slug || !projectRowItem.content.number) {
+    if (!tasksSupported || !client || !type || !slug || !projectRowItem.content.number) {
       setProjectRowDetailLoading(false)
       return
     }
@@ -4065,11 +4297,11 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, githubProjectTable, projectRowDetailRefreshSeq, projectRowItem])
+  }, [client, githubProjectTable, projectRowDetailRefreshSeq, projectRowItem, tasksSupported])
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
-    if (!client || !slug) {
+    if (!tasksSupported || !client || !slug) {
       setProjectAvailableLabels([])
       setProjectLabelsLoading(false)
       setProjectLabelsError('')
@@ -4111,11 +4343,11 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, projectMetadataRepository])
+  }, [client, projectMetadataRepository, tasksSupported])
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
-    if (!client || !slug) {
+    if (!tasksSupported || !client || !slug) {
       setProjectAssignableUsers([])
       setProjectAssignableUsersLoading(false)
       setProjectAssignableUsersError('')
@@ -4163,11 +4395,11 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, projectMetadataRepository, projectMetadataSeedLogins])
+  }, [client, projectMetadataRepository, projectMetadataSeedLogins, tasksSupported])
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectIssueTypeRepository)
-    if (!client || !slug) {
+    if (!tasksSupported || !client || !slug) {
       setProjectIssueTypes([])
       setProjectIssueTypesLoading(false)
       setProjectIssueTypesError('')
@@ -4211,7 +4443,7 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, projectIssueTypeRepository])
+  }, [client, projectIssueTypeRepository, tasksSupported])
 
   const getWorkspaceTargetRepo = useCallback(
     (item: ActionableTaskItem, repoIdOverride?: string): RepoSummary | null => {
@@ -4391,7 +4623,7 @@ export default function MobileTasksScreen() {
   }, [])
 
   useEffect(() => {
-    if (!client || !workspaceCreateDraft || !workspaceCreateTargetRepo) {
+    if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetRepo) {
       setWorkspaceSparsePresets([])
       setWorkspaceSparsePresetsLoading(false)
       setWorkspaceSparsePresetsLoaded(false)
@@ -4445,11 +4677,18 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, workspaceCreateDraft, workspaceCreateTargetRepo, workspaceSparseReloadKey])
+  }, [
+    client,
+    tasksSupported,
+    workspaceCreateDraft,
+    workspaceCreateTargetRepo,
+    workspaceSparseReloadKey
+  ])
 
   useEffect(() => {
     if (
       !client ||
+      !tasksSupported ||
       !workspaceCreateDraft ||
       !workspaceCreateTargetRepo ||
       !showWorkspaceBaseBranchPicker
@@ -4507,6 +4746,7 @@ export default function MobileTasksScreen() {
     }
   }, [
     client,
+    tasksSupported,
     showWorkspaceBaseBranchPicker,
     workspaceBaseBranchQuery,
     workspaceCreateDraft,
@@ -4552,6 +4792,7 @@ export default function MobileTasksScreen() {
   const saveWorkspaceSparsePreset = useCallback(async (): Promise<void> => {
     if (
       !client ||
+      !tasksSupported ||
       !workspaceCreateTargetRepo ||
       !workspaceSparseDraft ||
       !workspaceSparseDraftParsed ||
@@ -4594,6 +4835,7 @@ export default function MobileTasksScreen() {
   }, [
     canSaveWorkspaceSparseDraft,
     client,
+    tasksSupported,
     workspaceCreateTargetRepo,
     workspaceSparseDraft,
     workspaceSparseDraftName,
@@ -4602,7 +4844,7 @@ export default function MobileTasksScreen() {
   ])
 
   useEffect(() => {
-    if (!client || !workspaceCreateDraft || !workspaceCreateTargetConnectionId) {
+    if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetConnectionId) {
       setWorkspaceSshState(null)
       setWorkspaceSshConnecting(false)
       return
@@ -4640,10 +4882,10 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, workspaceCreateDraft, workspaceCreateTargetConnectionId])
+  }, [client, tasksSupported, workspaceCreateDraft, workspaceCreateTargetConnectionId])
 
   const connectWorkspaceSshRepo = useCallback(async (): Promise<void> => {
-    if (!client || !workspaceCreateTargetConnectionId) {
+    if (!client || !tasksSupported || !workspaceCreateTargetConnectionId) {
       return
     }
     setWorkspaceSshConnecting(true)
@@ -4681,11 +4923,11 @@ export default function MobileTasksScreen() {
     } finally {
       setWorkspaceSshConnecting(false)
     }
-  }, [client, workspaceCreateTargetConnectionId])
+  }, [client, tasksSupported, workspaceCreateTargetConnectionId])
 
   const ensureWorkspaceSshReady = useCallback(
     async (repo: RepoSummary): Promise<void> => {
-      if (!repo.connectionId || !client) {
+      if (!repo.connectionId || !client || !tasksSupported) {
         return
       }
       if (
@@ -4706,11 +4948,11 @@ export default function MobileTasksScreen() {
         throw new Error(`Connect ${repo.displayName} before creating a workspace.`)
       }
     },
-    [client, workspaceSshState]
+    [client, tasksSupported, workspaceSshState]
   )
 
   useEffect(() => {
-    if (!workspaceCreateDraft || !client || !workspaceCreateTargetRepo) {
+    if (!tasksSupported || !workspaceCreateDraft || !client || !workspaceCreateTargetRepo) {
       setWorkspaceDetectedAgentIds(null)
       return
     }
@@ -4740,13 +4982,20 @@ export default function MobileTasksScreen() {
     return () => {
       stale = true
     }
-  }, [client, workspaceCreateDraft, workspaceCreateSshStatus, workspaceCreateTargetRepo])
+  }, [
+    client,
+    tasksSupported,
+    workspaceCreateDraft,
+    workspaceCreateSshStatus,
+    workspaceCreateTargetRepo
+  ])
 
   useEffect(() => {
-    if (!workspaceCreateDraft || workspaceAgentOverridden) return
+    if (!tasksSupported || !workspaceCreateDraft || workspaceAgentOverridden) return
     setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
   }, [
     runtimeTaskSettings,
+    tasksSupported,
     workspaceAgentOverridden,
     workspaceCreateDraft,
     workspaceDetectedAgentIds
@@ -4755,6 +5004,7 @@ export default function MobileTasksScreen() {
   useEffect(() => {
     if (
       !workspaceCreateDraft ||
+      !tasksSupported ||
       workspaceDetectedAgentIds === null ||
       !workspaceAgent ||
       workspaceAgent === 'blank' ||
@@ -4767,7 +5017,13 @@ export default function MobileTasksScreen() {
     // the same detected-agent rule desktop uses instead of launching a bad CLI.
     setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
     setWorkspaceAgentOverridden(false)
-  }, [runtimeTaskSettings, workspaceAgent, workspaceCreateDraft, workspaceDetectedAgentIds])
+  }, [
+    runtimeTaskSettings,
+    tasksSupported,
+    workspaceAgent,
+    workspaceCreateDraft,
+    workspaceDetectedAgentIds
+  ])
 
   const resolvedWorkspaceAgent = useMemo(
     () => workspaceAgent ?? pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds),
@@ -4792,7 +5048,7 @@ export default function MobileTasksScreen() {
           setupTrust?: RepoHooksResponse['setupTrust']
         }
     > => {
-      if (!client) return { kind: 'decision', decision: override ?? 'inherit' }
+      if (!client || !tasksSupported) return { kind: 'decision', decision: override ?? 'inherit' }
       const response = await client.sendRequest('repo.hooks', { repo: `id:${repo.id}` })
       if (!isSuccess(response)) {
         throw new Error(response.error.message)
@@ -4816,7 +5072,7 @@ export default function MobileTasksScreen() {
         setupTrust
       }
     },
-    [client]
+    [client, tasksSupported]
   )
 
   const createWorkspace = useCallback(
@@ -4832,7 +5088,7 @@ export default function MobileTasksScreen() {
       sparseCheckoutOverride?: { directories: string[]; presetId?: string },
       approvedSetupContentHash?: string
     ): Promise<void> => {
-      if (!client) return
+      if (!client || !tasksSupported || !taskStateHydrated) return
       setCreatingKey(item.key)
       setError('')
       try {
@@ -5035,12 +5291,15 @@ export default function MobileTasksScreen() {
       hostId,
       resolveCreateSetupDecision,
       router,
+      taskStateHydrated,
+      tasksSupported,
       trustedOrcaHooks
     ]
   )
 
   const createWorkspaceFromProjectRow = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
+      if (!tasksSupported) return
       const kind = projectRowType(row)
       const repo = findProjectRowRepo(row)
       if (!kind || !row.content.number || !row.content.url) {
@@ -5087,7 +5346,7 @@ export default function MobileTasksScreen() {
         source
       })
     },
-    [findProjectRowRepo, openWorkspaceCreate]
+    [findProjectRowRepo, openWorkspaceCreate, tasksSupported]
   )
 
   const mutateProjectRowIssueOrPr = useCallback(
@@ -6102,6 +6361,10 @@ export default function MobileTasksScreen() {
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+        const result = response.result as { ok?: boolean; error?: string }
+        if (result.ok === false) {
+          throw new Error(result.error ?? 'Failed to update GitHub status')
+        }
         setActionItem(null)
         await loadTasks({ silent: true })
       } catch (err) {
@@ -7072,7 +7335,7 @@ export default function MobileTasksScreen() {
       state: LinearState,
       options: { closeDetail?: boolean } = {}
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || !taskUiReady || mutatingStatus) return
       setMutatingStatus(true)
       setError('')
       try {
@@ -7115,7 +7378,7 @@ export default function MobileTasksScreen() {
         setMutatingStatus(false)
       }
     },
-    [client, loadTasks, mutatingStatus]
+    [client, loadTasks, mutatingStatus, taskUiReady]
   )
 
   const addLinearComment = useCallback(
@@ -7251,7 +7514,7 @@ export default function MobileTasksScreen() {
   )
 
   const createTask = useCallback(async (): Promise<void> => {
-    if (!client || creatingTask) return
+    if (!client || !tasksSupported || !taskStateHydrated || creatingTask) return
     const title = createTitle.trim()
     if (!title) return
     setCreatingTask(true)
@@ -7379,12 +7642,14 @@ export default function MobileTasksScreen() {
     hostedRepos,
     linearTeams,
     loadTasks,
-    provider
+    provider,
+    taskStateHydrated,
+    tasksSupported
   ])
 
   const setGitHubIssueSourcePreference = useCallback(
     async (repo: RepoSummary, preference: 'upstream' | 'origin'): Promise<void> => {
-      if (!client) return
+      if (!client || !taskUiReady) return
       setError('')
       try {
         const response = await client.sendRequest(
@@ -7413,7 +7678,7 @@ export default function MobileTasksScreen() {
         setError(err instanceof Error ? err.message : 'Failed to update issue source')
       }
     },
-    [client, loadTasks]
+    [client, loadTasks, taskUiReady]
   )
 
   const renderCommentComposer = (args: {
@@ -7908,8 +8173,9 @@ export default function MobileTasksScreen() {
           </View>
           <Pressable
             style={styles.iconButton}
-            disabled={connState !== 'connected' || loading || refreshing || githubProjectLoading}
+            disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
             onPress={() => {
+              if (!taskUiReady) return
               if (provider === 'github' && githubMode === 'project') {
                 void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
                 return
@@ -7917,16 +8183,14 @@ export default function MobileTasksScreen() {
               void loadTasks({ silent: true })
             }}
           >
-            <RefreshCw
-              size={16}
-              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-            />
+            <RefreshCw size={16} color={taskUiReady ? colors.textSecondary : colors.textMuted} />
           </Pressable>
           {showHeaderCreateTask ? (
             <Pressable
               style={styles.iconButton}
-              disabled={connState !== 'connected'}
+              disabled={!taskUiReady}
               onPress={() => {
+                if (!taskUiReady) return
                 if (provider === 'linear' && !linearConnected) {
                   setLinearApiKeyDraft('')
                   setLinearConnectState('idle')
@@ -7939,10 +8203,7 @@ export default function MobileTasksScreen() {
                 setShowCreateTask(true)
               }}
             >
-              <Plus
-                size={16}
-                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-              />
+              <Plus size={16} color={taskUiReady ? colors.textSecondary : colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -7953,13 +8214,27 @@ export default function MobileTasksScreen() {
           style={styles.toolbarScroll}
           contentContainerStyle={styles.toolbar}
         >
-          <Pressable style={styles.segmentButton} onPress={() => setShowProviderPicker(true)}>
+          <Pressable
+            style={styles.segmentButton}
+            disabled={!taskUiReady}
+            onPress={() => {
+              if (!taskUiReady) return
+              setShowProviderPicker(true)
+            }}
+          >
             <TaskProviderLogo provider={provider} size={14} color={colors.textPrimary} />
             <Text style={styles.segmentButtonText}>{providerLabel}</Text>
           </Pressable>
 
           {provider === 'gitlab' || (provider === 'github' && githubMode !== 'project') ? (
-            <Pressable style={styles.segmentButton} onPress={() => setShowRepoPicker(true)}>
+            <Pressable
+              style={styles.segmentButton}
+              disabled={!taskUiReady}
+              onPress={() => {
+                if (!taskUiReady) return
+                setShowRepoPicker(true)
+              }}
+            >
               {repoPickerSelectedRepo ? (
                 <View
                   style={[
@@ -7979,21 +8254,36 @@ export default function MobileTasksScreen() {
 
           {provider === 'github' && (
             <>
-              <Pressable style={styles.segmentButton} onPress={() => setShowGitHubKindPicker(true)}>
+              <Pressable
+                style={styles.segmentButton}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowGitHubKindPicker(true)
+                }}
+              >
                 <Text style={styles.segmentSecondaryText}>{githubModeLabel}</Text>
               </Pressable>
               {githubMode === 'items' ? (
                 <>
                   <Pressable
                     style={styles.segmentButton}
-                    onPress={() => setShowGitHubPresetPicker(true)}
+                    disabled={!taskUiReady}
+                    onPress={() => {
+                      if (!taskUiReady) return
+                      setShowGitHubPresetPicker(true)
+                    }}
                   >
                     <Text style={styles.segmentSecondaryText}>{githubPresetLabel}</Text>
                   </Pressable>
                   {githubIssueSourceRows.length > 0 ? (
                     <Pressable
                       style={styles.segmentButton}
-                      onPress={() => setShowGitHubIssueSourcePicker(true)}
+                      disabled={!taskUiReady}
+                      onPress={() => {
+                        if (!taskUiReady) return
+                        setShowGitHubIssueSourcePicker(true)
+                      }}
                     >
                       <Text style={styles.segmentSecondaryText}>
                         Source: {githubIssueSourceLabel}
@@ -8005,14 +8295,22 @@ export default function MobileTasksScreen() {
                 <>
                   <Pressable
                     style={styles.segmentButton}
-                    onPress={() => setShowGitHubProjectPicker(true)}
+                    disabled={!taskUiReady}
+                    onPress={() => {
+                      if (!taskUiReady) return
+                      setShowGitHubProjectPicker(true)
+                    }}
                   >
                     <Text style={styles.segmentSecondaryText}>{activeProjectLabel}</Text>
                   </Pressable>
                   {activeGitHubProjectView ? (
                     <Pressable
                       style={styles.segmentButton}
-                      onPress={() => setShowGitHubProjectViewPicker(true)}
+                      disabled={!taskUiReady}
+                      onPress={() => {
+                        if (!taskUiReady) return
+                        setShowGitHubProjectViewPicker(true)
+                      }}
                     >
                       <Text style={styles.segmentSecondaryText}>
                         {activeGitHubProjectView.name}
@@ -8022,7 +8320,11 @@ export default function MobileTasksScreen() {
                   {githubProjectTable ? (
                     <Pressable
                       style={styles.segmentButton}
-                      onPress={() => setShowGitHubProjectSortPicker(true)}
+                      disabled={!taskUiReady}
+                      onPress={() => {
+                        if (!taskUiReady) return
+                        setShowGitHubProjectSortPicker(true)
+                      }}
                     >
                       <Text style={styles.segmentSecondaryText}>
                         Sort: {githubProjectSortLabel}
@@ -8032,7 +8334,11 @@ export default function MobileTasksScreen() {
                   {githubProjectAvailableSummaryFields.length > 0 ? (
                     <Pressable
                       style={styles.segmentButton}
-                      onPress={() => setShowGitHubProjectFieldsPicker(true)}
+                      disabled={!taskUiReady}
+                      onPress={() => {
+                        if (!taskUiReady) return
+                        setShowGitHubProjectFieldsPicker(true)
+                      }}
                     >
                       <Text style={styles.segmentSecondaryText}>
                         Fields: {githubProjectFieldsLabel}
@@ -8051,7 +8357,11 @@ export default function MobileTasksScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Open view in GitHub"
                       style={styles.segmentIconButton}
-                      onPress={() => void Linking.openURL(selectedGitHubProjectViewUrl)}
+                      disabled={!taskUiReady}
+                      onPress={() => {
+                        if (!taskUiReady) return
+                        void Linking.openURL(selectedGitHubProjectViewUrl)
+                      }}
                     >
                       <ExternalLink size={14} color={colors.textSecondary} />
                     </Pressable>
@@ -8063,7 +8373,14 @@ export default function MobileTasksScreen() {
 
           {provider === 'gitlab' && (
             <>
-              <Pressable style={styles.segmentButton} onPress={() => setShowGitLabViewPicker(true)}>
+              <Pressable
+                style={styles.segmentButton}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowGitLabViewPicker(true)
+                }}
+              >
                 <Text style={styles.segmentSecondaryText}>
                   {gitlabView === 'project' ? 'Project MRs' : 'My Todos'}
                 </Text>
@@ -8071,7 +8388,11 @@ export default function MobileTasksScreen() {
               {gitlabView === 'project' && (
                 <Pressable
                   style={styles.segmentButton}
-                  onPress={() => setShowGitLabFilterPicker(true)}
+                  disabled={!taskUiReady}
+                  onPress={() => {
+                    if (!taskUiReady) return
+                    setShowGitLabFilterPicker(true)
+                  }}
                 >
                   <Text style={styles.segmentSecondaryText}>{gitlabFilterLabel}</Text>
                 </Pressable>
@@ -8084,38 +8405,72 @@ export default function MobileTasksScreen() {
               {linearWorkspaces.length > 1 ? (
                 <Pressable
                   style={styles.segmentButton}
-                  onPress={() => setShowLinearWorkspacePicker(true)}
+                  disabled={!taskUiReady}
+                  onPress={() => {
+                    if (!taskUiReady) return
+                    setShowLinearWorkspacePicker(true)
+                  }}
                 >
                   <Text style={styles.segmentSecondaryText}>{linearWorkspaceLabel}</Text>
                 </Pressable>
               ) : null}
-              <Pressable style={styles.segmentButton} onPress={() => setShowLinearTeamPicker(true)}>
+              <Pressable
+                style={styles.segmentButton}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearTeamPicker(true)
+                }}
+              >
                 <Text style={styles.segmentSecondaryText}>{linearTeamLabel}</Text>
               </Pressable>
               <Pressable
                 style={styles.segmentButton}
-                onPress={() => setShowLinearFilterPicker(true)}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearFilterPicker(true)
+                }}
               >
                 <Text style={styles.segmentSecondaryText}>{linearFilterLabel}</Text>
               </Pressable>
-              <Pressable style={styles.segmentButton} onPress={() => setShowLinearViewPicker(true)}>
+              <Pressable
+                style={styles.segmentButton}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearViewPicker(true)
+                }}
+              >
                 <Text style={styles.segmentSecondaryText}>{linearViewLabel}</Text>
               </Pressable>
               <Pressable
                 style={styles.segmentButton}
-                onPress={() => setShowLinearGroupPicker(true)}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearGroupPicker(true)
+                }}
               >
                 <Text style={styles.segmentSecondaryText}>Group: {linearGroupLabel}</Text>
               </Pressable>
               <Pressable
                 style={styles.segmentButton}
-                onPress={() => setShowLinearOrderPicker(true)}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearOrderPicker(true)
+                }}
               >
                 <Text style={styles.segmentSecondaryText}>Order: {linearOrderLabel}</Text>
               </Pressable>
               <Pressable
                 style={styles.segmentButton}
-                onPress={() => setShowLinearDisplayPicker(true)}
+                disabled={!taskUiReady}
+                onPress={() => {
+                  if (!taskUiReady) return
+                  setShowLinearDisplayPicker(true)
+                }}
               >
                 <Text style={styles.segmentSecondaryText}>Display</Text>
               </Pressable>
@@ -8123,7 +8478,14 @@ export default function MobileTasksScreen() {
           )}
 
           {provider !== 'linear' && !(provider === 'github' && githubMode === 'project') ? (
-            <Pressable style={styles.segmentButton} onPress={() => setShowSortPicker(true)}>
+            <Pressable
+              style={styles.segmentButton}
+              disabled={!taskUiReady}
+              onPress={() => {
+                if (!taskUiReady) return
+                setShowSortPicker(true)
+              }}
+            >
               <GitBranch size={14} color={colors.textSecondary} />
               <Text style={styles.segmentSecondaryText}>Sort: {sortLabel}</Text>
             </Pressable>
@@ -8154,6 +8516,7 @@ export default function MobileTasksScreen() {
               autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={() => {
+                if (!taskUiReady) return
                 if (provider === 'github' && githubMode === 'project') {
                   applyGitHubProjectSearch()
                   return
@@ -8281,7 +8644,20 @@ export default function MobileTasksScreen() {
         </View>
       ) : null}
 
-      {provider === 'linear' && !linearConnected ? (
+      {!tasksSupported ? (
+        tasksUnsupported ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>Update Orca desktop</Text>
+            <Text style={styles.centeredHint}>
+              This mobile Tasks view needs a newer desktop runtime.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.centered}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          </View>
+        )
+      ) : provider === 'linear' && !linearConnected ? (
         <View style={styles.centered}>
           <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
           <Text style={styles.emptyText}>Connect your Linear account</Text>
@@ -8290,7 +8666,9 @@ export default function MobileTasksScreen() {
           </Text>
           <Pressable
             style={[styles.targetButton, styles.centerActionButton]}
+            disabled={!taskUiReady}
             onPress={() => {
+              if (!taskUiReady) return
               setLinearApiKeyDraft('')
               setLinearConnectState('idle')
               setLinearConnectError('')
@@ -8310,7 +8688,11 @@ export default function MobileTasksScreen() {
             <Text style={styles.emptyText}>Choose a GitHub project</Text>
             <Pressable
               style={[styles.targetButton, styles.centerActionButton]}
-              onPress={() => setShowGitHubProjectPicker(true)}
+              disabled={!taskUiReady}
+              onPress={() => {
+                if (!taskUiReady) return
+                setShowGitHubProjectPicker(true)
+              }}
             >
               <Text style={styles.targetButtonText}>Browse projects</Text>
             </Pressable>
@@ -8651,6 +9033,11 @@ export default function MobileTasksScreen() {
             provider === 'github' && githubMode === 'items' && githubCanShowPagination ? (
               <View style={styles.paginationFooter}>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous page"
+                  accessibilityState={{
+                    disabled: githubCurrentPage === 0 || githubPaginationLoading
+                  }}
                   style={[
                     styles.paginationButton,
                     (githubCurrentPage === 0 || githubPaginationLoading) &&
@@ -8659,12 +9046,22 @@ export default function MobileTasksScreen() {
                   disabled={githubCurrentPage === 0 || githubPaginationLoading}
                   onPress={() => void handleGitHubPageChange(githubCurrentPage - 1)}
                 >
-                  <Text style={styles.paginationButtonText}>Previous</Text>
+                  <ChevronLeft size={17} color={colors.textPrimary} />
                 </Pressable>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    githubTotalCount === null
+                      ? `Select page, Page ${githubCurrentPage + 1}`
+                      : `Select page, Page ${githubCurrentPage + 1} of ${githubTotalPages}`
+                  }
+                  accessibilityState={{ disabled: githubPaginationLoading }}
                   style={styles.paginationLabelButton}
                   disabled={githubPaginationLoading}
-                  onPress={() => setShowGitHubPagePicker(true)}
+                  onPress={() => {
+                    if (!taskUiReady) return
+                    setShowGitHubPagePicker(true)
+                  }}
                 >
                   <Text style={styles.paginationLabel}>
                     {githubTotalCount === null
@@ -8673,6 +9070,14 @@ export default function MobileTasksScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Next page"
+                  accessibilityState={{
+                    disabled:
+                      (!githubCanLoadUncountedNextPage &&
+                        githubCurrentPage >= githubTotalPages - 1) ||
+                      githubPaginationLoading
+                  }}
                   style={[
                     styles.paginationButton,
                     ((!githubCanLoadUncountedNextPage &&
@@ -8687,9 +9092,11 @@ export default function MobileTasksScreen() {
                   }
                   onPress={() => void handleGitHubPageChange(githubCurrentPage + 1)}
                 >
-                  <Text style={styles.paginationButtonText}>
-                    {githubLoadingTargetPage === githubCurrentPage + 1 ? 'Loading...' : 'Next'}
-                  </Text>
+                  {githubLoadingTargetPage === githubCurrentPage + 1 ? (
+                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                  ) : (
+                    <ChevronRight size={17} color={colors.textPrimary} />
+                  )}
                 </Pressable>
               </View>
             ) : null
@@ -8809,7 +9216,7 @@ export default function MobileTasksScreen() {
       )}
 
       <PickerModal
-        visible={showProviderPicker}
+        visible={taskUiReady && showProviderPicker}
         title="Task Source"
         options={providerOptions}
         selected={provider}
@@ -8852,7 +9259,10 @@ export default function MobileTasksScreen() {
         onClose={() => setShowProviderPicker(false)}
       />
 
-      <BottomDrawer visible={showRepoPicker} onClose={() => setShowRepoPicker(false)}>
+      <BottomDrawer
+        visible={taskUiReady && showRepoPicker}
+        onClose={() => setShowRepoPicker(false)}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>Repositories</Text>
           <Text style={styles.sheetSubtitle}>Choose which repositories to query.</Text>
@@ -8906,7 +9316,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={showGitHubIssueSourcePicker}
+        visible={taskUiReady && showGitHubIssueSourcePicker}
         onClose={() => setShowGitHubIssueSourcePicker(false)}
       >
         <View style={styles.sheetHeader}>
@@ -8983,7 +9393,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showGitHubKindPicker}
+        visible={taskUiReady && showGitHubKindPicker}
         title="GitHub View"
         options={GITHUB_KIND_OPTIONS}
         selected={githubMode === 'project' ? 'project' : githubKind}
@@ -9011,7 +9421,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showGitHubPresetPicker}
+        visible={taskUiReady && showGitHubPresetPicker}
         title={githubKind === 'prs' ? 'Pull Requests' : 'Issues'}
         options={githubPresetPickerOptions}
         selected={githubPreset}
@@ -9031,7 +9441,10 @@ export default function MobileTasksScreen() {
         onClose={() => setShowGitHubPresetPicker(false)}
       />
 
-      <BottomDrawer visible={showGitHubPagePicker} onClose={() => setShowGitHubPagePicker(false)}>
+      <BottomDrawer
+        visible={taskUiReady && showGitHubPagePicker}
+        onClose={() => setShowGitHubPagePicker(false)}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>GitHub Pages</Text>
           <Text style={styles.sheetSubtitle}>Jump to a loaded or available result page.</Text>
@@ -9064,7 +9477,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={showGitHubProjectPicker}
+        visible={taskUiReady && showGitHubProjectPicker}
         onClose={() => setShowGitHubProjectPicker(false)}
       >
         <View style={styles.sheetHeader}>
@@ -9306,7 +9719,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showGitHubProjectViewPicker}
+        visible={taskUiReady && showGitHubProjectViewPicker}
         title={pendingGitHubProjectViewSelection ? 'Choose Project View' : 'Project View'}
         options={githubProjectViews.map((view) => ({
           value: view.id,
@@ -9341,7 +9754,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showGitHubProjectSortPicker}
+        visible={taskUiReady && showGitHubProjectSortPicker}
         title="Project Sort"
         options={githubProjectSortOptions}
         selected={githubProjectSortOverride?.fieldId ?? PROJECT_VIEW_DEFAULT_SORT}
@@ -9364,7 +9777,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={showGitHubProjectFieldsPicker}
+        visible={taskUiReady && showGitHubProjectFieldsPicker}
         onClose={() => setShowGitHubProjectFieldsPicker(false)}
       >
         <View style={styles.sheetHeader}>
@@ -9404,7 +9817,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showGitLabViewPicker}
+        visible={taskUiReady && showGitLabViewPicker}
         title="GitLab View"
         options={GITLAB_VIEW_OPTIONS}
         selected={gitlabView}
@@ -9422,7 +9835,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showGitLabFilterPicker}
+        visible={taskUiReady && showGitLabFilterPicker}
         title="GitLab Filter"
         options={GITLAB_FILTER_OPTIONS}
         selected={gitlabFilter}
@@ -9431,7 +9844,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showLinearFilterPicker}
+        visible={taskUiReady && showLinearFilterPicker}
         title="Linear Filter"
         options={LINEAR_FILTER_OPTIONS}
         selected={linearFilter}
@@ -9445,7 +9858,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showLinearWorkspacePicker}
+        visible={taskUiReady && showLinearWorkspacePicker}
         title="Linear Workspace"
         options={[
           { value: 'all', label: 'All workspaces' },
@@ -9470,7 +9883,10 @@ export default function MobileTasksScreen() {
         onClose={() => setShowLinearWorkspacePicker(false)}
       />
 
-      <BottomDrawer visible={showLinearTeamPicker} onClose={() => setShowLinearTeamPicker(false)}>
+      <BottomDrawer
+        visible={taskUiReady && showLinearTeamPicker}
+        onClose={() => setShowLinearTeamPicker(false)}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>Linear Teams</Text>
           <Text style={styles.sheetSubtitle}>Choose which teams appear in Tasks.</Text>
@@ -9531,7 +9947,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={linearStatusPickerItem !== null}
+        visible={taskUiReady && linearStatusPickerItem !== null}
         onClose={() => setLinearStatusPickerItem(null)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       >
@@ -9591,7 +10007,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showLinearViewPicker}
+        visible={taskUiReady && showLinearViewPicker}
         title="Linear View"
         options={LINEAR_VIEW_OPTIONS}
         selected={linearViewMode}
@@ -9600,7 +10016,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showLinearGroupPicker}
+        visible={taskUiReady && showLinearGroupPicker}
         title="Group Linear Issues"
         options={LINEAR_GROUP_OPTIONS}
         selected={linearGroupBy}
@@ -9609,7 +10025,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={showLinearOrderPicker}
+        visible={taskUiReady && showLinearOrderPicker}
         title="Order Linear Issues"
         options={LINEAR_ORDER_OPTIONS}
         selected={linearOrderBy}
@@ -9618,7 +10034,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={showLinearDisplayPicker}
+        visible={taskUiReady && showLinearDisplayPicker}
         onClose={() => setShowLinearDisplayPicker(false)}
       >
         <View style={styles.sheetHeader}>
@@ -9659,7 +10075,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showSortPicker}
+        visible={taskUiReady && showSortPicker}
         title="Sort Tasks"
         options={SORT_OPTIONS}
         selected={taskSort}
@@ -9668,7 +10084,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={showCreateTask}
+        visible={taskUiReady && showCreateTask}
         onClose={() => {
           setShowCreateTargetPicker(false)
           setShowCreateTask(false)
@@ -9690,7 +10106,14 @@ export default function MobileTasksScreen() {
           <Text style={styles.fieldLabel}>
             {provider === 'github' || provider === 'gitlab' ? 'Repository' : 'Team'}
           </Text>
-          <Pressable style={styles.targetButton} onPress={() => setShowCreateTargetPicker(true)}>
+          <Pressable
+            style={styles.targetButton}
+            disabled={!taskUiReady}
+            onPress={() => {
+              if (!taskUiReady) return
+              setShowCreateTargetPicker(true)
+            }}
+          >
             {provider === 'github' || provider === 'gitlab' ? (
               <View
                 style={[
@@ -9785,9 +10208,9 @@ export default function MobileTasksScreen() {
           <Pressable
             style={[
               styles.createButton,
-              (!createTitle.trim() || creatingTask) && styles.createButtonDisabled
+              (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled
             ]}
-            disabled={!createTitle.trim() || creatingTask}
+            disabled={!taskUiReady || !createTitle.trim() || creatingTask}
             onPress={() => void createTask()}
           >
             {creatingTask ? (
@@ -9800,7 +10223,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={showCreateTask && showCreateTargetPicker}
+        visible={taskUiReady && showCreateTask && showCreateTargetPicker}
         title={provider === 'linear' ? 'Linear Team' : 'Repository'}
         options={createTargetOptions}
         selected={
@@ -9816,7 +10239,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={showLinearConnect}
+        visible={taskUiReady && showLinearConnect}
         onClose={() => {
           if (linearConnectState !== 'connecting') setShowLinearConnect(false)
         }}
@@ -9885,7 +10308,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={workspaceRepoPickerItem != null}
+        visible={taskUiReady && workspaceRepoPickerItem != null}
         title="Create Workspace In"
         options={workspaceRepoOptions}
         selected={workspaceRepos[0]?.id ?? ''}
@@ -9900,7 +10323,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={workspaceCreateDraft != null}
+        visible={taskUiReady && workspaceCreateDraft != null}
         onClose={() => setWorkspaceCreateDraft(null)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       >
@@ -10135,7 +10558,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <PickerModal
-        visible={workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
+        visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
         title="Repository"
         options={workspaceRepoOptions}
         selected={workspaceCreateTargetRepo?.id ?? ''}
@@ -10150,7 +10573,7 @@ export default function MobileTasksScreen() {
       />
 
       <PickerModal
-        visible={workspaceCreateDraft != null && showWorkspaceAgentPicker}
+        visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceAgentPicker}
         title="Agent"
         options={workspaceAgentOptions}
         selected={resolvedWorkspaceAgent}
@@ -10164,7 +10587,7 @@ export default function MobileTasksScreen() {
       />
 
       <BottomDrawer
-        visible={workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
+        visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
         onClose={() => setShowWorkspaceBaseBranchPicker(false)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
@@ -10240,7 +10663,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={workspaceCreateDraft != null && showWorkspaceSparsePicker}
+        visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceSparsePicker}
         onClose={() => setShowWorkspaceSparsePicker(false)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
@@ -10319,7 +10742,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={workspaceCreateDraft != null && workspaceSparseDraft != null}
+        visible={taskUiReady && workspaceCreateDraft != null && workspaceSparseDraft != null}
         onClose={() => {
           if (!workspaceSparseSaving) setWorkspaceSparseDraft(null)
         }}
@@ -10398,7 +10821,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={setupPrompt != null}
+        visible={taskUiReady && setupPrompt != null}
         onClose={() => setSetupPrompt(null)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
@@ -10470,7 +10893,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={orcaYamlTrustPrompt != null}
+        visible={taskUiReady && orcaYamlTrustPrompt != null}
         onClose={() => setOrcaYamlTrustPrompt(null)}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
@@ -10594,7 +11017,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <BottomDrawer
-        visible={projectRepoNotInOrca != null}
+        visible={taskUiReady && projectRepoNotInOrca != null}
         onClose={() => {
           setProjectRepoNotInOrca(null)
         }}
@@ -10644,7 +11067,10 @@ export default function MobileTasksScreen() {
         ) : null}
       </BottomDrawer>
 
-      <BottomDrawer visible={projectRowItem != null} onClose={() => setProjectRowItem(null)}>
+      <BottomDrawer
+        visible={taskUiReady && projectRowItem != null}
+        onClose={() => setProjectRowItem(null)}
+      >
         {projectRowItem ? (
           <View>
             <View style={styles.sheetHeader}>
@@ -11675,7 +12101,7 @@ export default function MobileTasksScreen() {
         ) : null}
       </BottomDrawer>
 
-      <BottomDrawer visible={actionItem != null} onClose={() => setActionItem(null)}>
+      <BottomDrawer visible={taskUiReady && actionItem != null} onClose={() => setActionItem(null)}>
         {actionItem ? (
           <View>
             <View style={styles.sheetHeader}>
@@ -12609,7 +13035,7 @@ export default function MobileTasksScreen() {
       </BottomDrawer>
 
       <ActionSheetModal
-        visible={mergeMethodProjectRow != null}
+        visible={taskUiReady && mergeMethodProjectRow != null}
         title="Merge method"
         message="Choose how this pull request should be merged."
         actions={
@@ -12626,7 +13052,7 @@ export default function MobileTasksScreen() {
         onClose={() => setMergeMethodProjectRow(null)}
       />
       <ActionSheetModal
-        visible={mergeMethodTaskItem != null}
+        visible={taskUiReady && mergeMethodTaskItem != null}
         title="Merge method"
         message={
           mergeMethodTaskItem?.provider === 'gitlab'
@@ -12654,7 +13080,7 @@ export default function MobileTasksScreen() {
         onClose={() => setMergeMethodTaskItem(null)}
       />
       <ConfirmModal
-        visible={pendingHostedMerge != null}
+        visible={taskUiReady && pendingHostedMerge != null}
         title={
           pendingHostedMerge?.item.provider === 'gitlab' ? 'Merge Request' : 'Merge Pull Request'
         }
@@ -12663,13 +13089,13 @@ export default function MobileTasksScreen() {
           pendingHostedMerge ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method) : 'Merge'
         }
         onConfirm={() => {
-          if (!pendingHostedMerge) return
+          if (!taskUiReady || !pendingHostedMerge) return
           void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
         }}
         onCancel={() => setPendingHostedMerge(null)}
       />
       <ConfirmModal
-        visible={pendingProjectGitHubMerge != null}
+        visible={taskUiReady && pendingProjectGitHubMerge != null}
         title="Merge Pull Request"
         message={
           pendingProjectGitHubMerge
@@ -12682,7 +13108,7 @@ export default function MobileTasksScreen() {
             : 'Merge'
         }
         onConfirm={() => {
-          if (!pendingProjectGitHubMerge) return
+          if (!taskUiReady || !pendingProjectGitHubMerge) return
           void mergeProjectGitHubPullRequest(
             pendingProjectGitHubMerge.row,
             pendingProjectGitHubMerge.method
@@ -12691,7 +13117,7 @@ export default function MobileTasksScreen() {
         onCancel={() => setPendingProjectGitHubMerge(null)}
       />
       <ConfirmModal
-        visible={pendingHostedStateChange != null}
+        visible={taskUiReady && pendingHostedStateChange != null}
         title={
           pendingHostedStateChange
             ? getHostedStateConfirmTitle(pendingHostedStateChange)
@@ -12709,7 +13135,7 @@ export default function MobileTasksScreen() {
         }
         destructive={pendingHostedStateChange?.nextState === 'closed'}
         onConfirm={() => {
-          if (!pendingHostedStateChange) return
+          if (!taskUiReady || !pendingHostedStateChange) return
           if (pendingHostedStateChange.source === 'task') {
             if (pendingHostedStateChange.item.provider === 'gitlab') {
               void toggleGitLabStatus(pendingHostedStateChange.item)
@@ -13115,22 +13541,18 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm
   },
   paginationButton: {
-    width: 92,
+    width: 44,
+    minHeight: 38,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.button,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
   paginationButtonDisabled: {
     opacity: 0.45
-  },
-  paginationButtonText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600'
   },
   paginationLabel: {
     color: colors.textSecondary,

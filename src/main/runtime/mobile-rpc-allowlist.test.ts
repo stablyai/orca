@@ -10,6 +10,7 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'accounts.selectCodex',
   'github.updateIssue',
   'github.updatePRState',
+  'gitlab.updateIssue',
   'gitlab.updateMR'
 ]
 

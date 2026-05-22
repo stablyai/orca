@@ -592,6 +592,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleRuntimeClientVersion).toBe(status.minCompatibleMobileVersion)
     expect(status.capabilities).toContain('terminal.binary-stream.v1')
     expect(status.capabilities).toContain('workspace-ports.v1')
+    expect(status.capabilities).toContain('mobile.tasks.v1')
     expect(typeof status.protocolVersion).toBe('number')
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
     expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
