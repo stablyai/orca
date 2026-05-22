@@ -975,6 +975,16 @@ describe('TabsSlice', () => {
       expect(store.getState().unifiedTabsByWorktree[WT][0].label).toBe('zsh')
     })
 
+    it('setTabLabel preserves tab map references when the label is unchanged', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().setTabLabel(tab.id, 'zsh')
+      const before = store.getState().unifiedTabsByWorktree
+
+      store.getState().setTabLabel(tab.id, 'zsh')
+
+      expect(store.getState().unifiedTabsByWorktree).toBe(before)
+    })
+
     it('setTabCustomLabel updates customLabel', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       store.getState().setTabCustomLabel(tab.id, 'my-term')

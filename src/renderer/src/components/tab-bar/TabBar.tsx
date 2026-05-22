@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const isWindows = navigator.userAgent.includes('Windows')
+type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
+const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -144,7 +146,9 @@ function TabBarInner({
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitStatusEntries = useAppStore(
+    (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
+  )
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
@@ -154,10 +158,7 @@ function TabBarInner({
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(isWindows)
   const resolvedGroupId = groupId ?? worktreeId
 
-  const statusByRelativePath = useMemo(
-    () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
-    [worktreeId, gitStatusByWorktree]
-  )
+  const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.

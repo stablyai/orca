@@ -3,6 +3,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   SetupSplitDirection,
+  Tab,
   TerminalLayoutSnapshot,
   TerminalTab,
   Worktree,
@@ -65,6 +66,40 @@ function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
     tab.title ||
     `Terminal ${(index ?? 0) + 1}`
   )
+}
+
+let terminalTabOwnerCacheSource: Record<string, TerminalTab[]> | null = null
+let terminalTabOwnerCache = new Map<string, string>()
+
+function getTerminalTabOwnerWorktreeId(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  tabId: string
+): string | null {
+  if (terminalTabOwnerCacheSource !== tabsByWorktree) {
+    const nextCache = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      for (const tab of tabs) {
+        nextCache.set(tab.id, worktreeId)
+      }
+    }
+    terminalTabOwnerCacheSource = tabsByWorktree
+    terminalTabOwnerCache = nextCache
+  }
+  return terminalTabOwnerCache.get(tabId) ?? null
+}
+
+function updateUnifiedTerminalLabel(
+  unifiedTabs: Tab[],
+  terminalTabId: string,
+  label: string
+): Tab[] | null {
+  const unifiedIndex = unifiedTabs.findIndex(
+    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
+  )
+  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.label === label) {
+    return null
+  }
+  return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
 }
 
 function isWindowsRendererRuntime(): boolean {
@@ -812,38 +847,47 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // unchanged) would break shallow-equality checks in unrelated
       // selectors and trigger spurious re-renders across background
       // worktrees on every OSC title frame.
-      let ownerWorktreeId: string | null = null
-      let ownerTabs: TerminalTab[] | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        const idx = tabs.findIndex((t) => t.id === tabId)
-        if (idx === -1) {
-          continue
-        }
-        const t = tabs[idx]
-        const nextTitle = title.trim() || getFallbackTabTitle(t)
-        if (t.title === nextTitle) {
-          return s
-        }
-        ownerWorktreeId = wId
-        ownerTabs = tabs.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                // Why: PTYs can briefly emit an empty title while an agent exits.
-                // Keep the stable fallback label instead of rendering a blank tab.
-                title: nextTitle,
-                defaultTitle:
-                  tab.defaultTitle ??
-                  (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
-                  (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
-              }
-            : tab
-        )
-        break
-      }
-      if (!ownerWorktreeId || !ownerTabs) {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
         return s
       }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const tabIndex = tabs.findIndex((t) => t.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab) {
+        return s
+      }
+      const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
+        currentUnifiedTabs,
+        tabId,
+        nextTitle
+      )
+      if (currentTab.title === nextTitle) {
+        return unifiedTabsWithUpdatedLabel
+          ? {
+              unifiedTabsByWorktree: {
+                ...s.unifiedTabsByWorktree,
+                [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+              }
+            }
+          : s
+      }
+      const ownerTabs = tabs.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              // Why: PTYs can briefly emit an empty title while an agent exits.
+              // Keep the stable fallback label instead of rendering a blank tab.
+              title: nextTitle,
+              defaultTitle:
+                tab.defaultTitle ??
+                (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
+                (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
+            }
+          : tab
+      )
       scheduleRuntimeGraphSync()
       const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
       // Agent status is derived from terminal titles and affects sort scoring,
@@ -854,20 +898,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // title update). Bumping sortEpoch here would reorder the sidebar
       // on click — the exact bug PR #209 intended to fix.
       const isActive = ownerWorktreeId === s.activeWorktreeId
-      return isActive
+      const nextState: Partial<AppState> = isActive
         ? { tabsByWorktree: nextTabsByWorktree }
         : { tabsByWorktree: nextTabsByWorktree, sortEpoch: s.sortEpoch + 1 }
+      if (unifiedTabsWithUpdatedLabel) {
+        nextState.unifiedTabsByWorktree = {
+          ...s.unifiedTabsByWorktree,
+          [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+        }
+      }
+      return nextState
     })
-    const item = Object.values(get().unifiedTabsByWorktree)
-      .flat()
-      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
-    if (item) {
-      const resolvedTitle =
-        Object.values(get().tabsByWorktree)
-          .flat()
-          .find((tab) => tab.id === tabId)?.title ?? title.trim()
-      get().setTabLabel(item.id, resolvedTitle)
-    }
   },
 
   setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -892,13 +933,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // re-emits its working title) — bumping would re-rank the sidebar on
       // click, the exact bug PR #209 fixed for updateTabTitle. If no owner
       // is found the pane is orphaned; skip the bump as unsafe.
-      let ownerWorktreeId: string | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          ownerWorktreeId = wId
-          break
-        }
-      }
+      const ownerWorktreeId = classificationChanged
+        ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        : null
       const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
       const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
       return {
@@ -936,13 +973,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // fire as a side-effect of a click-driven PTY teardown in the active
       // worktree must not re-rank the sidebar. Skip bumping when no owner is
       // found (orphaned pane) for the same safety reason.
-      let ownerWorktreeId: string | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          ownerWorktreeId = wId
-          break
-        }
-      }
+      const ownerWorktreeId = hadClassification
+        ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        : null
       const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
       const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
       return {

@@ -1358,6 +1358,65 @@ describe('setActiveWorktree', () => {
     })
   })
 
+  it('preserves terminal and unified tab map references when a live title repeats', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+    const tabsByWorktree = store.getState().tabsByWorktree
+    const unifiedTabsByWorktree = store.getState().unifiedTabsByWorktree
+    const sortEpoch = store.getState().sortEpoch
+
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
+    expect(store.getState().sortEpoch).toBe(sortEpoch)
+  })
+
+  it('repairs a stale unified tab label when a live title repeats', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+    const tabsByWorktree = store.getState().tabsByWorktree
+    store.setState((state) => ({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [wt]: state.unifiedTabsByWorktree[wt].map((tab) =>
+          tab.contentType === 'terminal' && tab.entityId === first.id
+            ? { ...tab, label: 'stale' }
+            : tab
+        )
+      }
+    }))
+
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(
+      store
+        .getState()
+        .unifiedTabsByWorktree[wt]?.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === first.id
+        )?.label
+    ).toBe('Claude Code')
+  })
+
   it('clears stale background browser tab type when closing the last browser tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
