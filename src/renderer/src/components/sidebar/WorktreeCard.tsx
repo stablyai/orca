@@ -48,6 +48,7 @@ import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktree } from './sleep-worktree-flow'
 import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
+import { useMacOptionKeyPressed } from './mac-option-key-state'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -160,26 +161,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const [isMacOptionPressed, setIsMacOptionPressed] = useState(false)
-
-  useEffect(() => {
-    const isMac = navigator.userAgent.includes('Mac')
-    if (!isMac) {
-      return
-    }
-    const handleKeyChange = (event: KeyboardEvent): void => {
-      setIsMacOptionPressed(event.altKey)
-    }
-    const handleWindowBlur = (): void => setIsMacOptionPressed(false)
-    window.addEventListener('keydown', handleKeyChange, true)
-    window.addEventListener('keyup', handleKeyChange, true)
-    window.addEventListener('blur', handleWindowBlur)
-    return () => {
-      window.removeEventListener('keydown', handleKeyChange, true)
-      window.removeEventListener('keyup', handleKeyChange, true)
-      window.removeEventListener('blur', handleWindowBlur)
-    }
-  }, [])
+  const isMacOptionPressed = useMacOptionKeyPressed()
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
