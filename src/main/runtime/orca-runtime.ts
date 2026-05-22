@@ -6967,6 +6967,7 @@ export class OrcaRuntimeService {
     const shouldActivate = args.activate === true || args.runHooks === true
     let didSpawnStartup = false
     let didSpawnSetup = false
+    let startupTerminalHandle: string | null = null
     if (effectiveStartup && this.ptyController?.spawn) {
       try {
         // Why: automation startup must not depend on a renderer TerminalPane
@@ -6984,6 +6985,7 @@ export class OrcaRuntimeService {
           this.pasteStartupDraftWhenReady(terminal.handle, effectiveDraftPaste)
         }
         didSpawnStartup = true
+        startupTerminalHandle = terminal.handle
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -6995,16 +6997,31 @@ export class OrcaRuntimeService {
     if (didSpawnStartup && setup && this.ptyController?.spawn) {
       try {
         // Why: reveal-on-adopt can create the startup tab before renderer
-        // activation handles setup. Spawn setup in runtime too so startup+setup
-        // cannot be skipped by the renderer's "terminal already exists" guard.
-        await this.createTerminal(`id:${worktree.id}`, {
-          title: 'Setup',
-          command: buildSetupRunnerCommand(
-            setup.runnerScriptPath,
-            process.platform === 'win32' ? 'windows' : 'posix'
-          ),
-          env: setup.envVars
-        })
+        // activation handles setup. Honor the same split-vs-tab setting here
+        // because renderer activation will skip setup once the startup tab exists.
+        const setupCommand = buildSetupRunnerCommand(
+          setup.runnerScriptPath,
+          process.platform === 'win32' ? 'windows' : 'posix'
+        )
+        const setupLaunchMode =
+          (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
+            .setupScriptLaunchMode ?? 'new-tab'
+        if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
+          if (!startupTerminalHandle) {
+            throw new Error('startup_terminal_missing')
+          }
+          await this.splitTerminal(startupTerminalHandle, {
+            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
+            command: setupCommand,
+            env: setup.envVars
+          })
+        } else {
+          await this.createTerminal(`id:${worktree.id}`, {
+            title: 'Setup',
+            command: setupCommand,
+            env: setup.envVars
+          })
+        }
         didSpawnSetup = true
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -7133,6 +7150,7 @@ export class OrcaRuntimeService {
     let warning = result.warning
     let didSpawnStartup = false
     let didSpawnSetup = false
+    let startupTerminalHandle: string | null = null
     if (args.startup && this.ptyController?.spawn) {
       try {
         const startupTrustAgent = args.startupDraftPaste?.agent ?? args.createdWithAgent
@@ -7151,6 +7169,7 @@ export class OrcaRuntimeService {
           this.pasteStartupDraftWhenReady(terminal.handle, args.startupDraftPaste)
         }
         didSpawnStartup = true
+        startupTerminalHandle = terminal.handle
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -7162,15 +7181,31 @@ export class OrcaRuntimeService {
     if (didSpawnStartup && result.setup && this.ptyController?.spawn) {
       try {
         // Why: remote/mobile task creates spawn the agent terminal in runtime,
-        // so renderer activation never receives the setup payload to split.
-        await this.createTerminal(`path:${result.worktree.path}`, {
-          title: 'Setup',
-          command: buildSetupRunnerCommand(
-            result.setup.runnerScriptPath,
-            isWindowsAbsolutePathLike(result.setup.runnerScriptPath) ? 'windows' : 'posix'
-          ),
-          env: result.setup.envVars
-        })
+        // so renderer activation never receives the setup payload. Runtime
+        // must apply the same user-selected split-vs-tab setup placement.
+        const setupCommand = buildSetupRunnerCommand(
+          result.setup.runnerScriptPath,
+          isWindowsAbsolutePathLike(result.setup.runnerScriptPath) ? 'windows' : 'posix'
+        )
+        const setupLaunchMode =
+          (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
+            .setupScriptLaunchMode ?? 'new-tab'
+        if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
+          if (!startupTerminalHandle) {
+            throw new Error('startup_terminal_missing')
+          }
+          await this.splitTerminal(startupTerminalHandle, {
+            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
+            command: setupCommand,
+            env: result.setup.envVars
+          })
+        } else {
+          await this.createTerminal(`path:${result.worktree.path}`, {
+            title: 'Setup',
+            command: setupCommand,
+            env: result.setup.envVars
+          })
+        }
         didSpawnSetup = true
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -8553,13 +8588,17 @@ export class OrcaRuntimeService {
 
   async splitTerminal(
     handle: string,
-    opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
+    opts: {
+      direction?: 'horizontal' | 'vertical'
+      command?: string
+      env?: Record<string, string>
+    } = {}
   ): Promise<RuntimeTerminalSplit> {
-    this.assertGraphReady()
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty) {
       return await this.splitPtyBackedTerminal(livePty.pty, opts)
     }
+    this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
 
@@ -8583,7 +8622,11 @@ export class OrcaRuntimeService {
 
   private async splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
-    opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
+    opts: {
+      direction?: 'horizontal' | 'vertical'
+      command?: string
+      env?: Record<string, string>
+    } = {}
   ): Promise<RuntimeTerminalSplit> {
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
@@ -8608,6 +8651,7 @@ export class OrcaRuntimeService {
       cwd: worktree.path,
       command: opts.command,
       env: {
+        ...opts.env,
         ORCA_PANE_KEY: paneKey,
         ORCA_TAB_ID: parentTabId,
         ORCA_WORKTREE_ID: worktree.id

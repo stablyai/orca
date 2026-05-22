@@ -338,7 +338,8 @@ const TerminalSplit = TerminalHandle.extend({
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
     .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
     .optional(),
-  command: OptionalString
+  command: OptionalString,
+  env: z.record(z.string(), z.string()).optional()
 })
 
 const TerminalStop = z.object({
@@ -571,7 +572,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       split: await runtime.splitTerminal(params.terminal, {
         direction: params.direction,
-        command: params.command
+        command: params.command,
+        env: params.env
       })
     })
   }),

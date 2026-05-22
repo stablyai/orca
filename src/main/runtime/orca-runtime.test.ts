@@ -6582,6 +6582,122 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('honors split setup placement for local startup-draft worktrees', async () => {
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        defaultTuiAgent: 'codex' as const,
+        setupScriptLaunchMode: 'split-vertical' as const
+      }),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-startup-split-main' })
+      .mockResolvedValueOnce({ id: 'pty-startup-split-setup' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-startup-split' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup-split')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup-split')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-startup-setup-split',
+        head: 'def',
+        branch: 'runtime-startup-setup-split',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-startup-setup-split',
+      startupDraft: 'https://github.com/stablyai/orca/issues/123',
+      setupDecision: 'run',
+      activate: true
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-startup-setup-split',
+        command: 'codex',
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-startup-setup-split',
+        command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+        env: expect.objectContaining({
+          ORCA_ROOT_PATH: '/tmp/repo',
+          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
+          ORCA_WORKTREE_ID: result.worktree.id
+        }),
+        worktreeId: result.worktree.id
+      })
+    )
+    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
+    const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}
+    expect(mainEnv.ORCA_TAB_ID).toBeDefined()
+    expect(mainEnv.ORCA_PANE_KEY).toBeDefined()
+    expect(setupEnv.ORCA_TAB_ID).toBe(mainEnv.ORCA_TAB_ID)
+    const mainLeafId = mainEnv.ORCA_PANE_KEY!.slice(`${mainEnv.ORCA_TAB_ID!}:`.length)
+    expect(revealTerminalSession).toHaveBeenLastCalledWith(
+      result.worktree.id,
+      expect.objectContaining({
+        ptyId: 'pty-startup-split-setup',
+        tabId: mainEnv.ORCA_TAB_ID,
+        splitFromLeafId: mainLeafId,
+        splitDirection: 'vertical'
+      })
+    )
+  })
+
   it('lets explicit startup draft agents override the desktop default', async () => {
     detectInstalledAgentsMock.mockResolvedValue([])
     const metaById: Record<string, WorktreeMeta> = {}
