@@ -906,9 +906,20 @@ function Settings(): React.JSX.Element {
       if (container) {
         container.scrollTo({ top: 0 })
       }
+      if (settingsSearchQuery.trim() !== '') {
+        // Why: sidebar search is a discovery tool. Once a user selects a
+        // section from the filtered results, show the actual pane instead of
+        // keeping another matching pane rendered by the stale query.
+        setSettingsSearchQuery('')
+      }
       setActiveSectionId(sectionId)
     },
-    [activeSectionId, confirmDiscardCommitPromptChanges]
+    [
+      activeSectionId,
+      confirmDiscardCommitPromptChanges,
+      setSettingsSearchQuery,
+      settingsSearchQuery
+    ]
   )
 
   const openComputerUseFromBrowser = useCallback(async () => {
