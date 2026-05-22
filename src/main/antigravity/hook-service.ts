@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: local Antigravity install, Windows wrapper
+   generation, status cleanup, and SSH remote install must share one event list
+   and managed-command matcher so stale hook cleanup cannot drift by platform. */
 import { homedir } from 'os'
 import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
@@ -5,6 +8,7 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
+  hookDefinitionHasManagedCommand,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -22,15 +26,33 @@ import {
 const ANTIGRAVITY_HOOK_BUNDLE_NAME = 'orca-status'
 
 const ANTIGRAVITY_EVENTS = [
-  { eventName: 'PreInvocation', schema: 'direct' },
-  { eventName: 'PostInvocation', schema: 'direct' },
-  { eventName: 'Stop', schema: 'direct' },
+  {
+    eventName: 'PreInvocation',
+    schema: 'direct',
+    windowsWrapperFileName: 'antigravity-pre-invocation.cmd'
+  },
+  {
+    eventName: 'PostInvocation',
+    schema: 'direct',
+    windowsWrapperFileName: 'antigravity-post-invocation.cmd'
+  },
+  { eventName: 'Stop', schema: 'direct', windowsWrapperFileName: 'antigravity-stop.cmd' },
   // Why: Antigravity requires PreToolUse hooks to make permission decisions.
   // Orca's hook is observational, so installing there can block user tools.
-  { eventName: 'PostToolUse', schema: 'tool' }
+  {
+    eventName: 'PostToolUse',
+    schema: 'tool',
+    windowsWrapperFileName: 'antigravity-post-tool-use.cmd'
+  }
 ] as const
 
 type AntigravityEvent = (typeof ANTIGRAVITY_EVENTS)[number]
+
+const ANTIGRAVITY_MANAGED_SCRIPT_FILE_NAMES = [
+  'antigravity-hook.sh',
+  'antigravity-hook.cmd',
+  ...ANTIGRAVITY_EVENTS.map((event) => event.windowsWrapperFileName)
+] as const
 
 function getConfigPath(): string {
   // Why: Antigravity's hook docs define global hooks in ~/.gemini/config/hooks.json,
@@ -46,11 +68,15 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function getManagedCommand(scriptPath: string, eventName: string): string {
+function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
+  return getSharedManagedScriptPath(event.windowsWrapperFileName)
+}
+
+function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return `cmd /d /s /c "set "ORCA_ANTIGRAVITY_EVENT=${eventName}" && call "${scriptPath}""`
+    return getWindowsWrapperScriptPath(event)
   }
-  return wrapPosixHookCommand(scriptPath, { ORCA_ANTIGRAVITY_EVENT: eventName })
+  return wrapPosixHookCommand(scriptPath, { ORCA_ANTIGRAVITY_EVENT: event.eventName })
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -111,6 +137,26 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
+function getWindowsWrapperScript(eventName: string): string {
+  return [
+    '@echo off',
+    'setlocal',
+    `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
+    'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
+    'if exist "%ORCA_ANTIGRAVITY_CORE%" (',
+    '  call "%ORCA_ANTIGRAVITY_CORE%"',
+    '  exit /b 0',
+    ')',
+    'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
+    '  echo {"decision":""}',
+    ') else (',
+    '  echo {}',
+    ')',
+    'exit /b 0',
+    ''
+  ].join('\r\n')
+}
+
 function buildWindowsAntigravityHookPostCommand(): string {
   return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/antigravity') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes | Out-Null } catch {}"`
 }
@@ -130,6 +176,45 @@ function hasManagedCommand(definitions: HookDefinition[], command: string): bool
       definition.command === command ||
       (Array.isArray(definition.hooks) && definition.hooks.some((hook) => hook.command === command))
   )
+}
+
+function createAntigravityManagedCommandMatcher(): (command: string | undefined) => boolean {
+  const matchers = ANTIGRAVITY_MANAGED_SCRIPT_FILE_NAMES.map((scriptFileName) =>
+    createManagedCommandMatcher(scriptFileName)
+  )
+  return (command) => matchers.some((matcher) => matcher(command))
+}
+
+function bundleHasStaleManagedCommand(
+  bundle: Record<string, unknown>,
+  isManagedCommand: (command: string | undefined) => boolean,
+  currentCommands: ReadonlySet<string>
+): boolean {
+  for (const definitions of Object.values(bundle)) {
+    if (!Array.isArray(definitions)) {
+      continue
+    }
+    for (const definition of definitions as HookDefinition[]) {
+      if (!hookDefinitionHasManagedCommand(definition, isManagedCommand)) {
+        continue
+      }
+      const commands = [
+        definition.command,
+        definition.bash,
+        definition.powershell,
+        ...(Array.isArray(definition.hooks) ? definition.hooks.map((hook) => hook.command) : [])
+      ]
+      if (
+        commands.some(
+          (command) =>
+            command !== undefined && isManagedCommand(command) && !currentCommands.has(command)
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 function buildEventDefinition(event: AntigravityEvent, command: string): HookDefinition {
@@ -163,10 +248,9 @@ function removeManagedCommandsFromBundle(
 
 function buildInstalledConfig(
   config: HooksConfig,
-  commandForEvent: (eventName: string) => string,
-  scriptFileName: string
+  commandForEvent: (event: AntigravityEvent) => string,
+  isManagedCommand: (command: string | undefined) => boolean
 ): void {
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const bundle = removeManagedCommandsFromBundle(getBundle(config), isManagedCommand)
 
   for (const event of ANTIGRAVITY_EVENTS) {
@@ -174,17 +258,14 @@ function buildInstalledConfig(
       ? (bundle[event.eventName] as HookDefinition[])
       : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
-    bundle[event.eventName] = [
-      ...cleaned,
-      buildEventDefinition(event, commandForEvent(event.eventName))
-    ]
+    bundle[event.eventName] = [...cleaned, buildEventDefinition(event, commandForEvent(event))]
   }
 
   config[ANTIGRAVITY_HOOK_BUNDLE_NAME] = bundle
 }
 
-function removeInstalledConfig(config: HooksConfig, scriptFileName: string): void {
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+function removeInstalledConfig(config: HooksConfig): void {
+  const isManagedCommand = createAntigravityManagedCommandMatcher()
   const bundle = removeManagedCommandsFromBundle(getBundle(config), isManagedCommand)
   if (Object.keys(bundle).length === 0) {
     delete config[ANTIGRAVITY_HOOK_BUNDLE_NAME]
@@ -209,31 +290,43 @@ export class AntigravityHookService {
     }
 
     const bundle = getBundle(config)
+    const isManagedCommand = createAntigravityManagedCommandMatcher()
+    const currentCommands = new Set(
+      ANTIGRAVITY_EVENTS.map((event) => getManagedCommand(scriptPath, event))
+    )
+    const staleManagedPresent = bundleHasStaleManagedCommand(
+      bundle,
+      isManagedCommand,
+      currentCommands
+    )
     const missing: string[] = []
     let presentCount = 0
     for (const event of ANTIGRAVITY_EVENTS) {
       const definitions = Array.isArray(bundle[event.eventName])
         ? (bundle[event.eventName] as HookDefinition[])
         : []
-      if (hasManagedCommand(definitions, getManagedCommand(scriptPath, event.eventName))) {
+      if (hasManagedCommand(definitions, getManagedCommand(scriptPath, event))) {
         presentCount += 1
       } else {
         missing.push(event.eventName)
       }
     }
 
-    const managedHooksPresent = presentCount > 0
+    const managedHooksPresent = presentCount > 0 || staleManagedPresent
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0) {
+    if (missing.length === 0 && !staleManagedPresent) {
       state = 'installed'
       detail = null
-    } else if (presentCount === 0) {
+    } else if (presentCount === 0 && !staleManagedPresent) {
       state = 'not_installed'
       detail = null
     } else {
       state = 'partial'
-      detail = `Managed hook missing for events: ${missing.join(', ')}`
+      detail =
+        missing.length > 0
+          ? `Managed hook missing for events: ${missing.join(', ')}`
+          : 'Stale managed hook entries need cleanup'
     }
     return { agent: 'antigravity', state, configPath, managedHooksPresent, detail }
   }
@@ -254,10 +347,20 @@ export class AntigravityHookService {
 
     buildInstalledConfig(
       config,
-      (eventName) => getManagedCommand(scriptPath, eventName),
-      getManagedScriptFileName()
+      (event) => getManagedCommand(scriptPath, event),
+      createAntigravityManagedCommandMatcher()
     )
     writeManagedScript(scriptPath, getManagedScript())
+    if (process.platform === 'win32') {
+      // Why: Antigravity wraps hook commands in cmd.exe. Keeping event env
+      // setup inside event-specific .cmd files avoids nested hooks.json quotes.
+      for (const event of ANTIGRAVITY_EVENTS) {
+        writeManagedScript(
+          getWindowsWrapperScriptPath(event),
+          getWindowsWrapperScript(event.eventName)
+        )
+      }
+    }
     writeHooksJson(configPath, config)
     return this.getStatus()
   }
@@ -280,9 +383,9 @@ export class AntigravityHookService {
 
       buildInstalledConfig(
         config,
-        (eventName) =>
-          wrapPosixHookCommand(remoteScriptPath, { ORCA_ANTIGRAVITY_EVENT: eventName }),
-        'antigravity-hook.sh'
+        (event) =>
+          wrapPosixHookCommand(remoteScriptPath, { ORCA_ANTIGRAVITY_EVENT: event.eventName }),
+        createAntigravityManagedCommandMatcher()
       )
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, config)
@@ -318,7 +421,7 @@ export class AntigravityHookService {
       }
     }
 
-    removeInstalledConfig(config, getManagedScriptFileName())
+    removeInstalledConfig(config)
     writeHooksJson(configPath, config)
     return this.getStatus()
   }
