@@ -108,7 +108,6 @@ export function KeybindingsFileActions(): React.JSX.Element {
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <p className="shrink-0 text-xs font-medium">Keybindings JSON</p>
-            <p className="text-xs text-muted-foreground">The visual editor saves here.</p>
           </div>
           <p className="truncate font-mono text-[11px] leading-4 text-muted-foreground">
             {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
