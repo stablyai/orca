@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GetRateLimitResult, GitHubRateLimitSnapshot } from '../../../../shared/types'
@@ -96,20 +97,10 @@ export function useGitHubRateLimitSnapshot(options?: { autoRefresh?: boolean }):
     if (!autoRefresh) {
       return
     }
-    const fetchIfVisible = (): void => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) {
-        void refresh(false)
-      }
-    }
-    void refresh(false)
-    const handle = window.setInterval(fetchIfVisible, REFRESH_INTERVAL_MS)
-    window.addEventListener('focus', fetchIfVisible)
-    document.addEventListener('visibilitychange', fetchIfVisible)
-    return () => {
-      window.clearInterval(handle)
-      window.removeEventListener('focus', fetchIfVisible)
-      document.removeEventListener('visibilitychange', fetchIfVisible)
-    }
+    return installWindowVisibilityInterval({
+      run: () => void refresh(false),
+      intervalMs: REFRESH_INTERVAL_MS
+    })
   }, [autoRefresh, refresh])
 
   return { snapshot, hasError, isFetching, refresh }

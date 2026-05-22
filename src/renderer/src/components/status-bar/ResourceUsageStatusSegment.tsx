@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
@@ -798,23 +799,13 @@ export function ResourceUsageStatusSegment({
       setSessionsError(false)
       return
     }
-    const refreshIfVisible = (): void => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) {
-        void refreshSessions()
-      }
-    }
-    void refreshSessions()
     // Why: the closed-popover badge is informational. Polling daemon sessions
     // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; focus/visibility refreshes catch the badge up immediately.
-    const interval = setInterval(refreshIfVisible, SESSIONS_POLL_MS)
-    window.addEventListener('focus', refreshIfVisible)
-    document.addEventListener('visibilitychange', refreshIfVisible)
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('focus', refreshIfVisible)
-      document.removeEventListener('visibilitychange', refreshIfVisible)
-    }
+    // no visible UI; visibility refreshes catch the badge up immediately.
+    return installWindowVisibilityInterval({
+      run: () => void refreshSessions(),
+      intervalMs: SESSIONS_POLL_MS
+    })
   }, [runtimeEnvironmentActive, refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
