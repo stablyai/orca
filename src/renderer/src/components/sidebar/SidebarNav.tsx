@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/task-providers'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useMobileSidebarOnboardingBadge } from './mobile-sidebar-onboarding-badge'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -119,6 +120,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge()
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
@@ -246,7 +248,10 @@ const SidebarNav = React.memo(function SidebarNav() {
       ) : null}
       <button
         type="button"
-        onClick={openMobilePage}
+        onClick={() => {
+          mobileOnboardingBadge.dismiss()
+          openMobilePage()
+        }}
         aria-current={mobileActive ? 'page' : undefined}
         className={cn(
           'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
@@ -260,6 +265,11 @@ const SidebarNav = React.memo(function SidebarNav() {
           strokeWidth={mobileActive ? 2.25 : 1.75}
         />
         <span className="flex-1">Orca Mobile</span>
+        {mobileOnboardingBadge.visible ? (
+          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+            New
+          </span>
+        ) : null}
       </button>
       <button
         type="button"
