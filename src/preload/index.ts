@@ -61,6 +61,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
 import type {
+  WorkspacePortAdvertisedUrlChangedEvent,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortScanRequest,
@@ -578,7 +579,17 @@ const api = {
     scan: (args: WorkspacePortScanRequest): Promise<WorkspacePortScanResult> =>
       ipcRenderer.invoke('workspacePorts:scan', args),
     kill: (args: WorkspacePortKillRequest): Promise<WorkspacePortKillResult> =>
-      ipcRenderer.invoke('workspacePorts:kill', args)
+      ipcRenderer.invoke('workspacePorts:kill', args),
+    onAdvertisedUrlChanged: (
+      callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: WorkspacePortAdvertisedUrlChangedEvent
+      ): void => callback(event)
+      ipcRenderer.on('workspacePorts:advertised-url-changed', listener)
+      return () => ipcRenderer.removeListener('workspacePorts:advertised-url-changed', listener)
+    }
   },
 
   pty: {

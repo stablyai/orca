@@ -516,6 +516,11 @@ export class AdvertisedUrlWatcher {
       return true
     }
     const baseline = this.validationBaselines.get(key)
+    if (baseline?.kind === 'absent' && current.kind === 'present') {
+      // Why: dev servers can print their URL before the OS listener scan sees
+      // the port. Let that first present scan validate the startup banner.
+      return false
+    }
     return (
       entry.validatedListenerPid === undefined &&
       baseline !== undefined &&

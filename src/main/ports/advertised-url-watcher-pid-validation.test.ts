@@ -125,6 +125,18 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
   })
 
+  it('keeps a startup URL when the previous scan had not seen the listener yet', () => {
+    const watcher = bindFresh()
+
+    watcher.reconcileScan([WORKTREE], [])
+    watcher.ingest(PTY, 'Nautilus: http://localhost:3002/\n')
+    watcher.reconcileScan([WORKTREE], [{ port: 3002, pid: 4242 }])
+
+    const advertised = watcher.lookup(WORKTREE, 3002, 4242)
+    expect(advertised?.origin).toBe('http://localhost:3002')
+    expect(advertised?.validatedListenerPid).toBe(4242)
+  })
+
   it('evicts an unvalidated URL when scanner observes a different PID first', () => {
     const watcher = bindFresh()
 

@@ -6,10 +6,11 @@ import {
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
+const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
   return {
@@ -85,6 +86,46 @@ export function WorkspacePortScanner(): null {
       stopVisibleInterval()
     }
   }, [refresh, setWorkspacePortScan])
+
+  useEffect(() => {
+    if (runtimeTarget.kind !== 'local') {
+      return
+    }
+
+    let eventSequence = 0
+    let disposed = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    const clearRetryTimer = (): void => {
+      if (!retryTimer) {
+        return
+      }
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
+
+    const unsubscribe = window.api.workspacePorts.onAdvertisedUrlChanged(() => {
+      eventSequence += 1
+      const sequence = eventSequence
+      clearRetryTimer()
+      if (!isWindowVisible()) {
+        return
+      }
+      void refresh().finally(() => {
+        if (disposed || sequence !== eventSequence || !isWindowVisible()) {
+          return
+        }
+        // Why: some dev servers print their URL just before the listener is
+        // visible to lsof/netstat. One quiet settle scan catches that startup race.
+        retryTimer = setTimeout(() => void refresh(), WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS)
+      })
+    })
+
+    return () => {
+      disposed = true
+      clearRetryTimer()
+      unsubscribe()
+    }
+  }, [refresh, runtimeTarget])
 
   return null
 }
