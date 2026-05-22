@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
+import { Plug, Copy, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -9,10 +9,11 @@ import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   canStopWorkspacePort,
+  goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  scanWorkspacePortsForTarget,
-  workspacePortRuntimeTargetKey
+  refreshWorkspacePortScanAfterStop,
+  shouldOpenWorkspacePortInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
@@ -99,14 +100,15 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         port,
         runtimeTarget,
         createBrowserTab,
-        setRemoteBrowserPageHandle
+        setRemoteBrowserPageHandle,
+        openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
       }).then((result) => {
         if (!result.ok) {
           toast.error('Failed to open browser', { description: result.reason })
         }
       })
     },
-    [createBrowserTab, port, runtimeTarget, setRemoteBrowserPageHandle]
+    [createBrowserTab, port, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
   const handleCopy = useCallback(
@@ -136,15 +138,15 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           return
         }
         toast.success(`Stopped process on ${port.port}`)
-        setWorkspacePortScanRefreshing(true)
-        try {
-          const scan = await scanWorkspacePortsForTarget(runtimeTarget)
-          setWorkspacePortScan({
-            key: `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`,
-            result: scan
+        const refreshResult = await refreshWorkspacePortScanAfterStop({
+          runtimeTarget,
+          setWorkspacePortScan,
+          setWorkspacePortScanRefreshing
+        })
+        if (!refreshResult.ok) {
+          toast.error('Failed to refresh ports', {
+            description: refreshResult.reason
           })
-        } finally {
-          setWorkspacePortScanRefreshing(false)
         }
       }
       void run()
@@ -153,17 +155,17 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   )
 
   return (
-    <div className="group/port grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50">
+    <div className="group/port grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-accent/50">
       <span className="select-text font-mono text-[12px] font-semibold tabular-nums text-foreground">
         {port.port}
       </span>
       <div className="relative flex h-5 min-w-0 items-center">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex min-w-0 select-text items-baseline gap-1.5 overflow-hidden pr-14 text-[11px] text-muted-foreground">
+            <span className="flex min-w-0 select-text items-baseline gap-1 overflow-hidden pr-[3.75rem] text-[11px] text-muted-foreground">
               <span className="min-w-0 flex-1 truncate">{processLabel}</span>
               <span className="shrink-0 text-muted-foreground/45">-</span>
-              <span className="min-w-10 max-w-20 shrink-0 truncate text-right text-muted-foreground/70">
+              <span className="min-w-0 flex-[1.1] truncate text-muted-foreground/70">
                 {address}
               </span>
             </span>
@@ -177,7 +179,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
         <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
-          <PortAction label="Open in Orca Browser" onClick={handleOpen}>
+          <PortAction label="Open in Browser" onClick={handleOpen}>
             <ExternalLink className="size-3" />
           </PortAction>
           <PortAction label={`Copy ${address}`} onClick={handleCopy}>
@@ -195,6 +197,17 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
 export function WorktreeCardPortsDetails({
   ports
 }: WorktreeCardPortsProps): React.JSX.Element | null {
+  const handleGoToWorktree = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      const ownerPort = ports[0]
+      if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
+        toast.error('Workspace unavailable')
+      }
+    },
+    [ports]
+  )
+
   if (ports.length === 0) {
     return null
   }
@@ -204,9 +217,12 @@ export function WorktreeCardPortsDetails({
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
         <span>Live Ports</span>
-        <span className="ml-auto font-normal tabular-nums text-muted-foreground/70">
-          {ports.length}
-        </span>
+        <div className="ml-auto flex items-center gap-1">
+          <PortAction label="Go to Worktree" onClick={handleGoToWorktree}>
+            <FolderOpen className="size-3" />
+          </PortAction>
+          <span className="font-normal tabular-nums text-muted-foreground/70">{ports.length}</span>
+        </div>
       </div>
       <div className="space-y-0.5">
         {ports.map((port) => (

@@ -22,7 +22,9 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
+  refreshWorkspacePortScanAfterStop,
   scanWorkspacePortsForTarget,
+  shouldOpenWorkspacePortInOrcaBrowser,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
 import {
@@ -213,9 +215,18 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         return
       }
       toast.success(`Stopped process on :${port.port}`)
-      await refresh()
+      const refreshResult = await refreshWorkspacePortScanAfterStop({
+        runtimeTarget,
+        setWorkspacePortScan,
+        setWorkspacePortScanRefreshing
+      })
+      if (!refreshResult.ok) {
+        toast.error('Failed to refresh ports', {
+          description: refreshResult.reason
+        })
+      }
     },
-    [activeRepo, refresh, runtimeTarget]
+    [activeRepo, runtimeTarget, setWorkspacePortScan, setWorkspacePortScanRefreshing]
   )
 
   const handleOpenPortInBrowser = useCallback(
@@ -225,13 +236,14 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
-        setRemoteBrowserPageHandle
+        setRemoteBrowserPageHandle,
+        openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
       })
       if (!result.ok) {
         toast.error('Failed to open browser', { description: result.reason })
       }
     },
-    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle]
+    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
@@ -361,7 +373,7 @@ function LocalPortSection({
     <div className="px-3 pt-2">
       <button
         type="button"
-        className="flex items-center gap-1 w-full text-left mb-1 text-muted-foreground hover:text-foreground transition-colors"
+        className="sticky top-0 z-10 mb-1 flex w-full items-center gap-1 border-b border-border/40 bg-background py-1 text-left text-muted-foreground transition-colors hover:text-foreground"
         onClick={onToggle}
         aria-expanded={!collapsed}
         aria-controls={`local-port-section-${id}`}
@@ -497,13 +509,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleOpenBrowserButtonClick}
-                  aria-label="Open in Orca Browser"
+                  aria-label="Open in Browser"
                 >
                   <ExternalLink size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Open in Orca Browser
+                Open in Browser
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -551,7 +563,7 @@ function LocalPortRow({
         >{`:${port.port}`}</ContextMenuLabel>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleOpenBrowser}>
           <ExternalLink size={13} />
-          Open in Orca Browser
+          Open in Browser
         </ContextMenuItem>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
@@ -634,6 +646,7 @@ function LocalPortDetailsDialog({
 }
 
 function SshPortsPanel(): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -697,15 +710,20 @@ function SshPortsPanel(): React.JSX.Element {
 
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry) => {
+      const url = browserUrlForPortForwardEntry(entry)
+      if (!shouldOpenWorkspacePortInOrcaBrowser(settings)) {
+        void window.api.shell.openUrl(url)
+        return
+      }
       if (!activeWorktree?.id) {
         toast.error('No workspace selected for the browser.')
         return
       }
-      createBrowserTab(activeWorktree.id, browserUrlForPortForwardEntry(entry), {
+      createBrowserTab(activeWorktree.id, url, {
         activate: true
       })
     },
-    [activeWorktree?.id, createBrowserTab]
+    [activeWorktree?.id, createBrowserTab, settings]
   )
 
   const handleDialogClose = useCallback(() => {
@@ -935,9 +953,7 @@ function ForwardedPortRow({
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
           title={
-            advertisedBrowserUrl
-              ? `Open ${advertisedBrowserUrl} in Orca Browser`
-              : 'Open in Orca Browser'
+            advertisedBrowserUrl ? `Open ${advertisedBrowserUrl} in Browser` : 'Open in Browser'
           }
         >
           <ExternalLink size={13} />

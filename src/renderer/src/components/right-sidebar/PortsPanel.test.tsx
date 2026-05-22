@@ -25,6 +25,7 @@ import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
+  refreshWorkspacePortScanAfterStop,
   scanWorkspacePortsForTarget
 } from '@/lib/workspace-port-actions'
 
@@ -63,12 +64,14 @@ const localScan = vi.fn()
 const localKill = vi.fn()
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const openUrl = vi.fn()
 
 beforeEach(() => {
   localScan.mockReset()
   localKill.mockReset()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  openUrl.mockReset()
   activateAndRevealWorktreeMock.mockReset()
   clearRuntimeCompatibilityCacheForTests()
   vi.stubGlobal('window', {
@@ -82,6 +85,9 @@ beforeEach(() => {
       },
       runtimeEnvironments: {
         call: runtimeEnvironmentCall
+      },
+      shell: {
+        openUrl
       }
     }
   })
@@ -249,6 +255,83 @@ describe('PortsPanel runtime routing', () => {
       {
         activate: true
       }
+    )
+    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
+      environmentId: 'env-1',
+      remotePageId: 'remote-browser-page-1'
+    })
+  })
+
+  it('opens workspace ports in the system browser when link routing is off', async () => {
+    const createBrowserTab = vi.fn()
+    const setRemoteBrowserPageHandle = vi.fn()
+    openUrl.mockResolvedValueOnce(undefined)
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'local' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
+        openInOrcaBrowser: false
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).toHaveBeenCalledWith('http://127.0.0.1:63468')
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('returns post-stop refresh failures without throwing', async () => {
+    const setWorkspacePortScan = vi.fn()
+    const setWorkspacePortScanRefreshing = vi.fn()
+    localScan.mockRejectedValueOnce(new Error('scan failed'))
+
+    await expect(
+      refreshWorkspacePortScanAfterStop({
+        runtimeTarget: { kind: 'local' },
+        setWorkspacePortScan: setWorkspacePortScan as never,
+        setWorkspacePortScanRefreshing: setWorkspacePortScanRefreshing as never
+      })
+    ).resolves.toEqual({ ok: false, reason: 'scan failed' })
+
+    expect(setWorkspacePortScan).not.toHaveBeenCalled()
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(1, true)
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('keeps remote workspace ports in the server-side browser when link routing is off', async () => {
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result:
+          method === 'status.get' ? compatibleStatus : { browserPageId: 'remote-browser-page-1' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const createBrowserTab = vi.fn(() => ({ activePageId: 'local-page-1' }))
+    const setRemoteBrowserPageHandle = vi.fn()
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
+        openInOrcaBrowser: false
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get',
+      'browser.tabCreate'
+    ])
+    expect(createBrowserTab).toHaveBeenCalledWith(
+      'repo::/workspace/app',
+      'http://127.0.0.1:63468',
+      { activate: true }
     )
     expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
       environmentId: 'env-1',

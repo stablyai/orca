@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
+  FolderOpen,
   LoaderCircle,
   Trash2
 } from 'lucide-react'
@@ -17,9 +18,12 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   addressForPort,
   canStopWorkspacePort,
+  goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
+  refreshWorkspacePortScanAfterStop,
   scanWorkspacePortsForTarget,
+  shouldOpenWorkspacePortInOrcaBrowser,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
 import {
@@ -96,7 +100,8 @@ function PortRow({
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
-  const canOpen = port.kind === 'workspace' || Boolean(activeWorktreeId)
+  const openInOrcaBrowser = shouldOpenWorkspacePortInOrcaBrowser(settings)
+  const canOpen = !openInOrcaBrowser || port.kind === 'workspace' || Boolean(activeWorktreeId)
   const canStop = canStopWorkspacePort(port)
 
   const handleOpen = useCallback(
@@ -107,14 +112,22 @@ function PortRow({
         activeWorktreeId,
         runtimeTarget,
         createBrowserTab,
-        setRemoteBrowserPageHandle
+        setRemoteBrowserPageHandle,
+        openInOrcaBrowser
       }).then((result) => {
         if (!result.ok) {
           toast.error('Failed to open browser', { description: result.reason })
         }
       })
     },
-    [activeWorktreeId, createBrowserTab, port, runtimeTarget, setRemoteBrowserPageHandle]
+    [
+      activeWorktreeId,
+      createBrowserTab,
+      openInOrcaBrowser,
+      port,
+      runtimeTarget,
+      setRemoteBrowserPageHandle
+    ]
   )
 
   const handleCopy = useCallback(
@@ -144,15 +157,15 @@ function PortRow({
           return
         }
         toast.success(`Stopped process on ${port.port}`)
-        setWorkspacePortScanRefreshing(true)
-        try {
-          const scan = await scanWorkspacePortsForTarget(runtimeTarget)
-          setWorkspacePortScan({
-            key: `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`,
-            result: scan
+        const refreshResult = await refreshWorkspacePortScanAfterStop({
+          runtimeTarget,
+          setWorkspacePortScan,
+          setWorkspacePortScanRefreshing
+        })
+        if (!refreshResult.ok) {
+          toast.error('Failed to refresh ports', {
+            description: refreshResult.reason
           })
-        } finally {
-          setWorkspacePortScanRefreshing(false)
         }
       }
       void run()
@@ -178,7 +191,7 @@ function PortRow({
             </TooltipContent>
           </Tooltip>
           <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
-            <PortAction label="Open in Orca Browser" onClick={handleOpen} disabled={!canOpen}>
+            <PortAction label="Open in Browser" onClick={handleOpen} disabled={!canOpen}>
               <ExternalLink className="size-3" />
             </PortAction>
             <PortAction label={`Copy ${addressForPort(port)}`} onClick={handleCopy}>
@@ -204,15 +217,35 @@ function WorkspaceGroupRows({
   group: WorkspacePortGroup
   activeWorktreeId: string | null
 }): React.JSX.Element {
+  const handleGoToWorkspace = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      const ownerPort = group.ports[0]
+      if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
+        toast.error('Workspace unavailable')
+      }
+    },
+    [group.ports]
+  )
+
   return (
     <section className="border-t border-border/40 first:border-t-0">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/40 bg-popover px-3 py-2">
         <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
           {group.displayName}
         </span>
-        <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">
-          {group.ports.length}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <PortAction
+            label="Go to Worktree"
+            onClick={handleGoToWorkspace}
+            disabled={group.ports.length === 0}
+          >
+            <FolderOpen className="size-3" />
+          </PortAction>
+          <span className="font-mono text-[10px] text-muted-foreground/70">
+            {group.ports.length}
+          </span>
+        </div>
       </div>
       <div className="px-1 pb-1">
         {group.ports.map((port) => (
@@ -344,7 +377,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               <section className="border-t border-border/60">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                   aria-expanded={externalOpen}
                   onClick={() => setExternalOpen((value) => !value)}
                 >
