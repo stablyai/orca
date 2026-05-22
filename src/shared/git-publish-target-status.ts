@@ -11,6 +11,18 @@ export function getPublishTargetRemoteRef(target: GitPushTarget): string {
   return `refs/remotes/${target.remoteName}/${target.branchName}`
 }
 
+function isMissingRemoteTrackingRefError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const candidate = error as Error & { code?: unknown; stderr?: unknown }
+  const stderr = typeof candidate.stderr === 'string' ? candidate.stderr.trim() : ''
+  if (stderr.length > 0) {
+    return false
+  }
+  return candidate.code === 1 || /(?:exited with|exit code) 1\b/i.test(candidate.message)
+}
+
 export async function getPublishTargetStatus(
   runGit: GitCommandRunner,
   target: GitPushTarget,
@@ -21,7 +33,10 @@ export async function getPublishTargetStatus(
 
   try {
     await runGit(['rev-parse', '--verify', '--quiet', remoteRef])
-  } catch {
+  } catch (error) {
+    if (!isMissingRemoteTrackingRefError(error)) {
+      throw error
+    }
     return {
       hasUpstream: false,
       upstreamName,

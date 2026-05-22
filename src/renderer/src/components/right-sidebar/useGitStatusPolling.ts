@@ -28,6 +28,7 @@ export function useGitStatusPolling(): void {
   const fetchStatusRef = useRef<() => void>(() => {})
 
   const worktreePath = activeWorktree?.path ?? null
+  const activePushTarget = activeWorktree?.pushTarget
   const activeRepoId = activeWorktree?.repoId ?? null
   const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
@@ -74,6 +75,7 @@ export function useGitStatusPolling(): void {
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId,
+        pushTarget: activePushTarget,
         deps: {
           setGitStatus,
           updateWorktreeGitIdentity,
@@ -87,6 +89,7 @@ export function useGitStatusPolling(): void {
   }, [
     activeRepoSupportsGit,
     activeConnectionId,
+    activePushTarget,
     activeWorktreeId,
     fetchUpstreamStatus,
     isConnectionReady,

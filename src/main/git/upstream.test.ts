@@ -180,4 +180,37 @@ describe('getUpstreamStatus', () => {
       ]
     ])
   })
+
+  it('reports no upstream when an explicit publish target has not been fetched yet', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(Object.assign(new Error('git exited with 1.'), { stderr: '' }))
+
+    await expect(
+      getUpstreamStatus('/repo', {
+        remoteName: 'fork',
+        branchName: 'feature/fix'
+      })
+    ).resolves.toEqual({
+      hasUpstream: false,
+      upstreamName: 'fork/feature/fix',
+      ahead: 0,
+      behind: 0
+    })
+  })
+
+  it('does not hide git failures while checking an explicit publish target', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' }).mockRejectedValueOnce(
+      Object.assign(new Error('fatal: not a git repository'), {
+        stderr: 'fatal: not a git repository'
+      })
+    )
+
+    await expect(
+      getUpstreamStatus('/repo', {
+        remoteName: 'fork',
+        branchName: 'feature/fix'
+      })
+    ).rejects.toThrow('fatal: not a git repository')
+  })
 })

@@ -58,17 +58,18 @@ export async function refreshGitStatusForWorktree({
     return
   }
   if (status.upstreamStatus) {
-    deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
-    // Why: porcelain status has counts but cannot tell stale post-rebase
-    // upstream commits from real remote work. A diverged branch needs the
-    // richer explicit probe before the UI offers Pull/Sync.
     if (
       status.upstreamStatus.ahead > 0 &&
       status.upstreamStatus.behind > 0 &&
       status.upstreamStatus.behindCommitsArePatchEquivalent === undefined
     ) {
+      // Why: porcelain status has counts but cannot tell stale post-rebase
+      // upstream commits from real remote work. Writing it first makes the
+      // primary action flicker between Sync and Force Push on every poll.
       await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      return
     }
+    deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
     return
   }
   await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
