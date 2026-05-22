@@ -978,6 +978,43 @@ describe('useIpcEvents updater integration', () => {
       title: 'Terminal 1'
     })
 
+    storeState.terminalLayoutsByTabId = {
+      'tab-existing': {
+        root: { type: 'leaf', leafId: 'leaf-source' },
+        activeLeafId: 'leaf-source',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-source': 'pty-bg' }
+      }
+    }
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-split-background',
+      tabId: 'tab-existing',
+      leafId: 'leaf-split-background',
+      splitFromLeafId: 'leaf-source',
+      splitDirection: 'vertical',
+      activate: false
+    })
+
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split-background')
+    expect(setTabLayout).toHaveBeenCalledWith('tab-existing', {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-source' },
+        second: { type: 'leaf', leafId: 'leaf-split-background' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-source',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        'leaf-source': 'pty-bg',
+        'leaf-split-background': 'pty-split-background'
+      }
+    })
+
     const splitLayout = {
       root: {
         type: 'split',

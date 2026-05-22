@@ -129,10 +129,15 @@ function addSplitLeafToLayout(
   newLeafId: string,
   ptyId: string,
   direction: TerminalSplitDirection,
-  title?: string | null
+  title?: string | null,
+  activateNewLeaf = true
 ): TerminalLayoutSnapshot {
   const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
   const existingLeafIds = collectLeafIdsInOrder(root)
+  const nextActiveLeafId =
+    activateNewLeaf || !layout?.activeLeafId || !existingLeafIds.includes(layout.activeLeafId)
+      ? newLeafId
+      : layout.activeLeafId
   const nextRoot = existingLeafIds.includes(newLeafId)
     ? root
     : (() => {
@@ -151,7 +156,7 @@ function addSplitLeafToLayout(
   return {
     ...(layout ?? { root: null, activeLeafId: null, expandedLeafId: null }),
     root: nextRoot,
-    activeLeafId: newLeafId,
+    activeLeafId: nextActiveLeafId,
     expandedLeafId: null,
     ptyIdsByLeafId: {
       ...layout?.ptyIdsByLeafId,
@@ -831,7 +836,8 @@ export function useIpcEvents(): void {
                     leafId,
                     ptyId,
                     splitDirection ?? 'horizontal',
-                    title
+                    title,
+                    shouldActivate
                   )
                 )
                 window.dispatchEvent(

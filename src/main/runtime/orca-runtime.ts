@@ -7013,7 +7013,8 @@ export class OrcaRuntimeService {
           await this.splitTerminal(startupTerminalHandle, {
             direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
             command: setupCommand,
-            env: setup.envVars
+            env: setup.envVars,
+            activate: false
           })
         } else {
           await this.createTerminal(`id:${worktree.id}`, {
@@ -7197,7 +7198,8 @@ export class OrcaRuntimeService {
           await this.splitTerminal(startupTerminalHandle, {
             direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
             command: setupCommand,
-            env: result.setup.envVars
+            env: result.setup.envVars,
+            activate: false
           })
         } else {
           await this.createTerminal(`path:${result.worktree.path}`, {
@@ -8592,6 +8594,7 @@ export class OrcaRuntimeService {
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
+      activate?: boolean
     } = {}
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
@@ -8626,6 +8629,7 @@ export class OrcaRuntimeService {
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
+      activate?: boolean
     } = {}
   ): Promise<RuntimeTerminalSplit> {
     if (!this.ptyController?.spawn) {
@@ -8672,7 +8676,7 @@ export class OrcaRuntimeService {
       await this.notifier?.revealTerminalSession?.(worktree.id, {
         ptyId: result.id,
         title: null,
-        activate: true,
+        activate: opts.activate !== false,
         tabId: parentTabId,
         leafId,
         splitFromLeafId: parsedPaneKey.leafId,

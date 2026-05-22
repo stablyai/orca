@@ -6692,6 +6692,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         ptyId: 'pty-startup-split-setup',
         tabId: mainEnv.ORCA_TAB_ID,
+        activate: false,
         splitFromLeafId: mainLeafId,
         splitDirection: 'vertical'
       })
