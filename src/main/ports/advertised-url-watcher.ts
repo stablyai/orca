@@ -390,9 +390,12 @@ export class AdvertisedUrlWatcher {
       } else {
         this.validationBaselines.delete(key)
       }
-      this.enforceCacheLimit()
+      const changedEvents = this.enforceCacheLimit()
       if (!existing || existing.origin !== candidate.origin) {
-        this.emitChange({ worktreeId, port })
+        changedEvents.push({ worktreeId, port })
+      }
+      for (const event of dedupeChangeEvents(changedEvents)) {
+        this.emitChange(event)
       }
     } else {
       // Refresh recency on the existing entry so it isn't evicted by LRU.
@@ -410,19 +413,23 @@ export class AdvertisedUrlWatcher {
     }
   }
 
-  private enforceCacheLimit(): void {
+  private enforceCacheLimit(): AdvertisedUrlChangeEvent[] {
     if (this.cache.size <= this.maxCacheEntries) {
-      return
+      return []
     }
     // Drop oldest by lastSeenAt until we are back at the cap.
     const entries = Array.from(this.cache.entries()).sort(
       (a, b) => a[1].lastSeenAt - b[1].lastSeenAt
     )
     const overflow = this.cache.size - this.maxCacheEntries
+    const removedEvents: AdvertisedUrlChangeEvent[] = []
     for (let i = 0; i < overflow; i++) {
-      this.cache.delete(entries[i][0])
-      this.validationBaselines.delete(entries[i][0])
+      const [key, entry] = entries[i]
+      this.cache.delete(key)
+      this.validationBaselines.delete(key)
+      removedEvents.push({ worktreeId: worktreeIdFromCacheKey(key, entry.port), port: entry.port })
     }
+    return removedEvents
   }
 
   lookup(worktreeId: string, port: number, currentListenerPid?: number): AdvertisedUrl | undefined {
@@ -627,4 +634,20 @@ function scanStateChanged(previous: ListenerScanState, current: ListenerScanStat
     return false
   }
   return previous.pid !== undefined && current.pid !== undefined && previous.pid !== current.pid
+}
+
+function dedupeChangeEvents(
+  events: readonly AdvertisedUrlChangeEvent[]
+): AdvertisedUrlChangeEvent[] {
+  const seen = new Set<string>()
+  const deduped: AdvertisedUrlChangeEvent[] = []
+  for (const event of events) {
+    const key = cacheKey(event.worktreeId, event.port)
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    deduped.push(event)
+  }
+  return deduped
 }

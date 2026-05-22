@@ -216,10 +216,16 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     watcher.bindPty(PTY, WORKTREE)
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n', 100)
     watcher.ingest(PTY, 'B: https://b.example.com:3002/\n', 200)
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
     watcher.ingest(PTY, 'C: https://c.example.com:3003/\n', 300)
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     expect(watcher.lookup(WORKTREE, 3002)?.host).toBe('b.example.com')
     expect(watcher.lookup(WORKTREE, 3003)?.host).toBe('c.example.com')
+    expect(events).toEqual([
+      { worktreeId: WORKTREE, port: 3001 },
+      { worktreeId: WORKTREE, port: 3003 }
+    ])
   })
 
   it('invalidate drops one cache entry', () => {

@@ -182,6 +182,94 @@ describe('enrichSshDetectedPorts', () => {
     ])
   })
 
+  it('skips advertised enrichment when one port maps to multiple listener PIDs', () => {
+    const calls: unknown[][] = []
+    const watcher = {
+      reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
+        calls.push(['reconcile', ...args])
+      },
+      lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
+        calls.push(['lookupBest', ...args])
+        return {
+          origin: 'https://local.example.com:3001',
+          host: 'local.example.com',
+          hostKind: 'custom',
+          protocol: 'https',
+          port: 3001,
+          ptyId: 'pty',
+          lastSeenAt: 0
+        }
+      }
+    }
+
+    const enriched = enrichSshDetectedPorts(
+      [
+        { port: 3001, host: '127.0.0.1', pid: 1111, processName: 'node' },
+        { port: 3001, host: '127.0.0.2', pid: 2222, processName: 'node' }
+      ],
+      ['wt'],
+      watcher
+    )
+
+    expect(enriched.every((port) => port.advertisedUrl === undefined)).toBe(true)
+    expect(calls).toEqual([
+      [
+        'reconcile',
+        ['wt'],
+        [
+          { port: 3001, pid: 1111 },
+          { port: 3001, pid: 2222 }
+        ]
+      ]
+    ])
+  })
+
+  it('still enriches duplicate host rows when the port has one unique PID', () => {
+    const calls: unknown[][] = []
+    const watcher = {
+      reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
+        calls.push(['reconcile', ...args])
+      },
+      lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
+        calls.push(['lookupBest', ...args])
+        return {
+          origin: 'https://local.example.com:3001',
+          host: 'local.example.com',
+          hostKind: 'custom',
+          protocol: 'https',
+          port: 3001,
+          ptyId: 'pty',
+          lastSeenAt: 0
+        }
+      }
+    }
+
+    const enriched = enrichSshDetectedPorts(
+      [
+        { port: 3001, host: '127.0.0.1', pid: 4242, processName: 'node' },
+        { port: 3001, host: '::1', pid: 4242, processName: 'node' }
+      ],
+      ['wt'],
+      watcher
+    )
+
+    expect(enriched.every((port) => port.advertisedUrl === 'https://local.example.com:3001')).toBe(
+      true
+    )
+    expect(calls).toEqual([
+      [
+        'reconcile',
+        ['wt'],
+        [
+          { port: 3001, pid: 4242 },
+          { port: 3001, pid: 4242 }
+        ]
+      ],
+      ['lookupBest', ['wt'], 3001, 4242],
+      ['lookupBest', ['wt'], 3001, 4242]
+    ])
+  })
+
   it('can enrich cached scanner rows without validating their PID', () => {
     const calls: unknown[][] = []
     const watcher = {
