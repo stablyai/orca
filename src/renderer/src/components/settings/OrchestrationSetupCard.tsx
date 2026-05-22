@@ -1,4 +1,4 @@
-import { type JSX } from 'react'
+import { useEffect, type JSX } from 'react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
@@ -10,8 +10,9 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 export function OrchestrationSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
+  onInstalledChange?: (installed: boolean) => void
 }): JSX.Element {
-  const { compact, terminalHeightPx } = props
+  const { compact, terminalHeightPx, onInstalledChange } = props
   const {
     installed: skillInstalled,
     loading: skillLoading,
@@ -20,6 +21,10 @@ export function OrchestrationSetupCard(props: {
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
+  useEffect(() => {
+    onInstalledChange?.(skillInstalled)
+  }, [onInstalledChange, skillInstalled])
 
   const setupPanel = (
     <AgentSkillSetupPanel

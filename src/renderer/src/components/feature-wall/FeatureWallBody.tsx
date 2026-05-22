@@ -199,6 +199,7 @@ export function FeatureWallBody(props: {
   agentsActiveStep: AgentsStep | null
   workbenchActiveStep: WorkbenchStep | null
   reviewActiveStep: ReviewStep | null
+  onOrchestrationSkillInstalledChange: (installed: boolean) => void
 }): JSX.Element {
   const {
     selected,
@@ -210,7 +211,8 @@ export function FeatureWallBody(props: {
     source,
     agentsActiveStep,
     workbenchActiveStep,
-    reviewActiveStep
+    reviewActiveStep,
+    onOrchestrationSkillInstalledChange
   } = props
   const isWorkspaces = selected.id === 'workspaces'
   const isTasks = selected.id === 'tasks'
@@ -374,7 +376,11 @@ export function FeatureWallBody(props: {
                     widthPx={480}
                     heightPx={235}
                   />
-                  <OrchestrationSetupCard compact terminalHeightPx={140} />
+                  <OrchestrationSetupCard
+                    compact
+                    terminalHeightPx={140}
+                    onInstalledChange={onOrchestrationSkillInstalledChange}
+                  />
                 </>
               ) : agentsActiveStep ? (
                 <AgentsOrchestrationVisual

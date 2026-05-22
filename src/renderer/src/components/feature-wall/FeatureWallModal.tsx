@@ -69,11 +69,6 @@ export default function FeatureWallModal(): JSX.Element | null {
   const agentsSteps = useMemo(() => getAgentsSteps(), [])
   const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
   const reviewSteps = useMemo(() => getReviewSteps(), [])
-  const completion = useFeatureWallCompletion(
-    isOpen,
-    taskSourcePresentation.hasConnectedTaskSource,
-    taskSourcePresentation.isCheckingTaskSources
-  )
   const [agentsStepId, setAgentsStepId] = useState<AgentsStepId>(
     () => agentsSteps[0]?.id ?? 'statuses'
   )
@@ -82,6 +77,13 @@ export default function FeatureWallModal(): JSX.Element | null {
   )
   const [reviewStepId, setReviewStepId] = useState<ReviewStepId>(
     () => reviewSteps[0]?.id ?? 'notes'
+  )
+  const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
+  const completion = useFeatureWallCompletion(
+    isOpen,
+    taskSourcePresentation.hasConnectedTaskSource,
+    taskSourcePresentation.isCheckingTaskSources,
+    orchestrationSkillInstalled
   )
   // Reset to the first step whenever the visible step list changes so we never
   // land on an id that's been filtered out (e.g. user toggled notifications on
@@ -164,6 +166,7 @@ export default function FeatureWallModal(): JSX.Element | null {
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
       setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
       setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+      setOrchestrationSkillInstalled(false)
     }
   }, [agentsSteps, isOpen, reviewSteps, workbenchSteps])
 
@@ -234,6 +237,10 @@ export default function FeatureWallModal(): JSX.Element | null {
     },
     [selectedId, source]
   )
+
+  const handleOrchestrationSkillInstalledChange = useCallback((installed: boolean): void => {
+    setOrchestrationSkillInstalled(installed)
+  }, [])
 
   const handleRailKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
     if (!NAVIGATION_KEYS.has(event.key)) {
@@ -381,6 +388,7 @@ export default function FeatureWallModal(): JSX.Element | null {
               agentsActiveStep={agentsActiveStep}
               workbenchActiveStep={workbenchActiveStep}
               reviewActiveStep={reviewActiveStep}
+              onOrchestrationSkillInstalledChange={handleOrchestrationSkillInstalledChange}
             />
             {showKeepAwakeCard && settings ? (
               <div className="px-9 pb-9">

@@ -26,10 +26,79 @@ export type FeatureWallCompletionState = {
   markReviewStepVisited: (id: ReviewStepId) => void
 }
 
+export type FeatureWallCompletionProgress = Pick<
+  FeatureWallCompletionState,
+  'workflowDone' | 'agentStepDone' | 'workbenchStepDone' | 'reviewStepDone'
+>
+
+export function getFeatureWallCompletionProgress(input: {
+  visitedWorkflows: ReadonlySet<FeatureWallWorkflowId>
+  visitedAgentSteps: ReadonlySet<AgentsStepId>
+  visitedWorkbenchSteps: ReadonlySet<WorkbenchStepId>
+  visitedReviewSteps: ReadonlySet<ReviewStepId>
+  hasConnectedTaskSource: boolean
+  isCheckingTaskSources: boolean
+  hasUsageAccount: boolean
+  orchestrationSkillInstalled: boolean
+  notificationsConfigured: boolean
+  githubConfigured: boolean
+  aiCommitPrConfigured: boolean
+}): FeatureWallCompletionProgress {
+  const tasksDone = !input.isCheckingTaskSources && input.hasConnectedTaskSource
+  const usageDone = input.hasUsageAccount
+  const orchestrationDone =
+    input.visitedAgentSteps.has('orchestration') && input.orchestrationSkillInstalled
+  const notificationsDone = input.notificationsConfigured
+  // Why: the keep-awake setting surfaced on Visibility is optional; viewing
+  // the step should complete the tour item even when the setting stays off.
+  const statusesDone = input.visitedAgentSteps.has('statuses')
+
+  const agentsWorkflowDone = usageDone && orchestrationDone && notificationsDone && statusesDone
+  // Workbench is "done" once the user has viewed every sub-step — same shape
+  // as agents but each step is purely informational (no setup gate).
+  const workbenchTerminalDone = input.visitedWorkbenchSteps.has('terminal')
+  const workbenchEditorDone = input.visitedWorkbenchSteps.has('editor')
+  const workbenchBrowserDone = input.visitedWorkbenchSteps.has('browser')
+  const workbenchAllStepsDone = workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
+  // Review mixes informational and setup-backed steps: notes complete on
+  // view, while PR checks and AI commit/PR reflect their live configuration.
+  const reviewNotesDone = input.visitedReviewSteps.has('notes')
+  const reviewPrViewDone = input.githubConfigured
+  const reviewShipDone = input.aiCommitPrConfigured
+  const reviewAllStepsDone = reviewNotesDone && reviewPrViewDone && reviewShipDone
+
+  return {
+    workflowDone: {
+      workspaces: input.visitedWorkflows.has('workspaces'),
+      tasks: tasksDone,
+      'agents-orchestration': agentsWorkflowDone,
+      workbench: workbenchAllStepsDone,
+      review: reviewAllStepsDone
+    },
+    agentStepDone: {
+      statuses: statusesDone,
+      usage: usageDone,
+      orchestration: orchestrationDone,
+      notifications: notificationsDone
+    },
+    workbenchStepDone: {
+      terminal: workbenchTerminalDone,
+      editor: workbenchEditorDone,
+      browser: workbenchBrowserDone
+    },
+    reviewStepDone: {
+      notes: reviewNotesDone,
+      'pr-view': reviewPrViewDone,
+      ship: reviewShipDone
+    }
+  }
+}
+
 export function useFeatureWallCompletion(
   isOpen: boolean,
   hasConnectedTaskSource: boolean,
-  isCheckingTaskSources: boolean
+  isCheckingTaskSources: boolean,
+  orchestrationSkillInstalled: boolean
 ): FeatureWallCompletionState {
   const settings = useAppStore((s) => s.settings)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
@@ -145,51 +214,20 @@ export function useFeatureWallCompletion(
     })
   }
 
-  const tasksDone = !isCheckingTaskSources && hasConnectedTaskSource
-  const usageDone = hasUsageAccount
-  const orchestrationDone = visitedAgentSteps.has('orchestration')
-  const notificationsDone = notificationsConfigured
-  // Why: the keep-awake setting surfaced on Visibility is optional; viewing
-  // the step should complete the tour item even when the setting stays off.
-  const statusesDone = visitedAgentSteps.has('statuses')
-
-  const agentsWorkflowDone = usageDone && orchestrationDone && notificationsDone && statusesDone
-  // Workbench is "done" once the user has viewed every sub-step — same shape
-  // as agents but each step is purely informational (no setup gate).
-  const workbenchTerminalDone = visitedWorkbenchSteps.has('terminal')
-  const workbenchEditorDone = visitedWorkbenchSteps.has('editor')
-  const workbenchBrowserDone = visitedWorkbenchSteps.has('browser')
-  const workbenchAllStepsDone = workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
-  // Review mixes informational and setup-backed steps: notes complete on
-  // view, while PR checks and AI commit/PR reflect their live configuration.
-  const reviewNotesDone = visitedReviewSteps.has('notes')
-  const reviewPrViewDone = githubConfigured
-  const reviewShipDone = aiCommitPrConfigured
-  const reviewAllStepsDone = reviewNotesDone && reviewPrViewDone && reviewShipDone
-
-  const workflowDone: Record<FeatureWallWorkflowId, boolean> = {
-    workspaces: visitedWorkflows.has('workspaces'),
-    tasks: tasksDone,
-    'agents-orchestration': agentsWorkflowDone,
-    workbench: workbenchAllStepsDone,
-    review: reviewAllStepsDone
-  }
-  const agentStepDone: Record<AgentsStepId, boolean> = {
-    statuses: statusesDone,
-    usage: usageDone,
-    orchestration: orchestrationDone,
-    notifications: notificationsDone
-  }
-  const workbenchStepDone: Record<WorkbenchStepId, boolean> = {
-    terminal: workbenchTerminalDone,
-    editor: workbenchEditorDone,
-    browser: workbenchBrowserDone
-  }
-  const reviewStepDone: Record<ReviewStepId, boolean> = {
-    notes: reviewNotesDone,
-    'pr-view': reviewPrViewDone,
-    ship: reviewShipDone
-  }
+  const { workflowDone, agentStepDone, workbenchStepDone, reviewStepDone } =
+    getFeatureWallCompletionProgress({
+      visitedWorkflows,
+      visitedAgentSteps,
+      visitedWorkbenchSteps,
+      visitedReviewSteps,
+      hasConnectedTaskSource,
+      isCheckingTaskSources,
+      hasUsageAccount,
+      orchestrationSkillInstalled,
+      notificationsConfigured,
+      githubConfigured,
+      aiCommitPrConfigured
+    })
 
   return {
     workflowDone,
