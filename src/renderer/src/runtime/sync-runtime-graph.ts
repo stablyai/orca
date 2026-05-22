@@ -69,8 +69,9 @@ const NO_TRANSPORT_GRACE_MS = 10_000
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
-const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
+const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
@@ -179,7 +180,8 @@ export type RuntimeMobileSessionSyncKey = {
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  agentStatusEpoch: number
+  agentStatusProjection: string
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
   // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
@@ -190,6 +192,32 @@ export type RuntimeMobileSessionSyncKey = {
   editorDraftsProjection: string
 }
 
+export function canSkipRuntimeMobileSessionSyncKeyBuild(
+  state: AppState,
+  previousState: AppState
+): boolean {
+  return (
+    state.tabsByWorktree === previousState.tabsByWorktree &&
+    state.groupsByWorktree === previousState.groupsByWorktree &&
+    state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
+    state.layoutByWorktree === previousState.layoutByWorktree &&
+    state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
+    state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
+    state.activeFileId === previousState.activeFileId &&
+    state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+    state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
+    state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
+    state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
+    state.openFiles === previousState.openFiles &&
+    state.editorDrafts === previousState.editorDrafts &&
+    state.activeTabId === previousState.activeTabId &&
+    state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
+    state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
+    state.agentStatusEpoch === previousState.agentStatusEpoch &&
+    state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
+  )
+}
+
 export function getRuntimeMobileSessionSyncKey(
   state: AppState,
   previousState?: AppState,
@@ -198,12 +226,16 @@ export function getRuntimeMobileSessionSyncKey(
   const canReusePrevious = previousState !== undefined && previousKey !== undefined
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
+  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
   const previousBrowserTabsByWorktree = previousState
     ? getBrowserTabsByWorktree(previousState)
     : EMPTY_BROWSER_TABS_BY_WORKTREE
   const previousBrowserPagesByWorkspace = previousState
     ? getBrowserPagesByWorkspace(previousState)
     : EMPTY_BROWSER_PAGES_BY_WORKSPACE
+  const previousAgentStatusByPaneKey = previousState
+    ? (previousState.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY)
+    : EMPTY_AGENT_STATUS_BY_PANE_KEY
 
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
@@ -218,9 +250,14 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-    // Why: explicit hook status is published with terminal surfaces so paired
-    // web can render the same per-worktree agent rows before a PTY is opened.
-    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY,
+    // Why: paired web/mobile snapshots include full agentStatus details. The
+    // epoch covers sort/retention/freshness transitions; the projection covers
+    // prompt/tool details without publishing every timestamp-only heartbeat.
+    agentStatusEpoch: state.agentStatusEpoch ?? 0,
+    agentStatusProjection:
+      canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
+        ? previousKey.agentStatusProjection
+        : buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey),
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
@@ -351,6 +388,35 @@ function buildRuntimeMobileEditorDraftsProjection(editorDrafts: AppState['editor
   )
 }
 
+function buildRuntimeMobileAgentStatusProjection(
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+): string {
+  return JSON.stringify(
+    Object.entries(agentStatusByPaneKey)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([paneKey, entry]) => ({
+        paneKey,
+        entryPaneKey: entry.paneKey,
+        state: entry.state,
+        prompt: entry.prompt,
+        updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
+        stateStartedAt: entry.stateStartedAt,
+        agentType: entry.agentType ?? null,
+        terminalTitle: entry.terminalTitle ?? null,
+        stateHistory: entry.stateHistory.map((history) => ({
+          state: history.state,
+          prompt: history.prompt,
+          startedAt: history.startedAt,
+          interrupted: history.interrupted ?? null
+        })),
+        toolName: entry.toolName ?? null,
+        toolInput: entry.toolInput ?? null,
+        lastAssistantMessage: entry.lastAssistantMessage ?? null,
+        interrupted: entry.interrupted ?? null
+      }))
+  )
+}
+
 export function runtimeMobileSessionSyncKeysEqual(
   a: RuntimeMobileSessionSyncKey,
   b: RuntimeMobileSessionSyncKey
@@ -367,7 +433,8 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
-    a.agentStatusByPaneKey === b.agentStatusByPaneKey &&
+    a.agentStatusEpoch === b.agentStatusEpoch &&
+    a.agentStatusProjection === b.agentStatusProjection &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.browserProjection === b.browserProjection &&

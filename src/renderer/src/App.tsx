@@ -76,6 +76,7 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import {
+  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
@@ -772,24 +773,7 @@ function App(): React.JSX.Element {
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (
-        state.tabsByWorktree === previousState.tabsByWorktree &&
-        state.groupsByWorktree === previousState.groupsByWorktree &&
-        state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
-        state.layoutByWorktree === previousState.layoutByWorktree &&
-        state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
-        state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
-        state.activeFileId === previousState.activeFileId &&
-        state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
-        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
-        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
-        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
-        state.openFiles === previousState.openFiles &&
-        state.editorDrafts === previousState.editorDrafts &&
-        state.activeTabId === previousState.activeTabId &&
-        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
-        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
-      ) {
+      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
         return
       }
       const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
