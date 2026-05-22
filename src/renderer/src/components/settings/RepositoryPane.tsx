@@ -15,11 +15,13 @@ import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { getRepositoryBadgeColorSectionId } from './repository-settings-targets'
 
 type RepositoryPaneProps = {
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
+  hooksInspectionReady: boolean
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeRepo: (repoId: string) => void
@@ -97,21 +99,40 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             ]
           },
           {
-            title: 'orca.yaml hooks',
-            description: 'Shared setup and archive hook commands for this repository.',
-            keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
-          },
-          {
-            title: 'Local Settings Commands',
-            description: 'Personal setup and archive commands stored locally on this machine.',
-            keywords: [repo.displayName, 'local', 'personal', 'hooks']
-          },
-          {
-            title: 'Command Source',
-            description:
-              'Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.',
+            title: 'Setup Script',
+            description: 'Local and shared scripts that run after a new worktree is created.',
             keywords: [
               repo.displayName,
+              'hooks',
+              'setup',
+              'setup script',
+              'setup command',
+              'local settings scripts',
+              'orca.yaml hooks',
+              'yaml'
+            ]
+          },
+          {
+            title: 'Archive Script',
+            description: 'Local and shared scripts that run before a worktree is archived.',
+            keywords: [
+              repo.displayName,
+              'hooks',
+              'archive',
+              'archive script',
+              'archive command',
+              'local settings scripts',
+              'orca.yaml hooks',
+              'yaml'
+            ]
+          },
+          {
+            title: 'Advanced',
+            description: 'Command source and orca.yaml details.',
+            keywords: [
+              repo.displayName,
+              'advanced',
+              'command source',
               'local',
               'orca.yaml',
               'shared',
@@ -122,7 +143,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           },
           {
             title: 'When to Run Setup',
-            description: 'Choose the default behavior when a setup command is available.',
+            description: 'Choose the default behavior when a setup script is available.',
             keywords: [
               repo.displayName,
               'setup run policy',
@@ -153,6 +174,7 @@ export function RepositoryPane({
   repo,
   yamlHooks,
   hasHooksFile,
+  hooksInspectionReady,
   mayNeedUpdate,
   updateRepo,
   removeRepo
@@ -200,9 +222,9 @@ export function RepositoryPane({
   )
   const hooksEntries = allEntries.filter((entry) =>
     [
-      'orca.yaml hooks',
-      'Local Settings Commands',
-      'Command Source',
+      'Setup Script',
+      'Archive Script',
+      'Advanced',
       'When to Run Setup',
       'Custom GitHub Issue Command'
     ].includes(entry.title)
@@ -210,6 +232,24 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
 
+  const hooksSection =
+    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
+      <RepositoryHooksSection
+        key="hooks"
+        repo={repo}
+        yamlHooks={yamlHooks}
+        hasHooksFile={hasHooksFile}
+        hooksInspectionReady={hooksInspectionReady}
+        mayNeedUpdate={mayNeedUpdate}
+        copiedTemplate={copiedTemplate}
+        onCopyTemplate={() => void handleCopyTemplate()}
+        onUpdateHookSettings={updateSelectedRepoHookSettings}
+      />
+    ) : null
+
+  // Why: Identity (name, color, base ref) stays at the top so it's the first
+  // thing a user sees. Setup commands follow immediately because they're the
+  // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
       <section key="identity" className="space-y-8">
@@ -249,42 +289,36 @@ export function RepositoryPane({
         <SearchableSetting
           title="Display Name"
           description="Repo-specific display details for the sidebar and tabs."
-          keywords={[repo.displayName, repo.path, 'repository name']}
+          keywords={[repo.displayName, repo.path, 'repository name', 'color', 'badge']}
           className="space-y-2"
+          id={getRepositoryBadgeColorSectionId(repo.id)}
         >
           <Label className="text-sm font-semibold">Display Name</Label>
-          <Input
-            value={repo.displayName}
-            onChange={(e) =>
-              updateRepo(repo.id, {
-                displayName: e.target.value
-              })
-            }
-            className="h-9 text-sm"
-          />
-        </SearchableSetting>
-
-        <SearchableSetting
-          title="Badge Color"
-          description="Repo color used in the sidebar and tabs."
-          keywords={[repo.displayName, 'color', 'badge']}
-          className="space-y-2"
-        >
-          <Label className="text-sm font-semibold">Badge Color</Label>
-          <div className="flex flex-wrap gap-2">
-            {REPO_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => updateRepo(repo.id, { badgeColor: color })}
-                className={`size-7 rounded-full transition-all ${
-                  repo.badgeColor === color
-                    ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                    : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
-                }`}
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
+          <div className="flex items-center gap-3">
+            <Input
+              value={repo.displayName}
+              onChange={(e) =>
+                updateRepo(repo.id, {
+                  displayName: e.target.value
+                })
+              }
+              className="h-9 flex-1 text-sm"
+            />
+            <div className="flex flex-wrap gap-2">
+              {REPO_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => updateRepo(repo.id, { badgeColor: color })}
+                  className={`size-7 rounded-full transition-all ${
+                    repo.badgeColor === color
+                      ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
+                      : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
           </div>
         </SearchableSetting>
 
@@ -306,6 +340,7 @@ export function RepositoryPane({
         ) : null}
       </section>
     ) : null,
+    hooksSection,
     !isFolder &&
     !repo.connectionId &&
     symlinksEnabled &&
@@ -317,18 +352,6 @@ export function RepositoryPane({
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, mcpEntries) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
-    ) : null,
-    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
-      <RepositoryHooksSection
-        key="hooks"
-        repo={repo}
-        yamlHooks={yamlHooks}
-        hasHooksFile={hasHooksFile}
-        mayNeedUpdate={mayNeedUpdate}
-        copiedTemplate={copiedTemplate}
-        onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
-      />
     ) : null
   ].filter(Boolean)
 

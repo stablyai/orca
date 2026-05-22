@@ -78,6 +78,7 @@ const SHELL_PROCESS_NAMES = new Set([
 const AGENT_PROCESS_NAMES = new Set([
   'aider',
   'amp',
+  'agy',
   'claude',
   'claude-code',
   'codex',

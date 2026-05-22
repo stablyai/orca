@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { getRelativePathInsideRoot } from '@/lib/path'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -69,21 +70,19 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const trimmedDir = dir.trim().replace(/\/+$/, '')
+    const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
     if (!trimmedDir) {
       setError('Folder path cannot be empty')
       return
     }
 
-    // Why: strict prefix check with trailing '/' prevents partial directory
-    // name matches (e.g. "/project-backup" matching "/project").
-    if (trimmedDir !== worktreePath && !trimmedDir.startsWith(`${worktreePath}/`)) {
+    const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
+    if (relDir === null) {
       setError('Folder must be inside the current workspace')
       return
     }
 
     const fileName = `${trimmedName}.md`
-    const relDir = trimmedDir.slice(worktreePath.length).replace(/^\/+/, '')
     const relativePath = relDir ? `${relDir}/${fileName}` : fileName
     onConfirm(relativePath)
   }, [name, dir, worktreePath, onConfirm])

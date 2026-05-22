@@ -37,8 +37,10 @@ import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorato
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { installEditorSaveShortcut } from './editor-shortcuts'
 
 type MonacoEditorProps = {
+  fileId: string
   filePath: string
   viewStateKey: string
   relativePath: string
@@ -53,9 +55,12 @@ type MonacoEditorProps = {
   worktreeId?: string
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
+  readOnly?: boolean
+  autoHeight?: boolean
 }
 
 export default function MonacoEditor({
+  fileId,
   filePath,
   viewStateKey,
   relativePath,
@@ -69,11 +74,14 @@ export default function MonacoEditor({
   markdownDocuments,
   worktreeId,
   markdownAnnotationsEnabled = false,
-  conflictDecorationsEnabled = false
+  conflictDecorationsEnabled = false,
+  readOnly = false,
+  autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
+  const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
@@ -113,6 +121,16 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  const estimatedAutoHeight = useMemo(() => {
+    if (!autoHeight) {
+      return null
+    }
+    const lineHeight = Math.ceil(editorFontSize * 1.45)
+    return Math.max(80, content.split(/\r?\n/).length * lineHeight + 18)
+  }, [autoHeight, content, editorFontSize])
+  const renderedEditorHeight = autoHeight
+    ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
+    : null
   // Why: `keepCurrentModel` retains Monaco models across unmounts, and
   // @monaco-editor/react skips its value→model sync on the first render after
   // a remount. Without explicit sync, external file changes that arrived
@@ -279,6 +297,24 @@ export default function MonacoEditor({
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
+      let autoHeightSub: { dispose: () => void } | null = null
+      let autoHeightFrame: number | null = null
+      const updateAutoHeight = (): void => {
+        if (!autoHeight) {
+          return
+        }
+        if (autoHeightFrame !== null) {
+          return
+        }
+        autoHeightFrame = window.requestAnimationFrame(() => {
+          autoHeightFrame = null
+          setAutoHeightContentHeight(Math.ceil(editorInstance.getContentHeight()) + 1)
+        })
+      }
+      if (autoHeight) {
+        updateAutoHeight()
+        autoHeightSub = editorInstance.onDidContentSizeChange(updateAutoHeight)
+      }
       markdownDocLinkDecorationsRef.current = createMarkdownDocLinkDecorationController(
         editorInstance,
         () => languageRef.current
@@ -317,11 +353,13 @@ export default function MonacoEditor({
         return model.getValueInRange(selection)
       })
 
-      // Add Cmd+S save keybinding
-      editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        const value = editorInstance.getValue()
-        propsRef.current.onSave(value)
-      })
+      const cleanupSaveShortcut = installEditorSaveShortcut(
+        editorInstance.getContainerDomNode(),
+        () => {
+          const value = editorInstance.getValue()
+          propsRef.current.onSave(value)
+        }
+      )
 
       // Track cursor line for "copy path to line" feature
       const pos = editorInstance.getPosition()
@@ -337,6 +375,12 @@ export default function MonacoEditor({
       })
 
       editorInstance.onDidDispose(() => {
+        cleanupSaveShortcut()
+        autoHeightSub?.dispose()
+        if (autoHeightFrame !== null) {
+          window.cancelAnimationFrame(autoHeightFrame)
+          autoHeightFrame = null
+        }
         conflictDecorationsRef.current?.clear()
         conflictDecorationsRef.current = null
         editorRef.current = null
@@ -380,7 +424,10 @@ export default function MonacoEditor({
       // Why: search-result navigation sets the reveal before openFile switches
       // the active tab. Without scoping consumption to the destination file,
       // the previously mounted editor can clear the reveal on the first click.
-      if (reveal?.filePath === filePath) {
+      const revealMatchesEditor = reveal?.fileId
+        ? reveal.fileId === fileId
+        : reveal?.filePath === filePath
+      if (reveal && revealMatchesEditor) {
         queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
           useAppStore.getState().setPendingEditorReveal(null)
         })
@@ -410,10 +457,12 @@ export default function MonacoEditor({
     [
       queueReveal,
       setupCopy,
+      fileId,
       filePath,
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
-      viewStateKey
+      viewStateKey,
+      autoHeight
     ]
   )
 
@@ -601,7 +650,11 @@ export default function MonacoEditor({
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
-    <div ref={editorContainerRef} className="relative h-full">
+    <div
+      ref={editorContainerRef}
+      className={autoHeight ? 'relative' : 'relative h-full'}
+      style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
+    >
       {commentPopover && shouldShowMarkdownAnnotations && (
         <DiffCommentPopover
           key={commentPopover.lineNumber}
@@ -614,7 +667,7 @@ export default function MonacoEditor({
         />
       )}
       <Editor
-        height="100%"
+        height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
         value={content}
         theme={isDark ? 'vs-dark' : 'vs'}
@@ -634,6 +687,8 @@ export default function MonacoEditor({
           renderLineHighlight: 'line',
           automaticLayout: true,
           tabSize: 2,
+          readOnly,
+          scrollbar: autoHeight ? { vertical: 'hidden', handleMouseWheel: false } : undefined,
           smoothScrolling: true,
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },

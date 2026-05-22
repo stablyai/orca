@@ -38,6 +38,12 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
 }))
@@ -57,6 +63,7 @@ vi.mock('./SshDisconnectedDialog', () => ({
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
+  WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
 
@@ -107,6 +114,10 @@ function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
+function renderWorktreeCardMarkup(element: ReactNode): string {
+  return renderToStaticMarkup(<>{element}</>)
+}
+
 describe('WorktreeCard linked PR display', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -117,7 +128,7 @@ describe('WorktreeCard linked PR display', () => {
   it('keeps an icon-only linked GH PR badge visible before hosted review details are cached', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
-    const markup = renderToStaticMarkup(
+    const markup = renderWorktreeCardMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
@@ -129,7 +140,7 @@ describe('WorktreeCard linked PR display', () => {
     worktreeCardProperties = ['issue', 'pr', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
-    const markup = renderToStaticMarkup(
+    const markup = renderWorktreeCardMarkup(
       <WorktreeCard
         worktree={makeWorktree({
           linkedIssue: 123,
@@ -150,6 +161,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading issue')
     expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
+    expect(markup.indexOf('Workspace notes')).toBeLessThan(markup.indexOf('Linked issue #123'))
   })
 
   it('does not render the standalone CI badge and colors a failing linked PR icon red', async () => {
@@ -162,7 +174,7 @@ describe('WorktreeCard linked PR display', () => {
     }
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
-    const markup = renderToStaticMarkup(
+    const markup = renderWorktreeCardMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 

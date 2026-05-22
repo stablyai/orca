@@ -27,7 +27,7 @@ vi.mock('./gh-utils', async () => {
   }
 })
 
-import { createIssue, getIssue, listIssues } from './issues'
+import { createIssue, getIssue, listIssues, updateIssue } from './issues'
 
 describe('issue source operations', () => {
   beforeEach(() => {
@@ -122,6 +122,19 @@ describe('issue source operations', () => {
         '--raw-field',
         'body=Body'
       ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('updates issue body through the REST issue endpoint', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await expect(updateIssue('/repo-root', 924, { body: 'Updated body' })).resolves.toEqual({
+      ok: true
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/924', '--raw-field', 'body=Updated body'],
       { cwd: '/repo-root' }
     )
   })

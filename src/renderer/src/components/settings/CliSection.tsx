@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Copy, FolderOpen, RefreshCw } from 'lucide-react'
+import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
-import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
-import { AgentSkillInstalledIndicator } from '../AgentSkillInstalledIndicator'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -19,6 +21,8 @@ import {
 } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { WslCliRegistration } from './WslCliRegistration'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -52,7 +56,14 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
-  const { installed: cliSkillInstalled } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME)
+  const {
+    installed: cliSkillDetected,
+    loading: cliSkillLoading,
+    error: cliSkillError,
+    refresh: refreshCliSkill
+  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
 
   const refreshStatus = async (): Promise<void> => {
     setLoading(true)
@@ -101,15 +112,6 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       toast.error(error instanceof Error ? error.message : 'Failed to remove `orca` from PATH.')
     } finally {
       setBusyAction(null)
-    }
-  }
-
-  const handleCopySkillInstallCommand = async (command: string): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(command)
-      toast.success('Copied skill install command.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
     }
   }
 
@@ -219,39 +221,27 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               </p>
             </div>
 
-            <div className="mt-3 space-y-3">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">CLI skill</p>
-                <div className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
-                  <code className="overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-                    {ORCA_CLI_SKILL_INSTALL_COMMAND}
-                  </code>
-                  <TooltipProvider delayDuration={250}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() =>
-                            void handleCopySkillInstallCommand(ORCA_CLI_SKILL_INSTALL_COMMAND)
-                          }
-                          aria-label="Copy CLI skill install command"
-                        >
-                          <Copy className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        Copy
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {cliSkillInstalled ? <AgentSkillInstalledIndicator /> : null}
-                </div>
-              </div>
-            </div>
+            <AgentSkillSetupPanel
+              className="mt-3"
+              variant="inline"
+              title="CLI skill"
+              detectedDescription="Detected on this machine. Agents know how to use Orca and report status."
+              missingDescription="Agents need this skill before they can use Orca and report status. If you already installed it, click Re-check instead of running the installer again."
+              command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+              terminalTitle="CLI skill setup"
+              terminalAriaLabel="CLI skill install terminal"
+              terminalWorktreeId="settings-cli-skill-terminal"
+              installed={cliSkillDetected}
+              detected={cliSkillDetected}
+              loading={cliSkillLoading}
+              error={cliSkillError}
+              onRecheck={refreshCliSkill}
+            />
           </div>
         ) : null}
       </div>
+
+      <WslCliRegistration currentPlatform={currentPlatform} />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

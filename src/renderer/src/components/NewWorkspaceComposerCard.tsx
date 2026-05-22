@@ -19,6 +19,7 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -33,8 +34,6 @@ import SmartWorkspaceNameField, {
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 
@@ -247,6 +246,7 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
     return repo?.displayName ?? repo?.path ?? 'This repository'
@@ -647,7 +647,7 @@ export default function NewWorkspaceComposerCard({
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
           Create Workspace
           <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-            <span>{isMac ? '⌘' : 'Ctrl'}</span>
+            <span>{submitShortcutModifierLabel}</span>
             <CornerDownLeft className="size-3" />
           </span>
         </Button>

@@ -24,6 +24,7 @@ import {
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -41,7 +42,7 @@ export function createPaneDOM(
   options: PaneManagerOptions,
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number) => void,
+  onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
   onMouseEnter: (id: number, event: MouseEvent) => void
 ): ManagedPaneInternal {
   // Create .pane container
@@ -134,8 +135,10 @@ export function createPaneDOM(
   // the terminal. We must call focus: true here because after DOM reparenting
   // (e.g. splitPane moves the original pane into a flex container), xterm.js's
   // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', () => {
-    onPointerDown(id)
+  container.addEventListener('pointerdown', (event) => {
+    onPointerDown(id, {
+      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    })
   })
 
   // Focus-follows-mouse handler: when the setting is enabled, hovering a

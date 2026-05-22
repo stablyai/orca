@@ -39,8 +39,8 @@ export function getRepoHeaderCreateState(input: {
 
   return {
     disabled: false,
-    tooltip: `Create worktree for ${input.label}`,
-    ariaLabel: `Create worktree for ${input.label}`,
+    tooltip: `Create workspace for ${input.label}`,
+    ariaLabel: `Create workspace for ${input.label}`,
     requiresSshReconnect: false
   }
 }

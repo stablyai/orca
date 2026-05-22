@@ -9,6 +9,9 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
+let tabsByWorktree: Record<string, { id: string }[]> = {}
+let ptyIdsByTabId: Record<string, string[]> = {}
+let browserTabsByWorktree: Record<string, { id: string }[]> = {}
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -24,6 +27,9 @@ vi.mock('@/store', () => ({
       settings: null,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
+      browserTabsByWorktree,
+      ptyIdsByTabId,
+      tabsByWorktree,
       updateWorktreeMeta,
       worktreeCardProperties
     })
@@ -58,7 +64,8 @@ vi.mock('./SshDisconnectedDialog', () => ({
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
+  WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
 function makeRepo(): Repo {
@@ -98,6 +105,9 @@ describe('WorktreeCard quick actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'unread']
+    tabsByWorktree = {}
+    ptyIdsByTabId = {}
+    browserTabsByWorktree = {}
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', async () => {
@@ -109,5 +119,28 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('shows delete as the top-right quick action for an inactive workspace', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('shows sleep as the top-right quick action for a workspace with live activity', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Sleep workspace"')
   })
 })

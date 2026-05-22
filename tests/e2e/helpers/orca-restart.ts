@@ -19,6 +19,7 @@ import { execSync } from 'child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import os from 'os'
 import path from 'path'
+import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 
 type LaunchedOrca = {
@@ -63,28 +64,11 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const headful = shouldLaunchHeadful(testInfo)
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
-  // seed the same dismissed onboarding state or the full-screen overlay covers
-  // both launches and obscures restart failures.
+  // seed the same completed onboarding profile or first-run overlays cover
+  // both launches and obscure restart failures.
   writeFileSync(
     path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(
-      {
-        settings: {
-          telemetry: {
-            optedIn: true,
-            installId: '00000000-0000-4000-8000-000000000000',
-            existedBeforeTelemetryRelease: false
-          }
-        },
-        onboarding: {
-          closedAt: 1,
-          outcome: 'completed',
-          lastCompletedStep: 4
-        }
-      },
-      null,
-      2
-    )}\n`
+    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
 
   const launch = async (): Promise<LaunchedOrca> => {

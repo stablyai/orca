@@ -14,14 +14,37 @@ type CreatePRPayload = {
   }
 }
 
-async function openSourceControl(page: Page): Promise<void> {
-  await page.evaluate(() => {
+async function openSourceControl(page: Page, expectedWorktreeId: string): Promise<void> {
+  await page.evaluate((expectedWorktreeId) => {
     const state = window.__store?.getState()
+    if (state && state.activeWorktreeId !== expectedWorktreeId) {
+      state.setActiveWorktree(expectedWorktreeId)
+    }
     state?.setRightSidebarOpen(true)
     state?.setRightSidebarTab('source-control')
-  })
+  }, expectedWorktreeId)
+  await expect
+    .poll(
+      async () =>
+        page.evaluate((expectedWorktreeId) => {
+          const state = window.__store?.getState()
+          if (!state) {
+            return false
+          }
+          const activeWorktree = Object.values(state.worktreesByRepo)
+            .flat()
+            .some((entry) => entry.id === expectedWorktreeId)
+          return (
+            activeWorktree &&
+            state.activeWorktreeId === expectedWorktreeId &&
+            state.rightSidebarOpen &&
+            state.rightSidebarTab === 'source-control'
+          )
+        }, expectedWorktreeId),
+      { timeout: 5_000 }
+    )
+    .toBe(true)
   await expect(page.getByRole('button', { name: /Source Control/ })).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Commit message' })).toBeVisible()
 }
 
 async function forceCreatePREligibleStatus(
@@ -56,20 +79,16 @@ async function seedCreatePREligibleBranch(
       throw new Error('window.__store is not available')
     }
     const state = store.getState()
-    const worktreeId = state.activeWorktreeId
     const worktrees = Object.values(state.worktreesByRepo).flat()
-    const activeWorktree = worktrees.find((entry) => entry.id === worktreeId)
-    const worktree =
-      worktrees.find((entry) => {
-        const branchName = entry.branch.replace(/^refs\/heads\//, '')
-        return branchName !== 'main' && !entry.isMainWorktree
-      }) ?? activeWorktree
+    const worktree = worktrees.find(
+      (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
+    )
     if (!worktree) {
-      throw new Error('active worktree not found')
+      throw new Error('seeded e2e-secondary worktree not found')
     }
-    if (state.activeWorktreeId !== worktree.id) {
-      state.setActiveWorktree(worktree.id)
-    }
+    // Why: the worker-scoped test repo can accumulate extra non-main
+    // worktrees; use the seeded secondary worktree as the stable PR target.
+    state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
     if (!repo) {
       throw new Error('active repo not found')
@@ -161,29 +180,36 @@ test.describe('Source Control create pull request', () => {
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('opens the PR dialog from Source Control and creates the pull request', async ({
-    orcaPage
-  }) => {
+  test('creates the pull request from the Source Control primary action', async ({ orcaPage }) => {
     const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage)
-    await openSourceControl(orcaPage)
+    await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
     const createButton = orcaPage.getByRole('button', { name: 'Create PR' })
     await expect(createButton).toBeVisible({ timeout: 10_000 })
     await expect(createButton).toBeEnabled()
+    await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
+      'Create PR from E2E'
+    )
+    await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
+      'main'
+    )
+    await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
+      '- Initial commit for E2E'
+    )
     await createButton.click()
 
-    const dialog = orcaPage.getByRole('dialog', { name: 'Create Pull Request' })
-    await expect(dialog).toBeVisible()
-    await expect(dialog).toContainText(branch)
-    await expect(dialog.getByLabel('Base branch')).toHaveValue('main')
-    await expect(dialog.getByLabel('Title')).toHaveValue('Create PR from E2E')
-    await expect(dialog.getByLabel('Description')).toHaveValue('- Initial commit for E2E')
-
-    await dialog.getByRole('button', { name: 'Create PR' }).click()
-
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
-    await expect(orcaPage.getByText('Create PR from E2E')).toBeVisible({ timeout: 10_000 })
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate(
+            () =>
+              (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
+                .length
+          ),
+        { timeout: 10_000 }
+      )
+      .toBe(1)
 
     const payloads = await orcaPage.evaluate(
       () => (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads

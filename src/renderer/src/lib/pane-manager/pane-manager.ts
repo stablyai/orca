@@ -5,13 +5,14 @@ import type {
   ManagedPaneInternal,
   DropZone
 } from './pane-manager-types'
+import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
   createDivider,
   applyDividerStyles,
   applyPaneOpacity,
   applyRootBackground
 } from './pane-divider'
-import { createDragReorderState, hideDropOverlay, handlePaneDrop } from './pane-drag-reorder'
+import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import {
@@ -32,6 +33,7 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
 
@@ -89,6 +91,33 @@ export class PaneManager {
       root: this.root,
       styleOptions: this.styleOptions,
       managerOptions: this.options,
+      createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
+      createDivider: (isVertical) => this.createDividerWrapped(isVertical),
+      publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
+      getDragCallbacks: () => this.getDragCallbacks(),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      },
+      isDestroyed: () => this.destroyed
+    })
+  }
+
+  splitPaneAroundLeafIds(
+    sourceLeafIds: readonly string[],
+    fallbackPaneId: number,
+    direction: 'vertical' | 'horizontal',
+    opts?: SplitPaneAroundLeafIdsOptions
+  ): ManagedPane | null {
+    return splitPaneAroundMountedSubtree({
+      sourceLeafIds,
+      fallbackPaneId,
+      direction,
+      opts,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getNumericIdForLeaf: (leafId) => this.identities.getNumericIdForLeaf(leafId),
       createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
       createDivider: (isVertical) => this.createDividerWrapped(isVertical),
       publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
@@ -228,7 +257,7 @@ export class PaneManager {
 
   destroy(): void {
     this.destroyed = true
-    hideDropOverlay(this.dragState)
+    cancelActivePaneDrag(this.dragState)
     for (const pane of this.panes.values()) {
       disposePane(pane, this.panes)
     }
@@ -248,9 +277,9 @@ export class PaneManager {
       this.getDragCallbacks(),
       // Why: always re-focus even if already active — after splits the
       // browser's real textarea focus can lag the manager's activePaneId.
-      (paneId) => {
+      (paneId, options) => {
         if (!this.destroyed) {
-          this.setActivePane(paneId, { focus: true })
+          this.setActivePane(paneId, { focus: options?.focusTerminal !== false })
         }
       },
       (paneId, event) => {
@@ -306,7 +335,8 @@ export class PaneManager {
         applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions),
       applyDividerStyles: () => applyDividerStyles(this.root, this.styleOptions),
       refitPanesUnder: (el: HTMLElement) => refitPanesUnder(el, this.panes),
-      onLayoutChanged: this.options.onLayoutChanged
+      onLayoutChanged: this.options.onLayoutChanged,
+      onDragActiveChange: this.options.onPaneDragActiveChange
     }
   }
 }

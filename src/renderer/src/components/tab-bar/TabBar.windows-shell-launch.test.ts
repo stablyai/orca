@@ -28,7 +28,8 @@ vi.mock('react', async () => {
     useLayoutEffect: () => {},
     useMemo: <T>(factory: () => T) => factory(),
     useRef: <T>(current: T) => ({ current }),
-    useState: <T>(initial: T) => [initial, vi.fn()] as const
+    useState: <T>(initial: T | (() => T)) =>
+      [typeof initial === 'function' ? (initial as () => T)() : initial, vi.fn()] as const
   }
 })
 
@@ -205,6 +206,15 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) }
+      }
+    })
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities()
+
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule
     const TabBar =
@@ -230,8 +240,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onNewBrowserTab: () => {},
       onSetCustomTitle: () => {},
       onSetTabColor: () => {},
-      onTogglePaneExpand: () => {},
-      wslAvailable: false
+      onTogglePaneExpand: () => {}
     })
 
     const item = findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')
@@ -241,5 +250,45 @@ describe('TabBar PowerShell launch wiring', () => {
     onSelect?.()
 
     expect(onNewTerminalWithShell).toHaveBeenCalledWith('pwsh.exe')
+  })
+
+  it('shows the WSL terminal row when shared Windows capabilities report WSL', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: vi.fn().mockResolvedValue(true) },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) }
+      }
+    })
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities()
+
+    const tabBarModule = await import('./TabBar')
+    const candidate = tabBarModule.default ?? tabBarModule
+    const TabBar =
+      typeof candidate === 'function'
+        ? candidate
+        : typeof (candidate as { type?: unknown }).type === 'function'
+          ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
+          : null
+    expect(TabBar).not.toBeNull()
+
+    const element = TabBar!({
+      tabs: [],
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onNewTerminalTab: () => {},
+      onNewTerminalWithShell: () => {},
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {}
+    })
+
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).not.toBeNull()
   })
 })

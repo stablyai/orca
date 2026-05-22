@@ -3,27 +3,27 @@ import type { SettingsSearchEntry } from './settings-search'
 export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Workspace Directory',
-    description: 'Root directory where worktree folders are created.',
+    description: 'Root directory where workspace folders are created.',
     keywords: ['workspace', 'folder', 'path', 'worktree']
   },
   {
     title: 'Nest Workspaces',
-    description: 'Create worktrees inside a repo-named subfolder.',
+    description: 'Create workspaces inside a repo-named subfolder.',
     keywords: ['nested', 'subfolder', 'directory']
   },
   {
-    title: 'Skip Delete Worktree Confirmation',
-    description: 'Delete worktrees from the context menu without a confirmation dialog.',
+    title: 'Ask Before Deleting Workspaces',
+    description: 'Show a confirmation dialog before deleting a workspace.',
     keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
-    title: 'Skip Delete Automation Confirmation',
-    description: 'Delete automations without a confirmation dialog.',
+    title: 'Ask Before Deleting Automations',
+    description: 'Show a confirmation dialog before deleting an automation and its run history.',
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
     title: 'Open In Menu',
-    description: 'Add custom launchers to the worktree Open in menu.',
+    description: 'Add custom launchers to the workspace Open in menu.',
     keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
   }
 ]

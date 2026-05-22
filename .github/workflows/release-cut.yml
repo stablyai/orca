@@ -441,10 +441,8 @@ jobs:
             --generate-notes \
             --prerelease="$is_rc"
 
-  # Why: E2E runs alongside the release for visibility (failures surface as a
-  # red check on the tag), but is NOT in `publish-release`'s needs list.
-  # Releases already take a while and the suite is already a required check
-  # on PRs, so gating here would mostly delay shipping without adding signal.
+  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
+  # that publish-release must not depend on it.
   e2e:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'

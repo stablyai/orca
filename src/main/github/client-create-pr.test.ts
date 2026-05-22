@@ -21,6 +21,13 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: vi.fn(),
+  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  })),
+  ghRepoExecOptions: vi.fn((context: { repoPath: string; connectionId?: string | null }) =>
+    context.connectionId ? {} : { cwd: context.repoPath }
+  ),
   gitExecFileAsync: vi.fn(),
   extractExecError: extractExecErrorMock,
   parseGitHubOwnerRepo: vi.fn(),
@@ -93,6 +100,53 @@ describe('createGitHubPullRequest', () => {
     })
     expect(acquireMock).toHaveBeenCalledOnce()
     expect(releaseMock).toHaveBeenCalledOnce()
+  })
+
+  it('creates SSH-backed pull requests without using the remote path as a local cwd', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 45,
+        url: 'https://github.com/acme/widgets/pull/45'
+      })
+    })
+
+    await expect(
+      createGitHubPullRequest(
+        '/remote/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/ssh-create-pr',
+          title: 'SSH Create PR'
+        },
+        'ssh-1'
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 45,
+      url: 'https://github.com/acme/widgets/pull/45'
+    })
+
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
+    const [args, options] = ghExecFileAsyncMock.mock.calls[0]
+    expect(args).toEqual(
+      expect.arrayContaining([
+        'pr',
+        'create',
+        '--repo',
+        'acme/widgets',
+        '--base',
+        'main',
+        '--head',
+        'feature/ssh-create-pr'
+      ])
+    )
+    expect(options).toMatchObject({
+      timeout: 60_000,
+      idempotent: false
+    })
+    expect(options).not.toHaveProperty('cwd')
   })
 
   it('falls back to parsing the PR URL for older gh output', async () => {

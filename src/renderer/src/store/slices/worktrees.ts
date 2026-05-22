@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import type {
   Worktree,
   WorkspaceVisibleTabType,
+  GitPushTarget,
   WorktreeLineage,
   WorktreeMeta
 } from '../../../../shared/types'
@@ -17,6 +18,8 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { getHostedReviewCacheKey } from './hosted-review'
+import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
+import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: the runtime RPC default is intentionally bounded for CLI calls, but the
@@ -77,10 +80,13 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
       worktree.linkedPR === candidate.linkedPR &&
+      worktree.linkedGitLabMR === candidate.linkedGitLabMR &&
+      worktree.linkedGitLabIssue === candidate.linkedGitLabIssue &&
       worktree.isArchived === candidate.isArchived &&
       worktree.isUnread === candidate.isUnread &&
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
+      worktree.manualOrder === candidate.manualOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
       worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
@@ -110,6 +116,18 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
 
 function toRuntimeWorktreeIdSelector(worktreeId: string): string {
   return `id:${worktreeId}`
+}
+
+function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
+  if (force) {
+    return false
+  }
+  const protectedRemovalMessages = [
+    'Refusing to delete unregistered worktree path:',
+    'Refusing to delete protected worktree path:',
+    'Refusing to delete worktree because it contains another registered worktree:'
+  ]
+  return !protectedRemovalMessages.some((message) => error.includes(message))
 }
 
 type WorktreeWithLineage = Worktree & {
@@ -246,6 +264,33 @@ async function persistWorktreeMeta(
     { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
+}
+
+async function resolveLinkedPrPushTarget(
+  settings: AppState['settings'],
+  repoId: string,
+  prNumber: number
+): Promise<GitPushTarget | undefined> {
+  try {
+    const target = getActiveRuntimeTarget(settings)
+    const result =
+      target.kind === 'local'
+        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
+        : await callRuntimeRpc<
+            { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
+          >(target, 'worktree.resolvePrBase', { repo: repoId, prNumber }, { timeoutMs: 30_000 })
+    if ('error' in result) {
+      console.warn(`Failed to resolve push target for PR #${prNumber}: ${result.error}`)
+      return undefined
+    }
+    return result.pushTarget
+  } catch (error) {
+    console.warn(
+      `Failed to resolve push target for PR #${prNumber}:`,
+      error instanceof Error ? error.message : error
+    )
+    return undefined
+  }
 }
 
 function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
@@ -613,7 +658,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     createdWithAgent,
     linkedLinearIssue,
     branchNameOverride,
-    workspaceStatus
+    workspaceStatus,
+    linkedGitLabMR,
+    linkedGitLabIssue
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -633,6 +680,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const candidateName = nextCandidateName(name, attempt)
         const candidateBranchNameOverride = nextCandidateBranchName(branchNameOverride, attempt)
         try {
+          // Why: Manual sort is user-authored order. Stamp new workspaces
+          // deliberately at the top instead of relying on sortOrder fallback.
+          const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const createArgs = {
             repoId,
             name: candidateName,
@@ -649,7 +699,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(pushTarget ? { pushTarget } : {}),
             ...(createdWithAgent ? { createdWithAgent } : {}),
             ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
-            ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
+            ...(manualOrder !== undefined ? { manualOrder } : {}),
+            ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
+            ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -673,7 +726,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
                     ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
-                    ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
+                    ...(manualOrder !== undefined ? { manualOrder } : {}),
+                    ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
+                    ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
+                    ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
@@ -968,7 +1024,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           [worktreeId]: {
             isDeleting: false,
             error,
-            canForceDelete: !(force ?? false)
+            canForceDelete: canRetryWorktreeRemovalWithForce(error, force)
           }
         }
       }))
@@ -989,6 +1045,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   updateWorktreeMeta: async (worktreeId, updates) => {
     const existingWorktree = findWorktreeById(get().worktreesByRepo, worktreeId)
+    // Why: manual PR linking only supplies the PR number. Resolve the PR head
+    // branch here so Push targets the review branch, not the checkout mirror.
+    const linkedPrForPushTarget =
+      typeof updates.linkedPR === 'number' && Number.isFinite(updates.linkedPR)
+        ? updates.linkedPR
+        : null
+    const resolvedPushTarget =
+      linkedPrForPushTarget !== null &&
+      updates.pushTarget === undefined &&
+      existingWorktree &&
+      !existingWorktree.pushTarget
+        ? await resolveLinkedPrPushTarget(
+            get().settings,
+            existingWorktree.repoId,
+            linkedPrForPushTarget
+          )
+        : undefined
     const shouldRefreshHostedReview =
       updates.linkedPR === null && existingWorktree?.linkedPR !== null
     const reviewRepo = shouldRefreshHostedReview
@@ -1001,16 +1074,47 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // since the previous sort, so a re-sort causes the worktree to drop in
     // ranking even though the user just touched it. Bumping the timestamp
     // keeps the recency signal fresh so the worktree holds its position.
-    const enriched = 'comment' in updates ? { ...updates, lastActivityAt: Date.now() } : updates
+    const targetEnriched = resolvedPushTarget
+      ? { ...updates, pushTarget: resolvedPushTarget }
+      : updates
+    const enriched =
+      'comment' in targetEnriched
+        ? { ...targetEnriched, lastActivityAt: Date.now() }
+        : targetEnriched
 
     set((s) => {
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
       const cacheKey =
         reviewRepo && reviewBranch
-          ? getHostedReviewCacheKey(reviewRepo.path, reviewBranch, s.settings, reviewRepo.id)
+          ? getHostedReviewCacheKey(
+              reviewRepo.path,
+              reviewBranch,
+              s.settings,
+              reviewRepo.id,
+              reviewRepo.connectionId
+            )
           : null
+      const prCacheKey =
+        reviewRepo && reviewBranch
+          ? getGitHubPRCacheKey(
+              reviewRepo.path,
+              reviewRepo.id,
+              reviewBranch,
+              s.settings,
+              reviewRepo.connectionId
+            )
+          : null
+      const prCacheKeys =
+        reviewRepo && reviewBranch
+          ? [
+              prCacheKey,
+              getLegacyGitHubPRCacheKey(reviewRepo.path, reviewRepo.id, reviewBranch),
+              getLegacyGitHubPRCacheKey(reviewRepo.path, undefined, reviewBranch)
+            ].filter((key): key is string => Boolean(key))
+          : []
       const hostedReviewCache = s.hostedReviewCache ?? {}
-      if (nextWorktrees === s.worktreesByRepo && !cacheKey) {
+      const prCache = s.prCache ?? {}
+      if (nextWorktrees === s.worktreesByRepo && !cacheKey && !prCacheKey) {
         return {}
       }
 
@@ -1022,6 +1126,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               return next
             })()
           : hostedReviewCache
+      const nextPRCache = prCacheKeys.some((key) => prCache[key])
+        ? (() => {
+            const next = { ...prCache }
+            for (const key of prCacheKeys) {
+              delete next[key]
+            }
+            return next
+          })()
+        : prCache
 
       return {
         ...(nextWorktrees !== s.worktreesByRepo
@@ -1029,7 +1142,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : {}),
         ...(nextHostedReviewCache !== hostedReviewCache
           ? { hostedReviewCache: nextHostedReviewCache }
-          : {})
+          : {}),
+        ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
       }
     })
 
@@ -1282,6 +1396,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId) => {
+    if (get().activeWorktreeId !== worktreeId) {
+      moveFocusToRendererBeforeFocusedWebviewHidden()
+    }
     const reconciledActiveTabId = worktreeId
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
@@ -1475,9 +1592,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     })
 
-    // Why: force-refreshing GitHub data on every switch burned API rate limit
-    // quota and added 200-800ms latency. Only refresh when cache is actually
-    // stale (>5 min old). Users can still force-refresh via the sidebar button.
+    // Why: activation is explicit enough to revalidate PR state immediately;
+    // the GitHub coordinator still coalesces requests and applies rate guards.
     if (worktreeId) {
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }

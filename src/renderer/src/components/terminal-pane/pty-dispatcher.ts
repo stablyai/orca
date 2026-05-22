@@ -264,6 +264,7 @@ export type PtyTransport = {
   }) => void
   disconnect: () => void
   sendInput: (data: string) => boolean
+  sendInputAccepted?: (data: string) => Promise<boolean>
   resize: (
     cols: number,
     rows: number,

@@ -1,4 +1,6 @@
 import {
+  DEFAULT_HIDE_SLEEPING_WORKSPACES,
+  DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../shared/constants'
@@ -34,9 +36,11 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
     rightSidebarWidth: 350,
-    groupBy: 'repo',
+    groupBy: 'workspace-status',
     sortBy: 'name',
     showActiveOnly: false,
+    hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
+    showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
     filterRepoIds: [],
     collapsedGroups: [],

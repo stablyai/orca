@@ -24,8 +24,8 @@ describe('repo header create state', () => {
       })
     ).toEqual({
       disabled: false,
-      tooltip: 'Create worktree for orca',
-      ariaLabel: 'Create worktree for orca',
+      tooltip: 'Create workspace for orca',
+      ariaLabel: 'Create workspace for orca',
       requiresSshReconnect: false
     })
   })
@@ -53,7 +53,7 @@ describe('repo header create state', () => {
       })
     ).toMatchObject({
       disabled: false,
-      tooltip: 'Create worktree for remote',
+      tooltip: 'Create workspace for remote',
       requiresSshReconnect: false
     })
   })

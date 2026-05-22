@@ -17,6 +17,11 @@ export type PaneIdentitySnapshot = {
   ptyIdsByLeafId: Record<string, string>
 }
 
+export type ActivePaneHookDescriptor = {
+  paneKey: string
+  worktreeId: string
+}
+
 // Why: worktree restoration can render the terminal surface before the legacy
 // global activeTabId settles. Prefer the active worktree's saved terminal tab
 // pointer, then fall back to the first terminal tab.
@@ -119,6 +124,82 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
     throw new Error('waitForActivePanePtyId: active pane has no PTY binding')
   }
   return ptyId
+}
+
+export async function waitForActivePaneHookDescriptor(
+  page: Page,
+  timeoutMs = 15_000
+): Promise<ActivePaneHookDescriptor> {
+  let descriptor: ActivePaneHookDescriptor | null = null
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          descriptor = null
+          return false
+        }
+        descriptor = await page.evaluate((tabId) => {
+          const layoutHasLeaf = (node: unknown, targetLeafId: string): boolean => {
+            if (!node || typeof node !== 'object') {
+              return false
+            }
+            const record = node as {
+              type?: unknown
+              leafId?: unknown
+              first?: unknown
+              second?: unknown
+            }
+            if (record.type === 'leaf') {
+              return record.leafId === targetLeafId
+            }
+            return (
+              layoutHasLeaf(record.first, targetLeafId) ||
+              layoutHasLeaf(record.second, targetLeafId)
+            )
+          }
+
+          const store = window.__store
+          const manager = window.__paneManagers?.get(tabId)
+          if (!store || !manager) {
+            return null
+          }
+          const state = store.getState()
+          const worktreeId = state.activeWorktreeId
+          if (
+            !worktreeId ||
+            !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+          ) {
+            return null
+          }
+
+          const activePane = manager.getActivePane?.() ?? manager.getPanes?.()[0]
+          const leafId = activePane?.leafId ?? null
+          const layout = state.terminalLayoutsByTabId[tabId]
+          if (
+            !leafId ||
+            !layoutHasLeaf(layout?.root, leafId) ||
+            layout?.ptyIdsByLeafId?.[leafId] !== activePane?.container?.dataset?.ptyId
+          ) {
+            return null
+          }
+          return { paneKey: `${tabId}:${leafId}`, worktreeId }
+        }, tabId)
+        return descriptor !== null
+      },
+      {
+        timeout: timeoutMs,
+        // Why: hook IPC routing drops statuses for pane keys before the store
+        // layout knows that leaf, even if the terminal DOM already has a PTY.
+        message: 'Active terminal pane did not become routable for hook status IPC'
+      }
+    )
+    .toBe(true)
+
+  if (!descriptor) {
+    throw new Error('Active terminal pane descriptor disappeared after routing wait')
+  }
+  return descriptor
 }
 
 // Why: PTY IDs are opaque integers not exposed in the DOM. Probe each

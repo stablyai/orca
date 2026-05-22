@@ -6,9 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
@@ -207,61 +207,13 @@ export function useFileExplorerDragDrop({
       }
 
       const newPath = joinPath(destDir, fileName)
-      const remapOpenTabsForMovedPath = (fromPath: string, toPath: string): void => {
-        const state = useAppStore.getState()
-        const filesToMove = state.openFiles.filter((file) => {
-          if (file.filePath === fromPath) {
-            return true
-          }
-          return (
-            file.filePath.startsWith(`${fromPath}/`) || file.filePath.startsWith(`${fromPath}\\`)
-          )
+      const remapOpenTabsForMovedPath = (fromPath: string, toPath: string): void =>
+        remapOpenEditorTabsForPathChange({
+          fromPath,
+          toPath,
+          worktreePath,
+          worktreeId: activeWorktreeId
         })
-        // Why: OpenFile.id === absolute path, so moves must close/reopen tabs to migrate
-        // draft/dirty metadata to the new key (forward move and undo/redo parity).
-        for (const file of filesToMove) {
-          const oldFilePath = file.filePath
-          const suffix = oldFilePath.slice(fromPath.length)
-          const updatedPath = toPath + suffix
-          const updatedRelative = updatedPath.slice(worktreePath.length + 1)
-          const draft = state.editorDrafts[file.id]
-          const wasDirty = file.isDirty
-
-          // Why: markdown preview tabs use a synthetic tab id rather than the
-          // file path, so move remaps must close the actual tab id before
-          // reopening the file at its new path.
-          state.closeFile(file.id)
-
-          if (file.mode === 'edit') {
-            state.openFile({
-              filePath: updatedPath,
-              relativePath: updatedRelative,
-              worktreeId: file.worktreeId,
-              language: detectLanguage(basename(updatedPath)),
-              mode: 'edit'
-            })
-          } else if (file.mode === 'markdown-preview') {
-            state.openMarkdownPreview(
-              {
-                filePath: updatedPath,
-                relativePath: updatedRelative,
-                worktreeId: file.worktreeId,
-                language: 'markdown'
-              },
-              { anchor: file.markdownPreviewAnchor ?? null }
-            )
-          } else {
-            continue
-          }
-
-          if (draft !== undefined) {
-            state.setEditorDraft(updatedPath, draft)
-          }
-          if (wasDirty) {
-            state.markFileDirty(updatedPath, true)
-          }
-        }
-      }
 
       const run = async (): Promise<void> => {
         const filesToMove = openFiles.filter((file) => {

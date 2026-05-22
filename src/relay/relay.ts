@@ -22,7 +22,7 @@
 import { createServer, createConnection, type Socket, type Server } from 'net'
 import { homedir } from 'os'
 import { resolve, join } from 'path'
-import { unlinkSync, existsSync } from 'fs'
+import { unlinkSync, existsSync, statSync } from 'fs'
 import { RELAY_SENTINEL } from './protocol'
 import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
 import { RelayDispatcher } from './dispatcher'
@@ -49,6 +49,39 @@ import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugi
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
 const CONNECT_TIMEOUT_MS = 5_000
+const STALE_SOCKET_PROBE_TIMEOUT_MS = 500
+const EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
+  'ORCA_RELAY_EMPTY_STARTUP_GRACE_MS',
+  60_000
+)
+
+type SocketIdentity = {
+  dev: bigint
+  ino: bigint
+  ctimeNs: bigint
+}
+
+function sameSocketIdentity(a: SocketIdentity, b: SocketIdentity): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.ctimeNs === b.ctimeNs
+}
+
+function parseNonNegativeIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw === undefined) {
+    return fallback
+  }
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function readSocketIdentity(sockPath: string): SocketIdentity | null {
+  try {
+    const stat = statSync(sockPath, { bigint: true })
+    return { dev: stat.dev, ino: stat.ino, ctimeNs: stat.ctimeNs }
+  } catch {
+    return null
+  }
+}
 
 function parseArgs(argv: string[]): {
   graceTimeMs: number
@@ -160,13 +193,32 @@ async function main(): Promise<void> {
     return
   }
 
+  let ownsSocketPath = false
+  let ownedSocketIdentity: SocketIdentity | null = null
+  const ownsCurrentSocketPath = (): boolean => {
+    const currentIdentity = readSocketIdentity(sockPath)
+    return (
+      ownsSocketPath &&
+      ownedSocketIdentity !== null &&
+      currentIdentity !== null &&
+      sameSocketIdentity(currentIdentity, ownedSocketIdentity)
+    )
+  }
+  const cleanupOwnedSocket = (): void => {
+    if (ownsCurrentSocketPath()) {
+      cleanupSocket(sockPath)
+    }
+    ownsSocketPath = false
+    ownedSocketIdentity = null
+  }
+
   // Why: After an uncaught exception Node's internal state may be corrupted
   // (e.g. half-written buffers, broken invariants). Logging and continuing
   // would risk silent data corruption or zombie PTYs. We log for diagnostics
   // and then exit so the client can detect the disconnect and reconnect cleanly.
   process.on('uncaughtException', (err) => {
     process.stderr.write(`[relay] Uncaught exception: ${err.message}\n${err.stack}\n`)
-    cleanupSocket(sockPath)
+    cleanupOwnedSocket()
     process.exit(1)
   })
 
@@ -281,7 +333,7 @@ async function main(): Promise<void> {
   // treated as soft: log and continue, the augmenter returns {} and agent
   // status simply does not flow.
   try {
-    await hookServer.start()
+    await hookServer.start({ publishEndpoint: false })
   } catch (err) {
     process.stderr.write(
       `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
@@ -393,6 +445,43 @@ async function main(): Promise<void> {
   const socketClients = new Map<Socket, number>()
   let socketServer: Server | null = null
   const launchVersion = readLaunchVersion()
+  const startedAt = Date.now()
+  let acceptedSocketConnections = 0
+  let hasAcceptedSocketClient = false
+  let graceDeadlineAt: number | null = null
+  let graceReason: string | null = null
+
+  dispatcher.onRequest('relay.status', async () => ({
+    pid: process.pid,
+    uptimeMs: Date.now() - startedAt,
+    detached,
+    stdoutAlive,
+    memory: process.memoryUsage(),
+    ptys: {
+      active: ptyHandler.activePtyCount
+    },
+    socket: {
+      path: sockPath,
+      owned: ownsSocketPath,
+      listening: socketServer?.listening ?? false,
+      clients: socketClients.size,
+      acceptedConnections: acceptedSocketConnections
+    },
+    grace: {
+      active: ptyHandler.graceTimerActive,
+      deadlineAt: graceDeadlineAt,
+      reason: graceReason
+    }
+  }))
+
+  function cancelGrace(reason: string): void {
+    if (ptyHandler.graceTimerActive) {
+      process.stderr.write(`[relay] Grace canceled: ${reason}\n`)
+    }
+    graceDeadlineAt = null
+    graceReason = null
+    ptyHandler.cancelGraceTimer()
+  }
 
   function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
     // Why: stdin's data listener is still registered from the initial connection.
@@ -401,7 +490,12 @@ async function main(): Promise<void> {
     process.stdin.pause()
     process.stdin.removeAllListeners('data')
 
-    ptyHandler.cancelGraceTimer()
+    hasAcceptedSocketClient = true
+    acceptedSocketConnections++
+    process.stderr.write(
+      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})\n`
+    )
+    cancelGrace('socket client accepted')
 
     const clientId = dispatcher.attachClient((data) => {
       if (!sock.destroyed) {
@@ -419,13 +513,12 @@ async function main(): Promise<void> {
     }
 
     sock.on('data', (chunk: Buffer) => {
-      ptyHandler.cancelGraceTimer()
+      cancelGrace('socket client data')
       dispatcher.feedClient(clientId, chunk)
     })
   }
 
-  function startSocketServer(): Server {
-    cleanupSocket(sockPath)
+  async function startSocketServer(): Promise<Server> {
     const server = createServer((sock) => {
       // Why: pre-dispatcher version handshake — see relay-handshake.ts.
       setupDaemonHandshake(sock, { launchVersion, onAccepted: attachAcceptedSocket })
@@ -450,8 +543,9 @@ async function main(): Promise<void> {
         if (clientId !== undefined) {
           dispatcher.detachClient(clientId)
         }
+        process.stderr.write(`[relay] Socket client closed (clients=${socketClients.size})\n`)
         if (!stdoutAlive && socketClients.size === 0) {
-          startGrace()
+          startGrace('socket client closed')
         }
       })
     })
@@ -461,19 +555,143 @@ async function main(): Promise<void> {
     // (chmod after listen) had a TOCTOU window where another local user
     // could connect to the socket before chmod ran.
     const prevUmask = process.umask(0o177)
+    let umaskRestored = false
+    const restoreUmask = (): void => {
+      if (!umaskRestored) {
+        process.umask(prevUmask)
+        umaskRestored = true
+      }
+    }
 
-    server.on('error', (err) => {
-      process.umask(prevUmask)
-      process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
+    await new Promise<void>((resolve, reject) => {
+      let staleRetryAttempted = false
+
+      function removeStartupListeners(): void {
+        server.off('listening', onListening)
+        server.off('error', onInitialError)
+        server.off('error', failInitial)
+      }
+
+      function listenForStartupError(onError: (err: NodeJS.ErrnoException) => void): void {
+        server.once('listening', onListening)
+        server.once('error', onError)
+        server.listen(sockPath)
+      }
+
+      function onListening(): void {
+        removeStartupListeners()
+        restoreUmask()
+        ownsSocketPath = true
+        ownedSocketIdentity = readSocketIdentity(sockPath)
+        server.on('error', (err) => {
+          process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
+        })
+        process.stderr.write(`[relay] Socket server listening: ${sockPath}\n`)
+        resolve()
+      }
+
+      function failInitial(err: NodeJS.ErrnoException): void {
+        removeStartupListeners()
+        restoreUmask()
+        if (err.code === 'EADDRINUSE') {
+          process.stderr.write(
+            `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.\n`
+          )
+        } else {
+          process.stderr.write(`[relay] Socket server error before listen: ${err.message}\n`)
+        }
+        reject(err)
+      }
+
+      function unlinkIfStillStale(blockedIdentity: SocketIdentity | null): boolean {
+        const currentIdentity = readSocketIdentity(sockPath)
+        if (currentIdentity === null) {
+          return true
+        }
+        if (blockedIdentity === null || !sameSocketIdentity(currentIdentity, blockedIdentity)) {
+          return false
+        }
+        try {
+          unlinkSync(sockPath)
+          return true
+        } catch (unlinkErr) {
+          const e = unlinkErr as NodeJS.ErrnoException
+          return e.code === 'ENOENT'
+        }
+      }
+
+      // Why: a previous relay killed by SIGKILL/OOM/host-crash leaves the
+      // socket file on disk with no listener. EADDRINUSE on bind in that
+      // case is not "duplicate active" — it is a stale inode. Probe with a
+      // short connect; if it refuses, the socket is dead and we may unlink
+      // and retry once. If it connects, a live relay owns it and we keep
+      // the existing "duplicate detected" rejection.
+      function onInitialError(err: NodeJS.ErrnoException): void {
+        if (err.code !== 'EADDRINUSE' || staleRetryAttempted) {
+          failInitial(err)
+          return
+        }
+        staleRetryAttempted = true
+        const blockedIdentity = readSocketIdentity(sockPath)
+        const probe = createConnection({ path: sockPath })
+        let probeSettled = false
+        let probeTimeout: NodeJS.Timeout | null = null
+        const finishProbe = (callback: () => void): void => {
+          if (probeSettled) {
+            return
+          }
+          probeSettled = true
+          if (probeTimeout) {
+            clearTimeout(probeTimeout)
+          }
+          callback()
+        }
+        probe.once('connect', () => {
+          finishProbe(() => {
+            probe.destroy()
+            failInitial(err)
+          })
+        })
+        probe.once('error', (probeErr: NodeJS.ErrnoException) => {
+          finishProbe(() => {
+            if (probeErr.code !== 'ECONNREFUSED' && probeErr.code !== 'ENOENT') {
+              failInitial(err)
+              return
+            }
+            if (!unlinkIfStillStale(blockedIdentity)) {
+              failInitial(err)
+              return
+            }
+            process.stderr.write(
+              `[relay] Removed stale socket at ${sockPath} and retrying listen\n`
+            )
+            removeStartupListeners()
+            listenForStartupError(failInitial)
+          })
+        })
+        probeTimeout = setTimeout(() => {
+          finishProbe(() => {
+            probe.destroy()
+            failInitial(err)
+          })
+        }, STALE_SOCKET_PROBE_TIMEOUT_MS)
+      }
+
+      listenForStartupError(onInitialError)
     })
 
-    server.listen(sockPath, () => {
-      process.umask(prevUmask)
-    })
     return server
   }
 
-  socketServer = startSocketServer()
+  try {
+    socketServer = await startSocketServer()
+    // Why: endpoint.env is shared by PTYs under this relay socket path. Publish
+    // it only after socket ownership is proven so a refused duplicate daemon
+    // cannot poison the active relay's hook coordinates.
+    hookServer.publishEndpointFile()
+  } catch {
+    process.exit(1)
+  }
 
   // ── stdin/stdout transport (initial connection) ─────────────────────
 
@@ -486,10 +704,24 @@ async function main(): Promise<void> {
     dispatcher.invalidateClient()
   })
 
-  function startGrace(): void {
+  function startGrace(reason: string): void {
+    const startupEmptyDetached =
+      detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
+    const timeoutMs =
+      graceTimeMs === 0
+        ? 0
+        : startupEmptyDetached
+          ? Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
+          : graceTimeMs
+    graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
+    graceReason = reason
+    process.stderr.write(
+      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}\n`
+    )
     ptyHandler.startGraceTimer(() => {
+      process.stderr.write(`[relay] Grace expired (${reason}); shutting down\n`)
       shutdown()
-    })
+    }, timeoutMs)
   }
 
   if (detached) {
@@ -500,10 +732,10 @@ async function main(): Promise<void> {
     // pipe), start the grace timer (socket connect will cancel it), and
     // rely entirely on the Unix socket for client communication.
     stdoutAlive = false
-    startGrace()
+    startGrace('detached startup')
   } else {
     process.stdin.on('data', (chunk: Buffer) => {
-      ptyHandler.cancelGraceTimer()
+      cancelGrace('stdin data')
       dispatcher.feed(chunk)
     })
 
@@ -515,7 +747,7 @@ async function main(): Promise<void> {
       stdoutAlive = false
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
-        startGrace()
+        startGrace('stdin ended')
       }
     })
 
@@ -523,20 +755,28 @@ async function main(): Promise<void> {
       stdoutAlive = false
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
-        startGrace()
+        startGrace('stdin error')
       }
     })
   }
 
   function shutdown(): void {
+    process.stderr.write(
+      `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}\n`
+    )
+    graceDeadlineAt = null
+    graceReason = null
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
     hookServer.stop()
-    if (socketServer) {
+    // Why: Node's Unix server.close() can unlink the listen path. If the path
+    // was externally removed and rebound by a newer relay, closing this older
+    // server would strand the newer daemon behind a missing socket.
+    if (socketServer && ownsCurrentSocketPath()) {
       socketServer.close()
     }
-    cleanupSocket(sockPath)
+    cleanupOwnedSocket()
     process.exit(0)
   }
 

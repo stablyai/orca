@@ -11,7 +11,7 @@ export function getDeleteWorktreeToastCopy(
 ): DeleteWorktreeToastCopy {
   if (canForceDelete) {
     return {
-      title: `Failed to delete worktree ${worktreeName}`,
+      title: `Failed to delete workspace ${worktreeName}`,
       description: 'It has changed files. Use Force Delete to delete it anyway.',
       // Why: git commonly refuses the first delete when the worktree still has
       // modified or untracked files. Showing raw stderr in a destructive toast
@@ -22,7 +22,7 @@ export function getDeleteWorktreeToastCopy(
   }
 
   return {
-    title: `Failed to delete worktree ${worktreeName}`,
+    title: `Failed to delete workspace ${worktreeName}`,
     description: error,
     isDestructive: true
   }

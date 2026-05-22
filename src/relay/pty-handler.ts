@@ -626,17 +626,17 @@ export class PtyHandler {
     }
   }
 
-  startGraceTimer(onExpire: () => void): void {
+  startGraceTimer(onExpire: () => void, timeoutMs = this.graceTimeMs): void {
     this.cancelGraceTimer()
-    if (this.graceTimeMs === 0) {
+    if (timeoutMs === 0) {
       return
     }
-    // Why: always wait the full grace period even with zero PTYs.  A detached
-    // relay may have no PTYs yet but a --connect client will arrive shortly.
-    // Firing immediately would kill the relay before anyone could connect.
+    // Why: callers may shorten the first empty-detached startup window, but
+    // connected relays still use the configured grace so live PTYs can survive
+    // app restarts and reconnects.
     this.graceTimer = setTimeout(() => {
       onExpire()
-    }, this.graceTimeMs)
+    }, timeoutMs)
   }
 
   cancelGraceTimer(): void {
@@ -673,5 +673,9 @@ export class PtyHandler {
 
   get activePtyCount(): number {
     return this.ptys.size
+  }
+
+  get graceTimerActive(): boolean {
+    return this.graceTimer !== null
   }
 }

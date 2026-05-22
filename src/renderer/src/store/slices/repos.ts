@@ -26,12 +26,12 @@ type RepoUpdate = Partial<
   >
 >
 
-const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<void>>>()
+const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
 
-function getRepoUpdateChains(get: () => AppState) {
+function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>> {
   let chains = updateRepoChainsByStore.get(get)
   if (!chains) {
-    chains = new Map<string, Promise<void>>()
+    chains = new Map<string, Promise<boolean>>()
     updateRepoChainsByStore.set(get, chains)
   }
   return chains
@@ -45,7 +45,7 @@ export type RepoSlice = {
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
-  updateRepo: (repoId: string, updates: RepoUpdate) => Promise<void>
+  updateRepo: (repoId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (repoId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
 }
@@ -76,7 +76,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return {
           repos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds.filter((repoId) =>
+            validRepoIds.has(repoId)
+          )
         }
       })
     } catch (err) {
@@ -332,8 +335,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         set((s) => ({
           repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
         }))
+        return true
       } catch (err) {
         console.error('Failed to update repo:', err)
+        return false
       }
     }
     const previous = updateRepoChains.get(repoId)
@@ -349,7 +354,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
     }
     void next.then(cleanup, cleanup)
-    await next
+    return next
   },
 
   setActiveRepo: (repoId) => set({ activeRepoId: repoId }),

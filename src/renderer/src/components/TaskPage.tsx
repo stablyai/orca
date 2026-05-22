@@ -8,6 +8,7 @@ import {
   AlertCircle,
   ArrowDownUp,
   ArrowRight,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -31,7 +32,6 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  UserPlus,
   Users,
   X
 } from 'lucide-react'
@@ -76,14 +76,23 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import {
+  getGitHubPRPrimaryReviewer,
+  getGitHubPRReviewLabel,
+  normalizeGitHubReviewerLogins,
+  type GitHubPRPrimaryReviewer
+} from '@/components/github-pr-reviewer-display'
 import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
-import { stripRepoQualifiers } from '../../../shared/task-query'
+import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
+import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import GitHubItemDialog from '@/components/GitHubItemDialog'
+import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
+import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
@@ -100,9 +109,15 @@ import {
   buildTaskPageRepoSourceState,
   findTaskPageDialogWorkItem,
   findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh,
+  reconcileTaskPagePagesAfterLandingRefresh,
+  reconcileTaskPagePagesWithWorkItemsCache,
+  shouldResetTaskPagePaginationAfterLandingRefresh,
   selectTaskPageWorkItemsCacheEntries,
+  shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
+import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import type {
   GitHubOwnerRepo,
   GitHubAssignableUser,
@@ -117,6 +132,7 @@ import type {
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
 import {
   linearCreateIssue,
@@ -125,27 +141,58 @@ import {
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
 import {
-  filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
+  restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 
 type TaskSource = TaskProvider
 
 type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
+type GitLabIssueFilter = 'opened' | 'assigned-to-me'
 
-const GITLAB_TASK_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
+const GITLAB_MR_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
   { id: 'opened', label: 'Open' },
   { id: 'merged', label: 'Merged' },
   { id: 'closed', label: 'Closed' },
   { id: 'all', label: 'All' }
 ]
+
+const GITLAB_ISSUE_FILTERS: { id: GitLabIssueFilter; label: string }[] = [
+  { id: 'opened', label: 'Open' },
+  { id: 'assigned-to-me', label: 'Assigned to me' }
+]
+
+function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
+  return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
+}
+
+function isGitLabIssueFilter(
+  value: GitLabTaskFilter | GitLabIssueFilter
+): value is GitLabIssueFilter {
+  return value === 'opened' || value === 'assigned-to-me'
+}
 type TaskQueryPreset = {
   id: TaskViewPresetId
   label: string
   query: string
 }
 type GitHubTaskKind = 'issues' | 'prs'
+
+const ISSUE_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
+  { id: 'issues', label: 'Open', query: getTaskPresetQuery('issues') },
+  { id: 'my-issues', label: 'Assigned to me', query: getTaskPresetQuery('my-issues') }
+]
+
+const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
+  { id: 'prs', label: 'Open', query: getTaskPresetQuery('prs') },
+  { id: 'my-prs', label: 'Mine', query: getTaskPresetQuery('my-prs') },
+  { id: 'review', label: 'Needs review', query: getTaskPresetQuery('review') }
+]
+
+function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
+  return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
+}
 
 function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
   if (!repoId) {
@@ -192,17 +239,6 @@ const SOURCE_OPTIONS: SourceOption[] = [
   }
 ]
 
-const ISSUE_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  { id: 'issues', label: 'Open', query: getTaskPresetQuery('issues') },
-  { id: 'my-issues', label: 'Assigned to me', query: getTaskPresetQuery('my-issues') }
-]
-
-const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  { id: 'prs', label: 'Open', query: getTaskPresetQuery('prs') },
-  { id: 'my-prs', label: 'Mine', query: getTaskPresetQuery('my-prs') },
-  { id: 'review', label: 'Needs review', query: getTaskPresetQuery('review') }
-]
-
 type LinearPresetId = 'assigned' | 'created' | 'all' | 'completed'
 type LinearPreset = { id: LinearPresetId; label: string }
 
@@ -215,11 +251,37 @@ const LINEAR_PRESETS: LinearPreset[] = [
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
+const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const GITHUB_TASK_GRID_CLASS =
-  'min-w-[860px] grid-cols-[72px_minmax(260px,2fr)_minmax(130px,0.8fr)_100px_92px_158px]'
+  'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
 const GITHUB_PR_TASK_GRID_CLASS =
-  'min-w-[1270px] grid-cols-[72px_minmax(260px,2fr)_minmax(130px,0.8fr)_100px_132px_128px_132px_92px_158px]'
+  'min-w-[1020px] grid-cols-[72px_minmax(360px,2fr)_132px_128px_132px_92px_158px]'
+const GITHUB_TASK_ROW_SURFACE_CLASS =
+  '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
+const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
+  'group-hover/github-task-row:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))]'
+// Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
+// edge and the sticky ID column; without a covering ::before, scrolled cell text
+// bleeds through that strip. Same trick as the title column for its 8px gap.
+const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
+  'sticky left-3 z-30 before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_TITLE_HEADER_CLASS = cn(
+  'sticky left-[92px] z-30 border-r border-border/50 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_ID_CELL_CLASS = cn(
+  'sticky left-3 z-20 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS,
+  GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
+  'sticky left-[92px] z-20 min-w-0 border-r border-border/50 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS,
+  GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
+)
 
 type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
@@ -233,8 +295,14 @@ function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): bo
   if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
     return true
   }
-  const normalized = query.toLowerCase()
-  return /\bis:pr\b/.test(normalized) && !/\bis:issue\b/.test(normalized)
+  const parsed = parseTaskQuery(query)
+  return (
+    parsed.scope === 'pr' ||
+    parsed.state === 'merged' ||
+    parsed.draft ||
+    parsed.reviewRequested !== null ||
+    parsed.reviewedBy !== null
+  )
 }
 
 function normalizeGitHubTaskPreset(preset: TaskViewPresetId | null | undefined): TaskViewPresetId {
@@ -251,19 +319,17 @@ function getDefaultPresetForGitHubTaskKind(kind: GitHubTaskKind): TaskViewPreset
   return kind === 'prs' ? 'prs' : 'issues'
 }
 
-function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
-  return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
-}
-
 function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   const trimmed = query.trim()
   if (!trimmed) {
     return getTaskPresetQuery(getDefaultPresetForGitHubTaskKind(kind))
   }
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
+  if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
     return trimmed
   }
-  return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
+  const parsed = parseTaskQuery(trimmed)
+  const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
+  return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 // Why: Intl.RelativeTimeFormat allocation is non-trivial, and previously we
@@ -291,26 +357,6 @@ function formatRelativeTime(input: string): string {
 
   const diffDays = Math.round(diffHours / 24)
   return relativeTimeFormatter.format(diffDays, 'day')
-}
-
-function getTaskStatusLabel(item: GitHubWorkItem): string {
-  if (item.type === 'issue') {
-    return 'Open'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return 'Ready'
-}
-
-function getTaskStatusTone(item: GitHubWorkItem): string {
-  if (item.type === 'issue') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (item.state === 'draft') {
-    return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
-  }
-  return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
 }
 
 // Why: Linear encodes priority as an integer (0–4). Map to human-readable
@@ -658,7 +704,7 @@ function GHStatusCell({
       reqRef.current += 1
       const reqId = reqRef.current
       setLocalState(newState)
-      patchWorkItem(item.id, { state: newState })
+      patchWorkItem(item.id, { state: newState }, item.repoId)
       const target = getActiveRuntimeTarget(useAppStore.getState().settings)
       const updatePromise =
         target.kind === 'environment'
@@ -682,7 +728,11 @@ function GHStatusCell({
           const typed = result as { ok?: boolean; error?: string }
           if (typed && typed.ok === false) {
             setLocalState(newState === 'closed' ? 'open' : 'closed')
-            patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+            patchWorkItem(
+              item.id,
+              { state: newState === 'closed' ? 'open' : 'closed' },
+              item.repoId
+            )
             toast.error(typed.error ?? 'Failed to update state')
           }
         })
@@ -691,22 +741,17 @@ function GHStatusCell({
             return
           }
           setLocalState(newState === 'closed' ? 'open' : 'closed')
-          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' }, item.repoId)
           toast.error('Failed to update state')
         })
     },
-    [item.id, item.number, item.type, localState, repo, patchWorkItem]
+    [item.id, item.number, item.repoId, item.type, localState, repo, patchWorkItem]
   )
 
   if (item.type !== 'issue' || !repo) {
     return (
-      <span
-        className={cn(
-          'rounded-full border px-2 py-0.5 text-[10px] font-medium opacity-70',
-          getTaskStatusTone(item)
-        )}
-      >
-        {getTaskStatusLabel(item)}
+      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 opacity-70 dark:text-emerald-200">
+        Open
       </span>
     )
   }
@@ -776,29 +821,6 @@ function formatPRDelta(item: GitHubWorkItem): string | null {
   return parts.length > 0 ? parts.join(' ') : null
 }
 
-function getReviewLabel(item: GitHubWorkItem): string {
-  if (
-    item.reviewDecision === undefined &&
-    item.reviewRequests === undefined &&
-    item.latestReviews === undefined
-  ) {
-    return 'Reviewers'
-  }
-  if (item.reviewDecision === 'APPROVED') {
-    return 'Approved'
-  }
-  if (item.reviewDecision === 'CHANGES_REQUESTED') {
-    return 'Changes requested'
-  }
-  if (item.reviewRequests && item.reviewRequests.length > 0) {
-    return `${item.reviewRequests.length} requested`
-  }
-  if (item.latestReviews && item.latestReviews.length > 0) {
-    return `${item.latestReviews.length} reviewed`
-  }
-  return 'No reviewers'
-}
-
 function getReviewTone(item: GitHubWorkItem): string {
   if (item.reviewDecision === 'APPROVED') {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
@@ -810,6 +832,278 @@ function getReviewTone(item: GitHubWorkItem): string {
     return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   }
   return 'border-border/60 bg-background/70 text-muted-foreground'
+}
+
+function ReviewChipAvatar({
+  reviewer
+}: {
+  reviewer: GitHubPRPrimaryReviewer | null
+}): React.JSX.Element {
+  if (reviewer?.avatarUrl) {
+    return (
+      <img
+        src={reviewer.avatarUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        title={reviewer.name ? `${reviewer.name} (${reviewer.login})` : reviewer.login}
+        className="size-3.5 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+      />
+    )
+  }
+  if (reviewer?.login) {
+    return (
+      <span
+        title={reviewer.login}
+        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[8px] font-medium text-muted-foreground"
+      >
+        {reviewer.login.slice(0, 1).toUpperCase()}
+      </span>
+    )
+  }
+  return <Users className="size-3 shrink-0" />
+}
+
+function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }): React.JSX.Element {
+  if (assignee.avatarUrl) {
+    return (
+      <img
+        src={assignee.avatarUrl}
+        alt={assignee.login}
+        loading="lazy"
+        decoding="async"
+        title={assignee.name ? `${assignee.name} (${assignee.login})` : assignee.login}
+        className="size-5 rounded-full border border-border/40 bg-muted object-cover"
+      />
+    )
+  }
+  return (
+    <span
+      title={assignee.login}
+      className="inline-flex size-5 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
+    >
+      {assignee.login.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+function GHAssigneesCell({
+  item,
+  repo
+}: {
+  item: GitHubWorkItem
+  repo: Repo | null
+}): React.JSX.Element {
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const settings = useAppStore((s) => s.settings)
+  const [open, setOpen] = useState(false)
+  const [pendingLogin, setPendingLogin] = useState<string | null>(null)
+  const assignees = useMemo(() => item.assignees ?? [], [item.assignees])
+  const parsed = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
+  const owner = parsed?.slug.owner ?? null
+  const repoName = parsed?.slug.repo ?? null
+  const seedLogins = useMemo(
+    () =>
+      assignees
+        .map((a) => a.login)
+        .sort()
+        .filter(Boolean),
+    [assignees]
+  )
+  const metadata = useRepoAssigneesBySlug(
+    open ? owner : null,
+    open ? repoName : null,
+    seedLogins,
+    settings
+  )
+
+  const toggleAssignee = useCallback(
+    async (user: GitHubAssignableUser): Promise<void> => {
+      if (item.type !== 'issue' || pendingLogin) {
+        return
+      }
+      const userLoginKey = user.login.toLowerCase()
+      const isOn = assignees.some((a) => a.login.toLowerCase() === userLoginKey)
+      const previousAssignees = assignees
+      const nextAssignees = isOn
+        ? assignees.filter((a) => a.login.toLowerCase() !== userLoginKey)
+        : [...assignees, user]
+      setPendingLogin(user.login)
+      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId)
+
+      try {
+        const updates = isOn ? { removeAssignees: [user.login] } : { addAssignees: [user.login] }
+        const target = getActiveRuntimeTarget(settings)
+        if (owner && repoName) {
+          const args = {
+            owner,
+            repo: repoName,
+            number: item.number,
+            updates
+          }
+          const res =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
+                  target,
+                  'github.project.updateIssueBySlug',
+                  args,
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updateIssueBySlug(args)
+          if (!res.ok) {
+            throw new Error(res.error.message)
+          }
+        } else if (repo) {
+          const res =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<{ ok?: boolean; error?: string }>(
+                  target,
+                  'github.updateIssue',
+                  { repo: repo.id, number: item.number, updates },
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updateIssue({
+                  repoPath: repo.path,
+                  repoId: repo.id,
+                  number: item.number,
+                  updates
+                })
+          if (res && res.ok === false) {
+            throw new Error(res.error)
+          }
+        } else {
+          throw new Error('No GitHub repository context available for this issue.')
+        }
+      } catch (err) {
+        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId)
+        toast.error(err instanceof Error ? err.message : 'Failed to update assignees.')
+      } finally {
+        setPendingLogin(null)
+      }
+    },
+    [
+      assignees,
+      item.id,
+      item.number,
+      item.repoId,
+      item.type,
+      owner,
+      patchWorkItem,
+      pendingLogin,
+      repo,
+      repoName,
+      settings
+    ]
+  )
+
+  const triggerContent =
+    assignees.length > 0 ? (
+      <>
+        <div className="flex min-w-0 -space-x-1 overflow-hidden">
+          {assignees.slice(0, 3).map((assignee) => (
+            <GitHubAssigneeAvatar key={assignee.login} assignee={assignee} />
+          ))}
+        </div>
+        {assignees.length > 3 ? (
+          <span className="ml-1 shrink-0 text-[10px] font-medium text-muted-foreground">
+            +{assignees.length - 3}
+          </span>
+        ) : null}
+      </>
+    ) : (
+      <span className="text-xs text-muted-foreground/60">-</span>
+    )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={
+            assignees.length
+              ? `Assigned to ${assignees.map((a) => a.login).join(', ')}`
+              : 'Assign issue'
+          }
+          aria-busy={pendingLogin !== null}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          className={cn(
+            'inline-flex h-6 max-w-full items-center gap-1 text-left transition disabled:opacity-60',
+            assignees.length > 0
+              ? 'rounded-full border border-border/40 bg-background/70 px-1.5 hover:bg-muted/60'
+              : 'w-full rounded-sm border border-transparent bg-transparent px-1 hover:bg-muted/40'
+          )}
+        >
+          {triggerContent}
+          {pendingLogin ? (
+            <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+          ) : assignees.length > 0 ? (
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="popover-scroll-content scrollbar-sleek w-64 p-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {!owner || !repoName ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">Issue has no repo slug.</div>
+        ) : metadata.loading ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">Loading…</div>
+        ) : metadata.error ? (
+          <div className="px-2 py-2 text-xs text-destructive">{metadata.error}</div>
+        ) : metadata.data.length === 0 ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">No assignable users.</div>
+        ) : (
+          metadata.data.map((user) => {
+            const isOn = assignees.some((a) => a.login.toLowerCase() === user.login.toLowerCase())
+            const pending = pendingLogin === user.login
+            return (
+              <button
+                key={user.login}
+                type="button"
+                disabled={pendingLogin !== null}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted/50 disabled:opacity-60"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void toggleAssignee(user)
+                }}
+              >
+                <span
+                  className={cn(
+                    'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+                    isOn ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                  )}
+                >
+                  {pending ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : isOn ? (
+                    <Check className="size-3" />
+                  ) : null}
+                </span>
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+                ) : (
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+                    {user.login.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{user.login}</span>
+                  {user.name ? (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {user.name}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function getChecksLabel(item: GitHubWorkItem): string {
@@ -843,15 +1137,26 @@ function getChecksTone(item: GitHubWorkItem): string {
   return 'border-border/60 bg-background/70 text-muted-foreground'
 }
 
+function sameOptionalGitHubOwnerRepo(
+  left: GitHubOwnerRepo | null | undefined,
+  right: GitHubOwnerRepo | null | undefined
+): boolean {
+  const leftValue = left ?? null
+  const rightValue = right ?? null
+  return leftValue === null && rightValue === null
+    ? true
+    : sameGitHubOwnerRepo(leftValue, rightValue)
+}
+
 function getMergeLabel(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
   if (item.state === 'merged') {
     return 'Merged'
   }
   if (item.state === 'closed') {
     return 'Closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge'
   }
   if (item.mergeable === 'CONFLICTING') {
     return 'Conflicts'
@@ -882,14 +1187,14 @@ function getMergeTone(item: GitHubWorkItem): string {
 }
 
 function getMergeTooltip(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status has not loaded yet'
-  }
   if (item.state === 'merged') {
     return 'This pull request is already merged'
   }
   if (item.state === 'closed') {
     return 'This pull request is closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge status is unavailable for this PR'
   }
   if (item.mergeable === 'CONFLICTING') {
     return 'GitHub reports merge conflicts'
@@ -910,27 +1215,6 @@ function getMergeTooltip(item: GitHubWorkItem): string {
     return 'GitHub says this PR can merge'
   }
   return 'GitHub has not reported a final merge status'
-}
-
-function getReviewerInputToken(
-  value: string,
-  caret: number
-): { start: number; end: number; query: string } {
-  let start = Math.max(0, Math.min(caret, value.length))
-  let end = start
-
-  while (start > 0 && !/[\s,]/.test(value[start - 1])) {
-    start--
-  }
-  while (end < value.length && !/[\s,]/.test(value[end])) {
-    end++
-  }
-
-  return {
-    start,
-    end,
-    query: value.slice(start, end).replace(/^@/, '').toLowerCase()
-  }
 }
 
 function mergeReviewerSuggestions(
@@ -984,9 +1268,8 @@ function PRReviewCell({
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
-  const [reviewerInputCaret, setReviewerInputCaret] = useState(0)
-  const [reviewerSuggestionsOpen, setReviewerSuggestionsOpen] = useState(false)
-  const [activeReviewerSuggestionIndex, setActiveReviewerSuggestionIndex] = useState(0)
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
@@ -1027,32 +1310,31 @@ function PRReviewCell({
     settings
   )
 
+  const authorLogin = item.author?.toLowerCase() ?? null
   const reviewerCandidates = useMemo(
-    () => mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers),
-    [reviewerMetadata.data, reviewerSeedUsers]
+    () =>
+      mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
+        (user) => user.login.toLowerCase() !== authorLogin
+      ),
+    [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
   )
-  const reviewerInputToken = useMemo(
-    () => getReviewerInputToken(reviewerInput, reviewerInputCaret),
-    [reviewerInput, reviewerInputCaret]
+  const reviewerCandidatesByLogin = useMemo(
+    () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
+    [reviewerCandidates]
   )
-  const alreadyEnteredReviewerLogins = useMemo(
+  const selectedReviewerLogins = useMemo(
     () =>
       new Set(
-        reviewerInput
-          .split(/[\s,]+/)
-          .map((login) => login.trim().replace(/^@/, '').toLowerCase())
-          .filter(Boolean)
+        localReviewRequests.map((reviewer) => reviewer.login.trim().toLowerCase()).filter(Boolean)
       ),
-    [reviewerInput]
+    [localReviewRequests]
   )
-  const reviewerSuggestions = useMemo(() => {
-    const query = reviewerInputToken.query
+  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
+  const filteredReviewerCandidates = useMemo(() => {
+    const query = reviewerQuery
     return reviewerCandidates
       .filter((user) => {
         const login = user.login.toLowerCase()
-        if (alreadyEnteredReviewerLogins.has(login) && login !== query) {
-          return false
-        }
         return (
           query.length === 0 ||
           login.includes(query) ||
@@ -1069,65 +1351,94 @@ function PRReviewCell({
         }
         return a.login.localeCompare(b.login)
       })
-      .slice(0, 8)
-  }, [alreadyEnteredReviewerLogins, reviewerCandidates, reviewerInputToken.query])
-  const showReviewerSuggestions =
-    reviewerSuggestionsOpen &&
-    !submitting &&
-    !!repo &&
-    (reviewerMetadata.loading || reviewerSuggestions.length > 0 || reviewerInput.trim().length > 0)
+  }, [reviewerCandidates, reviewerQuery])
+  const suggestedReviewerRows = useMemo(
+    () =>
+      reviewerQuery.length === 0
+        ? reviewerSeedUsers
+            .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
+            .filter((user) => user.login.toLowerCase() !== authorLogin)
+            .map((user) => reviewerCandidatesByLogin.get(user.login.toLowerCase()) ?? user)
+            .slice(0, 1)
+        : [],
+    [
+      authorLogin,
+      reviewerCandidatesByLogin,
+      reviewerQuery.length,
+      reviewerSeedUsers,
+      selectedReviewerLogins
+    ]
+  )
+  const everyoneElseReviewerRows = useMemo(() => {
+    const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+    return filteredReviewerCandidates.filter(
+      (user) => !suggestedLogins.has(user.login.toLowerCase())
+    )
+  }, [filteredReviewerCandidates, suggestedReviewerRows])
+  const actionableReviewerRows = useMemo(
+    () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
+    [everyoneElseReviewerRows, suggestedReviewerRows]
+  )
 
   useEffect(() => {
-    setActiveReviewerSuggestionIndex(0)
-  }, [reviewerInputToken.query, reviewerSuggestions.length])
+    setActiveReviewerIndex(0)
+  }, [reviewerQuery, actionableReviewerRows.length])
 
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
 
   const itemWithLocalReviewRequests = { ...item, reviewRequests: localReviewRequests }
-  const reviewers = [
-    ...localReviewRequests.map((user) => ({ ...user, state: 'Requested' })),
-    ...(item.latestReviews ?? []).map((review) => ({
-      login: review.login,
-      name: null,
-      avatarUrl: review.avatarUrl ?? '',
-      state: review.state ?? 'Reviewed'
-    }))
-  ]
+  const primaryReviewer = getGitHubPRPrimaryReviewer(itemWithLocalReviewRequests)
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
 
-  const handleRequestReview = async (): Promise<void> => {
+  const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
     if (!repo || submitting) {
       return
     }
-    const logins = reviewerInput
-      .split(/[\s,]+/)
-      .map((login) => login.trim().replace(/^@/, ''))
-      .filter(Boolean)
+    const logins = normalizeGitHubReviewerLogins(
+      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      selectedReviewerLogins
+    )
     if (logins.length === 0) {
-      toast.error('Enter a reviewer login')
+      toast.error('Enter a reviewer')
+      return
+    }
+    if (localReviewRequests.length + logins.length > 15) {
+      toast.error('You can request up to 15 reviewers')
       return
     }
     setSubmitting(true)
     try {
-      const result = await window.api.gh.requestPRReviewers({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: item.number,
-        reviewers: logins
-      })
+      const target = getActiveRuntimeTarget(settings)
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.requestPRReviewers',
+              { repo: repo.id, prNumber: item.number, reviewers: logins },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.requestPRReviewers({
+              repoPath: repo.path,
+              repoId: repo.id,
+              prNumber: item.number,
+              reviewers: logins
+            })
       if (result.ok) {
         toast.success('Reviewer requested')
-        setLocalReviewRequests((current) =>
-          buildRequestedReviewUsers(logins, reviewerCandidates, current)
+        const nextReviewRequests = buildRequestedReviewUsers(
+          logins,
+          reviewerCandidates,
+          localReviewRequests
         )
+        setLocalReviewRequests(nextReviewRequests)
+        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
         setReviewerInput('')
-        setReviewerSuggestionsOpen(false)
       } else {
         toast.error(result.error)
       }
@@ -1138,25 +1449,76 @@ function PRReviewCell({
     }
   }
 
-  const insertReviewerSuggestion = (suggestion: GitHubAssignableUser): void => {
-    const token = getReviewerInputToken(
-      reviewerInput,
-      reviewerInputRef.current?.selectionStart ?? reviewerInputCaret
+  const requestReviewer = async (reviewer: GitHubAssignableUser): Promise<void> => {
+    if (selectedReviewerLogins.has(reviewer.login.toLowerCase())) {
+      return
+    }
+    // Close the popover immediately so the UI feels responsive; the GitHub
+    // request runs in the background and toasts on completion.
+    setOpen(false)
+    setReviewerInput('')
+    await handleRequestReview([reviewer.login])
+  }
+
+  const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      return
+    }
+    setReviewerInput('')
+  }
+
+  const renderReviewerPickerRow = (
+    reviewer: GitHubAssignableUser,
+    options: { suggested: boolean; activeIndex: number }
+  ): React.JSX.Element => {
+    const selected = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+    const active = actionableReviewerRows[activeReviewerIndex]?.login === reviewer.login
+    return (
+      <button
+        key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
+        type="button"
+        className={cn(
+          'flex min-h-10 w-full items-center gap-2 border-b border-border/50 px-3 py-2 text-left text-[13px] outline-none last:border-b-0 hover:bg-accent/70',
+          active && 'bg-accent text-accent-foreground',
+          selected && 'font-medium'
+        )}
+        onMouseEnter={() => setActiveReviewerIndex(options.activeIndex)}
+        onMouseDown={(event) => {
+          event.preventDefault()
+          void requestReviewer(reviewer)
+        }}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
+          {selected ? <Check className="size-3.5" /> : null}
+        </span>
+        {reviewer.avatarUrl ? (
+          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+        ) : (
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+            {reviewer.login.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">
+            <span className="font-semibold text-foreground">{reviewer.login}</span>
+            {reviewer.name ? (
+              <span className="ml-1 font-normal text-muted-foreground">{reviewer.name}</span>
+            ) : null}
+          </span>
+          {options.suggested ? (
+            <span className="block truncate text-[12px] leading-4 text-muted-foreground">
+              Recently active in this pull request
+            </span>
+          ) : null}
+        </span>
+      </button>
     )
-    const inserted = `@${suggestion.login}`
-    const nextValue = `${reviewerInput.slice(0, token.start)}${inserted}${reviewerInput.slice(token.end)}`
-    const nextCaret = token.start + inserted.length
-    setReviewerInput(nextValue)
-    setReviewerInputCaret(nextCaret)
-    setReviewerSuggestionsOpen(false)
-    requestAnimationFrame(() => {
-      reviewerInputRef.current?.focus()
-      reviewerInputRef.current?.setSelectionRange(nextCaret, nextCaret)
-    })
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -1166,170 +1528,100 @@ function PRReviewCell({
             getReviewTone(itemWithLocalReviewRequests)
           )}
         >
-          <Users className="size-3" />
-          <span className="truncate">{getReviewLabel(itemWithLocalReviewRequests)}</span>
+          <ReviewChipAvatar reviewer={primaryReviewer} />
+          <span className="truncate">{getGitHubPRReviewLabel(itemWithLocalReviewRequests)}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-72 overflow-visible p-3"
+        className="w-[330px] overflow-hidden rounded-md border-border/70 p-0"
         align="start"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="space-y-3">
-          <div>
-            <div className="text-xs font-medium text-foreground">Reviewers</div>
-            <div className="mt-2 space-y-1.5">
-              {reviewers.length > 0 ? (
-                reviewers.slice(0, 6).map((reviewer) => (
-                  <div
-                    key={`${reviewer.login}:${reviewer.state}`}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/30 px-2 py-1.5 text-xs"
-                  >
-                    <span className="truncate">@{reviewer.login}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {reviewer.state}
-                    </span>
+        <div className="border-b border-border/70 px-3 py-2">
+          <div className="text-[13px] font-semibold text-foreground">
+            Request up to 15 reviewers
+          </div>
+        </div>
+        <div className="border-b border-border/70 p-3">
+          <Input
+            ref={reviewerInputRef}
+            value={reviewerInput}
+            onChange={(event) => setReviewerInput(event.target.value)}
+            placeholder="Type or choose a user"
+            disabled={!repo || submitting}
+            className="h-8 rounded-md bg-background px-2 text-[13px]"
+            aria-label="Type or choose a user"
+            aria-autocomplete="list"
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                event.preventDefault()
+                setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
+                return
+              }
+              if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                event.preventDefault()
+                setActiveReviewerIndex(
+                  (current) =>
+                    (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
+                )
+                return
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                if (activeReviewer) {
+                  void requestReviewer(activeReviewer)
+                  return
+                }
+                void handleRequestReview()
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                handleReviewerPickerOpenChange(false)
+              }
+            }}
+          />
+        </div>
+        <div className="max-h-[300px] overflow-y-auto scrollbar-sleek">
+          {reviewerMetadata.loading ? (
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading…</div>
+          ) : filteredReviewerCandidates.length > 0 ? (
+            <>
+              {suggestedReviewerRows.length > 0 ? (
+                <>
+                  <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                    Suggestions
                   </div>
-                ))
+                  {suggestedReviewerRows.map((reviewer, index) =>
+                    renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                  )}
+                </>
+              ) : null}
+              <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                Everyone else
+              </div>
+              {everyoneElseReviewerRows.length > 0 ? (
+                everyoneElseReviewerRows.map((reviewer, index) =>
+                  renderReviewerPickerRow(reviewer, {
+                    suggested: false,
+                    activeIndex: suggestedReviewerRows.length + index
+                  })
+                )
               ) : (
-                <div className="text-xs text-muted-foreground">
-                  {hasReviewerMetadata
-                    ? 'No reviewers requested yet.'
-                    : 'Open the PR details to view current reviewers.'}
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  No matching reviewers.
                 </div>
               )}
+            </>
+          ) : (
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">
+              {reviewerMetadata.error ??
+                (hasReviewerMetadata
+                  ? 'No matching reviewers.'
+                  : 'Open the PR details to view current reviewers.')}
             </div>
-          </div>
-          <div className="relative">
-            <div className="flex items-center gap-2">
-              <Input
-                ref={reviewerInputRef}
-                value={reviewerInput}
-                onChange={(event) => {
-                  setReviewerInput(event.target.value)
-                  setReviewerInputCaret(
-                    event.currentTarget.selectionStart ?? event.target.value.length
-                  )
-                  setReviewerSuggestionsOpen(true)
-                }}
-                onClick={(event) => {
-                  setReviewerInputCaret(event.currentTarget.selectionStart ?? reviewerInput.length)
-                  setReviewerSuggestionsOpen(true)
-                }}
-                onFocus={(event) => {
-                  setReviewerInputCaret(event.currentTarget.selectionStart ?? reviewerInput.length)
-                  setReviewerSuggestionsOpen(true)
-                }}
-                onBlur={() => setReviewerSuggestionsOpen(false)}
-                onKeyUp={(event) => {
-                  if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-                    setReviewerInputCaret(
-                      event.currentTarget.selectionStart ?? reviewerInput.length
-                    )
-                  }
-                }}
-                placeholder="login or @login"
-                disabled={!repo || submitting}
-                className="h-8 text-xs"
-                aria-expanded={showReviewerSuggestions}
-                aria-autocomplete="list"
-                onKeyDown={(event) => {
-                  if (showReviewerSuggestions && reviewerSuggestions.length > 0) {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault()
-                      setActiveReviewerSuggestionIndex(
-                        (current) => (current + 1) % reviewerSuggestions.length
-                      )
-                      return
-                    }
-                    if (event.key === 'ArrowUp') {
-                      event.preventDefault()
-                      setActiveReviewerSuggestionIndex(
-                        (current) =>
-                          (current - 1 + reviewerSuggestions.length) % reviewerSuggestions.length
-                      )
-                      return
-                    }
-                    if (event.key === 'Enter' || event.key === 'Tab') {
-                      event.preventDefault()
-                      insertReviewerSuggestion(
-                        reviewerSuggestions[activeReviewerSuggestionIndex] ?? reviewerSuggestions[0]
-                      )
-                      return
-                    }
-                  }
-                  if (event.key === 'Escape' && reviewerSuggestionsOpen) {
-                    event.preventDefault()
-                    setReviewerSuggestionsOpen(false)
-                    return
-                  }
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void handleRequestReview()
-                  }
-                }}
-              />
-              <Button
-                size="sm"
-                disabled={!repo || submitting}
-                onClick={() => void handleRequestReview()}
-              >
-                {submitting ? (
-                  <LoaderCircle className="size-3 animate-spin" />
-                ) : (
-                  <UserPlus className="size-3" />
-                )}
-                Request
-              </Button>
-            </div>
-            {showReviewerSuggestions && (
-              <div className="absolute top-[calc(100%+4px)] right-0 left-0 z-[70] max-h-56 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-md">
-                {reviewerMetadata.loading ? (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Loading…</div>
-                ) : reviewerSuggestions.length > 0 ? (
-                  reviewerSuggestions.map((suggestion, index) => (
-                    <button
-                      key={suggestion.login}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs',
-                        index === activeReviewerSuggestionIndex &&
-                          'bg-accent text-accent-foreground'
-                      )}
-                      onMouseDown={(event) => {
-                        event.preventDefault()
-                        insertReviewerSuggestion(suggestion)
-                      }}
-                    >
-                      {suggestion.avatarUrl ? (
-                        <img
-                          src={suggestion.avatarUrl}
-                          alt=""
-                          className="size-5 shrink-0 rounded-full"
-                        />
-                      ) : (
-                        <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                          {suggestion.login.slice(0, 1).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        @{suggestion.login}
-                      </span>
-                      {suggestion.name ? (
-                        <span className="max-w-24 truncate text-[11px] text-muted-foreground">
-                          {suggestion.name}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    {reviewerMetadata.error ?? 'No matching reviewers.'}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>
@@ -1338,11 +1630,39 @@ function PRReviewCell({
 
 function PRChecksCell({
   item,
-  onOpen
+  onOpen,
+  onLoadChecks
 }: {
   item: GitHubWorkItem
   onOpen: () => void
+  onLoadChecks: () => void
 }): React.JSX.Element {
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (item.type !== 'pr' || item.checksSummary) {
+      return
+    }
+    const node = triggerRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      return
+    }
+    let requested = false
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (requested || !entries.some((entry) => entry.isIntersecting)) {
+          return
+        }
+        requested = true
+        onLoadChecks()
+        observer.disconnect()
+      },
+      { rootMargin: '160px 0px' }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [item.checksSummary, item.type, onLoadChecks])
+
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
@@ -1359,9 +1679,13 @@ function PRChecksCell({
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
+          onFocus={onLoadChecks}
+          onMouseEnter={onLoadChecks}
           onClick={(event) => {
             event.stopPropagation()
+            onLoadChecks()
             onOpen()
           }}
           className={cn(
@@ -1374,7 +1698,7 @@ function PRChecksCell({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Open PR conversation and checks
+        Open PR checks
       </TooltipContent>
     </Tooltip>
   )
@@ -1390,6 +1714,7 @@ function PRMergeCell({
   onRefresh: () => void
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
+  const confirm = useConfirmationDialog()
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
@@ -1404,11 +1729,13 @@ function PRMergeCell({
     if (!repo || mergeDisabled) {
       return
     }
-    const confirmed = window.confirm(
-      method === 'squash'
-        ? `Squash and merge PR #${item.number}?`
-        : `${method === 'rebase' ? 'Rebase and merge' : 'Merge'} PR #${item.number}?`
-    )
+    const label =
+      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const confirmed = await confirm({
+      title: `${label} PR #${item.number}?`,
+      description: 'This will update the pull request on GitHub.',
+      confirmLabel: label
+    })
     if (!confirmed) {
       return
     }
@@ -1519,7 +1846,7 @@ function PaginationBar({
 }): React.JSX.Element {
   const pageNumbers = getPageNumbers(currentPage, totalPages)
   const btnClass =
-    'inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+    'inline-flex w-24 items-center justify-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
   const numClass = (page: number): string =>
     cn(
       'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
@@ -1615,6 +1942,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeState = useAppStore((s) => s.taskResumeState)
   const setTaskResumeState = useAppStore((s) => s.setTaskResumeState)
   const pageData = useAppStore((s) => s.taskPageData)
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
@@ -1622,6 +1950,7 @@ export default function TaskPage(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
+  const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
   // Why: bumped by `setIssueSourcePreference` after cache eviction so the
@@ -1643,6 +1972,7 @@ export default function TaskPage(): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
   // Why: initial selection resolution honors (1) an explicit preselection from
@@ -1723,13 +2053,23 @@ export default function TaskPage(): React.JSX.Element {
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
   )
+  const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
   const visibleTaskProviders = useMemo(
     () =>
-      filterAvailableTaskProviders(preferredVisibleTaskProviders, {
-        gitlabInstalled: preflightStatus?.glab?.installed === true,
-        linearConnected: linearStatus.connected === true
-      }),
-    [linearStatus.connected, preferredVisibleTaskProviders, preflightStatus?.glab?.installed]
+      restoreAvailableDefaultTaskProvider(
+        preferredVisibleTaskProviders,
+        {
+          gitlabInstalled: preflightStatus?.glab?.installed === true,
+          linearConnected: linearStatus.connected === true
+        },
+        defaultTaskSource
+      ),
+    [
+      defaultTaskSource,
+      linearStatus.connected,
+      preferredVisibleTaskProviders,
+      preflightStatus?.glab?.installed
+    ]
   )
   const visibleSourceOptions = useMemo(
     () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
@@ -1744,7 +2084,6 @@ export default function TaskPage(): React.JSX.Element {
   const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
-  const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
   const [taskSource, setTaskSource] = useState<TaskSource>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
@@ -1800,7 +2139,7 @@ export default function TaskPage(): React.JSX.Element {
   // Why: parallel to Linear's slim per-source state. Skips workItemsCache
   // and cross-repo aggregation in v1 — the GitLab list fetches directly
   // from `window.api.gl.listMRs` / `listIssues` for the primary repo.
-  const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter>('opened')
+  const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
@@ -1814,9 +2153,33 @@ export default function TaskPage(): React.JSX.Element {
   // Why: GitLab tab has two sub-views — the project's MR/issue list,
   // and the user's cross-project Todos (gitlab.com/dashboard/todos).
   // 'project' is default; 'todos' fetches a separate stream.
-  const [gitlabView, setGitlabView] = useState<'project' | 'todos'>('project')
+  const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
+
+  // Why: Issues and MRs expose different filter sets. Reset before fetching
+  // so a stale chip cannot become an invalid glab CLI flag.
+  useEffect(() => {
+    const filterIsValid =
+      gitlabView === 'issues'
+        ? isGitLabIssueFilter(gitlabFilter)
+        : gitlabView === 'mrs'
+          ? isGitLabMRFilter(gitlabFilter)
+          : true
+    if (!filterIsValid) {
+      setGitlabFilter('opened')
+    }
+  }, [gitlabView, gitlabFilter])
+
+  const displayedGitLabItems = useMemo(() => {
+    if (gitlabView === 'issues') {
+      return gitlabItems.filter((item) => item.type === 'issue')
+    }
+    if (gitlabView === 'mrs') {
+      return gitlabItems.filter((item) => item.type === 'mr')
+    }
+    return gitlabItems
+  }, [gitlabItems, gitlabView])
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
@@ -1825,6 +2188,8 @@ export default function TaskPage(): React.JSX.Element {
     defaultTaskViewPreset
   )
   const [tasksLoading, setTasksLoading] = useState(false)
+  const [tasksRefreshing, setTasksRefreshing] = useState(false)
+  const [tasksFiltering, setTasksFiltering] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
   // Why: per-repo failure count surfaced through the "N of M" banner. IPC-level
   // rejections populate tasksError instead — the two are mutually exclusive so
@@ -1841,6 +2206,10 @@ export default function TaskPage(): React.JSX.Element {
   // collapse onto a stale in-flight request that resolved against the
   // pre-flip source).
   const lastFetchedInvalidationNonceRef = useRef(0)
+  // Why: entering Tasks with fresh cache should still verify remote status
+  // once, but the result is reconciled into existing rows to avoid a full
+  // table shuffle when only status/key fields changed.
+  const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   // Why: pages holds all fetched pages of work items. Page 0 is seeded from
   // cache for instant first paint; subsequent pages are loaded via date cursors.
   const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
@@ -1871,11 +2240,12 @@ export default function TaskPage(): React.JSX.Element {
   // this dialog for a read/review surface. The dialog's "Use" button routes
   // through the same direct-launch flow as the row-level "Use" CTA so
   // behavior is consistent regardless of entry point.
-  const [dialogWorkItemKey, setDialogWorkItemKey] = useState<{
-    id: string
-    repoId: string
-  } | null>(null)
-  const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+  const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
+  const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
+  const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
+  const dialogWorkItemKey = githubTaskDrawerWorkItem
+    ? { id: githubTaskDrawerWorkItem.id, repoId: githubTaskDrawerWorkItem.repoId }
+    : null
 
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
@@ -1901,12 +2271,74 @@ export default function TaskPage(): React.JSX.Element {
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
-  const dialogWorkItem = dialogWorkItemKey ? (cachedDialogWorkItem ?? dialogWorkItemFallback) : null
+  const dialogWorkItem = dialogWorkItemKey
+    ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
+    : null
+  const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
 
-  const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
-    setDialogWorkItemFallback(item)
-  }, [])
+  const setDialogWorkItem = useCallback(
+    (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
+      setDialogInitialTab(item ? initialTab : 'conversation')
+      setGithubTaskDrawerWorkItem(item)
+    },
+    [setGithubTaskDrawerWorkItem]
+  )
+
+  useEffect(() => {
+    if (!pageData.openGitHubWorkItem) {
+      setDialogWorkItem(null)
+      return
+    }
+    setGithubMode('items')
+    setDialogWorkItem(pageData.openGitHubWorkItem, pageData.openGitHubInitialTab)
+  }, [pageData.openGitHubInitialTab, pageData.openGitHubWorkItem, setDialogWorkItem])
+
+  const openGitHubDetailPage = useCallback(
+    (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
+      openTaskPage({
+        taskSource: 'github',
+        preselectedRepoId: item.repoId,
+        openGitHubWorkItem: item,
+        openGitHubInitialTab: initialTab
+      })
+    },
+    [openTaskPage]
+  )
+
+  const patchTaskPageWorkItemRows = useCallback(
+    (
+      itemKey: { id: string; repoId: string },
+      patch: Partial<GitHubWorkItem>,
+      shouldPatch?: (item: GitHubWorkItem) => boolean
+    ): void => {
+      setPages((current) => {
+        let changed = false
+        const nextPages = current.map((page) => {
+          let pageChanged = false
+          const nextPage = page.map((item) => {
+            if (item.id !== itemKey.id || item.repoId !== itemKey.repoId) {
+              return item
+            }
+            if (shouldPatch && !shouldPatch(item)) {
+              return item
+            }
+            pageChanged = true
+            changed = true
+            return { ...item, ...patch }
+          })
+          return pageChanged ? nextPage : page
+        })
+        return changed ? nextPages : current
+      })
+    },
+    []
+  )
+  const handleDialogReviewRequestsChange = useCallback(
+    (itemKey: { id: string; repoId: string }, reviewRequests: GitHubAssignableUser[]): void => {
+      patchTaskPageWorkItemRows(itemKey, { reviewRequests })
+    },
+    [patchTaskPageWorkItemRows]
+  )
 
   // Why: feature 1 — render the "Issues from {owner}/{repo}" indicator per
   // selected repo whose issue-source and PR-source slugs differ, and surface
@@ -1921,6 +2353,17 @@ export default function TaskPage(): React.JSX.Element {
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
   )
+
+  useEffect(() => {
+    if (taskSource !== 'github' || githubMode !== 'items') {
+      return
+    }
+    // Why: inline/dialog edits patch `workItemsCache`; the paged table renders
+    // from a local snapshot so it needs the patched row objects copied across.
+    setPages((current) =>
+      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries)
+    )
+  }, [githubMode, selectedWorkItemsCacheEntries, taskSource])
 
   // Why: surface a one-time toast per session per repo when the user's
   // preferred `'upstream'` is no longer configured and we fell back to
@@ -1981,6 +2424,10 @@ export default function TaskPage(): React.JSX.Element {
     },
     [selectedRepos]
   )
+  const handleRefreshGithubTasks = useCallback((): void => {
+    setTasksRefreshing(true)
+    setTaskRefreshNonce((current) => current + 1)
+  }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -2027,22 +2474,56 @@ export default function TaskPage(): React.JSX.Element {
     []
   )
 
-  const openRelatedLinearIssue = useCallback(
-    (issue: LinearIssue) => {
-      setSelectedLinearIssue(issue, { allowOutsideList: true })
-    },
-    [setSelectedLinearIssue]
-  )
-
-  const closeSelectedLinearIssue = useCallback(() => {
-    setSelectedLinearIssue(null)
-  }, [setSelectedLinearIssue])
-
   const clearSelectedLinearIssue = useCallback(() => {
     setSelectedLinearIssueCanFloat(false)
     setSelectedLinearIssueId(null)
     setSelectedLinearIssueFallback(null)
   }, [])
+
+  useEffect(() => {
+    if (!pageData.openLinearIssue) {
+      clearSelectedLinearIssue()
+      return
+    }
+    setSelectedLinearIssue(pageData.openLinearIssue, { allowOutsideList: true })
+  }, [clearSelectedLinearIssue, pageData.openLinearIssue, setSelectedLinearIssue])
+
+  const openLinearDetailPage = useCallback(
+    (issue: LinearIssue) => {
+      openTaskPage({ taskSource: 'linear', openLinearIssue: issue })
+    },
+    [openTaskPage]
+  )
+
+  const openRelatedLinearIssue = useCallback(
+    (issue: LinearIssue) => {
+      openLinearDetailPage(issue)
+    },
+    [openLinearDetailPage]
+  )
+
+  const closeTaskDetailPage = useCallback(() => {
+    const state = useAppStore.getState()
+    const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+    if (
+      typeof currentEntry === 'object' &&
+      currentEntry.kind === 'task-detail' &&
+      state.worktreeNavHistoryIndex > 0
+    ) {
+      state.goBackWorktree()
+      return
+    }
+    setDialogWorkItem(null)
+    clearSelectedLinearIssue()
+    useAppStore.setState((s) => ({
+      taskPageData: {
+        ...s.taskPageData,
+        openGitHubWorkItem: undefined,
+        openGitHubInitialTab: undefined,
+        openLinearIssue: undefined
+      }
+    }))
+  }, [clearSelectedLinearIssue, setDialogWorkItem])
 
   // Linear tab state
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
@@ -2065,6 +2546,7 @@ export default function TaskPage(): React.JSX.Element {
     ReadonlySet<string>
   >(() => new Set())
   const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
+  const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -2167,20 +2649,30 @@ export default function TaskPage(): React.JSX.Element {
     [selectedRepos]
   )
 
-  // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
-  // Why: fetch in parallel across every selected non-remote repo and
-  // merge the results, mirroring the GitHub side's cross-repo
-  // aggregation. Each repo's project is resolved from its git remote
-  // by the main process — non-GitLab remotes return an error envelope
-  // which we silently drop (filter chips on a GitHub-only repo
-  // shouldn't surface "no GitLab project" banners).
+  // Why: GitLab task-source data fetch. Issues and MRs are fetched
+  // separately (mirrors GitHub's separate Issues / PRs endpoints) so
+  // errors are isolated per tab and the backend doesn't need a combined
+  // merge+sort that can hide failures.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
     }
-    // Why: GitLab queries don't work over SSH-relay (yet) and folder-
-    // mode repos have no remotes to derive a project from. Filter both.
-    const eligibleRepos = selectedRepos.filter((r) => !r.connectionId)
+    if (gitlabView === 'todos') {
+      return
+    }
+    const activeIssueFilter =
+      gitlabView === 'issues' && isGitLabIssueFilter(gitlabFilter) ? gitlabFilter : null
+    const activeMRFilter =
+      gitlabView === 'mrs' && isGitLabMRFilter(gitlabFilter) ? gitlabFilter : null
+    if (
+      (gitlabView === 'issues' && !activeIssueFilter) ||
+      (gitlabView === 'mrs' && !activeMRFilter)
+    ) {
+      return
+    }
+    // Why: folder-mode repos have no remotes to derive a GitLab project from;
+    // SSH-backed Git repos go through the same provider-aware IPC path.
+    const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -2190,28 +2682,48 @@ export default function TaskPage(): React.JSX.Element {
     let stale = false
     setGitlabLoading(true)
     setGitlabError(null)
-    void Promise.allSettled(
-      eligibleRepos.map((repo) =>
-        window.api.gl
-          .listWorkItems({
-            repoPath: repo.path,
-            state: gitlabFilter,
-            page: 1,
-            perPage: 50
-          })
-          .then((result) => ({
-            repoId: repo.id,
-            items: (result as { items: GitLabWorkItem[] }).items,
-            // Why: not_found just means "this repo isn't a GitLab project"
-            // (e.g. a GitHub-only repo in a mixed selection). Drop it
-            // silently so the GitLab list doesn't show false errors.
-            error:
-              (result as { error?: { type?: string; message: string } }).error?.type === 'not_found'
-                ? undefined
-                : (result as { error?: { message: string } }).error
-          }))
-      )
-    )
+
+    const fetchItems =
+      gitlabView === 'issues'
+        ? (repo: (typeof eligibleRepos)[0]) => {
+            const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
+            return window.api.gl
+              .listIssues({
+                repoPath: repo.path,
+                state: 'opened',
+                assignee: isAssignedToMe ? '@me' : undefined,
+                limit: 50
+              })
+              .then((result) => {
+                const typed = result as {
+                  items: GitLabWorkItem[]
+                  error?: { type?: string; message: string }
+                }
+                // Why: not_found just means "this repo isn't a GitLab project"
+                // (e.g. a GitHub-only repo in a mixed selection). Drop it
+                // silently so the GitLab list doesn't show false errors.
+                const error = typed.error?.type === 'not_found' ? undefined : typed.error
+                return { repoId: repo.id, items: typed.items, error }
+              })
+          }
+        : (repo: (typeof eligibleRepos)[0]) =>
+            window.api.gl
+              .listMRs({
+                repoPath: repo.path,
+                state: activeMRFilter ?? 'opened',
+                page: 1,
+                perPage: 50
+              })
+              .then((result) => {
+                const typed = result as {
+                  items: GitLabWorkItem[]
+                  error?: { type?: string; message: string }
+                }
+                const error = typed.error?.type === 'not_found' ? undefined : typed.error
+                return { repoId: repo.id, items: typed.items, error }
+              })
+
+    void Promise.allSettled(eligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return
@@ -2232,10 +2744,9 @@ export default function TaskPage(): React.JSX.Element {
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
-        // Why: only surface an error banner when EVERY eligible repo
-        // failed — partial failure (one of three GitLab projects has
-        // a permission issue) is better signaled by the bare row count
-        // than a banner that overshadows the working repos.
+        // Why: only surface an error banner when EVERY eligible repo failed.
+        // Mixed selections often include non-GitLab repos, and a partial
+        // banner would hide the working rows.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
         }
@@ -2249,7 +2760,7 @@ export default function TaskPage(): React.JSX.Element {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [taskSource, gitlabView, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
 
   // Why: Todos fetch lives in its own effect — different trigger
   // condition from the project view (no chip filter dependence) and a
@@ -2581,18 +3092,106 @@ export default function TaskPage(): React.JSX.Element {
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
   )
+  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  const loadedGitHubAuthorLogins = useMemo(() => {
+    const seen = new Set<string>()
+    const logins: string[] = []
+    for (const page of pages) {
+      for (const item of page) {
+        if (
+          !item.author ||
+          (activeGithubTaskKind === 'prs' ? item.type !== 'pr' : item.type !== 'issue')
+        ) {
+          continue
+        }
+        const key = item.author.toLowerCase()
+        if (seen.has(key)) {
+          continue
+        }
+        seen.add(key)
+        logins.push(item.author)
+      }
+    }
+    return logins
+  }, [activeGithubTaskKind, pages])
+  const primaryGithubFilterSlug = useMemo(() => {
+    for (const state of perRepoSourceState) {
+      const source = activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
+      if (source) {
+        return source
+      }
+    }
+    return null
+  }, [activeGithubTaskKind, perRepoSourceState])
   const showPRManagementColumns = activeGithubTaskKind === 'prs'
   const githubTaskGridClass = showPRManagementColumns
     ? GITHUB_PR_TASK_GRID_CLASS
     : GITHUB_TASK_GRID_CLASS
 
-  // Why: totalPages is derived from the search API count when available,
-  // so the pagination bar shows the full range (with ellipsis) upfront.
-  // Falls back to the loaded page count when the count hasn't returned yet.
+  const ensurePRChecksLoaded = useCallback(
+    (item: GitHubWorkItem): void => {
+      if (item.type !== 'pr' || item.checksSummary) {
+        return
+      }
+      const repo = repoMap.get(item.repoId)
+      if (!repo) {
+        return
+      }
+      const requestedHeadSha = item.headSha
+      const requestedPRRepo = item.prRepo ?? null
+      void fetchPRChecks(
+        repo.path,
+        item.number,
+        item.branchName,
+        item.headSha,
+        item.prRepo ?? null,
+        { repoId: repo.id }
+      ).then((checks) => {
+        patchTaskPageWorkItemRows(
+          { id: item.id, repoId: item.repoId },
+          { checksSummary: deriveTaskPagePRCheckSummary(checks) },
+          (currentItem) =>
+            currentItem.type === 'pr' &&
+            currentItem.headSha === requestedHeadSha &&
+            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo)
+        )
+      })
+    },
+    [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
+  )
+
+  useEffect(() => {
+    if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {
+      return
+    }
+
+    for (const item of filteredWorkItems.slice(0, PR_CHECKS_EAGER_PREFETCH_LIMIT)) {
+      ensurePRChecksLoaded(item)
+    }
+  }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
+
+  // Why: each page is bounded by both the per-repo fetch budget (so a single
+  // repo can yield at most PER_REPO_FETCH_LIMIT rows per page) and the
+  // post-merge display cap. Dividing the total by CROSS_REPO_DISPLAY_LIMIT
+  // alone under-counts pages when the per-repo budget is the tighter bound —
+  // e.g. one repo with 60 open PRs yielded 36 rows on page 0 and ceil(60/100)
+  // = 1 total pages, hiding the pager entirely.
+  const effectivePageSize = Math.max(
+    1,
+    Math.min(PER_REPO_FETCH_LIMIT * Math.max(1, selectedRepos.length), CROSS_REPO_DISPLAY_LIMIT)
+  )
+  // Why: if the search-API count is unavailable (rate-limited, transient
+  // failure — `countWorkItemsAcrossRepos` swallows errors and returns 0),
+  // infer there's at least one more page whenever the last loaded page
+  // filled to the per-page capacity. Otherwise pagination would silently
+  // hide and trap the user on page 0 with no way to advance.
+  const lastPageFull = (pages.at(-1)?.length ?? 0) >= effectivePageSize
   const totalPages =
-    totalItemCount !== null
-      ? Math.max(pages.length, Math.ceil(totalItemCount / CROSS_REPO_DISPLAY_LIMIT))
-      : pages.length
+    totalItemCount && totalItemCount > 0
+      ? Math.max(pages.length, Math.ceil(totalItemCount / effectivePageSize))
+      : lastPageFull
+        ? pages.length + 1
+        : pages.length
 
   // Why: loads the next page using the oldest item's updatedAt as a cursor.
   // When targetPage is provided (from clicking a numbered page beyond loaded
@@ -2656,10 +3255,14 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     const timeout = window.setTimeout(() => {
-      setAppliedTaskSearch(scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind))
+      const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+      if (scoped !== appliedTaskSearch) {
+        setTasksFiltering(true)
+      }
+      setAppliedTaskSearch(scoped)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [activeGithubTaskKind, taskSearchInput, taskResumeApplied])
+  }, [activeGithubTaskKind, appliedTaskSearch, taskSearchInput, taskResumeApplied])
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -2692,10 +3295,14 @@ export default function TaskPage(): React.JSX.Element {
     // button would stay stuck in its disabled/Retrying state indefinitely.
     if (taskSource !== 'github' || githubMode !== 'items') {
       setRetryingRepoPaths(new Set())
+      setTasksRefreshing(false)
+      setTasksFiltering(false)
       return
     }
     if (selectedRepos.length === 0) {
       setRetryingRepoPaths(new Set())
+      setTasksRefreshing(false)
+      setTasksFiltering(false)
       return
     } // unreachable — multi-combobox forbids empty
 
@@ -2711,11 +3318,13 @@ export default function TaskPage(): React.JSX.Element {
     // to this pre-paint; the fetch will fill it in.
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
+    let anyRepoCached = false
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
+        anyRepoCached = true
         preMerged.push(...cached)
       }
     }
@@ -2745,8 +3354,22 @@ export default function TaskPage(): React.JSX.Element {
     const preferenceInvalidated =
       workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
     lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
-
+    const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+    const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
+    const shouldProbeOnLanding =
+      !forcedFetch && anyRepoCached && !landingGitHubRefreshKeysRef.current.has(landingRefreshKey)
+    if (shouldProbeOnLanding) {
+      landingGitHubRefreshKeysRef.current = new Set([
+        ...landingGitHubRefreshKeysRef.current,
+        landingRefreshKey
+      ])
+    }
+    // Why: manual refresh keeps cached rows visible, so the normal
+    // `tasksLoading` flag may stay false. Track the forced fetch separately
+    // so the toolbar still shows a refresh-in-progress affordance.
+    setTasksRefreshing(forcedFetch)
+
     // Why: snapshot the retrying paths at effect-dispatch so overlapping
     // retries don't clear each other's pending state. An earlier cancelled
     // effect settling after a newer retry starts would otherwise wipe the
@@ -2754,7 +3377,7 @@ export default function TaskPage(): React.JSX.Element {
     // when this effect dispatched preserves later additions.
     const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+      force: forcedFetch || shouldProbeOnLanding
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear only the repos this effect was responsible for
@@ -2776,10 +3399,21 @@ export default function TaskPage(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPages([items])
-        setCurrentPage(0)
+        if (shouldProbeOnLanding) {
+          const replaceFirstPage = shouldReplaceTaskPageItemsAfterRefresh(page0, items)
+          const resetPagination = shouldResetTaskPagePaginationAfterLandingRefresh(page0, items)
+          setPages((current) => reconcileTaskPagePagesAfterLandingRefresh(current, items))
+          if (replaceFirstPage || resetPagination) {
+            setCurrentPage(0)
+          }
+        } else {
+          setPages([items])
+          setCurrentPage(0)
+        }
         setFailedCount(failed)
         setTasksLoading(false)
+        setTasksRefreshing(false)
+        setTasksFiltering(false)
       })
       .catch((err) => {
         // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
@@ -2806,6 +3440,8 @@ export default function TaskPage(): React.JSX.Element {
         setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
         setFailedCount(0) // the per-repo banner would be misleading next to tasksError
         setTasksLoading(false)
+        setTasksRefreshing(false)
+        setTasksFiltering(false)
       })
 
     // Why: fire-and-forget count query in parallel with the items fetch.
@@ -2838,12 +3474,66 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied
   ])
 
+  const applyPRFilterChange = useCallback(
+    (change: PRFilterChange): void => {
+      let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+      // Why: each filter dropdown contributes an independent qualifier patch.
+      // `withQualifier` round-trips through parseTaskQuery so prior filters and
+      // free-text are preserved.
+      if ('author' in change) {
+        next = withQualifier(next, 'author', change.author ?? null)
+      }
+      if ('assignee' in change) {
+        next = withQualifier(next, 'assignee', change.assignee ?? null)
+      }
+      if ('labels' in change) {
+        next = withQualifier(next, 'labels', change.labels ?? [])
+      }
+      if ('state' in change && change.state) {
+        next = withQualifier(next, 'state', change.state)
+        if (change.state !== 'open') {
+          next = withQualifier(next, 'draft', null)
+        }
+      }
+      if ('draft' in change) {
+        next = withQualifier(next, 'draft', change.draft ? 'true' : 'false')
+      }
+      if ('reviewer' in change) {
+        // Why: the two reviewer qualifiers (review-requested vs reviewed-by) are
+        // mutually exclusive in the PR-list UX — clear the other axis whenever
+        // one is set so the chip's visible state matches the actual query.
+        const reviewer = change.reviewer ?? null
+        if (reviewer === null) {
+          next = withQualifier(next, 'reviewRequested', null)
+          next = withQualifier(next, 'reviewedBy', null)
+        } else if (reviewer.kind === 'requested') {
+          next = withQualifier(next, 'reviewedBy', null)
+          next = withQualifier(next, 'reviewRequested', reviewer.login)
+        } else {
+          next = withQualifier(next, 'reviewRequested', null)
+          next = withQualifier(next, 'reviewedBy', reviewer.login)
+        }
+      }
+      setTaskSearchInput(next)
+      setAppliedTaskSearch(next)
+      setActiveTaskPreset(null)
+      setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: next })
+      // Why: filter changes replace the meaning of every row. Showing stale
+      // rows while the filtered query resolves reads like the filter did
+      // nothing, so render the same skeleton used for an uncached initial load.
+      setTasksFiltering(true)
+      setTaskRefreshNonce((current) => current + 1)
+    },
+    [activeGithubTaskKind, setTaskResumeState, taskSearchInput]
+  )
+
   const handleApplyTaskSearch = useCallback((): void => {
     const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
     setTaskSearchInput(scoped)
     setAppliedTaskSearch(scoped)
     setActiveTaskPreset(null)
     setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: scoped })
+    setTasksFiltering(true)
     setTaskRefreshNonce((current) => current + 1)
   }, [activeGithubTaskKind, setTaskResumeState, taskSearchInput])
 
@@ -2876,6 +3566,7 @@ export default function TaskPage(): React.JSX.Element {
         githubItemsPreset: preset,
         githubItemsQuery: query
       })
+      setTasksFiltering(true)
       setTaskRefreshNonce((current) => current + 1)
     },
     [setTaskResumeState]
@@ -2980,6 +3671,31 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForItem]
   )
 
+  const openComposerForGitLabItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: getLinkedWorkItemSuggestedName(item),
+        initialRepoId: item.repoId,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
+
+  const handleUseGitLabItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      openComposerForGitLabItem(item)
+    },
+    [openComposerForGitLabItem]
+  )
+
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
     if (!newIssueTargetRepo) {
       return
@@ -3037,7 +3753,7 @@ export default function TaskPage(): React.JSX.Element {
         updatedAt: new Date().toISOString(),
         author: null
       }
-      setDialogWorkItem(stub)
+      openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
       const fullIssuePromise = target
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
@@ -3067,7 +3783,14 @@ export default function TaskPage(): React.JSX.Element {
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDialogWorkItem])
+  }, [
+    newIssueBody,
+    newIssueSubmitting,
+    newIssueTargetRepo,
+    newIssueTitle,
+    openGitHubDetailPage,
+    setDialogWorkItem
+  ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
     if (!newLinearIssueTargetTeam) {
@@ -3107,7 +3830,7 @@ export default function TaskPage(): React.JSX.Element {
       void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
         .then((full) => {
           if (full) {
-            setSelectedLinearIssue(full)
+            openLinearDetailPage(full)
           }
         })
         .catch(() => {})
@@ -3119,9 +3842,11 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueSubmitting,
     newLinearIssueTargetTeam,
     newLinearIssueTitle,
-    settings,
-    setSelectedLinearIssue
+    openLinearDetailPage,
+    settings
   ])
+
+  const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
@@ -3243,6 +3968,16 @@ export default function TaskPage(): React.JSX.Element {
       previousRequest?.nonce !== linearRefreshNonce &&
       previousRequest?.signature === requestSignature
     lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
+    const shouldProbeOnLanding =
+      !forceRefresh &&
+      cachedIssues !== null &&
+      !landingLinearRefreshKeysRef.current.has(requestSignature)
+    if (shouldProbeOnLanding) {
+      landingLinearRefreshKeysRef.current = new Set([
+        ...landingLinearRefreshKeysRef.current,
+        requestSignature
+      ])
+    }
 
     // Why: cached rows should remain visible on navigation. Only an explicit
     // refresh or a true cache miss needs the blocking loading state.
@@ -3250,15 +3985,25 @@ export default function TaskPage(): React.JSX.Element {
 
     const request =
       readArgs.kind === 'search'
-        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, { force: forceRefresh })
-        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, { force: forceRefresh })
+        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
+        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
 
     void request
       .then((issues) => {
         if (cancelled) {
           return
         }
-        setLinearIssues(issues)
+        if (shouldProbeOnLanding) {
+          setLinearIssues((current) =>
+            reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
+          )
+        } else {
+          setLinearIssues(issues)
+        }
         setLinearLoading(false)
       })
       .catch((err) => {
@@ -3382,19 +4127,27 @@ export default function TaskPage(): React.JSX.Element {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Why: pt-1.5 vertically centers this row's 32px icon cluster (X +
             source toggles) with the sidebar's "Tasks" nav row. Sidebar Tasks
             center sits 22px below the titlebar (pt-2 + py-1.5 + half size-4
             icon). Matching that here needs 6px top padding above the 32px
             cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
             too low, breaking the visual band across the top chrome. */}
-        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
-          <div className="flex-none flex flex-col gap-3">
+        <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
+          <div
+            className={cn(
+              'flex-none flex flex-col gap-3',
+              // Why: GitHub detail views (PR + Issue) fill the entire right
+              // pane — the list filter row above them is not relevant and
+              // would visually duplicate the detail page's own breadcrumb.
+              taskSource === 'github' && dialogWorkItem && 'hidden'
+            )}
+          >
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {/* Why: Close is anchored left in the same row as the
                         source icons so the top chrome is one compact band.
                         Left-aligned keeps it clear of the app sidebar on the
@@ -3426,7 +4179,7 @@ export default function TaskPage(): React.JSX.Element {
                               disabled={source.disabled}
                               onClick={() => {
                                 taskSourceManuallyChangedRef.current = true
-                                setTaskSource(source.id)
+                                openTaskPage({ taskSource: source.id })
                                 void updateSettings({ defaultTaskSource: source.id }).catch(() => {
                                   toast.error('Failed to save default task source.')
                                 })
@@ -3478,7 +4231,7 @@ export default function TaskPage(): React.JSX.Element {
                           </SelectContent>
                         </Select>
                       ) : null}
-                      <div className="w-[200px]">
+                      <div className="min-w-0 w-full sm:w-[200px]">
                         <TeamMultiCombobox
                           teams={linearTeamOptions}
                           selected={linearTeamSelection}
@@ -3504,7 +4257,7 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
 
                 {taskSource === 'github' ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {projectModeVisible ? (
                       <div className="flex items-center gap-1 text-xs">
                         {GITHUB_MODE_BUTTONS.map((mode) => {
@@ -3545,7 +4298,7 @@ export default function TaskPage(): React.JSX.Element {
                         inert — hide it to avoid suggesting it does
                         something. */}
                     {githubMode !== 'project' && (
-                      <div className="w-[200px]">
+                      <div className="min-w-0 max-w-[220px] shrink-0">
                         <RepoMultiCombobox
                           repos={eligibleRepos}
                           selected={repoSelection}
@@ -3562,7 +4315,7 @@ export default function TaskPage(): React.JSX.Element {
                               toast.error('Failed to save repo selection.')
                             })
                           }}
-                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                          triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
                         />
                       </div>
                     )}
@@ -3570,94 +4323,51 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {taskSource === 'github' && githubMode === 'items' ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex flex-wrap gap-2">
-                          {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
-                            const active = activeTaskPreset === option.id
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onClick={() => {
-                                  const query = option.query
-                                  setTaskSearchInput(query)
-                                  setAppliedTaskSearch(query)
-                                  setActiveTaskPreset(option.id)
-                                  setTaskResumeState({
-                                    githubItemsPreset: option.id,
-                                    githubItemsQuery: query
-                                  })
-                                  setTaskRefreshNonce((current) => current + 1)
-                                }}
-                                onContextMenu={(event) => {
-                                  event.preventDefault()
-                                  handleSetDefaultTaskPreset(option.id)
-                                }}
-                                className={cn(
-                                  'rounded-md border px-2 py-1 text-xs transition',
-                                  active
-                                    ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                    : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                                )}
-                              >
-                                {option.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => {
-                                setNewIssueTitle('')
-                                setNewIssueBody('')
-                                setNewIssueRepoId(primaryRepo?.id ?? null)
-                                setNewIssueOpen(true)
-                              }}
-                              disabled={!newIssueTargetRepo}
-                              aria-label="New GitHub issue"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                            >
-                              <Plus className="size-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            New GitHub issue
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => setTaskRefreshNonce((current) => current + 1)}
-                              disabled={tasksLoading}
-                              aria-label="Refresh GitHub work"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                            >
-                              {tasksLoading ? (
-                                <LoaderCircle className="size-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="size-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh GitHub work
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+                  <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
+                        const active = activeTaskPreset === option.id
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              const query = option.query
+                              setTaskSearchInput(query)
+                              setAppliedTaskSearch(query)
+                              setActiveTaskPreset(option.id)
+                              setTaskResumeState({
+                                githubItemsPreset: option.id,
+                                githubItemsQuery: query
+                              })
+                              setTaskRefreshNonce((current) => current + 1)
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              handleSetDefaultTaskPreset(option.id)
+                            }}
+                            className={cn(
+                              'rounded-md border px-2 py-1 text-xs transition',
+                              active
+                                ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
                     </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <div className="relative min-w-[320px] flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <PRFilterDropdowns
+                        parsed={parseTaskQuery(taskSearchInput)}
+                        kind={activeGithubTaskKind}
+                        authorLogins={loadedGitHubAuthorLogins}
+                        primarySlug={primaryGithubFilterSlug}
+                        settings={settings}
+                        onChange={(change) => applyPRFilterChange(change)}
+                      />
+                      <div className="relative min-w-0 flex-1 basis-64">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           ref={taskSearchInputRef}
@@ -3682,6 +4392,54 @@ export default function TaskPage(): React.JSX.Element {
                             <X className="size-4" />
                           </button>
                         ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setNewIssueTitle('')
+                                setNewIssueBody('')
+                                setNewIssueRepoId(primaryRepo?.id ?? null)
+                                setNewIssueOpen(true)
+                              }}
+                              disabled={!newIssueTargetRepo}
+                              aria-label="New GitHub issue"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            New GitHub issue
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={handleRefreshGithubTasks}
+                              disabled={githubTasksBusy}
+                              aria-busy={githubTasksBusy}
+                              aria-label={
+                                githubTasksBusy ? 'Refreshing GitHub work' : 'Refresh GitHub work'
+                              }
+                              className="size-8 cursor-pointer border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md disabled:pointer-events-auto disabled:cursor-wait supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {githubTasksBusy ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {githubTasksBusy ? 'Refreshing GitHub work…' : 'Refresh GitHub work'}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
 
@@ -3758,7 +4516,7 @@ export default function TaskPage(): React.JSX.Element {
                     })()}
                   </div>
                 ) : taskSource === 'linear' && linearStatus.connected ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                  <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         {LINEAR_PRESETS.map((preset) => {
@@ -3832,8 +4590,8 @@ export default function TaskPage(): React.JSX.Element {
                         </Tooltip>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="relative min-w-[320px] flex-1">
+                    <div className="mt-3 flex min-w-0 items-center gap-3">
+                      <div className="relative min-w-0 flex-1 basis-64">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={linearSearchInput}
@@ -3878,107 +4636,159 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   </div>
                 ) : taskSource === 'gitlab' ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    {/* Why: view toggle — Project = the selected repo's MRs
-                        and issues; My Todos = the user's cross-project
-                        gitlab.com/dashboard/todos stream. They have
-                        different data shapes so we render distinct lists
-                        below. */}
-                    <div className="mb-2 flex items-center gap-2">
-                      {(['project', 'todos'] as const).map((view) => {
-                        const active = gitlabView === view
-                        const label = view === 'project' ? 'Project MRs' : 'My Todos'
-                        return (
-                          <button
-                            key={view}
-                            type="button"
-                            onClick={() => setGitlabView(view)}
-                            className={cn(
-                              'rounded-md border px-2.5 py-1 text-xs transition',
-                              active
-                                ? 'border-foreground/40 bg-foreground/90 text-background'
-                                : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                            )}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {/* Why: state chips only apply to the project view
-                            — todos are filtered to 'pending' state in the
-                            backend and don't have an Open/Merged/Closed
-                            axis. */}
-                        {gitlabView === 'project'
-                          ? GITLAB_TASK_FILTERS.map(({ id, label }) => {
-                              const active = gitlabFilter === id
-                              return (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  onClick={() => {
-                                    setGitlabFilter(id)
-                                    setGitlabRefreshNonce((n) => n + 1)
-                                  }}
-                                  className={cn(
-                                    'rounded-md border px-2 py-1 text-xs transition',
-                                    active
-                                      ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                      : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                                  )}
-                                >
-                                  {label}
-                                </button>
-                              )
-                            })
-                          : null}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => setGitlabRefreshNonce((n) => n + 1)}
-                              disabled={gitlabLoading || gitlabTodosLoading}
-                              aria-label={
-                                gitlabView === 'project'
-                                  ? 'Refresh GitLab work items'
-                                  : 'Refresh My Todos'
-                              }
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                            >
-                              {gitlabLoading || gitlabTodosLoading ? (
-                                <LoaderCircle className="size-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="size-4" />
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1 text-xs">
+                        {(['issues', 'mrs', 'todos'] as const).map((view) => {
+                          const active = gitlabView === view
+                          const label =
+                            view === 'issues' ? 'Issues' : view === 'mrs' ? 'MRs' : 'My Todos'
+                          return (
+                            <button
+                              key={view}
+                              type="button"
+                              onClick={() => setGitlabView(view)}
+                              className={cn(
+                                'rounded-md border px-2.5 py-1 text-xs transition',
+                                active
+                                  ? 'border-foreground/40 bg-foreground/90 text-background'
+                                  : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                               )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {gitlabView === 'project'
-                              ? 'Refresh GitLab work items'
-                              : 'Refresh My Todos'}
-                          </TooltipContent>
-                        </Tooltip>
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="min-w-0 w-full sm:w-[200px]">
+                        <RepoMultiCombobox
+                          repos={eligibleRepos}
+                          selected={repoSelection}
+                          onChange={(next) => {
+                            setRepoSelection(next)
+                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                              toast.error('Failed to save repo selection.')
+                            })
+                          }}
+                          onSelectAll={() => {
+                            const allIds = new Set(eligibleRepos.map((r) => r.id))
+                            setRepoSelection(allIds)
+                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                              toast.error('Failed to save repo selection.')
+                            })
+                          }}
+                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
                       </div>
                     </div>
-                  </div>
+                    <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {gitlabView === 'issues' || gitlabView === 'mrs'
+                              ? (gitlabView === 'issues'
+                                  ? GITLAB_ISSUE_FILTERS
+                                  : GITLAB_MR_FILTERS
+                                ).map(({ id, label }) => {
+                                  const active = gitlabFilter === id
+                                  return (
+                                    <button
+                                      key={id}
+                                      type="button"
+                                      onClick={() => {
+                                        setGitlabFilter(id)
+                                        setGitlabRefreshNonce((n) => n + 1)
+                                      }}
+                                      className={cn(
+                                        'rounded-md border px-2 py-1 text-xs transition',
+                                        active
+                                          ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                          : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                                      )}
+                                    >
+                                      {label}
+                                    </button>
+                                  )
+                                })
+                              : null}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setGitlabRefreshNonce((n) => n + 1)}
+                                disabled={gitlabLoading || gitlabTodosLoading}
+                                aria-label={
+                                  gitlabView === 'todos'
+                                    ? 'Refresh My Todos'
+                                    : 'Refresh GitLab work items'
+                                }
+                                className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              >
+                                {gitlabLoading || gitlabTodosLoading ? (
+                                  <LoaderCircle className="size-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="size-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {gitlabView === 'todos'
+                                ? 'Refresh My Todos'
+                                : 'Refresh GitLab work items'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 ) : null}
               </div>
             </section>
           </div>
 
-          {taskSource === 'github' && githubMode === 'project' ? (
-            <div className="mt-3 flex min-h-0 max-h-full flex-col rounded-md border border-border/50 bg-muted/50 overflow-hidden shadow-sm">
+          {taskSource === 'github' && dialogWorkItem ? (
+            dialogWorkItem.type === 'pr' ? (
+              <PullRequestPage
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                backLabel="Pull requests"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            ) : (
+              <GitHubItemDialog
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                variant="page"
+                backLabel="GitHub list"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            )
+          ) : taskSource === 'github' && githubMode === 'project' ? (
+            <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
               <ProjectViewWrapper />
             </div>
           ) : taskSource === 'github' ? (
-            <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+            <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">
               <div
-                className="min-h-0 flex-initial overflow-auto scrollbar-sleek"
+                className="min-h-0 flex-initial overflow-auto scrollbar-sleek scrollbar-sleek-lg"
                 style={{ scrollbarGutter: 'stable' }}
               >
                 <div
@@ -3987,17 +4797,18 @@ export default function TaskPage(): React.JSX.Element {
                     githubTaskGridClass
                   )}
                 >
-                  <span>ID</span>
-                  <span>Title / Context</span>
-                  <span>Branch</span>
-                  <span>Status</span>
+                  <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>ID</span>
+                  <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>Title / Context</span>
+                  {activeGithubTaskKind === 'issues' ? <span>Assignees</span> : null}
                   {showPRManagementColumns ? (
                     <>
                       <span>Reviewers</span>
                       <span>Checks</span>
                       <span>Merge</span>
                     </>
-                  ) : null}
+                  ) : (
+                    <span>Status</span>
+                  )}
                   <span>Updated</span>
                   <span />
                 </div>
@@ -4063,27 +4874,26 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
 
-                {tasksLoading && filteredWorkItems.length === 0 ? (
-                  // Why: shimmer skeleton stands in for the first ~3 rows while
-                  // the initial fetch is in flight, so the card is never empty
-                  // or collapsed during load. Only shown when we have no cached
-                  // items — on revalidate we keep the stale list visible.
+                {showGitHubTaskSkeletons ? (
+                  // Why: render enough shimmer rows to fill a typical viewport
+                  // so the table doesn't visibly grow when results land. A
+                  // 3-row stub jumps to ~30 real rows; matching the steady-
+                  // state height keeps layout stable across the load.
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className={cn('grid gap-2 px-3 py-2', githubTaskGridClass)}>
-                        <div className="flex items-center">
+                        <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
                           <div className="h-7 w-16 animate-pulse rounded-lg bg-muted/70" />
                         </div>
-                        <div className="min-w-0">
+                        <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
                           <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
                           <div className="mt-2 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
                         </div>
-                        <div className="flex items-center">
-                          <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
-                        </div>
+                        {!showPRManagementColumns ? (
+                          <div className="flex items-center">
+                            <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+                          </div>
+                        ) : null}
                         {showPRManagementColumns ? (
                           <>
                             <div className="flex items-center">
@@ -4096,7 +4906,11 @@ export default function TaskPage(): React.JSX.Element {
                               <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
                             </div>
                           </>
-                        ) : null}
+                        ) : (
+                          <div className="flex items-center">
+                            <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
+                          </div>
+                        )}
                         <div className="flex items-center">
                           <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
                         </div>
@@ -4114,7 +4928,7 @@ export default function TaskPage(): React.JSX.Element {
                     "No matching GitHub work" next to "Couldn't load issues from X/Y"
                     is contradictory and misleads the user into thinking they
                     typed the wrong query. */}
-                {!tasksLoading &&
+                {!showGitHubTaskSkeletons &&
                 filteredWorkItems.length === 0 &&
                 !tasksError &&
                 failedCount === 0 &&
@@ -4128,175 +4942,191 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 <div className="divide-y divide-border/50">
-                  {filteredWorkItems.map((item) => {
-                    const itemRepo = repoMap.get(item.repoId) ?? null
-                    return (
-                      // Why: the row is a clickable container rather than a
-                      // <button> because it holds nested interactive elements
-                      // (Use button, ellipsis DropdownMenuTrigger, Radix
-                      // TooltipTrigger). A <button> ancestor of another
-                      // <button> is invalid HTML and triggers React hydration
-                      // errors that break rendering of the whole page.
-                      <div
-                        // Why: combine repoId with item.id because two selected repos
-                        // that route issues through the same upstream (e.g. fork +
-                        // non-fork both resolving to stablyai/orca) surface the same
-                        // item.id under different repoIds. React treats a bare id as
-                        // a collision and warns + silently drops rows otherwise.
-                        key={`${item.repoId}:${item.id}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setDialogWorkItem(item)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            setDialogWorkItem(item)
-                          }
-                        }}
-                        className={cn(
-                          'grid cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                          githubTaskGridClass
-                        )}
-                      >
-                        <div className="flex items-center">
-                          <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
-                            {item.type === 'pr' ? (
-                              <GitPullRequest className="size-3" />
-                            ) : (
-                              <CircleDot className="size-3" />
-                            )}
-                            <span className="font-mono text-[11px] font-normal">
-                              #{item.number}
-                            </span>
-                          </span>
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate text-sm font-semibold text-foreground">
-                              {item.title}
-                            </h3>
-                            {selectedRepos.length > 1 && itemRepo ? (
-                              // Why: disambiguate rows when multiple repos are in
-                              // the merged list — a single-repo view doesn't need it.
-                              <RepoDotLabel
-                                name={itemRepo.displayName}
-                                color={itemRepo.badgeColor}
-                                dotClassName="size-1.5"
-                                className="shrink-0 text-[11px] text-muted-foreground"
-                              />
-                            ) : null}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                            <span>{item.author ?? 'unknown author'}</span>
-                            {selectedRepos.length === 1 && itemRepo ? (
-                              <span>{itemRepo.displayName}</span>
-                            ) : null}
-                            {item.type === 'pr' && formatPRDelta(item) ? (
-                              <span className="inline-flex items-center gap-1">
-                                <Files className="size-3" />
-                                {formatPRDelta(item)}
-                              </span>
-                            ) : null}
-                            {item.labels.slice(0, 3).map((label) => (
-                              <span
-                                key={label}
-                                className="rounded-full border border-border/50 bg-background/80 px-1.5 py-0 text-[10px] text-muted-foreground"
-                              >
-                                {label}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 flex items-center text-xs text-muted-foreground">
-                          {item.type === 'pr' ? (
-                            <div className="min-w-0">
-                              <div className="truncate text-foreground">
-                                {item.branchName || 'unknown head'}
-                              </div>
-                              <div className="truncate text-[10px] text-muted-foreground">
-                                into {item.baseRefName || 'base'}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="truncate">workspace/default</span>
+                  {!showGitHubTaskSkeletons &&
+                    filteredWorkItems.map((item) => {
+                      const itemRepo = repoMap.get(item.repoId) ?? null
+                      return (
+                        // Why: the row is a clickable container rather than a
+                        // <button> because it holds nested interactive elements
+                        // (Use button, ellipsis DropdownMenuTrigger, Radix
+                        // TooltipTrigger). A <button> ancestor of another
+                        // <button> is invalid HTML and triggers React hydration
+                        // errors that break rendering of the whole page.
+                        <div
+                          // Why: combine repoId with item.id because two selected repos
+                          // that route issues through the same upstream (e.g. fork +
+                          // non-fork both resolving to stablyai/orca) surface the same
+                          // item.id under different repoIds. React treats a bare id as
+                          // a collision and warns + silently drops rows otherwise.
+                          key={`${item.repoId}:${item.id}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openGitHubDetailPage(item)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              openGitHubDetailPage(item)
+                            }
+                          }}
+                          className={cn(
+                            'group/github-task-row grid cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                            githubTaskGridClass
                           )}
+                        >
+                          <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5',
+                                item.state === 'merged'
+                                  ? 'text-purple-600 dark:text-purple-300'
+                                  : item.state === 'closed'
+                                    ? 'text-rose-600 dark:text-rose-300'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {item.type === 'pr' ? (
+                                <GitPullRequest className="size-3" />
+                              ) : (
+                                <CircleDot className="size-3" />
+                              )}
+                              <span className="font-mono text-[11px] font-normal">
+                                #{item.number}
+                              </span>
+                            </span>
+                          </div>
+
+                          <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate text-sm font-semibold text-foreground">
+                                {item.title}
+                              </h3>
+                              {item.type === 'pr' && item.state === 'draft' ? (
+                                <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+                                  Draft
+                                </span>
+                              ) : null}
+                              {selectedRepos.length > 1 && itemRepo ? (
+                                // Why: disambiguate rows when multiple repos are in
+                                // the merged list — a single-repo view doesn't need it.
+                                <RepoDotLabel
+                                  name={itemRepo.displayName}
+                                  color={itemRepo.badgeColor}
+                                  dotClassName="size-1.5"
+                                  className="shrink-0 text-[11px] text-muted-foreground"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                              <span>{item.author ?? 'unknown author'}</span>
+                              {selectedRepos.length === 1 && itemRepo ? (
+                                <span>{itemRepo.displayName}</span>
+                              ) : null}
+                              {item.type === 'pr' && formatPRDelta(item) ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Files className="size-3" />
+                                  {formatPRDelta(item)}
+                                </span>
+                              ) : null}
+                              {item.labels.slice(0, 3).map((label) => (
+                                <span
+                                  key={label}
+                                  className="rounded-full border border-border/50 bg-background/80 px-1.5 py-0 text-[10px] text-muted-foreground"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {!showPRManagementColumns ? (
+                            <div className="min-w-0 flex items-center text-xs text-muted-foreground">
+                              <GHAssigneesCell item={item} repo={itemRepo ?? null} />
+                            </div>
+                          ) : null}
+
+                          {showPRManagementColumns ? (
+                            <>
+                              <div className="flex min-w-0 items-center">
+                                <PRReviewCell item={item} repo={itemRepo ?? null} />
+                              </div>
+
+                              <div className="flex min-w-0 items-center">
+                                <PRChecksCell
+                                  item={item}
+                                  onOpen={() => openGitHubDetailPage(item, 'checks')}
+                                  onLoadChecks={() => ensurePRChecksLoaded(item)}
+                                />
+                              </div>
+
+                              <div className="flex min-w-0 items-center">
+                                <PRMergeCell
+                                  item={item}
+                                  repo={itemRepo ?? null}
+                                  onRefresh={() => setTaskRefreshNonce((current) => current + 1)}
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center">
+                              <GHStatusCell item={item} repo={itemRepo ?? null} />
+                            </div>
+                          )}
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center text-[11px] text-muted-foreground">
+                                {formatRelativeTime(item.updatedAt)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {new Date(item.updatedAt).toLocaleString()}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <div className="flex items-center justify-start gap-1 lg:justify-end">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleUseWorkItem(item)
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
+                            >
+                              Start
+                              <ArrowRight className="size-3" />
+                            </button>
+                            <DropdownMenu modal={false}>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+                                  aria-label="More actions"
+                                >
+                                  <EllipsisVertical className="size-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onSelect={() => window.api.shell.openUrl(item.url)}
+                                >
+                                  <ExternalLink className="size-4" />
+                                  Open in browser
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
-
-                        <div className="flex items-center">
-                          <GHStatusCell item={item} repo={itemRepo ?? null} />
-                        </div>
-
-                        {showPRManagementColumns ? (
-                          <>
-                            <div className="flex min-w-0 items-center">
-                              <PRReviewCell item={item} repo={itemRepo ?? null} />
-                            </div>
-
-                            <div className="flex min-w-0 items-center">
-                              <PRChecksCell item={item} onOpen={() => setDialogWorkItem(item)} />
-                            </div>
-
-                            <div className="flex min-w-0 items-center">
-                              <PRMergeCell
-                                item={item}
-                                repo={itemRepo ?? null}
-                                onRefresh={() => setTaskRefreshNonce((current) => current + 1)}
-                              />
-                            </div>
-                          </>
-                        ) : null}
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center text-[11px] text-muted-foreground">
-                              {formatRelativeTime(item.updatedAt)}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {new Date(item.updatedAt).toLocaleString()}
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <div className="flex items-center justify-start gap-1 lg:justify-end">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleUseWorkItem(item)
-                            }}
-                            className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
-                          >
-                            Start workspace
-                            <ArrowRight className="size-3" />
-                          </button>
-                          <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={(e) => e.stopPropagation()}
-                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
-                                aria-label="More actions"
-                              >
-                                <EllipsisVertical className="size-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
-                                <ExternalLink className="size-4" />
-                                Open in browser
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
                 </div>
+              </div>
 
-                {/* Pagination controls — GitHub-style with ellipsis */}
-                {filteredWorkItems.length > 0 && !tasksLoading && totalPages > 1 ? (
+              {/* Why: pagination sits outside the scroll container so it
+                  remains pinned at the bottom of the panel rather than
+                  hiding below the last row inside the scrolling region. */}
+              {filteredWorkItems.length > 0 && !showGitHubTaskSkeletons && totalPages > 1 ? (
+                <div className="flex-none border-t border-border/50 bg-muted/50">
                   <PaginationBar
                     currentPage={currentPage}
                     totalPages={totalPages}
@@ -4309,8 +5139,8 @@ export default function TaskPage(): React.JSX.Element {
                       }
                     }}
                   />
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
           ) : taskSource === 'gitlab' && gitlabView === 'todos' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
@@ -4327,7 +5157,7 @@ export default function TaskPage(): React.JSX.Element {
               >
                 {gitlabTodosLoading && gitlabTodos.length === 0 ? (
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
                         className="grid w-full gap-3 px-3 py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
@@ -4413,9 +5243,11 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 {gitlabLoading && gitlabItems.length === 0 ? (
                   // Why: matches the GitHub / Linear shimmer pattern so the card
-                  // never flashes empty during the initial fetch.
+                  // never flashes empty during the initial fetch. Row count is
+                  // tuned to fill the viewport so the table doesn't visibly
+                  // grow when real rows land.
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
                         className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
@@ -4431,15 +5263,19 @@ export default function TaskPage(): React.JSX.Element {
                     ))}
                   </div>
                 ) : null}
-                {!gitlabLoading && gitlabItems.length === 0 && !gitlabError ? (
+                {!gitlabLoading && displayedGitLabItems.length === 0 && !gitlabError ? (
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
-                      ? 'No GitLab work matches this filter.'
+                      ? gitlabView === 'issues'
+                        ? 'No GitLab issues match this filter.'
+                        : gitlabView === 'mrs'
+                          ? 'No GitLab MRs match this filter.'
+                          : 'No GitLab work matches this filter.'
                       : 'Select a repo to see GitLab work items.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
-                  {gitlabItems.map((item) => (
+                  {displayedGitLabItems.map((item) => (
                     // Why: row uses a <div role="button"> rather than a
                     // <button> because it nests an inner button for
                     // open-in-browser. Native <button> nesting is invalid
@@ -4472,22 +5308,51 @@ export default function TaskPage(): React.JSX.Element {
                       <span className="text-xs text-muted-foreground">
                         {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void window.api.shell.openUrl(item.url)
-                        }}
-                        aria-label="Open in browser"
-                        className="flex justify-end text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleUseGitLabItem(item)
+                              }}
+                              aria-label={`Start workspace from ${item.type === 'mr' ? 'MR' : 'issue'} ${item.number}`}
+                            >
+                              <ArrowRight className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            Start workspace
+                          </TooltipContent>
+                        </Tooltip>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void window.api.shell.openUrl(item.url)
+                          }}
+                          aria-label="Open in GitLab"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
+          ) : taskSource === 'linear' && selectedLinearIssue ? (
+            <LinearIssueWorkspace
+              issue={selectedLinearIssue}
+              variant="page"
+              backLabel="Linear list"
+              onUse={handleUseLinearItem}
+              onOpenIssue={openRelatedLinearIssue}
+              onClose={closeTaskDetailPage}
+            />
           ) : !linearStatusChecked ? (
             <div className="mt-4 flex items-center justify-center py-14">
               <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
@@ -4655,7 +5520,7 @@ export default function TaskPage(): React.JSX.Element {
 
                 {linearLoading && linearIssues.length === 0 ? (
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 6 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="px-3 py-3">
                         <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
                         <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
@@ -4733,14 +5598,14 @@ export default function TaskPage(): React.JSX.Element {
                                   setLinearBoardDraggingIssueId(null)
                                   setLinearBoardDragOverKey(null)
                                 }}
-                                onClick={() => setSelectedLinearIssue(issue)}
+                                onClick={() => openLinearDetailPage(issue)}
                                 onKeyDown={(e) => {
                                   if (e.target !== e.currentTarget) {
                                     return
                                   }
                                   if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault()
-                                    setSelectedLinearIssue(issue)
+                                    openLinearDetailPage(issue)
                                   }
                                 }}
                                 className={cn(
@@ -4864,7 +5729,7 @@ export default function TaskPage(): React.JSX.Element {
                           aria-current={selected ? 'true' : undefined}
                           data-current={selected ? 'true' : undefined}
                           onClick={() => {
-                            setSelectedLinearIssue(issue)
+                            openLinearDetailPage(issue)
                           }}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget) {
@@ -4872,7 +5737,7 @@ export default function TaskPage(): React.JSX.Element {
                             }
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              setSelectedLinearIssue(issue)
+                              openLinearDetailPage(issue)
                             }
                           }}
                           className={cn(
@@ -4999,7 +5864,7 @@ export default function TaskPage(): React.JSX.Element {
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Start workspace
+                                Start
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
@@ -5027,12 +5892,6 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
-              <LinearIssueWorkspace
-                issue={selectedLinearIssue}
-                onUse={handleUseLinearItem}
-                onOpenIssue={openRelatedLinearIssue}
-                onClose={closeSelectedLinearIssue}
-              />
             </div>
           )}
         </div>
@@ -5049,7 +5908,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewIssue()
             }
@@ -5176,10 +6035,10 @@ export default function TaskPage(): React.JSX.Element {
                 placeholder="What's going on?"
                 rows={6}
                 disabled={newIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
@@ -5217,7 +6076,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewLinearIssue()
             }
@@ -5286,10 +6145,10 @@ export default function TaskPage(): React.JSX.Element {
                 placeholder="What's going on?"
                 rows={6}
                 disabled={newLinearIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
@@ -5318,23 +6177,6 @@ export default function TaskPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      <GitHubItemDialog
-        workItem={dialogWorkItem}
-        repoPath={
-          // Why: the dialog is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the dialog is open.
-          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
-        }
-        repoId={dialogWorkItem?.repoId ?? null}
-        onUse={(item) => {
-          setDialogWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onClose={() => setDialogWorkItem(null)}
-      />
-
       <GitLabItemDialog
         item={gitlabDialogItem}
         // Why: dialog's repoPath has to come from the clicked item's
@@ -5347,6 +6189,10 @@ export default function TaskPage(): React.JSX.Element {
               null)
             : null
         }
+        onCreateWorkspace={(item) => {
+          setGitlabDialogItem(null)
+          handleUseGitLabItem(item)
+        }}
         onClose={() => setGitlabDialogItem(null)}
       />
 

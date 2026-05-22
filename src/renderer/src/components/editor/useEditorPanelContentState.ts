@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -81,7 +82,12 @@ export function useEditorPanelContentState({
       : null
 
   const loadFileContent = useCallback(
-    async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
+    async (
+      filePath: string,
+      id: string,
+      worktreeId?: string,
+      relativePath?: string
+    ): Promise<void> => {
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
@@ -108,7 +114,7 @@ export function useEditorPanelContentState({
           pending = readRuntimeFileContent({
             settings: readSettings,
             filePath,
-            relativePath: restoredOpenFile?.relativePath,
+            relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
             connectionId
           }) as Promise<FileContent>
@@ -156,7 +162,7 @@ export function useEditorPanelContentState({
       const compareAgainstHead = file.mode === 'edit'
       const key = inFlightDiffKey(
         { ...file, diffSource: effectiveDiffSource },
-        gitScope,
+        gitScope ?? undefined,
         compareAgainstHead
       )
       let pending = inFlightDiffReads.get(key)
@@ -246,12 +252,38 @@ export function useEditorPanelContentState({
         delete next[file.id]
         return next
       })
-      void loadFileContent(file.filePath, file.id, file.worktreeId)
+      void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
     },
     [loadFileContent]
   )
 
   useEffect(() => {
+    if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
+      const snapshotEntries = activeFile.conflictReview?.entries ?? []
+      if (snapshotEntries.length === 0) {
+        return
+      }
+
+      const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
+      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      for (const entry of liveEntries) {
+        if (
+          !snapshotPaths.has(entry.path) ||
+          entry.conflictStatus !== 'unresolved' ||
+          !entry.conflictKind ||
+          entry.status === 'deleted'
+        ) {
+          continue
+        }
+
+        const absolutePath = joinPath(activeFile.filePath, entry.path)
+        if (!fileContents[absolutePath]) {
+          void loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path)
+        }
+      }
+      return
+    }
+
     const fileToLoad = selectedConflictReviewFile ?? activeFile
     if (!fileToLoad || (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile)) {
       return
@@ -281,8 +313,10 @@ export function useEditorPanelContentState({
     activeFile?.id,
     activeFile?.mode,
     activeFile?.conflictReview?.selectedFileId,
+    activeFile?.conflictReview?.snapshotTimestamp,
     selectedConflictReviewFile?.id,
-    isChangesMode
+    isChangesMode,
+    gitStatusByWorktree
   ])
 
   useEditorPanelFileLoadRetry({

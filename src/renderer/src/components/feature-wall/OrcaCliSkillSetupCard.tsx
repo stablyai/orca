@@ -6,7 +6,10 @@ import {
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
-import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
 import { Button } from '@/components/ui/button'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
@@ -22,8 +25,10 @@ export function OrcaCliSkillSetupCard(props: {
   const { compact, terminalHeightPx } = props
   const [showTerminal, setShowTerminal] = useState(false)
   const [buttonVisible, setButtonVisible] = useState(true)
-  const { installed: skillInstalled, refresh: refreshSkillInstalled } =
-    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME)
+  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
+    ORCA_CLI_SKILL_NAME,
+    { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+  )
 
   useEffect(() => {
     if (!showTerminal) {
@@ -83,6 +88,7 @@ export function OrcaCliSkillSetupCard(props: {
       title="Orca CLI setup"
       ariaLabel="Orca CLI skill install command"
       description="Press Enter to install the Orca CLI skill. Confirm npx if asked."
+      worktreeId="feature-wall-orca-cli-skill-terminal"
       terminalHeightPx={terminalHeightPx}
     />
   ) : null

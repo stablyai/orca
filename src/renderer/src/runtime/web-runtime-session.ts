@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsResult,
+  RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { AppState } from '../store/types'
@@ -38,6 +39,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   targetGroupId?: string
   command?: string
   activate?: boolean
+  selectWorktree?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -47,7 +49,9 @@ export async function createWebRuntimeSessionTerminal(args: {
     return false
   }
 
-  selectWebRuntimeSessionWorktree(args.worktreeId)
+  if (args.selectWorktree !== false) {
+    selectWebRuntimeSessionWorktree(args.worktreeId)
+  }
   try {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
@@ -79,6 +83,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   url?: string
   profileId?: string | null
   targetGroupId?: string
+  selectWorktree?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -88,8 +93,11 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     return false
   }
 
+  const shouldSelectWorktree = args.selectWorktree !== false
   const stagedFromWorktreeId = useAppStore.getState().activeWorktreeId
-  selectWebRuntimeSessionWorktree(args.worktreeId)
+  if (shouldSelectWorktree) {
+    selectWebRuntimeSessionWorktree(args.worktreeId)
+  }
   try {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
@@ -113,8 +121,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       url: args.url,
       targetGroupId: args.targetGroupId,
       restoreFocus:
-        stagedFromWorktreeId === args.worktreeId ||
-        useAppStore.getState().activeWorktreeId === args.worktreeId
+        shouldSelectWorktree &&
+        (stagedFromWorktreeId === args.worktreeId ||
+          useAppStore.getState().activeWorktreeId === args.worktreeId)
     })
     void refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
     return true
@@ -450,6 +459,40 @@ export function splitWebRuntimeTerminal(
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to split terminal:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  return true
+}
+
+export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
+  if (!ptyId) {
+    return false
+  }
+  const remote = parseRemoteRuntimePtyId(ptyId)
+  const environmentId = remote?.environmentId?.trim()
+  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  // Why: host-session mirror panes are detached locally in the browser, but
+  // the host owns the real pane graph. Close the host terminal first so later
+  // session snapshots cannot resurrect the locally removed pane.
+  void window.api.runtimeEnvironments
+    .call({
+      selector: environmentId,
+      method: 'terminal.close',
+      params: {
+        terminal: remote.handle
+      },
+      timeoutMs: 15_000
+    })
+    .then((response) => {
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
+    })
+    .catch((error) => {
+      console.warn(
+        '[web-runtime-session] failed to close terminal pane:',
         error instanceof Error ? error.message : String(error)
       )
     })

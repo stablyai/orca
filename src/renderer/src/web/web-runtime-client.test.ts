@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: these tests share one mocked browser
+   WebSocket/E2EE transport fixture, and splitting them would obscure the
+   subscription lifecycle regressions they cover. */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import WebSocket, { WebSocketServer } from 'ws'
 import { WebRuntimeClient } from './web-runtime-client'
@@ -126,6 +129,227 @@ describe('WebRuntimeClient', () => {
     client.close()
 
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const handle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      childClients: Set<WebRuntimeClient>
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
+      .mockResolvedValue(handle)
+
+    const subscription = await client.subscribe(
+      'files.watch',
+      { worktree: 'wt-1' },
+      { onResponse: vi.fn() }
+    )
+
+    expect(subscribeOnCurrentConnection).toHaveBeenCalledWith(
+      'files.watch',
+      { worktree: 'wt-1' },
+      expect.objectContaining({ onResponse: expect.any(Function) }),
+      undefined
+    )
+    expect(internals.childClients.size).toBe(0)
+    const frame = new Uint8Array([1])
+    subscription.sendBinary(frame)
+    expect(handle.sendBinary).toHaveBeenCalledWith(frame)
+    client.close()
+  })
+
+  it('unwatches a direct file watch before removing the shared local subscription', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
+      .mockResolvedValue(localHandle)
+    const unwatch = vi.spyOn(client, 'call').mockImplementation(() => {
+      expect(localHandle.unsubscribe).not.toHaveBeenCalled()
+      return Promise.resolve({
+        id: 'unwatch',
+        ok: true,
+        result: { unsubscribed: true },
+        _meta: { runtimeId: 'runtime-web-test' }
+      })
+    })
+    const onResponse = vi.fn()
+
+    const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
+    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
+    wrappedCallbacks?.onResponse({
+      id: 'watch',
+      ok: true,
+      streaming: true,
+      result: { type: 'ready', subscriptionId: 'files-watch-1' },
+      _meta: { runtimeId: 'runtime-web-test' }
+    } as RuntimeRpcResponse<unknown> & { streaming: true })
+
+    subscription.unsubscribe()
+
+    expect(onResponse).toHaveBeenCalledTimes(1)
+    expect(unwatch).toHaveBeenCalledWith(
+      'files.unwatch',
+      { subscriptionId: 'files-watch-1' },
+      { timeoutMs: 5_000 }
+    )
+    await vi.waitFor(() => expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1))
+    client.close()
+  })
+
+  it('removes the shared local subscription when remote unwatch fails', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
+      .mockResolvedValue(localHandle)
+    const unwatchError = new Error('remote unwatch failed')
+    const unwatch = vi.spyOn(client, 'call').mockRejectedValue(unwatchError)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const subscription = await client.subscribe(
+        'files.watch',
+        { worktree: 'wt-1' },
+        { onResponse: vi.fn() }
+      )
+      const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
+      wrappedCallbacks?.onResponse({
+        id: 'watch',
+        ok: true,
+        streaming: true,
+        result: { type: 'ready', subscriptionId: 'files-watch-failing-unwatch' },
+        _meta: { runtimeId: 'runtime-web-test' }
+      } as RuntimeRpcResponse<unknown> & { streaming: true })
+
+      subscription.unsubscribe()
+
+      expect(unwatch).toHaveBeenCalledWith(
+        'files.unwatch',
+        { subscriptionId: 'files-watch-failing-unwatch' },
+        { timeoutMs: 5_000 }
+      )
+      await vi.waitFor(() => expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1))
+      expect(warn).toHaveBeenCalledWith('Failed to unwatch remote file subscription:', unwatchError)
+    } finally {
+      client.close()
+      warn.mockRestore()
+    }
+  })
+
+  it('keeps a stopped direct file watch alive until ready so it can unwatch', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
+      .mockResolvedValue(localHandle)
+    const unwatch = vi.spyOn(client, 'call').mockResolvedValue({
+      id: 'unwatch',
+      ok: true,
+      result: { unsubscribed: true },
+      _meta: { runtimeId: 'runtime-web-test' }
+    })
+    const onResponse = vi.fn()
+
+    const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
+    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
+
+    subscription.unsubscribe()
+    expect(unwatch).not.toHaveBeenCalled()
+    expect(localHandle.unsubscribe).not.toHaveBeenCalled()
+
+    wrappedCallbacks?.onResponse({
+      id: 'watch',
+      ok: true,
+      streaming: true,
+      result: { type: 'ready', subscriptionId: 'files-watch-late' },
+      _meta: { runtimeId: 'runtime-web-test' }
+    } as RuntimeRpcResponse<unknown> & { streaming: true })
+
+    expect(onResponse).not.toHaveBeenCalled()
+    expect(unwatch).toHaveBeenCalledWith(
+      'files.unwatch',
+      { subscriptionId: 'files-watch-late' },
+      { timeoutMs: 5_000 }
+    )
+    await vi.waitFor(() => expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1))
+    client.close()
+  })
+
+  it('cleans up a stopped pre-ready shared file watch if ready never arrives', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    vi.spyOn(internals, 'subscribeOnCurrentConnection').mockResolvedValue(localHandle)
+    const unwatch = vi.spyOn(client, 'call')
+
+    try {
+      const subscription = await client.subscribe(
+        'files.watch',
+        { worktree: 'wt-1' },
+        { onResponse: vi.fn() }
+      )
+
+      subscription.unsubscribe()
+      expect(unwatch).not.toHaveBeenCalled()
+      expect(localHandle.unsubscribe).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(localHandle.unsubscribe).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(unwatch).not.toHaveBeenCalled()
+    } finally {
+      client.close()
+      vi.useRealTimers()
+    }
   })
 
   it('decrypts binary WebSocket frames into subscription callbacks', async () => {

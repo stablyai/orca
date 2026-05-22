@@ -1,7 +1,9 @@
 // ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
 // These types define the normalized status that Orca receives from Claude,
-// Codex, and other explicit integrations. Agent state is hook-reported only —
-// we do not infer status from terminal titles anywhere in the data flow.
+// Codex, and other explicit integrations. Agent state normally comes from
+// hooks; a narrow interrupt fallback may synthesize a final done state when an
+// agent misses its own cancellation hook. We still do not infer status from
+// terminal titles anywhere in the data flow.
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -13,6 +15,7 @@ export type WellKnownAgentType =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode'
   | 'cursor'
   | 'copilot'
@@ -39,10 +42,10 @@ export type AgentStateHistoryEntry = {
   prompt: string
   /** When this state was first reported. */
   startedAt: number
-  /** True when this `done` was a cancellation (user hit ESC/Ctrl+C). Reported
-   *  by the agent itself — Claude Code sets `is_interrupt: true` on its `Stop`
-   *  hook when the turn ended via interrupt. Always falsy for non-`done`
-   *  states, so retention logic can preserve this signal. */
+  /** True when this `done` was a cancellation. May come from an agent hook
+   *  (for example Claude Code `is_interrupt`) or Orca's guarded interrupt
+   *  fallback. Always falsy for non-`done` states, so retention logic can
+   *  preserve this signal. */
   interrupted?: boolean
 }
 
@@ -77,10 +80,11 @@ export type AgentStatusEntry = {
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
   /** True when the current `done` state was reached via an interrupt rather
-   *  than a normal turn completion (Claude Code's `is_interrupt: true`).
+   *  than a normal turn completion. May be reported by the agent itself or
+   *  inferred by Orca's guarded interrupt fallback.
    *  Orthogonal to `state`: the agent still finished the turn, but the user
-   *  cancelled it. Undefined while the agent is working or for non-Claude
-   *  agents that don't surface this signal. */
+   *  cancelled it. Undefined while the agent is working or when no interrupt
+   *  signal was available. */
   interrupted?: boolean
 }
 

@@ -5,6 +5,9 @@ export function buildSetupRunnerCommand(
   platform: SetupRunnerCommandPlatform
 ): string {
   if (platform === 'windows') {
+    if (runnerScriptPath.startsWith('/')) {
+      return `bash ${quotePosixArg(runnerScriptPath)}`
+    }
     if (isWslUncPath(runnerScriptPath)) {
       const linuxPath = wslUncToLinuxPath(runnerScriptPath)
       return `bash ${quotePosixArg(linuxPath)}`

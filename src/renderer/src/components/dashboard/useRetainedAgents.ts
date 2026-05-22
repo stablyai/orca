@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { type DashboardAgentRow } from './useDashboardData'
@@ -23,7 +24,6 @@ type RetainedAgentsSyncInputs = {
   worktreesByRepo: Record<string, Worktree[]>
   tabsByWorktree: Record<string, TerminalTab[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  agentStatusEpoch?: number
 }
 
 type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
@@ -66,48 +66,6 @@ function agentStartedAt(entry: AgentStatusEntry): number {
   return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
 }
 
-export function buildRetainedAgentsSyncSignature(args: RetainedAgentsSyncInputs): string {
-  const { existingWorktreeIds, tabIndex } = buildLiveTabIndex(args)
-  const worktreeParts = [...existingWorktreeIds].sort()
-  const tabParts = [...tabIndex.entries()]
-    .map(([tabId, owner]) => `${owner.worktreeId}:${tabId}`)
-    .sort()
-  const agentParts: string[] = []
-
-  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
-    const tabId = paneKeyTabId(paneKey)
-    if (!tabId) {
-      continue
-    }
-    const owner = tabIndex.get(tabId)
-    if (!owner) {
-      continue
-    }
-    // Why: working/blocked/waiting pings can update prompt/tool text dozens of
-    // times per second; retention only cares about identity, state, freshness,
-    // and final done payloads.
-    const doneUpdatedAt = entry.state === 'done' ? entry.updatedAt : ''
-    agentParts.push(
-      [
-        owner.worktreeId,
-        paneKey,
-        entry.state,
-        entry.interrupted === true ? 'interrupted' : '',
-        agentStartedAt(entry),
-        doneUpdatedAt
-      ].join(':')
-    )
-  }
-
-  agentParts.sort()
-  return [
-    `epoch:${args.agentStatusEpoch ?? 0}`,
-    `worktrees:${worktreeParts.join(',')}`,
-    `tabs:${tabParts.join(',')}`,
-    `agents:${agentParts.join(',')}`
-  ].join('|')
-}
-
 export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshotInputs): {
   currentAgents: RetainedAgentSnapshot
   existingWorktreeIds: Set<string>
@@ -148,14 +106,8 @@ export function useRetainedAgentsSync(): void {
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const retentionSignature = useAppStore((s) =>
-    buildRetainedAgentsSyncSignature({
-      repos: s.repos,
-      worktreesByRepo: s.worktreesByRepo,
-      tabsByWorktree: s.tabsByWorktree,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentStatusEpoch: s.agentStatusEpoch
-    })
+  const [repos, worktreesByRepo, tabsByWorktree, agentStatusEpoch] = useAppStore(
+    useShallow((s) => [s.repos, s.worktreesByRepo, s.tabsByWorktree, s.agentStatusEpoch] as const)
   )
   const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
@@ -166,13 +118,12 @@ export function useRetainedAgentsSync(): void {
       worktreesByRepo: state.worktreesByRepo,
       tabsByWorktree: state.tabsByWorktree,
       agentStatusByPaneKey: state.agentStatusByPaneKey,
-      agentStatusEpoch: state.agentStatusEpoch,
       now: Date.now()
     })
 
-    // Why: read retention state via getState() instead of subscribing. This
-    // effect's driving input is the retention signature — retention decisions
-    // only need to happen when live identity/state/freshness or worktree
+    // Why: read retention state via getState() after the cheap ref/epoch gate
+    // fires. Building the full retention snapshot scans all agents, so do it
+    // only when live identity/state/freshness/final-done data or worktree
     // membership changes. Subscribing to retainedAgentsByPaneKey would create
     // a feedback loop because this effect calls retainAgents.
     const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } = state
@@ -194,7 +145,15 @@ export function useRetainedAgentsSync(): void {
     if (consumedSuppressedPaneKeys.length > 0) {
       clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
     }
-  }, [retentionSignature, retainAgents, pruneRetainedAgents, clearRetentionSuppressedPaneKeys])
+  }, [
+    repos,
+    worktreesByRepo,
+    tabsByWorktree,
+    agentStatusEpoch,
+    retainAgents,
+    pruneRetainedAgents,
+    clearRetentionSuppressedPaneKeys
+  ])
 }
 
 export function collectRetainedAgentsOnDisappear(args: {

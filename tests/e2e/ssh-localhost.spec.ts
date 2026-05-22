@@ -1,5 +1,7 @@
+/* eslint-disable max-lines -- Localhost SSH E2E covers setup, remote PTY, hook relay, and interrupt inference in one expensive app boot. */
 import os from 'os'
 
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -70,6 +72,65 @@ function emitMarkerCommand(value: string): string {
   return `printf '%s%s\\n' ${shellQuote(value.slice(0, midpoint))} ${shellQuote(
     value.slice(midpoint)
   )}`
+}
+
+async function focusTerminal(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Store unavailable')
+    }
+    const state = store.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      throw new Error('No active worktree')
+    }
+    const tabId =
+      state.activeTabType === 'terminal'
+        ? state.activeTabId
+        : (state.activeTabIdByWorktree?.[worktreeId] ?? null)
+    if (!tabId) {
+      throw new Error('No active terminal tab')
+    }
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+    if (!pane) {
+      throw new Error('No active terminal pane')
+    }
+    pane.terminal.focus()
+  })
+}
+
+async function postCodexHook(
+  page: Page,
+  ptyId: string,
+  payload: Record<string, unknown>,
+  markerName: string
+): Promise<void> {
+  const hookPostedMarker = marker(markerName)
+  await execInTerminal(
+    page,
+    ptyId,
+    [
+      'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+      '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
+      'else',
+      `  hook_payload=${shellQuote(JSON.stringify(payload))}`,
+      '  if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+      '    -H "Content-Type: application/x-www-form-urlencoded" \\',
+      '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+      '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+      '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+      '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+      '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+      '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+      '    --data-urlencode "payload=${hook_payload}" >/dev/null; then',
+      `    ${emitMarkerCommand(hookPostedMarker)}`,
+      '  fi',
+      'fi'
+    ].join('\n')
+  )
+  await waitForTerminalOutput(page, hookPostedMarker, 20_000)
 }
 
 test.describe('Localhost SSH', () => {
@@ -201,6 +262,17 @@ test.describe('Localhost SSH', () => {
     })
     const paneKeyLeafId = paneKey.slice(paneKey.indexOf(':') + 1)
     expect(paneKeyLeafId).toMatch(UUID_RE)
+    await orcaPage.evaluate(() => {
+      const state = window as unknown as {
+        __sshAgentStatusEvents?: unknown[]
+        __sshAgentStatusUnsubscribe?: () => void
+      }
+      state.__sshAgentStatusEvents = []
+      state.__sshAgentStatusUnsubscribe?.()
+      state.__sshAgentStatusUnsubscribe = window.api.agentStatus.onSet((event) => {
+        state.__sshAgentStatusEvents?.push(event)
+      })
+    })
 
     const terminalMarker = marker('LOCALHOST_SSH')
     await execInTerminal(orcaPage, ptyId, emitMarkerCommand(terminalMarker))
@@ -240,30 +312,12 @@ test.describe('Localhost SSH', () => {
     await waitForTerminalOutput(orcaPage, pluginOverlayMarker, 20_000)
 
     const prompt = `orca ssh e2e prompt ${Date.now()}`
-    const hookPostedMarker = marker('AGENT_HOOK_POSTED')
-    await execInTerminal(
+    await postCodexHook(
       orcaPage,
       ptyId,
-      [
-        'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-        '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
-        'else',
-        `  hook_payload=${shellQuote(JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt }))}`,
-        '  if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
-        '    -H "Content-Type: application/x-www-form-urlencoded" \\',
-        '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-        '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-        '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-        '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-        '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-        '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-        '    --data-urlencode "payload=${hook_payload}" >/dev/null; then',
-        `    ${emitMarkerCommand(hookPostedMarker)}`,
-        '  fi',
-        'fi'
-      ].join('\n')
+      { hook_event_name: 'UserPromptSubmit', prompt },
+      'AGENT_HOOK_POSTED'
     )
-    await waitForTerminalOutput(orcaPage, hookPostedMarker, 20_000)
 
     await expect
       .poll(
@@ -292,5 +346,103 @@ test.describe('Localhost SSH', () => {
         }
       )
       .toBe(true)
+
+    const ctrlPrompt = `orca ssh ctrl-c interrupt ${Date.now()}`
+    await postCodexHook(
+      orcaPage,
+      ptyId,
+      { hook_event_name: 'UserPromptSubmit', prompt: ctrlPrompt },
+      'AGENT_HOOK_CTRL_WORKING'
+    )
+    await focusTerminal(orcaPage)
+    await orcaPage.keyboard.press('Control+C')
+    await orcaPage.waitForTimeout(750)
+    expect(
+      await orcaPage.evaluate(
+        ({ paneKey, prompt, targetId, worktreeId }) => {
+          const state = window.__store?.getState()
+          const entry = state?.agentStatusByPaneKey[paneKey]
+          const events =
+            (
+              window as unknown as {
+                __sshAgentStatusEvents?: {
+                  prompt?: string
+                  connectionId?: string | null
+                  worktreeId?: string
+                }[]
+              }
+            ).__sshAgentStatusEvents ?? []
+          return {
+            state: entry?.state,
+            interrupted: entry?.interrupted,
+            prompt: entry?.prompt,
+            eventMatched: events.some(
+              (event) =>
+                event.prompt === prompt &&
+                event.connectionId === targetId &&
+                event.worktreeId === worktreeId
+            )
+          }
+        },
+        { paneKey, prompt: ctrlPrompt, targetId: remote.targetId, worktreeId: remote.worktreeId }
+      )
+    ).toEqual({
+      state: 'working',
+      interrupted: undefined,
+      prompt: ctrlPrompt,
+      eventMatched: true
+    })
+
+    await postCodexHook(
+      orcaPage,
+      ptyId,
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'exec_command',
+        tool_input: { cmd: '/bin/sleep 90' }
+      },
+      'AGENT_HOOK_LATE_WORKING'
+    )
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate(
+            ({ paneKey }) => {
+              const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
+              return {
+                state: entry?.state,
+                interrupted: entry?.interrupted,
+                prompt: entry?.prompt
+              }
+            },
+            { paneKey }
+          ),
+        { timeout: 5_000, message: 'Late remote working hook did not remain working' }
+      )
+      .toEqual({ state: 'working', interrupted: undefined, prompt: ctrlPrompt })
+
+    const escapePrompt = `orca ssh escape interrupt ${Date.now()}`
+    await postCodexHook(
+      orcaPage,
+      ptyId,
+      { hook_event_name: 'UserPromptSubmit', prompt: escapePrompt },
+      'AGENT_HOOK_ESCAPE_WORKING'
+    )
+    await focusTerminal(orcaPage)
+    await orcaPage.keyboard.press('Escape')
+    await orcaPage.waitForTimeout(750)
+    expect(
+      await orcaPage.evaluate(
+        ({ paneKey }) => {
+          const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
+          return {
+            state: entry?.state,
+            interrupted: entry?.interrupted,
+            prompt: entry?.prompt
+          }
+        },
+        { paneKey }
+      )
+    ).toEqual({ state: 'working', interrupted: undefined, prompt: escapePrompt })
   })
 })

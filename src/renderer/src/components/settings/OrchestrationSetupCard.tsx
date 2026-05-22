@@ -2,7 +2,10 @@ import { useEffect, useState, type JSX } from 'react'
 import { Terminal } from 'lucide-react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
-import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
 import { Button } from '@/components/ui/button'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
@@ -18,8 +21,10 @@ export function OrchestrationSetupCard(props: {
   const { compact, terminalHeightPx } = props
   const [showTerminal, setShowTerminal] = useState(false)
   const [buttonVisible, setButtonVisible] = useState(true)
-  const { installed: skillInstalled, refresh: refreshSkillInstalled } =
-    useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME)
+  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
+    ORCHESTRATION_SKILL_NAME,
+    { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+  )
 
   useEffect(() => {
     if (!showTerminal) {
@@ -60,6 +65,7 @@ export function OrchestrationSetupCard(props: {
       title="Orchestration setup"
       ariaLabel="Orchestration skill install command"
       description="Press Enter to install the orchestration skill. Confirm npx if asked."
+      worktreeId="feature-wall-orchestration-skill-terminal"
       terminalHeightPx={terminalHeightPx}
     />
   ) : null

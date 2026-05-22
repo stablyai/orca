@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleX, Folder, Pin } from 'lucide-react'
+import { CircleX, Folder, List, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
   Repo,
@@ -21,6 +21,8 @@ import {
 } from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { SortBy } from './smart-sort'
+import type { AppState } from '@/store/types'
+import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 
 export { branchName }
 
@@ -53,8 +55,6 @@ export type WorktreeRow = {
   lineageChildCount: number
   lineageGroupKey?: string
   lineageCollapsed?: boolean
-  parentLabel?: string
-  lineageState?: 'valid' | 'missing'
 }
 export type Row = GroupHeaderRow | WorktreeRow
 
@@ -105,8 +105,12 @@ export const PINNED_GROUP_META = {
   icon: Pin
 } as const
 
-export const MISSING_PARENT_GROUP_META = {
-  label: 'Missing parent'
+export const ALL_GROUP_KEY = 'all'
+
+export const ALL_GROUP_META = {
+  label: 'All',
+  tone: 'text-foreground',
+  icon: List
 } as const
 
 export const LINEAGE_GROUP_PREFIX = 'lineage:'
@@ -142,15 +146,34 @@ export function getLineageRenderInfo(
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
-  prCache: Record<string, unknown> | null
+  prCache: Record<string, unknown> | null,
+  settings?: AppState['settings']
 ): PRGroupKey {
   const repo = repoMap.get(worktree.repoId)
   const branch = branchName(worktree.branch)
-  const cacheKey = repo && branch ? `${repo.path}::${branch}` : ''
-  const prEntry =
-    cacheKey && prCache
-      ? (prCache[cacheKey] as { data?: { state?: string } } | undefined)
-      : undefined
+  const repoScopedCacheKey =
+    repo && branch
+      ? getGitHubPRCacheKey(repo.path, repo.id, branch, settings, repo.connectionId)
+      : ''
+  const canUseLegacyPRCache =
+    repo !== undefined && !settings?.activeRuntimeEnvironmentId?.trim() && !repo.connectionId
+  const legacyRepoScopedCacheKey =
+    canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch) : ''
+  const legacyPathScopedCacheKey =
+    canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, undefined, branch) : ''
+  // Why: PR refreshes now write repo-id scoped entries; legacy path entries may
+  // still exist from persisted cache, but must not override fresher repo data.
+  const prEntry = prCache
+    ? ((repoScopedCacheKey
+        ? (prCache[repoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined) ??
+      (legacyRepoScopedCacheKey
+        ? (prCache[legacyRepoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined) ??
+      (legacyPathScopedCacheKey
+        ? (prCache[legacyPathScopedCacheKey] as { data?: { state?: string } } | undefined)
+        : undefined))
+    : undefined
   const pr = prEntry?.data
 
   if (!pr) {
@@ -178,8 +201,7 @@ function emitPinnedGroup(
   lineageById: Record<string, WorktreeLineage>,
   worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
-  result: Row[],
-  showLineageContext: boolean
+  result: Row[]
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
   if (pinned.length === 0) {
@@ -197,7 +219,6 @@ function emitPinnedGroup(
   if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
     appendWorktreeRows(result, pinned, repoMap, lineageById, worktreeMap, {
       nestLineage: false,
-      showLineageContext,
       collapsedGroups
     })
   }
@@ -207,18 +228,12 @@ function emitPinnedGroup(
 function buildWorktreeRow(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
-  lineageById: Record<string, WorktreeLineage>,
-  worktreeMap: Map<string, Worktree>,
-  showLineageContext: boolean,
   depth: number,
   lineageTrail: boolean[],
   isLastLineageChild: boolean,
   lineageChildCount: number,
   lineageCollapsed: boolean
 ): WorktreeRow {
-  const lineage = showLineageContext
-    ? getLineageRenderInfo(worktree, lineageById, worktreeMap)
-    : { state: 'none' as const }
   return {
     type: 'item',
     worktree,
@@ -228,12 +243,7 @@ function buildWorktreeRow(
     isLastLineageChild,
     lineageChildCount,
     ...(lineageChildCount > 0 ? { lineageGroupKey: getLineageGroupKey(worktree.id) } : {}),
-    ...(lineageChildCount > 0 ? { lineageCollapsed } : {}),
-    ...(lineage.state === 'valid'
-      ? { parentLabel: lineage.parent.displayName, lineageState: 'valid' as const }
-      : lineage.state === 'missing'
-        ? { parentLabel: MISSING_PARENT_GROUP_META.label, lineageState: 'missing' as const }
-        : {})
+    ...(lineageChildCount > 0 ? { lineageCollapsed } : {})
   }
 }
 
@@ -245,27 +255,13 @@ function appendWorktreeRows(
   worktreeMap: Map<string, Worktree>,
   options: {
     nestLineage: boolean
-    showLineageContext: boolean
     collapsedGroups: Set<string>
   }
 ): void {
-  const { nestLineage, showLineageContext, collapsedGroups } = options
+  const { nestLineage, collapsedGroups } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
-      result.push(
-        buildWorktreeRow(
-          worktree,
-          repoMap,
-          lineageById,
-          worktreeMap,
-          showLineageContext,
-          0,
-          [],
-          false,
-          0,
-          false
-        )
-      )
+      result.push(buildWorktreeRow(worktree, repoMap, 0, [], false, 0, false))
     }
     return
   }
@@ -302,9 +298,6 @@ function appendWorktreeRows(
       buildWorktreeRow(
         worktree,
         repoMap,
-        lineageById,
-        worktreeMap,
-        showLineageContext,
         depth,
         lineageTrail,
         isLastChild,
@@ -357,7 +350,8 @@ export function buildRows(
   worktreeMap: Map<string, Worktree> = new Map(
     worktrees.map((worktree) => [worktree.id, worktree])
   ),
-  nestLineage = false
+  nestLineage = false,
+  settings?: AppState['settings']
 ): Row[] {
   const result: Row[] = []
 
@@ -367,17 +361,27 @@ export function buildRows(
     lineageById,
     worktreeMap,
     collapsedGroups,
-    result,
-    nestLineage
+    result
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
   if (groupBy === 'none') {
-    appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
-      nestLineage,
-      showLineageContext: nestLineage,
-      collapsedGroups
-    })
+    if (unpinned.length > 0) {
+      result.push({
+        type: 'header',
+        key: ALL_GROUP_KEY,
+        label: ALL_GROUP_META.label,
+        count: unpinned.length,
+        tone: ALL_GROUP_META.tone,
+        icon: ALL_GROUP_META.icon
+      })
+      if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+        appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
+          nestLineage,
+          collapsedGroups
+        })
+      }
+    }
     return result
   }
 
@@ -396,7 +400,7 @@ export function buildRows(
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else {
-      const prGroup = getPRGroupKey(w, repoMap, prCache)
+      const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`
       label = PR_GROUP_META[prGroup].label
     }
@@ -496,7 +500,6 @@ export function buildRows(
     if (!isCollapsed) {
       appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
         nestLineage,
-        showLineageContext: nestLineage,
         collapsedGroups
       })
     }
@@ -510,10 +513,11 @@ export function getGroupKeyForWorktree(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
   prCache: Record<string, unknown> | null,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
+  settings?: AppState['settings']
 ): string | null {
   if (groupBy === 'none') {
-    return null
+    return ALL_GROUP_KEY
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
@@ -521,5 +525,5 @@ export function getGroupKeyForWorktree(
   if (groupBy === 'repo') {
     return `repo:${worktree.repoId}`
   }
-  return `pr:${getPRGroupKey(worktree, repoMap, prCache)}`
+  return `pr:${getPRGroupKey(worktree, repoMap, prCache, settings)}`
 }

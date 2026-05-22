@@ -110,6 +110,7 @@ import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
+import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
@@ -140,6 +141,7 @@ function createTestStore() {
     ...createTabsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
+    ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
@@ -288,6 +290,7 @@ describe('updateDiffComment', () => {
       lineNumber: 10,
       body: 'old body',
       createdAt: 1000,
+      sentAt: 2000,
       side: 'modified'
     }
     seed(store, [original])
@@ -301,6 +304,7 @@ describe('updateDiffComment', () => {
     expect(saved.id).toBe('c1')
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
+    expect(saved.sentAt).toBeUndefined()
     expect(updateMeta).toHaveBeenCalledTimes(1)
   })
 
@@ -408,6 +412,59 @@ describe('updateDiffComment', () => {
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
     errSpy.mockRestore()
+  })
+})
+
+describe('markDiffCommentsSent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('marks selected notes as sent and persists once', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'c1', filePath: 'src/foo.ts' }),
+      makeComment({ id: 'c2', filePath: 'src/bar.ts' })
+    ])
+
+    const ok = await store.getState().markDiffCommentsSent(WT, ['c1'], 3000)
+
+    expect(ok).toBe(true)
+    const saved = store.getState().getDiffComments(WT)
+    expect(saved[0]).toEqual(expect.objectContaining({ id: 'c1', sentAt: 3000 }))
+    expect(saved[1]).toEqual(expect.objectContaining({ id: 'c2' }))
+    expect(saved[1].sentAt).toBeUndefined()
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: {
+        diffComments: [expect.objectContaining({ id: 'c1', sentAt: 3000 }), expect.any(Object)]
+      }
+    })
+  })
+
+  it('returns success without persisting when no selected notes match', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+
+    const ok = await store.getState().markDiffCommentsSent(WT, ['missing'], 3000)
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
   })
 })
 

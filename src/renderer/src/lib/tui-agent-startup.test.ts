@@ -38,6 +38,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('uses Antigravity interactive prompt mode with the agy binary', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'antigravity',
+        prompt: 'Investigate this regression',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'antigravity',
+      launchCommand: "agy --prompt-interactive 'Investigate this regression'",
+      expectedProcess: 'agy',
+      followupPrompt: null
+    })
+  })
+
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({

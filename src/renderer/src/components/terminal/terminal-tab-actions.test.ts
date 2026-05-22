@@ -27,7 +27,11 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 
-import { createNewTerminalTab } from './terminal-tab-actions'
+import {
+  closeOtherTerminalTabs,
+  closeTerminalTabsToRight,
+  createNewTerminalTab
+} from './terminal-tab-actions'
 
 describe('createNewTerminalTab', () => {
   beforeEach(() => {
@@ -81,5 +85,84 @@ describe('createNewTerminalTab', () => {
     })
     expect(createTab).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
+  })
+})
+
+describe('closeOtherTerminalTabs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    isWebRuntimeSessionActiveMock.mockReturnValue(false)
+  })
+
+  it('delegates other terminal closes to the host runtime in paired web clients', () => {
+    const setActiveTab = vi.fn()
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'keep' }, { id: 'close-a' }, { id: 'close-b' }]
+      },
+      setActiveTab,
+      closeTab
+    })
+
+    closeOtherTerminalTabs('keep', 'wt-1')
+
+    expect(setActiveTab).toHaveBeenCalledWith('keep')
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(2)
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'close-a',
+      environmentId: 'web-runtime'
+    })
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'close-b',
+      environmentId: 'web-runtime'
+    })
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('closeTerminalTabsToRight', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    isWebRuntimeSessionActiveMock.mockReturnValue(false)
+  })
+
+  it('delegates terminal tabs to the host while still closing local editor tabs to the right', () => {
+    const closeTab = vi.fn()
+    const closeFile = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    getStateMock
+      .mockReturnValueOnce({
+        settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+        tabsByWorktree: {
+          'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
+        },
+        openFiles: [{ id: 'file-b', worktreeId: 'wt-1' }],
+        tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-b', 'term-b', 'term-c'] },
+        closeTab
+      })
+      .mockReturnValue({
+        closeFile
+      })
+
+    closeTerminalTabsToRight('term-a', 'wt-1')
+
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(2)
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'term-b',
+      environmentId: 'web-runtime'
+    })
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'term-c',
+      environmentId: 'web-runtime'
+    })
+    expect(closeFile).toHaveBeenCalledWith('file-b')
+    expect(closeTab).not.toHaveBeenCalled()
   })
 })

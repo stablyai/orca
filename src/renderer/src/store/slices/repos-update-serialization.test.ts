@@ -119,7 +119,7 @@ describe('repo update serialization', () => {
       const failed = store.getState().updateRepo(localRepo.id, { displayName: 'Failed' })
       const recovered = store.getState().updateRepo(localRepo.id, { displayName: 'Recovered' })
 
-      await Promise.all([failed, recovered])
+      await expect(Promise.all([failed, recovered])).resolves.toEqual([false, true])
 
       expect(reposUpdate).toHaveBeenCalledTimes(2)
       expect(store.getState().repos[0]?.displayName).toBe('Recovered')

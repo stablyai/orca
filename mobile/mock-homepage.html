@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Orca Mobile – Homepage Redesign</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   :root {
@@ -24,7 +22,7 @@
   }
 
   body {
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg-base);
     color: var(--text-primary);
     max-width: 430px;
@@ -67,6 +65,23 @@
     transition: background 0.15s;
   }
   .icon-btn:hover { background: var(--bg-raised); }
+  .icon-btn.has-badge {
+    position: relative;
+  }
+  .nav-badge {
+    position: absolute;
+    top: 6px;
+    right: 5px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--text-primary);
+    color: var(--bg-base);
+    font-size: 9px;
+    line-height: 14px;
+    font-weight: 800;
+  }
 
   /* ─── Greeting ─── */
   .greeting {
@@ -206,6 +221,126 @@
   .host-chevron {
     color: var(--text-muted);
     flex-shrink: 0;
+  }
+  .host-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .host-task-chip {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    padding: 5px 8px;
+    background: rgba(255,255,255, 0.03);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .host-task-chip svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* ─── Task inbox placement candidate ─── */
+  .task-inbox {
+    margin: 0 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    background: var(--bg-panel);
+    overflow: hidden;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .task-inbox:hover { background: var(--bg-raised); }
+  .task-inbox-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .task-inbox-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(255,255,255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    flex: none;
+  }
+  .task-inbox-copy {
+    flex: 1;
+    min-width: 0;
+  }
+  .task-inbox-title {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .task-inbox-meta {
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    min-width: 0;
+  }
+  .provider-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+  }
+  .provider-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+  }
+  .task-inbox-count {
+    color: var(--text-primary);
+    font-size: 20px;
+    line-height: 22px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    flex: none;
+  }
+  .task-inbox-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .task-inbox-stat {
+    padding: 10px 12px;
+  }
+  .task-inbox-stat + .task-inbox-stat {
+    border-left: 1px solid var(--border-subtle);
+  }
+  .task-inbox-stat-value {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .task-inbox-stat-label {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .placement-note {
+    margin: 8px 20px 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 15px;
   }
 
   /* ─── Quick actions ─── */
@@ -501,7 +636,7 @@
 
 <div class="compare-bar">
   <button class="active" onclick="toggle('current')">Current</button>
-  <button onclick="toggle('proposed')">Proposed</button>
+  <button onclick="toggle('proposed')">Task Entry</button>
   <button onclick="toggle('empty')">Empty State</button>
 </div>
 
@@ -581,6 +716,10 @@
       <span class="brand-name">Orca</span>
     </div>
     <div class="top-actions">
+      <button class="icon-btn has-badge" title="Tasks">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>
+        <span class="nav-badge">7</span>
+      </button>
       <button class="icon-btn" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -617,6 +756,45 @@
     </div>
   </div>
 
+  <div class="section-heading">Tasks</div>
+  <div class="task-inbox">
+    <div class="task-inbox-main">
+      <div class="task-inbox-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>
+      </div>
+      <div class="task-inbox-copy">
+        <div class="task-inbox-title">Task inbox</div>
+        <div class="task-inbox-meta">
+          <span class="provider-dots">
+            <span class="provider-dot" style="background:#f97316;"></span>
+            <span class="provider-dot" style="background:#8b5cf6;"></span>
+            <span class="provider-dot" style="background:#22c55e;"></span>
+          </span>
+          GitHub, GitLab, Linear
+        </div>
+      </div>
+      <div class="task-inbox-count">7</div>
+      <div class="host-chevron">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+    <div class="task-inbox-breakdown">
+      <div class="task-inbox-stat">
+        <div class="task-inbox-stat-value">3</div>
+        <div class="task-inbox-stat-label">Assigned</div>
+      </div>
+      <div class="task-inbox-stat">
+        <div class="task-inbox-stat-value">2</div>
+        <div class="task-inbox-stat-label">Review</div>
+      </div>
+      <div class="task-inbox-stat">
+        <div class="task-inbox-stat-value">2</div>
+        <div class="task-inbox-stat-label">Drafts</div>
+      </div>
+    </div>
+  </div>
+  <div class="placement-note">Best candidate: puts issues/PRs at the same hierarchy as desktops without overloading Quick Actions.</div>
+
   <!-- Host cards with richer metadata -->
   <div class="section-heading">Desktops</div>
   <div class="host-list">
@@ -633,8 +811,14 @@
           <span class="host-meta-item" style="color: var(--status-green);">3 active</span>
         </div>
       </div>
-      <div class="host-chevron">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <div class="host-actions">
+        <div class="host-task-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>
+          7
+        </div>
+        <div class="host-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
       </div>
     </div>
 
@@ -697,6 +881,13 @@
   <div class="section-heading">Recent Activity</div>
   <div class="activity-list">
     <div class="activity-card">
+      <div class="activity-item">
+        <div class="activity-dot pr"></div>
+        <div class="activity-main">
+          <div class="activity-text">Assigned: Investigate remote task loading</div>
+          <div class="activity-time">GitHub · Host 1 · 8 min ago</div>
+        </div>
+      </div>
       <div class="activity-item">
         <div class="activity-dot working"></div>
         <div class="activity-main">
@@ -798,7 +989,7 @@ function toggle(version) {
   document.querySelectorAll('.compare-bar button').forEach(btn => {
     btn.classList.toggle('active',
       (version === 'current' && btn.textContent === 'Current') ||
-      (version === 'proposed' && btn.textContent === 'Proposed') ||
+      (version === 'proposed' && btn.textContent === 'Task Entry') ||
       (version === 'empty' && btn.textContent === 'Empty State')
     );
   });

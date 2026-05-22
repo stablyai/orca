@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
+import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 
@@ -27,43 +28,6 @@ function getGitHubSetupState(
     return 'not-installed'
   }
   return status.gh.authenticated ? 'connected' : 'not-authenticated'
-}
-
-type StatusTone = 'connected' | 'attention' | 'neutral'
-
-const statusToneClassNames: Record<StatusTone, { pill: string; dot: string }> = {
-  connected: {
-    pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-    dot: 'bg-emerald-500'
-  },
-  attention: {
-    pill: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    dot: 'bg-amber-500'
-  },
-  neutral: {
-    pill: 'border-border bg-background text-muted-foreground',
-    dot: 'bg-muted-foreground'
-  }
-}
-
-function StatusPill({
-  tone,
-  children
-}: {
-  tone: StatusTone
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        statusToneClassNames[tone].pill
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', statusToneClassNames[tone].dot)} />
-      {children}
-    </span>
-  )
 }
 
 export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element {
@@ -88,13 +52,13 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-[15px] font-semibold leading-tight text-foreground">GitHub</h3>
               {state === 'connected' ? (
-                <StatusPill tone="connected">Connected</StatusPill>
+                <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
               ) : state === 'not-installed' ? (
-                <StatusPill tone="attention">CLI not installed</StatusPill>
+                <IntegrationStatusPill tone="attention">CLI not installed</IntegrationStatusPill>
               ) : state === 'not-authenticated' ? (
-                <StatusPill tone="attention">Sign in needed</StatusPill>
+                <IntegrationStatusPill tone="attention">Sign in needed</IntegrationStatusPill>
               ) : (
-                <StatusPill tone="neutral">Checking…</StatusPill>
+                <IntegrationStatusPill tone="neutral">Checking…</IntegrationStatusPill>
               )}
             </div>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -197,7 +161,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>
                 {linearStatus.connected ? (
-                  <StatusPill tone="connected">Connected</StatusPill>
+                  <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
                 ) : null}
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -339,6 +303,15 @@ export function IntegrationsStep(): React.JSX.Element {
       <div className="space-y-3">
         <GitHubRow />
         <LinearRow />
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-muted/10 px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <span className="text-[14px] font-medium text-foreground/70">Jira</span>
+            <span className="text-[13px] text-muted-foreground">
+              Issues, sprints, and assignees.
+            </span>
+          </div>
+          <IntegrationStatusPill tone="neutral">Coming soon</IntegrationStatusPill>
+        </div>
       </div>
     </div>
   )

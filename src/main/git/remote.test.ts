@@ -8,7 +8,7 @@ vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { gitFetch, gitPull, gitPush } from './remote'
+import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 
 describe('git remote operations', () => {
   beforeEach(() => {
@@ -68,6 +68,21 @@ describe('git remote operations', () => {
       [['check-ref-format', '--branch', 'contributor/fix-sidebar'], { cwd: '/repo' }],
       [['push', '--set-upstream', 'origin', 'HEAD:contributor/fix-sidebar'], { cwd: '/repo' }]
     ])
+  })
+
+  it('passes --force-with-lease when requested', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPush('/repo', false, undefined, { forceWithLease: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--force-with-lease', '--set-upstream', 'origin', 'HEAD:feature'],
+      { cwd: '/repo' }
+    )
   })
 
   it('maps non-fast-forward push failures to an actionable message', async () => {
@@ -140,15 +155,87 @@ describe('git remote operations', () => {
   })
 
   it("runs pull with the user's configured strategy", async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPull('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['pull'], { cwd: '/repo' })
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['pull'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('pulls the same-name origin branch for legacy base-tracking worktrees', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/main\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPull('/repo')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature'], { cwd: '/repo' }],
+      [['pull', 'origin', 'feature'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('pulls from the explicit publish target when one is provided', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPull('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['pull', 'fork', 'feature/fix'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('rebases from the selected remote base ref', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'origin\nupstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'upstream/main')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['remote'], { cwd: '/repo' }],
+      [['check-ref-format', '--branch', 'main'], { cwd: '/repo' }],
+      [['pull', '--rebase', 'upstream', 'main'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('uses the longest configured remote name when rebasing from a base ref', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'fork\nfork/team\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'fork/team/feature/base')
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['pull', '--rebase', 'fork/team', 'feature/base'],
+      { cwd: '/repo' }
+    )
   })
 
   it('normalizes pull authentication errors to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('Authentication failed'))
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(new Error('Authentication failed'))
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Authentication failed. Check your remote credentials.'
@@ -156,15 +243,18 @@ describe('git remote operations', () => {
   })
 
   it('normalizes pull dirty-worktree aborts to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      new Error(
-        'Command failed: git pull\n' +
-          'error: Your local changes to the following files would be overwritten by merge:\n' +
-          '\tsrc/app.ts\n' +
-          'Please commit your changes or stash them before you merge.\n' +
-          'Aborting'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(
+        new Error(
+          'Command failed: git pull\n' +
+            'error: Your local changes to the following files would be overwritten by merge:\n' +
+            '\tsrc/app.ts\n' +
+            'Please commit your changes or stash them before you merge.\n' +
+            'Aborting'
+        )
       )
-    )
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
@@ -172,15 +262,18 @@ describe('git remote operations', () => {
   })
 
   it('normalizes pull untracked-file aborts to a friendly message', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      new Error(
-        'Command failed: git pull\n' +
-          'error: The following untracked working tree files would be overwritten by merge:\n' +
-          '\tsrc/new.ts\n' +
-          'Please move or remove them before you merge.\n' +
-          'Aborting'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(
+        new Error(
+          'Command failed: git pull\n' +
+            'error: The following untracked working tree files would be overwritten by merge:\n' +
+            '\tsrc/new.ts\n' +
+            'Please move or remove them before you merge.\n' +
+            'Aborting'
+        )
       )
-    )
 
     await expect(gitPull('/repo')).rejects.toThrow(
       'Pull would overwrite untracked files. Move, remove, or add them before pulling.'
@@ -193,6 +286,22 @@ describe('git remote operations', () => {
     await gitFetch('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', '--prune'], { cwd: '/repo' })
+  })
+
+  it('fetches the explicit publish target remote when provided', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFetch('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['fetch', '--prune', 'fork'], { cwd: '/repo' }]
+    ])
   })
 
   it('normalizes fetch authentication errors to a friendly message', async () => {

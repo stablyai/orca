@@ -6,17 +6,13 @@ import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import {
-  shouldAllowComposerEnterSubmitTarget,
-  shouldSuppressEnterSubmit
-} from '@/lib/new-workspace-enter-guard'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 type ComposerModalData = {
   prefilledName?: string
@@ -190,21 +186,15 @@ function QuickTabBody({
         return
       }
 
-      // Why: require the platform modifier (Cmd on macOS, Ctrl elsewhere) so
-      // plain Enter inside fields (notes, repo search) doesn't accidentally
-      // submit — users can type or confirm selections without triggering
-      // workspace creation.
-      const hasModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!hasModifier) {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
       if (createDisabled) {
-        return
-      }
-      if (shouldSuppressEnterSubmit(event, false)) {
         return
       }
       event.preventDefault()

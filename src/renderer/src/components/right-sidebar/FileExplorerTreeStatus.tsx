@@ -23,7 +23,7 @@ export function FileExplorerTreeStatus({
   if (error) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-        Could not load files for this worktree: {error}
+        Could not load files for this workspace: {error}
       </div>
     )
   }
@@ -31,7 +31,7 @@ export function FileExplorerTreeStatus({
   if (isEmpty) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-        No files in this worktree
+        No files in this workspace
       </div>
     )
   }

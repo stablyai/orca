@@ -20,6 +20,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   opencode: 'opencode',
   pi: 'pi',
   gemini: 'gemini',
+  antigravity: 'antigravity',
   aider: 'aider',
   goose: 'goose',
   amp: 'amp',

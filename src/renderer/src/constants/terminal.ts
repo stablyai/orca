@@ -12,11 +12,8 @@ export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-t
 // terminal fit synchronously before paint — so the new width and the
 // reflowed terminal land on the same frame with no visible transient.
 //
-// Continuous drags (sidebar-width drag, tab-group split drag) don't need
-// this: the per-pane ResizeObserver rAF path is fine on its own because
-// xterm's terminal.resize() natively preserves viewportY across reflows
-// (verified in scroll-reflow.test.ts "reference: undisturbed"). This is
-// how Superset and VSCode handle the same case.
+// Continuous drags (sidebar-width drag, tab-group split drag) use the
+// per-pane ResizeObserver path instead.
 export const SYNC_FIT_PANES_EVENT = 'orca-sync-fit-panes'
 
 export type ToggleTerminalPaneExpandDetail = {
@@ -33,6 +30,8 @@ export type FocusTerminalPaneDetail = {
   ackPaneKeyOnSuccess?: string
   /** Briefly lights the resolved pane rim after focus for click-to-locate flows. */
   flashFocusedPane?: boolean
+  /** Follow live agent output when activation is explicitly about that agent. */
+  scrollToBottomIfOutputSinceLastView?: boolean
 }
 
 export type PasteTerminalTextDetail = {

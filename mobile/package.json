@@ -42,7 +42,7 @@
     "react-native-webview": "^13.16.1",
     "react-native-worklets": "^0.8.3",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
   },

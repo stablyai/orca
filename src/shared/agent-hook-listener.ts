@@ -58,6 +58,7 @@ export type HookListenerState = {
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
+  antigravityCompletedTranscriptByPaneKey: Map<string, string>
 }
 
 export function createHookListenerState(): HookListenerState {
@@ -66,7 +67,8 @@ export function createHookListenerState(): HookListenerState {
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
-    lastStatusByPaneKey: new Map()
+    lastStatusByPaneKey: new Map(),
+    antigravityCompletedTranscriptByPaneKey: new Map()
   }
 }
 
@@ -74,17 +76,20 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
   state.lastStatusByPaneKey.delete(paneKey)
+  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
+  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
+  state.antigravityCompletedTranscriptByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
 }
@@ -133,6 +138,11 @@ export type AgentHookEventPayload = {
    *  HTTP path always sets null because it cannot know which mux a request
    *  came from. See docs/design/agent-status-over-ssh.md §5. */
   connectionId: string | null
+  /** True when this hook event carried prompt text directly, instead of using
+   *  the listener's cached prompt from an earlier event in the same pane. */
+  hasExplicitPrompt?: boolean
+  /** True when this event is a relay cache replay rather than a live hook. */
+  isReplay?: boolean
   payload: ParsedAgentStatusPayload
 }
 
@@ -318,6 +328,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   edit_file: ['file_path', 'path'],
   replace: ['file_path', 'path'],
   run_shell_command: ['command'],
+  run_command: ['CommandLine', 'command', 'cmd'],
   glob: ['pattern'],
   search_file_content: ['pattern'],
   web_fetch: ['url'],
@@ -348,7 +359,20 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   browser_type: ['text', 'target', 'selector'],
   session_search: ['query'],
   skill_manage: ['action', 'name', 'file_path'],
-  delegate_task: ['task', 'prompt', 'description']
+  delegate_task: ['task', 'prompt', 'description'],
+  view_file: ['AbsolutePath', 'path', 'file_path'],
+  write_to_file: ['TargetFile', 'path', 'file_path'],
+  replace_file_content: ['TargetFile', 'path', 'file_path'],
+  multi_replace_file_content: ['TargetFile', 'path', 'file_path'],
+  list_dir: ['DirectoryPath', 'path'],
+  find_by_name: ['SearchDirectory', 'Pattern', 'query'],
+  grep_search: ['SearchPath', 'Query', 'query', 'pattern'],
+  search_web: ['query'],
+  read_url_content: ['Url', 'url'],
+  manage_task: ['TaskId', 'Action'],
+  schedule: ['Prompt', 'DurationSeconds', 'CronExpression'],
+  ask_question: ['question', 'questions'],
+  ask_permission: ['Action', 'Target', 'Reason']
 }
 
 const FALLBACK_TOOL_INPUT_KEYS = [
@@ -366,7 +390,15 @@ const FALLBACK_TOOL_INPUT_KEYS = [
   'text',
   'action',
   'name',
-  'description'
+  'description',
+  'CommandLine',
+  'AbsolutePath',
+  'TargetFile',
+  'DirectoryPath',
+  'SearchPath',
+  'Query',
+  'Url',
+  'Prompt'
 ] as const
 
 function deriveToolInputPreview(
@@ -496,6 +528,14 @@ function extractAssistantTextFromLine(line: string): string | undefined {
       }
     }
   }
+  if (
+    record.source === 'MODEL' &&
+    record.type === 'PLANNER_RESPONSE' &&
+    typeof record.content === 'string' &&
+    record.content.trim().length > 0
+  ) {
+    return record.content
+  }
   const nestedMessage = record.message as Record<string, unknown> | undefined
   const role =
     record.role ?? nestedMessage?.role ?? (record.type === 'assistant' ? 'assistant' : undefined)
@@ -523,11 +563,46 @@ function extractAssistantContentText(content: unknown): string | undefined {
   return undefined
 }
 
+function extractAntigravityUserRequest(content: string): string | undefined {
+  const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/)
+  const text = request ? request[1] : content
+  const trimmed = text.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function extractUserPromptTextFromLine(line: string): string | undefined {
+  let entry: unknown
+  try {
+    entry = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  if (typeof entry !== 'object' || entry === null) {
+    return undefined
+  }
+  const record = entry as Record<string, unknown>
+  if (
+    (record.source === 'USER_EXPLICIT' || record.source === 'USER') &&
+    (record.type === 'USER_INPUT' || record.type === 'REQUEST') &&
+    typeof record.content === 'string'
+  ) {
+    return extractAntigravityUserRequest(record.content)
+  }
+  return undefined
+}
+
 function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
   return readLastAssistantFromTranscriptOnce(transcriptPath)
+}
+
+function readLastUserPromptFromTranscript(transcriptPath: unknown): string | undefined {
+  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+    return undefined
+  }
+  return readLastTextFromTranscriptOnce(transcriptPath, extractUserPromptTextFromLine)
 }
 
 function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
@@ -598,6 +673,8 @@ function readLastAssistantFromGrokChatHistory(
 }
 
 export function hasPendingAgentResultText(source: AgentHookSource, body: unknown): boolean {
+  const envelope =
+    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   const record = parseHookBodyPayloadRecord(body)
   if (!record) {
     return false
@@ -611,6 +688,15 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     const transcriptPath = record.transcript_path ?? record.transcriptPath
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
+  const eventName =
+    envelope?.hook_event_name ??
+    envelope?.hookEventName ??
+    record.hook_event_name ??
+    record.hookEventName
+  if (source === 'antigravity' && eventName === 'Stop') {
+    const transcriptPath = record.transcriptPath ?? record.transcript_path
+    return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
+  }
   if (
     source === 'grok' &&
     isGrokEvent(record.hookEventName ?? record.hook_event_name, 'stop', 'session_end')
@@ -621,6 +707,13 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
+  return readLastTextFromTranscriptOnce(transcriptPath, extractAssistantTextFromLine)
+}
+
+function readLastTextFromTranscriptOnce(
+  transcriptPath: string,
+  extractLineText: (line: string) => string | undefined
+): string | undefined {
   try {
     const stats = statSync(transcriptPath)
     const size = stats.size
@@ -670,7 +763,7 @@ function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | u
             if (line.length === 0) {
               continue
             }
-            const extracted = extractAssistantTextFromLine(line)
+            const extracted = extractLineText(line)
             if (extracted !== undefined) {
               return extracted
             }
@@ -769,6 +862,44 @@ function extractGeminiToolFields(
   }
   if (eventName === 'AfterAgent') {
     const message = readString(hookPayload, 'prompt_response')
+    if (message) {
+      return { lastAssistantMessage: message }
+    }
+  }
+  return {}
+}
+
+function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
+  toolName?: string
+  toolInputSource?: unknown
+} {
+  const toolCall = hookPayload.toolCall
+  if (typeof toolCall !== 'object' || toolCall === null) {
+    return {}
+  }
+  const record = toolCall as Record<string, unknown>
+  return {
+    toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
+    toolInputSource: record.args
+  }
+}
+
+function extractAntigravityToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+    const toolCall = readAntigravityToolCall(hookPayload)
+    const toolName = toolCall.toolName
+    const toolInput =
+      deriveToolInputPreview(toolName, toolCall.toolInputSource) ??
+      deriveFallbackToolInputPreview(toolCall.toolInputSource)
+    return { toolName, toolInput }
+  }
+  if (eventName === 'Stop') {
+    const message =
+      readString(hookPayload, 'last_assistant_message') ??
+      readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
     if (message) {
       return { lastAssistantMessage: message }
     }
@@ -1281,6 +1412,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
+    case 'antigravity':
+      return eventName === 'PreInvocation'
     case 'opencode':
       return false
     case 'cursor':
@@ -1319,6 +1452,8 @@ function extractToolFields(
       return extractCodexToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)
+    case 'antigravity':
+      return extractAntigravityToolFields(eventName, hookPayload)
     case 'opencode':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
@@ -1431,6 +1566,78 @@ function normalizeGeminiEvent(
   )
 }
 
+function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
+  return toolName === 'ask_question' || toolName === 'ask_permission'
+}
+
+function normalizeAntigravityEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  if (eventName === 'PreInvocation') {
+    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  } else if (
+    transcriptPath &&
+    eventName !== 'Stop' &&
+    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
+  ) {
+    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a
+    // finished row does not turn back into a yellow spinner.
+    return null
+  }
+
+  const toolName = readAntigravityToolCall(hookPayload).toolName
+  const stateName =
+    eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
+      ? 'waiting'
+      : eventName === 'Stop'
+        ? 'done'
+        : eventName === 'PreInvocation' ||
+            eventName === 'PostInvocation' ||
+            eventName === 'PreToolUse' ||
+            eventName === 'PostToolUse'
+          ? 'working'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const resetsTurn = isNewTurnEvent('antigravity', eventName)
+  // Why: Antigravity transcripts can grow during long tool-heavy turns. Once
+  // the prompt is cached for this pane, avoid rescanning the file per hook.
+  const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
+  const effectivePrompt =
+    promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('antigravity', eventName, hookPayload),
+    { resetOnNewTurn: resetsTurn }
+  )
+
+  const payload = parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: resetsTurn
+      }),
+      agentType: 'antigravity',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+  if (eventName === 'Stop' && transcriptPath) {
+    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+  }
+  return payload
+}
+
 function normalizeCodexEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -1523,19 +1730,25 @@ function normalizeCursorEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: Cursor can emit the final response text after `stop`; that should
+  // enrich the completed row, not resurrect the agent as working.
+  const previousStatus = state.lastStatusByPaneKey.get(paneKey)?.payload
   const stateName =
     eventName === 'beforeSubmitPrompt' ||
     eventName === 'sessionStart' ||
     eventName === 'preToolUse' ||
     eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure' ||
-    eventName === 'afterAgentResponse'
+    eventName === 'postToolUseFailure'
       ? 'working'
-      : eventName === 'stop' || eventName === 'sessionEnd'
-        ? 'done'
-        : eventName === 'beforeShellExecution' || eventName === 'beforeMCPExecution'
-          ? 'waiting'
-          : null
+      : eventName === 'afterAgentResponse'
+        ? previousStatus?.state === 'done' && previousStatus.agentType === 'cursor'
+          ? 'done'
+          : 'working'
+        : eventName === 'stop' || eventName === 'sessionEnd'
+          ? 'done'
+          : eventName === 'beforeShellExecution' || eventName === 'beforeMCPExecution'
+            ? 'waiting'
+            : null
 
   if (!stateName) {
     return null
@@ -1941,6 +2154,9 @@ export function normalizeHookPayload(
     case 'gemini':
       payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'antigravity':
+      payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     case 'opencode':
       payload = normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -1973,7 +2189,16 @@ export function normalizeHookPayload(
   // it null; the relay forwards null on the wire and Orca's `ingestRemote`
   // stamps the real value from `mux` identity on receive. See
   // docs/design/agent-status-over-ssh.md §5.
-  return payload ? { paneKey, tabId, worktreeId, connectionId: null, payload } : null
+  return payload
+    ? {
+        paneKey,
+        tabId,
+        worktreeId,
+        connectionId: null,
+        hasExplicitPrompt: promptText.length > 0,
+        payload
+      }
+    : null
 }
 
 // ─── URL routing ────────────────────────────────────────────────────
@@ -1982,6 +2207,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
   '/hook/gemini': 'gemini',
+  '/hook/antigravity': 'antigravity',
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',

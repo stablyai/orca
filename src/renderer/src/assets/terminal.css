@@ -134,19 +134,23 @@
   inset: 1px;
   z-index: 30;
   pointer-events: none;
-  border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 52%, transparent);
-  border-right-color: color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
-  border-left-color: color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
   border-radius: 2px;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
-    0 0 20px color-mix(in srgb, var(--terminal-pane-locate) 40%, transparent);
+    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: pane-focus-rim-flash 1.5s ease-out forwards;
 }
 
 @keyframes pane-focus-rim-flash {
   0% {
     opacity: 1;
+  }
+  24% {
+    opacity: 0.42;
+  }
+  46% {
+    opacity: 0;
   }
   100% {
     opacity: 0;

@@ -282,6 +282,9 @@ test.describe('Tab Rename (Inline)', () => {
 
   test('rename input stays at a usable width when many tabs are open', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const targetTabId = await getActiveTabId(orcaPage)
+    expect(targetTabId).not.toBeNull()
+    const targetTitle = 'Width Target Tab'
 
     // Why: create enough terminal tabs that flex space runs out. 15 is well
     // above the threshold at which the pre-fix input collapsed, and it keeps
@@ -290,23 +293,37 @@ test.describe('Tab Rename (Inline)', () => {
     // size — we assert ≥60px to allow a bit of slack for fonts/padding/
     // containers differing between environments. The meaningful guarantee is
     // that the input does not collapse to ~0 when flex space is saturated.
-    await orcaPage.evaluate((targetWorktreeId) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-      const state = store.getState()
-      const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
-      for (let i = existing; i < 15; i++) {
-        state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
-      }
-    }, worktreeId)
+    await orcaPage.evaluate(
+      ({ targetWorktreeId, targetTabId, targetTitle }) => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
+        const state = store.getState()
+        const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+        for (const [index, tab] of existing.entries()) {
+          // Why: shell-driven terminal title updates can race this crowded-tab
+          // assertion; custom titles keep the rename target stable.
+          state.setTabCustomTitle(
+            tab.id,
+            tab.id === targetTabId ? targetTitle : `Width Filler ${index + 1}`
+          )
+        }
+        for (let i = existing.length; i < 15; i++) {
+          const tab = state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
+          state.setTabCustomTitle(tab.id, `Width Filler ${i + 1}`)
+        }
+      },
+      { targetWorktreeId: worktreeId, targetTabId, targetTitle }
+    )
 
     await expect
       .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
       .toBeGreaterThanOrEqual(15)
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBe(targetTitle)
 
-    const targetTitle = await getActiveTabTitle(orcaPage, worktreeId)
     const tabLocator = tabLocatorByTitle(orcaPage, targetTitle)
     await tabLocator.scrollIntoViewIfNeeded()
     await expect(tabLocator).toBeVisible()
@@ -315,7 +332,18 @@ test.describe('Tab Rename (Inline)', () => {
     // hit area users aim for.
     const tabTitle = tabLocator.getByText(targetTitle, { exact: true })
     await expect(tabTitle).toBeVisible()
-    await tabTitle.dblclick()
+    // Why: this spec is about saturated-tab input width. The real pointer
+    // double-click path is covered above; dispatching the tab's own dblclick
+    // handler avoids pixel-level overlap flakes in the crowded strip.
+    await tabLocator.evaluate((element) => {
+      element.dispatchEvent(
+        new MouseEvent('dblclick', {
+          bubbles: true,
+          cancelable: true,
+          button: 0
+        })
+      )
+    })
 
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${targetTitle}`,

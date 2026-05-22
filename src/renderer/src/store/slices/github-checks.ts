@@ -1,5 +1,6 @@
 import type { AppState } from '../types'
 import type { PRCheckDetail, CheckStatus, GitHubOwnerRepo } from '../../../../shared/types'
+import { getGitHubPRCacheKey } from './github-cache-key'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -39,21 +40,27 @@ export function syncPRChecksStatus(
   repoId: string | undefined,
   branch: string | undefined,
   checks: PRCheckDetail[],
-  prRepo?: GitHubOwnerRepo | null
+  headSha?: string,
+  prRepo?: GitHubOwnerRepo | null,
+  settings?: AppState['settings'],
+  connectionId?: string | null
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null
   }
 
-  const prCacheKey = `${repoId ?? repoPath}::${normalized}`
+  const prCacheKey = getGitHubPRCacheKey(repoPath, repoId, normalized, settings, connectionId)
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
     return null
   }
   // Why: fork PR rediscovery can retarget the branch cache while an older
   // checks request is still in flight; only the matching PR repo may update it.
-  if (!samePRRepo(prEntry.data.prRepo, prRepo)) {
+  if (prRepo !== undefined && !samePRRepo(prEntry.data.prRepo, prRepo)) {
+    return null
+  }
+  if (headSha && prEntry.data.headSha && prEntry.data.headSha !== headSha) {
     return null
   }
 

@@ -59,7 +59,28 @@ export function getRegisteredDeletableWorktree(
   if (worktree.isMainWorktree || isDangerousWorktreeRemovalPath(worktree.path, repoPath)) {
     throw new Error(`Refusing to delete protected worktree path: ${worktree.path}`)
   }
+  assertWorktreeDoesNotContainRegisteredWorktree(worktree.path, worktrees)
   return worktree
+}
+
+export function assertWorktreeDoesNotContainRegisteredWorktree(
+  worktreePath: string,
+  worktrees: readonly GitWorktreeInfo[]
+): void {
+  const nestedWorktree = worktrees.find((item) => {
+    if (areWorktreePathsEqual(item.path, worktreePath)) {
+      return false
+    }
+    return containsPath(worktreePath, item.path, getPathOps(worktreePath, item.path))
+  })
+  if (nestedWorktree) {
+    // Why: `git worktree remove --force` treats nested worktrees as ordinary
+    // untracked directories and deletes their working files while leaving Git
+    // with a prunable child worktree record.
+    throw new Error(
+      `Refusing to delete worktree because it contains another registered worktree: ${nestedWorktree.path}`
+    )
+  }
 }
 
 export async function canSafelyRemoveOrphanedWorktreeDirectory(

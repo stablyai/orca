@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult, SkillSourceKind } from '../../../shared/skills'
 
 const INSTALLED_AGENT_SKILLS_CHANGED_EVENT = 'orca:installed-agent-skills-changed'
+export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
+  'home'
+] as const satisfies readonly SkillSourceKind[]
+
+type InstalledAgentSkillOptions = {
+  enabled?: boolean
+  sourceKinds?: readonly SkillSourceKind[]
+}
+
+type InstalledAgentSkillMatchOptions = {
+  sourceKinds?: readonly SkillSourceKind[]
+}
 
 let cachedDiscovery: SkillDiscoveryResult | null = null
 let pendingDiscovery: Promise<SkillDiscoveryResult> | null = null
+let pendingDiscoverySatisfiesForcedRefresh = false
 
 function normalizeSkillName(value: string): string {
   return value.trim().toLowerCase()
@@ -16,11 +29,15 @@ function basenameFromPath(pathValue: string): string {
 
 export function hasInstalledAgentSkill(
   skills: readonly DiscoveredSkill[],
-  skillName: string
+  skillName: string,
+  options: InstalledAgentSkillMatchOptions = {}
 ): boolean {
   const expected = normalizeSkillName(skillName)
   return skills.some((skill) => {
     if (!skill.installed) {
+      return false
+    }
+    if (options.sourceKinds && !options.sourceKinds.includes(skill.sourceKind)) {
       return false
     }
     return (
@@ -37,33 +54,67 @@ export function notifyInstalledAgentSkillsChanged(): void {
   }
 }
 
+function startInstalledAgentSkillDiscovery(force: boolean): Promise<SkillDiscoveryResult> {
+  const discovery = window.api.skills
+    .discover()
+    .then((result) => {
+      cachedDiscovery = result
+      return result
+    })
+    .finally(() => {
+      if (pendingDiscovery === discovery) {
+        pendingDiscovery = null
+        pendingDiscoverySatisfiesForcedRefresh = false
+      }
+    })
+  pendingDiscovery = discovery
+  pendingDiscoverySatisfiesForcedRefresh = force
+  return discovery
+}
+
 async function discoverInstalledAgentSkills(force: boolean): Promise<SkillDiscoveryResult> {
-  if (pendingDiscovery) {
-    return pendingDiscovery
-  }
   if (!force && cachedDiscovery) {
     return cachedDiscovery
   }
 
-  pendingDiscovery = window.api.skills.discover()
-  try {
-    cachedDiscovery = await pendingDiscovery
-    return cachedDiscovery
-  } finally {
+  const inFlightDiscovery = pendingDiscovery
+  if (inFlightDiscovery) {
+    if (!force || pendingDiscoverySatisfiesForcedRefresh) {
+      return inFlightDiscovery
+    }
+    try {
+      await inFlightDiscovery
+    } catch {
+      // Why: an explicit re-check should still read current disk state even if
+      // the older background scan failed.
+    }
+    if (pendingDiscovery && pendingDiscovery !== inFlightDiscovery) {
+      return pendingDiscovery
+    }
+  }
+
+  return startInstalledAgentSkillDiscovery(force)
+}
+
+export const _installedAgentSkillDiscoveryInternalsForTests = {
+  discoverInstalledAgentSkills,
+  reset(): void {
+    cachedDiscovery = null
     pendingDiscovery = null
+    pendingDiscoverySatisfiesForcedRefresh = false
   }
 }
 
 export function useInstalledAgentSkill(
   skillName: string,
-  options: { enabled?: boolean } = {}
+  options: InstalledAgentSkillOptions = {}
 ): {
   installed: boolean
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
 } {
-  const { enabled = true } = options
+  const { enabled = true, sourceKinds } = options
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
@@ -112,8 +163,9 @@ export function useInstalledAgentSkill(
   }, [enabled, refresh])
 
   const installed = useMemo(
-    () => (result ? hasInstalledAgentSkill(result.skills, skillName) : false),
-    [result, skillName]
+    () =>
+      enabled && result ? hasInstalledAgentSkill(result.skills, skillName, { sourceKinds }) : false,
+    [enabled, result, skillName, sourceKinds]
   )
 
   const forceRefresh = useCallback(() => refresh(true), [refresh])

@@ -26,7 +26,9 @@ export const RUNTIME_CAPABILITIES = [
   'runtime.environments.v1',
   'browser.screencast.v1',
   'terminal.binary-stream.v1',
-  'terminal.multiplex.v1'
+  'terminal.multiplex.v1',
+  'workspace-ports.v1',
+  'mobile.tasks.v1'
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

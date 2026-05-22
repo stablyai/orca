@@ -19,6 +19,7 @@ import {
   getDropIndicatorClasses,
   type DropIndicator
 } from './drop-indicator'
+import { preventMiddleButtonDefault } from './middle-button-default-guard'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -141,6 +142,7 @@ export default function BrowserTab({
               e.preventDefault()
             }
           }}
+          onMouseUp={preventMiddleButtonDefault}
           onAuxClick={(e) => {
             if (e.button === 1) {
               e.preventDefault()

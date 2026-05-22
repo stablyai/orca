@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   activateWebRuntimeSessionTab,
+  closeWebRuntimeTerminal,
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
@@ -200,6 +201,48 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(setStateResults.at(-1)).toEqual({ state: 'after' })
   })
 
+  it('can create a browser tab without selecting the target worktree', async () => {
+    const setStateResults: unknown[] = []
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
+      const result = updater({
+        state: 'before-stage',
+        activeWorktreeId: 'main-worktree'
+      })
+      setStateResults.push(result)
+    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: makeSnapshot()
+      })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        url: 'https://example.com/',
+        selectWorktree: false
+      })
+    ).resolves.toBe(true)
+
+    expect(setStateResults).not.toContainEqual({ activeWorktreeId: WORKTREE_ID })
+    expect(mocks.focusBrowserTabInWorktree).not.toHaveBeenCalled()
+  })
+
   it('does not focus a staged browser tab when the user leaves before host create resolves', async () => {
     let activeWorktreeId = WORKTREE_ID
     mocks.getState.mockImplementation(() => ({
@@ -393,6 +436,60 @@ describe('createWebRuntimeSessionTerminal', () => {
       snapshot,
       ENVIRONMENT_ID
     )
+  })
+
+  it('can create a terminal without selecting the target worktree', async () => {
+    const setStateResults: unknown[] = []
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
+      const result = updater({
+        state: 'before',
+        activeWorktreeId: 'main-worktree'
+      })
+      setStateResults.push(result)
+    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create-terminal',
+        ok: true,
+        result: {
+          tab: {
+            type: 'terminal',
+            id: 'host-tab-2::leaf-1',
+            parentTabId: 'host-tab-2',
+            leafId: 'leaf-1',
+            title: 'Terminal 2',
+            terminal: 'pty-2',
+            status: 'ready',
+            isActive: true
+          },
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 2
+        }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: makeSnapshot()
+      })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        activate: true,
+        selectWorktree: false
+      })
+    ).resolves.toBe(true)
+
+    expect(setStateResults).not.toContainEqual({ activeWorktreeId: WORKTREE_ID })
   })
 })
 
@@ -665,5 +762,66 @@ describe('web runtime session tab actions', () => {
       },
       timeoutMs: 15_000
     })
+  })
+})
+
+describe('closeWebRuntimeTerminal', () => {
+  beforeEach(() => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('delegates remote pane close to the host runtime', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'close',
+      ok: true,
+      result: {
+        close: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          ptyKilled: true
+        }
+      }
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'web-env-1',
+      method: 'terminal.close',
+      params: {
+        terminal: 'terminal-1'
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('ignores local panes and inactive web sessions', () => {
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(closeWebRuntimeTerminal('pty-local-1')).toBe(false)
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(false)
+
+    expect(runtimeCall).not.toHaveBeenCalled()
   })
 })

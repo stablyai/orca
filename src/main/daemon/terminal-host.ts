@@ -4,7 +4,7 @@ import { resolveProcessCwd } from '../providers/process-cwd'
 import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
 import { SessionNotFoundError } from './types'
 
-const MAX_TOMBSTONES = 1000
+const DEFAULT_MAX_TOMBSTONES = 1000
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -46,6 +46,9 @@ export type TerminalHostOptions = {
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
   onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  // Why: production keeps a large cap, but tests need a small deterministic cap
+  // without spawning thousands of full terminal sessions.
+  maxTombstones?: number
 }
 
 export class TerminalHost {
@@ -53,10 +56,12 @@ export class TerminalHost {
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+  private maxTombstones: number
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -266,7 +271,7 @@ export class TerminalHost {
     this.killedTombstones.delete(sessionId)
     this.killedTombstones.set(sessionId, Date.now())
 
-    if (this.killedTombstones.size > MAX_TOMBSTONES) {
+    if (this.killedTombstones.size > this.maxTombstones) {
       const oldest = this.killedTombstones.keys().next().value
       if (oldest) {
         this.killedTombstones.delete(oldest)

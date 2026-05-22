@@ -14,11 +14,11 @@ export function AgentSkillInstalledIndicator({
     <span
       aria-label="Skill installed"
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground',
+        'inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300',
         className
       )}
     >
-      <Check className="size-3.5 text-foreground" aria-hidden />
+      <Check className="size-3.5" aria-hidden />
       {showLabel ? <span>Installed</span> : <span className="sr-only">Installed</span>}
     </span>
   )

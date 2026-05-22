@@ -69,8 +69,7 @@ export class AutomationService {
       throw new Error('Automation not found.')
     }
     const run = this.store.createAutomationRun(automation, Date.now(), 'manual')
-    await this.requestDispatch(automation, run)
-    return run
+    return await this.requestDispatch(automation, run)
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
@@ -214,25 +213,28 @@ export class AutomationService {
     this.store.advanceAutomationNextRun(automation.id, now)
   }
 
-  private async requestDispatch(automation: Automation, run: AutomationRun): Promise<void> {
+  private async requestDispatch(
+    automation: Automation,
+    run: AutomationRun
+  ): Promise<AutomationRun> {
     const webContents = this.webContents
     if (!webContents || webContents.isDestroyed() || !this.rendererReady) {
-      this.store.updateAutomationRun({
+      return this.store.updateAutomationRun({
         runId: run.id,
         status: 'skipped_unavailable',
         workspaceId: automation.workspaceId,
         error: 'No Orca window was available to launch the automation.'
       })
-      return
     }
-    this.store.updateAutomationRun({
+    const updated = this.store.updateAutomationRun({
       runId: run.id,
       status: 'dispatching',
       workspaceId: automation.workspaceId,
       error: null
     })
-    const payload: AutomationDispatchRequest = { automation, run }
+    const payload: AutomationDispatchRequest = { automation, run: updated }
     webContents.send('automations:dispatchRequested', payload)
+    return updated
   }
 }
 

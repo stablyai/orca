@@ -31,8 +31,9 @@ import {
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
-import { useAllWorktrees, useWorktreeMap } from '../../store/selectors'
+import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
@@ -55,6 +56,12 @@ import {
   isResourceSessionActivationKey,
   navigateResourceSessionToTab
 } from './resource-session-navigation'
+import {
+  getResourceUsageAllWorktrees,
+  getResourceUsageRepos,
+  getResourceUsageRuntimePaneTitlesByTabId,
+  getResourceUsageTabsByWorktree
+} from './resource-usage-open-slices'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -659,16 +666,12 @@ export function ResourceUsageStatusSegment({
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const activeView = useAppStore((s) => s.activeView)
   const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
-  const repos = useAppStore((s) => s.repos)
-  const allWorktrees = useAllWorktrees()
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => s.settings?.activeRuntimeEnvironmentId ?? null
   )
@@ -684,6 +687,19 @@ export function ResourceUsageStatusSegment({
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
   const [spaceScanReady, setSpaceScanReady] = useState(false)
+  // Why: tab titles can update on terminal keystrokes. The resource popover's
+  // merged tree needs them only while open, so closed status-bar badges should
+  // not subscribe to those high-churn maps.
+  const runtimePaneTitlesByTabId = useAppStore((s) =>
+    getResourceUsageRuntimePaneTitlesByTabId(s, open, runtimeEnvironmentActive)
+  )
+  const repos = useAppStore((s) => getResourceUsageRepos(s, open, runtimeEnvironmentActive))
+  const allWorktrees = useAppStore((s) =>
+    getResourceUsageAllWorktrees(s, open, runtimeEnvironmentActive)
+  )
+  const tabsByWorktree = useAppStore((s) =>
+    getResourceUsageTabsByWorktree(s, open, runtimeEnvironmentActive)
+  )
   const previousSpaceScanningRef = useRef(workspaceSpaceScanning)
   const lastSeenSpaceScanAtRef = useRef<number | null>(workspaceSpaceScannedAt)
   // Why: this segment only understands the local Electron PTY/resource daemon.
@@ -783,23 +799,13 @@ export function ResourceUsageStatusSegment({
       setSessionsError(false)
       return
     }
-    const refreshIfVisible = (): void => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) {
-        void refreshSessions()
-      }
-    }
-    void refreshSessions()
     // Why: the closed-popover badge is informational. Polling daemon sessions
     // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; focus/visibility refreshes catch the badge up immediately.
-    const interval = setInterval(refreshIfVisible, SESSIONS_POLL_MS)
-    window.addEventListener('focus', refreshIfVisible)
-    document.addEventListener('visibilitychange', refreshIfVisible)
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('focus', refreshIfVisible)
-      document.removeEventListener('visibilitychange', refreshIfVisible)
-    }
+    // no visible UI; visibility refreshes catch the badge up immediately.
+    return installWindowVisibilityInterval({
+      run: () => void refreshSessions(),
+      intervalMs: SESSIONS_POLL_MS
+    })
   }, [runtimeEnvironmentActive, refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
@@ -1388,7 +1394,7 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  Delete inactive workspaces ({oldWorkspaceCount})
+                  Review inactive workspaces ({oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"

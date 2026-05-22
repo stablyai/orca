@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   shouldDetachPaneTransportOnUnmount,
-  splitPaneWithOneShotStartup
+  splitPaneWithOneShotStartup,
+  suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
 
 describe('splitPaneWithOneShotStartup', () => {
@@ -121,5 +122,27 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
         worktreeTabs: []
       })
     ).toBe(false)
+  })
+})
+
+describe('suppressIntentionalPaneCloseExit', () => {
+  it('suppresses the pane PTY exit before intentional close teardown destroys the transport', () => {
+    const suppressPtyExit = vi.fn()
+    const transport = {
+      getPtyId: vi.fn(() => 'pty-pane-2')
+    }
+
+    expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBe('pty-pane-2')
+    expect(suppressPtyExit).toHaveBeenCalledWith('pty-pane-2')
+  })
+
+  it('does not suppress natural PTY exits that already cleared the transport id', () => {
+    const suppressPtyExit = vi.fn()
+    const transport = {
+      getPtyId: vi.fn(() => null)
+    }
+
+    expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBeNull()
+    expect(suppressPtyExit).not.toHaveBeenCalled()
   })
 })

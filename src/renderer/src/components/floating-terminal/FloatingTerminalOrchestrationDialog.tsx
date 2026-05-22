@@ -12,7 +12,10 @@ import {
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
-import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
@@ -39,7 +42,7 @@ export function FloatingTerminalOrchestrationDialog({
   const [skillBusy, setSkillBusy] = useState(false)
   const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
     ORCHESTRATION_SKILL_NAME,
-    { enabled: open }
+    { enabled: open, sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
   )
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {

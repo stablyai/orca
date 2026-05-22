@@ -16,6 +16,7 @@ import {
   ListCollapse,
   Loader2,
   Pencil,
+  Search,
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { openFileInBrowserTab } from '@/lib/file-preview'
@@ -227,6 +229,7 @@ type FileExplorerRowProps = {
   onDuplicate: (node: TreeNode) => void
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
+  onFindInFolder: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -237,6 +240,10 @@ type FileExplorerRowProps = {
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
   return node.isDirectory && isExpanded
+}
+
+export function shouldShowFindInFolderAction(node: TreeNode): boolean {
+  return node.isDirectory
 }
 
 export function FileExplorerRow({
@@ -261,6 +268,7 @@ export function FileExplorerRow({
   onDuplicate,
   onRequestDelete,
   onCollapseFolderSubtree,
+  onFindInFolder,
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
@@ -270,6 +278,9 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
+  const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
+  const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
@@ -399,12 +410,16 @@ export function FileExplorerRow({
         <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
           {selectionSize > 1 ? 'Copy Paths' : 'Copy Path'}
-          <ContextMenuShortcut>{isMac ? '⌥⌘C' : 'Shift+Alt+C'}</ContextMenuShortcut>
+          {copyPathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
           <Copy />
           {selectionSize > 1 ? 'Copy Relative Paths' : 'Copy Relative Path'}
-          <ContextMenuShortcut>{isMac ? '⌥⇧⌘C' : 'Ctrl+Shift+Alt+C'}</ContextMenuShortcut>
+          {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
         {!node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
@@ -437,6 +452,15 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={onCollapseFolderSubtree}>
             <ListCollapse />
             Collapse Folder
+          </ContextMenuItem>
+        )}
+        {shouldShowFindInFolderAction(node) && (
+          <ContextMenuItem onSelect={onFindInFolder}>
+            <Search />
+            Find in Folder
+            {findInFolderShortcutLabel !== 'Unassigned' ? (
+              <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
+            ) : null}
           </ContextMenuItem>
         )}
         <ContextMenuItem

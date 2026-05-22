@@ -6,6 +6,8 @@ const {
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
   gitExecFileAsyncMock,
+  extractExecErrorMock,
+  getRateLimitMock,
   rateLimitGuardMock,
   noteRateLimitSpendMock,
   acquireMock,
@@ -16,6 +18,17 @@ const {
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  extractExecErrorMock: vi.fn((err: unknown) => {
+    if (err && typeof err === 'object') {
+      const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
+      return {
+        stderr: typeof e.stderr === 'string' ? e.stderr : String(e.message ?? err),
+        stdout: typeof e.stdout === 'string' ? e.stdout : ''
+      }
+    }
+    return { stderr: String(err), stdout: '' }
+  }),
+  getRateLimitMock: vi.fn(),
   rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   acquireMock: vi.fn(),
@@ -32,6 +45,7 @@ vi.mock('./gh-utils', () => ({
   ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
+  extractExecError: extractExecErrorMock,
   acquire: acquireMock,
   release: releaseMock,
   _resetOwnerRepoCache: vi.fn()
@@ -42,6 +56,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('./rate-limit', () => ({
+  getRateLimit: getRateLimitMock,
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock
 }))
@@ -55,6 +70,9 @@ describe('getPRChecks', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    extractExecErrorMock.mockClear()
+    getRateLimitMock.mockReset()
+    getRateLimitMock.mockResolvedValue({ resources: {} })
     rateLimitGuardMock.mockReset()
     rateLimitGuardMock.mockReturnValue({ blocked: false })
     noteRateLimitSpendMock.mockReset()
@@ -123,6 +141,44 @@ describe('getPRChecks', () => {
         workflowRunId: undefined
       }
     ])
+  })
+
+  it('treats gh pr checks "no checks reported" as an empty check list', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh pr checks 42'), {
+          stderr: "no checks reported on the 'codex/keybindings-toml' branch\n",
+          stdout: ''
+        })
+      )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks).toEqual([])
+    expect(consoleWarnSpy).not.toHaveBeenCalled()
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('throws unexpected gh pr checks fallback failures so callers preserve cache', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh pr checks 42'), {
+          stderr: 'GraphQL: Could not resolve to a PullRequest',
+          stdout: ''
+        })
+      )
+
+    await expect(getPRChecks('/repo-root', 42, 'head-oid')).rejects.toThrow(
+      'Command failed: gh pr checks 42'
+    )
+    expect(consoleWarnSpy).toHaveBeenCalledWith('getPRChecks failed:', expect.any(Error))
+    consoleWarnSpy.mockRestore()
   })
 
   it('falls back to gh pr checks when the cached head SHA no longer resolves', async () => {
@@ -196,5 +252,14 @@ describe('getPRChecks', () => {
       ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('throws when both check-runs and gh pr checks fail', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('gh: No commit found for SHA: stale-head (HTTP 422)'))
+      .mockRejectedValueOnce(new Error('rate limited'))
+
+    await expect(getPRChecks('/repo-root', 42, 'stale-head')).rejects.toThrow('rate limited')
   })
 })

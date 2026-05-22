@@ -8,7 +8,7 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
-import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
+import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 
@@ -244,10 +244,19 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           updates.terminalQuickCommands
         )
       }
-      if ('visibleTaskProviders' in updates) {
-        sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
-          updates.visibleTaskProviders
-        )
+      if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
+        const taskProviderSettings = normalizeTaskProviderSettings({
+          visibleTaskProviders:
+            'visibleTaskProviders' in updates
+              ? updates.visibleTaskProviders
+              : get().settings?.visibleTaskProviders,
+          defaultTaskSource:
+            'defaultTaskSource' in updates
+              ? updates.defaultTaskSource
+              : get().settings?.defaultTaskSource
+        })
+        sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
+        sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
       }
       if ('openInApplications' in updates) {
         sanitizedUpdates.openInApplications = normalizeOpenInApplications(

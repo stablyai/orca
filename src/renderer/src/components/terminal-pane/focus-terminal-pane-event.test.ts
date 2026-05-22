@@ -72,6 +72,29 @@ describe('handleFocusTerminalPaneDetail', () => {
     expect(surfaceStaleAgentRow).not.toHaveBeenCalled()
   })
 
+  it('requests follow-output scrolling after resolving the target leaf', () => {
+    const { manager } = createManager()
+    const scrollToBottomIfOutputSinceLastView = vi.fn()
+
+    handleFocusTerminalPaneDetail(
+      {
+        tabId: 'tab-1',
+        leafId: LEAF_ID,
+        scrollToBottomIfOutputSinceLastView: true
+      },
+      {
+        tabId: 'tab-1',
+        manager,
+        acknowledgeAgents: vi.fn(),
+        surfaceStaleAgentRow: vi.fn(),
+        scrollToBottomIfOutputSinceLastView
+      }
+    )
+
+    expect(manager.setActivePane).toHaveBeenCalledWith(7, { focus: true })
+    expect(scrollToBottomIfOutputSinceLastView).toHaveBeenCalledWith(7)
+  })
+
   it('does not focus, flash, or ack when the numeric pane no longer owns the leaf', () => {
     const { container, manager } = createManager({ leafId: OTHER_LEAF_ID })
     const acknowledgeAgents = vi.fn()

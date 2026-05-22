@@ -1,9 +1,12 @@
+/* eslint-disable max-lines -- Why: field state, base search, AI generation,
+   and cancellation share request guards that need to stay in one hook. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore, type AppState } from '@/store'
 import {
   cancelRuntimeGeneratePullRequestFields,
-  generateRuntimePullRequestFields
+  generateRuntimePullRequestFields,
+  type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import {
   getRuntimeRepoBaseRefDefault,
@@ -25,6 +28,13 @@ type UseCreatePullRequestDialogFieldsOptions = {
   eligibility: HostedReviewCreationEligibility | null
   settings: AppState['settings']
   submitting: boolean
+  onBranchChangedByGeneration?: () => Promise<void>
+  generation?: {
+    generating: boolean
+    generateError: string | null
+    onGenerate: (fields: { base: string; title: string; body: string; draft: boolean }) => void
+    onCancelGenerate: () => void
+  }
 }
 
 type GenerationSeed = {
@@ -33,6 +43,7 @@ type GenerationSeed = {
   title: string
   body: string
   draft: boolean
+  context: RuntimeGitContext
 }
 
 export function stripBaseRef(ref: string): string {
@@ -47,7 +58,9 @@ export function useCreatePullRequestDialogFields({
   branch,
   eligibility,
   settings,
-  submitting
+  submitting,
+  onBranchChangedByGeneration,
+  generation
 }: UseCreatePullRequestDialogFieldsOptions) {
   const commitMessageAi = settings?.commitMessageAi
   const effectiveCommitMessageAgentId = resolveCommitMessageAgentChoice(
@@ -73,6 +86,7 @@ export function useCreatePullRequestDialogFields({
   const [baseSearchError, setBaseSearchError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
+  const hasExternalGeneration = Boolean(generation)
 
   useEffect(() => {
     latestFieldsRef.current = { base, title, body, draft }
@@ -80,27 +94,26 @@ export function useCreatePullRequestDialogFields({
 
   useEffect(() => {
     if (!open) {
-      generationRequestIdRef.current += 1
-      if (generateInFlightRef.current && worktreePath) {
-        const connectionId = getConnectionId(worktreeId) ?? undefined
-        void cancelRuntimeGeneratePullRequestFields({
-          settings,
-          worktreeId,
-          worktreePath,
-          connectionId
-        })
+      if (!hasExternalGeneration) {
+        generationRequestIdRef.current += 1
+        if (generateInFlightRef.current) {
+          const requestContext = generationSeedRef.current?.context
+          if (requestContext?.worktreePath) {
+            void cancelRuntimeGeneratePullRequestFields(requestContext)
+          }
+        }
+        generateInFlightRef.current = false
+        generationSeedRef.current = null
+        initializedFromEligibilityRef.current = null
+        setGenerating(false)
+        setGenerateError(null)
       }
-      generateInFlightRef.current = false
-      generationSeedRef.current = null
-      initializedFromEligibilityRef.current = null
-      setGenerating(false)
-      setGenerateError(null)
       return
     }
     if (!eligibility) {
       return
     }
-    const initializationKey = `${repoId}:${branch}`
+    const initializationKey = `${repoId}:${worktreeId ?? worktreePath}:${branch}`
     if (initializedFromEligibilityRef.current === initializationKey) {
       return
     }
@@ -116,7 +129,10 @@ export function useCreatePullRequestDialogFields({
     setBaseResults([])
     setBaseSearchError(null)
     setGenerateError(null)
-  }, [branch, eligibility, open, repoId, settings, worktreeId, worktreePath])
+  }, [branch, eligibility, hasExternalGeneration, open, repoId, worktreeId, worktreePath])
+
+  const effectiveGenerating = generation?.generating ?? generating
+  const effectiveGenerateError = generation?.generateError ?? generateError
 
   useEffect(() => {
     if (!open || base) {
@@ -179,36 +195,42 @@ export function useCreatePullRequestDialogFields({
   } else if (!base.trim()) {
     generateDisabledReason = 'Choose a base branch before generating.'
   }
-  const generateDisabled = !generating && Boolean(generateDisabledReason)
+  const generateDisabled = !effectiveGenerating && Boolean(generateDisabledReason)
 
   const handleGenerate = useCallback(async (): Promise<void> => {
-    if (!worktreePath || !base.trim() || generateInFlightRef.current || generateDisabled) {
+    if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
+      return
+    }
+    if (generation) {
+      generation.onGenerate({ base, title, body, draft })
       return
     }
     const requestId = generationRequestIdRef.current + 1
     generationRequestIdRef.current = requestId
-    const seed = { requestId, base, title, body, draft }
+    const connectionId = getConnectionId(worktreeId) ?? undefined
+    const requestContext = {
+      settings: useAppStore.getState().settings,
+      worktreeId,
+      worktreePath,
+      connectionId
+    }
+    const seed = { requestId, base, title, body, draft, context: requestContext }
     generationSeedRef.current = seed
     generateInFlightRef.current = true
     setGenerating(true)
     setGenerateError(null)
     try {
-      const connectionId = getConnectionId(worktreeId) ?? undefined
-      const result = await generateRuntimePullRequestFields(
-        {
-          settings: useAppStore.getState().settings,
-          worktreeId,
-          worktreePath,
-          connectionId
-        },
-        {
-          base: stripBaseRef(base.trim()),
-          title,
-          body,
-          draft
-        }
-      )
-      if (generationRequestIdRef.current !== requestId) {
+      const result = await generateRuntimePullRequestFields(requestContext, {
+        base: stripBaseRef(base.trim()),
+        title,
+        body,
+        draft
+      })
+      if (result.branchChangedByPreparation) {
+        await onBranchChangedByGeneration?.()
+      }
+      const isCurrentRequest = generationRequestIdRef.current === requestId
+      if (!isCurrentRequest) {
         return
       }
       if (!result.success) {
@@ -254,10 +276,26 @@ export function useCreatePullRequestDialogFields({
         setGenerating(false)
       }
     }
-  }, [base, body, draft, generateDisabled, title, worktreeId, worktreePath])
+  }, [
+    base,
+    body,
+    draft,
+    effectiveGenerating,
+    generation,
+    generateDisabled,
+    onBranchChangedByGeneration,
+    title,
+    worktreeId,
+    worktreePath
+  ])
 
   const handleCancelGenerate = useCallback((): void => {
-    if (!worktreePath || !generateInFlightRef.current) {
+    if (generation) {
+      generation.onCancelGenerate()
+      return
+    }
+    const requestContext = generationSeedRef.current?.context
+    if (!requestContext?.worktreePath || !generateInFlightRef.current) {
       return
     }
     generationRequestIdRef.current += 1
@@ -265,14 +303,8 @@ export function useCreatePullRequestDialogFields({
     generationSeedRef.current = null
     setGenerating(false)
     setGenerateError(null)
-    const connectionId = getConnectionId(worktreeId) ?? undefined
-    void cancelRuntimeGeneratePullRequestFields({
-      settings: useAppStore.getState().settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    })
-  }, [worktreeId, worktreePath])
+    void cancelRuntimeGeneratePullRequestFields(requestContext)
+  }, [generation])
 
   return {
     aiGenerationEnabled: commitMessageAi?.enabled === true,
@@ -289,8 +321,8 @@ export function useCreatePullRequestDialogFields({
     baseResults,
     setBaseResults,
     baseSearchError,
-    generating,
-    generateError,
+    generating: effectiveGenerating,
+    generateError: effectiveGenerateError,
     generateDisabled,
     generateDisabledReason,
     handleGenerate,

@@ -4,7 +4,7 @@ import { dirname, join } from 'path'
 import { exec, execFile } from 'child_process'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
-import { normalizeHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
@@ -283,13 +283,21 @@ function getEffectiveHookScript(
   return shared || undefined
 }
 
-export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
-  const yamlHooks = loadHooks(worktreePath ?? repo.path)
+export function getEffectiveHooksFromConfig(
+  repo: Repo,
+  yamlHooks: OrcaHooks | null
+): OrcaHooks | null {
   const localSetup = repo.hookSettings?.scripts.setup
   const localArchive = repo.hookSettings?.scripts.archive
-  const policy = normalizeHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy)
-  const setup = getEffectiveHookScript(yamlHooks?.scripts.setup, localSetup, policy)
-  const archive = getEffectiveHookScript(yamlHooks?.scripts.archive, localArchive, policy)
+  const rawPolicy = repo.hookSettings?.commandSourcePolicy
+  const setupPolicy = resolveHookCommandSourcePolicy(rawPolicy, {
+    hasLocalScript: Boolean(localSetup?.trim())
+  })
+  const archivePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
+    hasLocalScript: Boolean(localArchive?.trim())
+  })
+  const setup = getEffectiveHookScript(yamlHooks?.scripts.setup, localSetup, setupPolicy)
+  const archive = getEffectiveHookScript(yamlHooks?.scripts.archive, localArchive, archivePolicy)
 
   if (!setup && !archive) {
     return null
@@ -304,6 +312,11 @@ export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks 
       ...(archive ? { archive } : {})
     }
   }
+}
+
+export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+  const hooksRoot = worktreePath ?? repo.path
+  return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot))
 }
 
 export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
@@ -330,9 +343,14 @@ export function getSetupCommandSource(
   repo: Repo,
   worktreePath?: string
 ): { source: 'yaml' | 'local' | 'both'; command: string } | null {
-  const yamlSetup = loadHooks(worktreePath ?? repo.path)?.scripts.setup?.trim()
+  const hooksRoot = worktreePath ?? repo.path
+  const yamlHooks = loadHooks(hooksRoot)
+  const yamlSetup = yamlHooks?.scripts.setup?.trim()
   const localSetup = repo.hookSettings?.scripts.setup?.trim()
-  const policy = normalizeHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy)
+  const rawPolicy = repo.hookSettings?.commandSourcePolicy
+  const policy = resolveHookCommandSourcePolicy(rawPolicy, {
+    hasLocalScript: Boolean(localSetup)
+  })
 
   if (policy === 'local-only') {
     return localSetup ? { source: 'local', command: localSetup } : null
@@ -366,7 +384,7 @@ function getGitPath(cwd: string, relativePath: string): string {
   }).trim()
 }
 
-function buildWindowsRunnerScript(script: string): string {
+export function buildWindowsRunnerScript(script: string): string {
   const lines = script.replace(/\r?\n/g, '\n').split('\n')
   const runnerLines = ['@echo off', 'setlocal EnableExtensions']
 
@@ -395,6 +413,14 @@ export function createSetupRunnerScript(
   script: string
 ): WorktreeSetupLaunch {
   return createWorktreeRunnerScript(repo, worktreePath, script, 'setup-runner')
+}
+
+export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
+  return getSetupEnvVars(repo, worktreePath)
+}
+
+export function buildPosixRunnerScript(script: string): string {
+  return `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
 }
 
 export function createIssueCommandRunnerScript(

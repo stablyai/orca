@@ -6,6 +6,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const mockSpawn = vi.fn()
+const mockWrite = vi.fn()
 const mockRuntimeEnvironmentCall = vi.fn()
 const mockRuntimeEnvironmentTransportCall = vi.fn()
 const mockRuntimeEnvironmentSubscribe = vi.fn()
@@ -18,6 +19,7 @@ const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+const mockMarkTrusted = vi.fn()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -33,7 +35,7 @@ function expectStablePaneSpawn(): string {
 
 const state = {
   settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
-  repos: [{ id: 'repo-1', connectionId: null }],
+  repos: [{ id: 'repo-1', connectionId: null as string | null }],
   allWorktrees: vi.fn(() => [
     { id: 'wt-1', repoId: 'repo-1', path: '/repo/worktree', displayName: 'main' }
   ]),
@@ -79,6 +81,7 @@ describe('launchAgentBackgroundSession', () => {
       }
     )
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
+    state.repos = [{ id: 'repo-1', connectionId: null }]
     mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
     mockRuntimeEnvironmentCall.mockResolvedValue({
@@ -94,7 +97,11 @@ describe('launchAgentBackgroundSession', () => {
     vi.stubGlobal('window', {
       api: {
         pty: {
-          spawn: mockSpawn
+          spawn: mockSpawn,
+          write: mockWrite
+        },
+        agentTrust: {
+          markTrusted: mockMarkTrusted
         },
         runtime: {
           call: vi.fn()
@@ -148,6 +155,22 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
+  })
+
+  it('pre-marks trust for agents with first-launch trust prompts', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockMarkTrusted).toHaveBeenCalledWith({
+      preset: 'codex',
+      workspacePath: '/repo/worktree'
+    })
+    expect(mockSpawn).toHaveBeenCalled()
   })
 
   it('parses agent status from hidden PTY output', async () => {
@@ -230,6 +253,30 @@ describe('launchAgentBackgroundSession', () => {
         submit: true
       })
     )
+  })
+
+  it('injects startup commands into SSH background sessions after shell output arrives', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBeUndefined()
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude 'run the automation'\r")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('creates background sessions on the active runtime environment', async () => {

@@ -38,9 +38,16 @@ type Props = {
   onClose: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
+  zIndex?: number
 }
 
-export function BottomDrawer({ visible, onClose, children, dragContentToDismiss = false }: Props) {
+export function BottomDrawer({
+  visible,
+  onClose,
+  children,
+  dragContentToDismiss = true,
+  zIndex
+}: Props) {
   const [mounted, setMounted] = useState(visible)
 
   useEffect(() => {
@@ -59,6 +66,7 @@ export function BottomDrawer({ visible, onClose, children, dragContentToDismiss 
       onClose={onClose}
       onHidden={() => setMounted(false)}
       dragContentToDismiss={dragContentToDismiss}
+      zIndex={zIndex}
     >
       {children}
     </MountedBottomDrawer>
@@ -74,7 +82,8 @@ function MountedBottomDrawer({
   onClose,
   onHidden,
   children,
-  dragContentToDismiss = false
+  dragContentToDismiss = true,
+  zIndex = 1000
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
@@ -239,7 +248,11 @@ function MountedBottomDrawer({
   )
 
   return (
-    <Animated.View style={[styles.overlay, pointerStyle]} accessibilityViewIsModal aria-modal>
+    <Animated.View
+      style={[styles.overlay, { zIndex, elevation: zIndex }, pointerStyle]}
+      accessibilityViewIsModal
+      aria-modal
+    >
       <GestureHandlerRootView style={styles.root}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />

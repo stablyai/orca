@@ -67,9 +67,8 @@ function createPane(): ManagedPaneInternal {
     pendingSplitScrollState: {
       bufferType: 'normal',
       wasAtBottom: true,
-      firstVisibleLineContent: '',
       viewportY: 0,
-      totalLines: 24
+      baseY: 0
     } satisfies ScrollState
   }
 }

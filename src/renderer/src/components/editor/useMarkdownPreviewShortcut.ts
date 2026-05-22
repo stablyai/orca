@@ -1,30 +1,35 @@
 import { useEffect, type RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { canOpenMarkdownPreview, isMarkdownPreviewShortcut } from './markdown-preview-controls'
 
 type UseMarkdownPreviewShortcutParams = {
   activeFile: OpenFile | null
   panelRef: RefObject<HTMLDivElement | null>
-  isMac: boolean
-  openMarkdownPreview: (file: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    runtimeEnvironmentId?: string
-    language: string
-  }) => void
+  openMarkdownPreview: (
+    file: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      runtimeEnvironmentId?: string | null
+      language: string
+    },
+    options?: { sourceFileId?: string }
+  ) => void
 }
 
 export function useMarkdownPreviewShortcut({
   activeFile,
   panelRef,
-  isMac,
   openMarkdownPreview
 }: UseMarkdownPreviewShortcutParams): void {
+  const keybindings = useAppStore((state) => state.keybindings)
   const activeFilePath = activeFile?.filePath ?? null
   const activeFileRelativePath = activeFile?.relativePath ?? null
   const activeFileWorktreeId = activeFile?.worktreeId ?? null
+  const activeFileId = activeFile?.id ?? null
   const activeFileMode = activeFile?.mode ?? null
   const activeFileDiffSource = activeFile?.diffSource
   const activeFileRuntimeEnvironmentId = activeFile?.runtimeEnvironmentId
@@ -46,7 +51,10 @@ export function useMarkdownPreviewShortcut({
       return
     }
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || !isMarkdownPreviewShortcut(event, isMac)) {
+      if (
+        event.defaultPrevented ||
+        !isMarkdownPreviewShortcut(event, getShortcutPlatform(), keybindings)
+      ) {
         return
       }
       const root = panelRef.current
@@ -56,13 +64,16 @@ export function useMarkdownPreviewShortcut({
       }
       event.preventDefault()
       event.stopPropagation()
-      openMarkdownPreview({
-        filePath: activeFilePath,
-        relativePath: activeFileRelativePath,
-        worktreeId: activeFileWorktreeId,
-        runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
-        language: shortcutLanguage
-      })
+      openMarkdownPreview(
+        {
+          filePath: activeFilePath,
+          relativePath: activeFileRelativePath,
+          worktreeId: activeFileWorktreeId,
+          runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
+          language: shortcutLanguage
+        },
+        { sourceFileId: activeFileId ?? undefined }
+      )
     }
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
@@ -70,10 +81,11 @@ export function useMarkdownPreviewShortcut({
     activeFileDiffSource,
     activeFileMode,
     activeFilePath,
+    activeFileId,
     activeFileRelativePath,
     activeFileRuntimeEnvironmentId,
     activeFileWorktreeId,
-    isMac,
+    keybindings,
     openMarkdownPreview,
     panelRef
   ])

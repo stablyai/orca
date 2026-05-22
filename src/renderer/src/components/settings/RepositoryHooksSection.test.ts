@@ -1,41 +1,74 @@
 import { describe, expect, it } from 'vitest'
-import {
-  commandRowsToScript,
-  localCommandDraftToScripts,
-  scriptToCommandRows,
-  type LocalCommandDraft,
-  type LocalCommandRow
-} from './RepositoryHooksSection'
+import { getLocalCommandSourcePolicyNotice } from './RepositoryHooksSection'
 
-describe('RepositoryHooksSection command row serialization', () => {
-  it('round-trips blank lines and trailing whitespace in existing scripts', () => {
-    const script = 'echo before  \n\ncat <<EOF\n  body  \nEOF\n'
-
-    expect(commandRowsToScript(scriptToCommandRows(script))).toBe(script)
+describe('getLocalCommandSourcePolicyNotice', () => {
+  it('does not show a notice when no local scripts are saved', () => {
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: true,
+        currentPolicy: 'shared-only',
+        setupScript: '',
+        archiveScript: '',
+        hasSharedScript: false
+      })
+    ).toBeNull()
   })
 
-  it('keeps persisted blank rows distinct from new empty placeholders', () => {
-    const rows: LocalCommandRow[] = [
-      ...scriptToCommandRows('echo before\n\n echo after  '),
-      { value: '', isPlaceholder: true }
-    ]
+  it('does not show a notice when command source already includes local scripts', () => {
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: true,
+        currentPolicy: 'local-only',
+        setupScript: 'pnpm install',
+        archiveScript: '',
+        hasSharedScript: true
+      })
+    ).toBeNull()
 
-    expect(commandRowsToScript(rows)).toBe('echo before\n\n echo after  ')
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: true,
+        currentPolicy: 'run-both',
+        setupScript: '',
+        archiveScript: 'echo archive',
+        hasSharedScript: true
+      })
+    ).toBeNull()
   })
 
-  it('serializes local command drafts with the same placeholder pruning used by commits', () => {
-    const draft: LocalCommandDraft = {
-      setup: [...scriptToCommandRows('echo setup\n'), { value: '', isPlaceholder: true }],
-      archive: [
-        { value: '', isPlaceholder: false },
-        { value: 'echo archive', isPlaceholder: false },
-        { value: '', isPlaceholder: true }
-      ]
-    }
+  it('waits for hook inspection before recommending a command source', () => {
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: false,
+        currentPolicy: 'shared-only',
+        setupScript: 'pnpm install',
+        archiveScript: '',
+        hasSharedScript: false
+      })
+    ).toEqual({ kind: 'checking' })
+  })
 
-    expect(localCommandDraftToScripts(draft)).toEqual({
-      setup: 'echo setup\n',
-      archive: '\necho archive'
-    })
+  it('recommends local commands when local scripts are saved and no shared script exists', () => {
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: true,
+        currentPolicy: 'shared-only',
+        setupScript: 'pnpm install',
+        archiveScript: '',
+        hasSharedScript: false
+      })
+    ).toEqual({ kind: 'action', policy: 'local-only', label: 'Use local commands' })
+  })
+
+  it('recommends run-both when local and shared scripts both exist', () => {
+    expect(
+      getLocalCommandSourcePolicyNotice({
+        hooksInspectionReady: true,
+        currentPolicy: 'shared-only',
+        setupScript: '',
+        archiveScript: 'echo archive',
+        hasSharedScript: true
+      })
+    ).toEqual({ kind: 'action', policy: 'run-both', label: 'Run both' })
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
@@ -50,7 +51,11 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
 }
 
 function primaryButton(props: ReturnType<typeof baseProps>): string {
-  const markup = renderToStaticMarkup(<CommitArea {...props} />)
+  const markup = renderToStaticMarkup(
+    <TooltipProvider>
+      <CommitArea {...props} />
+    </TooltipProvider>
+  )
   const match = markup.match(/<button\b[\s\S]*?<\/button>/)
   if (!match) {
     throw new Error('primary button not found')

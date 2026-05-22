@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isLinuxUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
@@ -16,7 +16,13 @@ export function resolvePrimarySelectionMiddleClickPaste(
   setting: boolean | undefined,
   userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
 ): boolean {
-  return setting ?? isLinuxUserAgent(userAgent)
+  return setting ?? isDefaultPrimarySelectionMiddleClickPasteUserAgent(userAgent)
+}
+
+export function isDefaultPrimarySelectionMiddleClickPasteUserAgent(
+  userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
+): boolean {
+  return isLinuxUserAgent(userAgent) || isMacUserAgent(userAgent)
 }
 
 function captureCurrentSelection(): void {

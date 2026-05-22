@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: the drag-split hook co-locates drop-zone
  * resolution, same-group reordering, and cross-group handoff so state
  * transitions stay readable in one place. */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -28,6 +28,7 @@ import {
   useHoveredTabInsertion,
   type HoveredTabInsertion
 } from './tab-insertion'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
 export type { HoveredTabInsertion }
 
@@ -203,6 +204,7 @@ export function useTabDragSplit({
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const [hoveredDropTarget, setHoveredDropTarget] = useState<HoveredTabDropTarget | null>(null)
+  const releaseWebviewDragPassthroughRef = useRef<(() => void) | null>(null)
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragCenter)
 
   // Why: hidden worktrees stay mounted so their PTYs survive worktree
@@ -216,11 +218,26 @@ export function useTabDragSplit({
   })
   const sensors = useSensors(pointerSensor)
 
+  const releaseWebviewDragPassthrough = useCallback(() => {
+    releaseWebviewDragPassthroughRef.current?.()
+    releaseWebviewDragPassthroughRef.current = null
+  }, [])
+
+  const acquireWebviewDragPassthrough = useCallback(() => {
+    // Why: dnd-kit tab drags are pointer-driven, so the native drag listeners
+    // in webview-registry never fire. Put webviews in passthrough explicitly.
+    releaseWebviewDragPassthrough()
+    releaseWebviewDragPassthroughRef.current = acquireWebviewsDragPassthrough()
+  }, [releaseWebviewDragPassthrough])
+
+  useEffect(() => () => releaseWebviewDragPassthrough(), [releaseWebviewDragPassthrough])
+
   const clearDragState = useCallback(() => {
+    releaseWebviewDragPassthrough()
     setActiveDrag(null)
     setHoveredDropTarget(null)
     tabInsertion.clear()
-  }, [tabInsertion])
+  }, [releaseWebviewDragPassthrough, tabInsertion])
 
   const updateHoveredPane = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
@@ -279,8 +296,9 @@ export function useTabDragSplit({
       }
 
       setActiveDrag(dragData)
+      acquireWebviewDragPassthrough()
     },
-    [clearDragState, worktreeId]
+    [acquireWebviewDragPassthrough, clearDragState, worktreeId]
   )
 
   const onDragMove = useCallback(

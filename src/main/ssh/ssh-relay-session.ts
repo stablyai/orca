@@ -14,6 +14,7 @@ import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
+import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
@@ -583,6 +584,8 @@ export class SshRelaySession {
         worktreeId?: unknown
         env?: unknown
         version?: unknown
+        hasExplicitPrompt?: unknown
+        isReplay?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -600,6 +603,8 @@ export class SshRelaySession {
           worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
           version: typeof envelope.version === 'string' ? envelope.version : undefined,
+          hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+          isReplay: envelope.isReplay === true ? true : undefined,
           payload: envelope.payload
         },
         this.targetId
@@ -750,9 +755,10 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
+      const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
       clearProviderPtyState(payload.id)
       deletePtyOwnership(payload.id)
-      this.store.markSshRemotePtyLease(this.targetId, payload.id, 'terminated')
+      this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
       this.runtime?.onPtyExit(payload.id, payload.code)
       const win = getWin()
       if (win && !win.isDestroyed()) {
@@ -768,7 +774,14 @@ export class SshRelaySession {
       .map((lease) => lease.ptyId)
     // Why: after app restart, ptyOwnership is empty but durable SSH leases
     // still describe remote PTYs that survived in the relay grace window.
-    const ptyIds = Array.from(new Set([...getPtyIdsForConnection(this.targetId), ...leasedPtyIds]))
+    const ptyIds = Array.from(
+      new Set([
+        ...getPtyIdsForConnection(this.targetId).map((ptyId) =>
+          toRelaySshPtyId(this.targetId, ptyId)
+        ),
+        ...leasedPtyIds
+      ])
+    )
     const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
     if (!ptyProvider) {
       return
@@ -782,7 +795,8 @@ export class SshRelaySession {
         if (!shouldContinue()) {
           return
         }
-        setPtyOwnership(ptyId, this.targetId)
+        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        setPtyOwnership(appPtyId, this.targetId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
@@ -793,15 +807,16 @@ export class SshRelaySession {
             err instanceof Error ? err.message : String(err)
           }`
         )
-        clearProviderPtyState(ptyId)
-        deletePtyOwnership(ptyId)
+        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        clearProviderPtyState(appPtyId)
+        deletePtyOwnership(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
         // Why: if the new relay cannot reattach this id, the remote backing
         // process is gone. Tell the renderer so it clears stale pane bindings
         // instead of keeping a cursor-only terminal.
         const win = this.getMainWindow()
         if (win && !win.isDestroyed()) {
-          win.webContents.send('pty:exit', { id: ptyId, code: -1 })
+          win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
         }
       }
     }

@@ -55,6 +55,16 @@ export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplicat
   })
 }
 
+export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | 'win32' | 'other' {
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  return 'other'
+}
+
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
 type GeneralPaneProps = {
@@ -209,13 +219,13 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Workspace</h3>
           <p className="text-xs text-muted-foreground">
-            Configure where new worktrees are created.
+            Configure where new workspaces are created.
           </p>
         </div>
 
         <SearchableSetting
           title="Workspace Directory"
-          description="Root directory where worktree folders are created."
+          description="Root directory where workspace folders are created."
           keywords={['workspace', 'folder', 'path', 'worktree']}
           className="space-y-2"
         >
@@ -237,20 +247,20 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Root directory where worktree folders are created.
+            Root directory where workspace folders are created.
           </p>
         </SearchableSetting>
 
         <SearchableSetting
           title="Nest Workspaces"
-          description="Create worktrees inside a repo-named subfolder."
+          description="Create workspaces inside a repo-named subfolder."
           keywords={['nested', 'subfolder', 'directory']}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
             <Label>Nest Workspaces</Label>
             <p className="text-xs text-muted-foreground">
-              Create worktrees inside a repo-named subfolder.
+              Create workspaces inside a repo-named subfolder.
             </p>
           </div>
           <button
@@ -278,33 +288,33 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             breaks that toast action even though this pane still renders fine. */}
         <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
           <SearchableSetting
-            title="Skip Delete Worktree Confirmation"
-            description="Delete worktrees from the context menu without a confirmation dialog."
+            title="Ask Before Deleting Workspaces"
+            description="Show a confirmation dialog before deleting a workspace."
             keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
             className="flex items-center justify-between gap-4 px-1 py-2"
           >
             <div className="space-y-0.5">
-              <Label>Skip Delete Worktree Confirmation</Label>
+              <Label>Ask Before Deleting Workspaces</Label>
               <p className="text-xs text-muted-foreground">
-                Delete worktrees from the context menu without a confirmation dialog. Errors still
-                surface as a toast with a Force Delete fallback.
+                Show a confirmation before deleting a workspace from the context menu. Failed
+                deletes still surface a Force Delete fallback.
               </p>
             </div>
             <button
               role="switch"
-              aria-checked={settings.skipDeleteWorktreeConfirm}
+              aria-checked={!settings.skipDeleteWorktreeConfirm}
               onClick={() =>
                 updateSettings({
                   skipDeleteWorktreeConfirm: !settings.skipDeleteWorktreeConfirm
                 })
               }
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.skipDeleteWorktreeConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+                !settings.skipDeleteWorktreeConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}
             >
               <span
                 className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  settings.skipDeleteWorktreeConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                  !settings.skipDeleteWorktreeConfirm ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -313,32 +323,32 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
 
         <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
           <SearchableSetting
-            title="Skip Delete Automation Confirmation"
-            description="Delete automations without a confirmation dialog."
+            title="Ask Before Deleting Automations"
+            description="Show a confirmation dialog before deleting an automation and its run history."
             keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
             className="flex items-center justify-between gap-4 px-1 py-2"
           >
             <div className="space-y-0.5">
-              <Label>Skip Delete Automation Confirmation</Label>
+              <Label>Ask Before Deleting Automations</Label>
               <p className="text-xs text-muted-foreground">
-                Delete automations and their run history without a confirmation dialog.
+                Show a confirmation before deleting automations and their run history.
               </p>
             </div>
             <button
               role="switch"
-              aria-checked={settings.skipDeleteAutomationConfirm}
+              aria-checked={!settings.skipDeleteAutomationConfirm}
               onClick={() =>
                 updateSettings({
                   skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm
                 })
               }
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.skipDeleteAutomationConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+                !settings.skipDeleteAutomationConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}
             >
               <span
                 className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  settings.skipDeleteAutomationConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                  !settings.skipDeleteAutomationConfirm ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -347,7 +357,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
 
         <SearchableSetting
           title="Open In Menu"
-          description="Add custom launchers to the worktree Open in menu."
+          description="Add custom launchers to the workspace Open in menu."
           keywords={['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']}
           className="space-y-3"
         >
@@ -355,7 +365,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             <Label>Open In Menu</Label>
             <p className="text-xs text-muted-foreground">
               VS Code is always included first. Add executables to show extra entries in each
-              worktree&apos;s Open in menu.
+              workspace&apos;s Open in menu.
             </p>
             <p className="text-xs text-muted-foreground">
               Commands are not shell-parsed. Use only an executable command name. For flags, use a
@@ -652,7 +662,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (
       <CliSection
         key="cli"
-        currentPlatform={navigator.userAgent.includes('Mac') ? 'darwin' : 'other'}
+        currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CACHE_TIMER_SEARCH_ENTRIES) ? (

@@ -17,7 +17,8 @@ import type {
   GitStatusResult,
   MarkdownDocument,
   SearchOptions,
-  SearchResult
+  SearchResult,
+  TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import {
@@ -49,17 +50,21 @@ import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
+  discoverCommitMessageModelsLocal,
+  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
+  type DiscoverCommitMessageModelsResult,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
-import { gitFetch, gitPull, gitPush } from '../git/remote'
+import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -623,7 +628,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -702,6 +708,44 @@ export function registerFilesystemHandlers(
   )
 
   ipcMain.handle(
+    'git:discoverCommitMessageModels',
+    async (
+      _event,
+      args: { agentId: string; worktreePath?: string; connectionId?: string }
+    ): Promise<DiscoverCommitMessageModelsResult> => {
+      const agentId = args.agentId
+      const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
+      if (args.connectionId) {
+        if (!args.worktreePath) {
+          return { success: false, error: 'Missing worktree path for remote model discovery.' }
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        return discoverCommitMessageModelsRemote(
+          agentId as TuiAgent,
+          args.worktreePath,
+          (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          agentCommandOverride
+        )
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(agentId, commitMessageAgentEnv)
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return discoverCommitMessageModelsLocal(
+        agentId as TuiAgent,
+        localEnv.env,
+        agentCommandOverride
+      )
+    }
+  )
+
+  ipcMain.handle(
     'git:generatePullRequestFields',
     async (
       _event,
@@ -714,7 +758,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -726,15 +771,24 @@ export function registerFilesystemHandlers(
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
-        const context = await getPullRequestDraftContext(
-          (argv) => provider.exec(argv, args.worktreePath),
-          {
-            base: args.base,
-            currentTitle: args.title,
-            currentBody: args.body,
-            currentDraft: args.draft
+        let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+        try {
+          context = await getPullRequestDraftContext(
+            (argv) => provider.exec(argv, args.worktreePath),
+            {
+              base: args.base,
+              currentTitle: args.title,
+              currentBody: args.body,
+              currentDraft: args.draft
+            }
+          )
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
           }
-        )
+        }
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
@@ -748,15 +802,23 @@ export function registerFilesystemHandlers(
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const context = await getPullRequestDraftContext(
-        (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
-        {
-          base: args.base,
-          currentTitle: args.title,
-          currentBody: args.body,
-          currentDraft: args.draft
+      let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+      try {
+        context = await getPullRequestDraftContext(
+          (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
+          {
+            base: args.base,
+            currentTitle: args.title,
+            currentBody: args.body,
+            currentDraft: args.draft
+          }
+        )
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
         }
-      )
+      }
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
@@ -832,32 +894,44 @@ export function registerFilesystemHandlers(
     'git:upstreamStatus',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string }
+      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<GitUpstreamStatus> => {
       if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.getUpstreamStatus(args.worktreePath)
+        return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getUpstreamStatus(worktreePath)
+      return getUpstreamStatus(worktreePath, args.pushTarget)
     }
   )
 
   ipcMain.handle(
     'git:fetch',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+    ): Promise<void> => {
       if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.fetchRemote(args.worktreePath)
+        return provider.fetchRemote(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitFetch(worktreePath)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitFetch(worktreePath, args.pushTarget)
     }
   )
 
@@ -868,6 +942,7 @@ export function registerFilesystemHandlers(
       args: {
         worktreePath: string
         publish?: boolean
+        forceWithLease?: boolean
         connectionId?: string
         pushTarget?: GitPushTarget
       }
@@ -884,28 +959,59 @@ export function registerFilesystemHandlers(
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.pushBranch(args.worktreePath, publish, args.pushTarget)
+        return provider.pushBranch(args.worktreePath, publish, args.pushTarget, {
+          forceWithLease: args.forceWithLease === true
+        })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       if (args.pushTarget) {
         await validateGitPushTarget(worktreePath, args.pushTarget)
       }
-      await gitPush(worktreePath, publish, args.pushTarget)
+      await gitPush(worktreePath, publish, args.pushTarget, {
+        forceWithLease: args.forceWithLease === true
+      })
     }
   )
 
   ipcMain.handle(
     'git:pull',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.pullBranch(args.worktreePath, args.pushTarget)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitPull(worktreePath, args.pushTarget)
+    }
+  )
+
+  ipcMain.handle(
+    'git:rebaseFromBase',
+    async (
+      _event,
+      args: { worktreePath: string; baseRef: string; connectionId?: string }
+    ): Promise<void> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.pullBranch(args.worktreePath)
+        return provider.rebaseFromBase(args.worktreePath, args.baseRef)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPull(worktreePath)
+      await gitPullRebaseFromBase(worktreePath, args.baseRef)
     }
   )
 
@@ -1121,9 +1227,8 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
     ): Promise<string | null> => {
-      // Why: remote repos can't use the local hosted-git-info approach because
-      // the .git/config lives on the remote. Route through the relay's git.exec
-      // to fetch the remote URL and build the file link server-side.
+      // Why: remote repos can't read relay-side .git/config locally. Delegate
+      // URL construction to the SSH provider, which can fetch remote metadata.
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

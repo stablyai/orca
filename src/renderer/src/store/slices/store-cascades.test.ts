@@ -199,6 +199,65 @@ describe('removeWorktree cascade', () => {
     })
   })
 
+  it('does not offer force delete for protected worktree removal failures', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child'
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child'
+    })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /path/wt1/child',
+      canForceDelete: false
+    })
+  })
+
+  it('does not offer force delete when Electron wraps protected removal failures', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'worktrees:remove': Error: Refusing to delete worktree because it contains another registered worktree: /path/wt1/child"
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
+  })
+
   it('does NOT affect other worktrees', async () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
@@ -710,6 +769,39 @@ describe('setActiveWorktree', () => {
         settings: { ...store.getState().settings!, terminalWindowsShell: 'cmd.exe' }
       })
       expect(store.getState().tabsByWorktree[wt][0].shellOverride).toBe('wsl.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('uses WSL as the default shell for WSL worktree terminals on Windows', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::/wsl/path'
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'powershell.exe' },
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({
+              id: wt,
+              repoId: 'repo1',
+              path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+            })
+          ]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt)
+      expect(terminal.shellOverride).toBe('wsl.exe')
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,
@@ -1264,6 +1356,65 @@ describe('setActiveWorktree', () => {
     ).toMatchObject({
       label: 'Terminal 1'
     })
+  })
+
+  it('preserves terminal and unified tab map references when a live title repeats', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+    const tabsByWorktree = store.getState().tabsByWorktree
+    const unifiedTabsByWorktree = store.getState().unifiedTabsByWorktree
+    const sortEpoch = store.getState().sortEpoch
+
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
+    expect(store.getState().sortEpoch).toBe(sortEpoch)
+  })
+
+  it('repairs a stale unified tab label when a live title repeats', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const first = store.getState().createTab(wt)
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+    const tabsByWorktree = store.getState().tabsByWorktree
+    store.setState((state) => ({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [wt]: state.unifiedTabsByWorktree[wt].map((tab) =>
+          tab.contentType === 'terminal' && tab.entityId === first.id
+            ? { ...tab, label: 'stale' }
+            : tab
+        )
+      }
+    }))
+
+    store.getState().updateTabTitle(first.id, 'Claude Code')
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(
+      store
+        .getState()
+        .unifiedTabsByWorktree[wt]?.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === first.id
+        )?.label
+    ).toBe('Claude Code')
   })
 
   it('clears stale background browser tab type when closing the last browser tab', () => {

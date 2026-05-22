@@ -34,6 +34,7 @@ export type AgentHookSource =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode'
   | 'cursor'
   | 'pi'
@@ -54,6 +55,11 @@ export type AgentHookRelayEnvelope = {
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
   connectionId: null
+  /** Preserved from the relay-side normalized hook event so Orca can
+   *  distinguish a true same-prompt retry from a cached-prompt tool ping. */
+  hasExplicitPrompt?: boolean
+  /** True when the relay is replaying its cache after Orca reconnects. */
+  isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
    *  which marks transport location rather than dev/prod build env. */
   env?: string

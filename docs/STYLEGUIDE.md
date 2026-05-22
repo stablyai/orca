@@ -217,6 +217,15 @@ The pattern in `src/renderer/src/components/settings/SettingsFormControls.tsx` i
 - **Control:** the shadcn primitive (`<Input>`, `<Select>`, etc.). Errors surface via `aria-invalid`; the input primitive already maps that to a destructive ring — don't paint your own.
 - **Trailing metadata:** `text-[11px] text-muted-foreground` below the control (e.g., "Current: 14px · Default: 13px"), not next to the label.
 
+### Overflow containment
+
+Every modal, card, list row, and nested preview must stay inside its parent when content contains long paths, branch names, command names, URLs, hashes, or unbroken error text.
+
+- **Flex/grid children that contain text need `min-w-0`.** Put it on the text column and any nested card/list wrapper that must shrink inside the parent.
+- **Bound framed previews with `max-w-full overflow-hidden`.** If a nested card shows rows of paths or labels, the framed preview itself should clip instead of contributing an intrinsic width wider than the dialog/card.
+- **Choose the overflow behavior deliberately.** Use `truncate` for one-line labels and paths, `[overflow-wrap:anywhere]` or `break-all` for multiline error/body text, and `overflow-x-auto` only when horizontal scrolling is the intended interaction.
+- **Test with hostile strings.** Before shipping dialog/card/list changes, check at least one long local path and one long SSH-style path so local-only happy paths don't hide layout bugs.
+
 ### Scrollbars
 
 Three scrollbar classes are defined globally in `main.css`:
@@ -230,6 +239,8 @@ Apply one of these to overflow containers; don't write a fourth style.
 ## UX rules
 
 These are the rules a contributor will most often get wrong if they're working in isolation. They apply to every UI change.
+
+**UI copy must not overclaim.** Never imply the app has taken an action, made a decision, or observed a fact unless the code has real state or result data to support it. Use neutral process language while work is pending, and reserve result verbs like "skipped", "protected", "found", "verified", or "deleted" for actual results.
 
 ### 1. Match in-flight feedback to perceived duration
 

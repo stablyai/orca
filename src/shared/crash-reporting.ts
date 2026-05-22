@@ -57,6 +57,9 @@ export type CrashReportSubmitResult =
 const MAX_STRING_DETAIL_LENGTH = 240
 const MAX_BREADCRUMB_NAME_LENGTH = 80
 const MAX_BREADCRUMBS = 30
+const MAX_FORMATTED_REPORT_LENGTH = 64_000
+const FORMATTED_REPORT_TRUNCATION_SUFFIX =
+  '\n\n[Crash report truncated to fit feedback endpoint limits.]'
 const SECRET_PATTERNS = [
   /\b(gh[pousr]_[A-Za-z0-9_]{20,})\b/g,
   /\b(sk-[A-Za-z0-9_-]{20,})\b/g,
@@ -185,5 +188,15 @@ export function formatCrashReportText(report: CrashReportRecord, notes?: string)
     lines.push('', 'User notes:', sanitizeCrashReportString(trimmedNotes))
   }
 
-  return lines.join('\n')
+  return truncateFormattedCrashReport(lines.join('\n'))
+}
+
+function truncateFormattedCrashReport(text: string): string {
+  if (text.length <= MAX_FORMATTED_REPORT_LENGTH) {
+    return text
+  }
+  // Why: the feedback endpoint accepts larger crash bodies and handles
+  // Slack-specific attachments server-side. Keep local reports below that API cap.
+  const budget = MAX_FORMATTED_REPORT_LENGTH - FORMATTED_REPORT_TRUNCATION_SUFFIX.length
+  return `${text.slice(0, Math.max(0, budget)).trimEnd()}${FORMATTED_REPORT_TRUNCATION_SUFFIX}`
 }

@@ -299,7 +299,10 @@ describe('TerminalHost', () => {
 
   describe('tombstones', () => {
     it('caps tombstones at limit', async () => {
-      for (let i = 0; i < 1005; i++) {
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, maxTombstones: 3 })
+
+      for (let i = 0; i < 5; i++) {
         await host.createOrAttach({
           sessionId: `session-${i}`,
           cols: 80,
@@ -311,7 +314,7 @@ describe('TerminalHost', () => {
 
       // Oldest tombstones should be evicted
       expect(host.isKilled('session-0')).toBe(false)
-      expect(host.isKilled('session-1004')).toBe(true)
+      expect(host.isKilled('session-4')).toBe(true)
     })
   })
 

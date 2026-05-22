@@ -117,6 +117,7 @@ describe('RelayAgentHookServer', () => {
       expect(forward.mock.calls[0][0].source).toBe('claude')
       expect(forward.mock.calls[0][0].env).toBe('remote')
       expect(forward.mock.calls[0][0].version).toBe('1')
+      expect(forward.mock.calls[0][0].isReplay).toBe(true)
     } finally {
       server.stop()
     }
@@ -193,6 +194,19 @@ describe('RelayAgentHookServer', () => {
       expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
       expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('can defer endpoint file publication until relay socket ownership is proven', async () => {
+    const forward = vi.fn()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start({ publishEndpoint: false })
+    try {
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(server.publishEndpointFile()).toBe(true)
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }

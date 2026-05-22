@@ -42,6 +42,39 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('ab')
   })
 
+  it('defers background write preparation until coalesced output drains', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const beforeWrite = vi.fn()
+
+    writeTerminalOutput(terminal, 'a', { foreground: false, beforeWrite })
+    writeTerminalOutput(terminal, 'b', { foreground: false, beforeWrite })
+
+    expect(beforeWrite).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(50)
+
+    expect(beforeWrite).toHaveBeenCalledTimes(1)
+    expect(beforeWrite).toHaveBeenCalledWith('ab')
+    expect(terminal.write).toHaveBeenCalledWith('ab')
+  })
+
+  it('runs deferred write preparation before explicit background flushes', async () => {
+    vi.useFakeTimers()
+    const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const beforeWrite = vi.fn((chunk: string) => {
+      expect(terminal.write).not.toHaveBeenCalledWith(chunk)
+    })
+
+    writeTerminalOutput(terminal, 'hidden', { foreground: false, beforeWrite })
+    flushTerminalOutput(terminal)
+
+    expect(beforeWrite).toHaveBeenCalledTimes(1)
+    expect(beforeWrite).toHaveBeenCalledWith('hidden')
+    expect(terminal.write).toHaveBeenCalledWith('hidden')
+  })
+
   it('limits how many background terminals begin xterm writes per drain tick', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

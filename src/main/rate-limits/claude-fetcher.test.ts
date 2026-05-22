@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: Claude rate-limit fallback tests share account/keychain/PTY mocks that would be noisier split apart. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -214,7 +215,7 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
-  it('tries PTY usage when OAuth credentials are expired but refreshable', async () => {
+  it('tries OAuth usage even when local credential metadata is expired', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -235,12 +236,66 @@ describe('fetchClaudeRateLimits', () => {
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'ok',
-      session: { usedPercent: 56 }
+      session: { usedPercent: 12 }
     })
 
-    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer expired-oauth-token'
+        })
+      })
+    )
     expect(readFileMock).not.toHaveBeenCalled()
-    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('does not mask OAuth usage rate limits with the PTY fallback', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'expired-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.'
+          }
+        }),
+        { status: 429 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude usage is rate limited right now.'
+    })
+
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer expired-oauth-token'
+        })
+      })
+    )
+    expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
   it('does not read inactive managed credentials from unowned auth paths', async () => {

@@ -147,6 +147,32 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('does not prompt for orca.yaml when local commands are the implicit default', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          hookSettings: {
+            mode: 'auto',
+            scripts: { setup: 'echo local', archive: '' }
+          }
+        }
+      ]
+    } as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'echo shared' } },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(pending).toHaveLength(0)
+  })
+
   it('returns run without prompting when issueCommand source is local (user-owned)', async () => {
     const { state, pending } = createTestState()
     readIssueCommandMock.mockResolvedValue({

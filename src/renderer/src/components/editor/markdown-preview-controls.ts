@@ -1,4 +1,5 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { EditorToggleValue } from './EditorViewToggle'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
@@ -6,10 +7,7 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
-const MARKDOWN_DIFF_VIEW_MODES = [
-  'source',
-  'preview'
-] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -70,6 +68,9 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
 }
 
 export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): MarkdownViewMode {
+  if (target.language === 'markdown' && target.mode === 'diff') {
+    return 'source'
+  }
   const modes = getMarkdownViewModes(target)
   return modes.includes('rich') ? 'rich' : 'source'
 }
@@ -78,11 +79,10 @@ export function canOpenMarkdownPreview(target: MarkdownPreviewTarget): boolean {
   return target.language === 'markdown' && target.mode === 'edit'
 }
 
-export function isMarkdownPreviewShortcut(event: KeyboardEvent, isMac: boolean): boolean {
-  const modifierPressed = isMac ? event.metaKey : event.ctrlKey
-  return modifierPressed && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'v'
-}
-
-export function getMarkdownPreviewShortcutLabel(isMac: boolean): string {
-  return isMac ? '⌘⇧V' : 'Ctrl+Shift+V'
+export function isMarkdownPreviewShortcut(
+  event: KeyboardEvent,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  return keybindingMatchesAction('editor.markdownPreview', event, platform, keybindings)
 }

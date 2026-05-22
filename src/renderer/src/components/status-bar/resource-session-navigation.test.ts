@@ -40,7 +40,8 @@ describe('resource session navigation', () => {
       `tab:${TAB_ID}:${LEAF_ID}`
     ])
     expect(deps.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID, {
-      flashFocusedPane: true
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
     })
   })
 
@@ -48,13 +49,15 @@ describe('resource session navigation', () => {
     const malformed = makeDeps()
     navigateResourceSessionToTab(TAB_ID, `${TAB_ID}:1`, malformed)
     expect(malformed.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, null, {
-      flashFocusedPane: true
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
     })
 
     const mismatched = makeDeps()
     navigateResourceSessionToTab(TAB_ID, `${OTHER_TAB_ID}:${LEAF_ID}`, mismatched)
     expect(mismatched.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, null, {
-      flashFocusedPane: true
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
     })
   })
 
@@ -67,7 +70,8 @@ describe('resource session navigation', () => {
     expect(deps.activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(deps.setActiveView).toHaveBeenCalledWith('terminal')
     expect(deps.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID, {
-      flashFocusedPane: true
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
     })
   })
 

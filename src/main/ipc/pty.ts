@@ -17,6 +17,7 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
+import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -28,6 +29,7 @@ import {
 } from '../claude-accounts/live-pty-gate'
 import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
 import { classifyError } from '../telemetry/classify-error'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
@@ -64,6 +66,10 @@ const ptyOwnership = new Map<string, string | null>()
 // Why: mobile clients must mirror desktop PTY geometry even when the renderer
 // cannot provide an xterm snapshot yet, such as immediately after tab creation.
 const ptySizes = new Map<string, { cols: number; rows: number }>()
+// Why: PTY data batching is window-bound, but the "recent user input" signal
+// is PTY-scoped and must be cleared by every teardown path, including SSH and
+// daemon shutdowns that do not flow through the local provider exit listener.
+const lastInputAtByPty = new Map<string, number>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -75,6 +81,14 @@ const ptyPaneKey = new Map<string, string>()
 // back into the pane's data stream) need to find the ptyId for that paneKey.
 // Kept in lock-step with ptyPaneKey via the same spawn and teardown sites.
 const paneKeyPtyId = new Map<string, string>()
+
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
@@ -169,6 +183,14 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   return getProvider(connectionId)
 }
 
+function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
+  return connectionId ? toAppSshPtyId(connectionId, ptyId) : ptyId
+}
+
+function getRelayPtyId(connectionId: string | null | undefined, ptyId: string): string {
+  return connectionId ? toRelaySshPtyId(connectionId, ptyId) : ptyId
+}
+
 function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
   try {
     return getProviderForPty(ptyId)
@@ -204,7 +226,7 @@ function finishPtyShutdown(
 ): void {
   clearProviderPtyState(id)
   if (connectionId) {
-    store?.markSshRemotePtyLease(connectionId, id, 'terminated')
+    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
   markClaudePtyExited(id)
@@ -301,6 +323,12 @@ export function buildPtyHostEnv(
   // must inject the loopback receiver coordinates before the agent starts.
   // Without these env vars the global hook config cannot map callbacks back
   // to the correct Orca pane.
+  // Why: nested Orca terminals can inherit another process's hook endpoint or
+  // token. Strip all hook runtime coordinates before injecting this PTY's fresh
+  // server values so callbacks route to the owning app/runtime.
+  for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
+    delete baseEnv[key]
+  }
   Object.assign(baseEnv, agentHookServer.buildPtyEnv())
 
   // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
@@ -450,12 +478,18 @@ export function clearProviderPtyState(id: string): void {
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
+  lastInputAtByPty.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
   // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
   // PTYs that were never registered (SSH-owned).
   unregisterPty(id)
+  // Why: cover lifecycle paths that bypass runtime.onPtyExit — SSH reattach
+  // failures, SSH connection shutdown (clearPtyOwnershipForConnection), and
+  // daemon spawn-failure cleanup all funnel through here. Without this the
+  // watcher's per-PTY buffer and worktree binding outlive the PTY.
+  advertisedUrlWatcher.unbindPty(id)
   clearMigrationUnsupportedPty(id)
   agentHookServer.clearPaneKeyAliasesForPty(id, {
     shouldClearStablePaneKey: (stablePaneKey) => {
@@ -567,6 +601,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
+  ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
@@ -620,11 +655,16 @@ export function registerPtyHandlers(
 
   // Why: batching PTY data into short flush windows (8ms ≈ half a frame)
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
-  // throughput, with no perceptible latency increase for interactive use.
+  // throughput. Keystroke echo/redraws bypass this below because agent TUIs
+  // already spend tens of ms producing their redraw.
   const pendingData = new Map<string, string>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
+  // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
+  // large output and non-interactive output must still use the batcher.
+  const INTERACTIVE_OUTPUT_WINDOW_MS = 100
+  const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
   const flushPendingData = (): void => {
     flushTimer = null
@@ -636,6 +676,14 @@ export function registerPtyHandlers(
       mainWindow.webContents.send('pty:data', { id, data })
     }
     pendingData.clear()
+  }
+
+  const clearFlushTimerIfIdle = (): void => {
+    if (pendingData.size > 0 || flushTimer === null) {
+      return
+    }
+    clearTimeout(flushTimer)
+    flushTimer = null
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -670,7 +718,24 @@ export function registerPtyHandlers(
         return
       }
       const existing = pendingData.get(payload.id)
-      pendingData.set(payload.id, existing ? existing + payload.data : payload.data)
+      const nextData = existing ? existing + payload.data : payload.data
+      const lastInputAt = lastInputAtByPty.get(payload.id)
+      const isInteractiveOutput =
+        nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
+        lastInputAt !== undefined &&
+        performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+      if (isInteractiveOutput) {
+        pendingData.delete(payload.id)
+        clearFlushTimerIfIdle()
+        // Why: agent TUIs redraw small prompt regions after every keystroke.
+        // Waiting for the throughput batch timer adds visible input latency.
+        mainWindow.webContents.send('pty:data', {
+          id: payload.id,
+          data: nextData
+        })
+        return
+      }
+      pendingData.set(payload.id, nextData)
       if (!flushTimer) {
         flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
       }
@@ -691,6 +756,7 @@ export function registerPtyHandlers(
           mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining })
           pendingData.delete(payload.id)
         }
+        lastInputAtByPty.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -1113,6 +1179,14 @@ export function registerPtyHandlers(
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+      const effectiveSessionAppId =
+        effectiveSessionId !== undefined
+          ? getAppPtyId(args.connectionId, effectiveSessionId)
+          : undefined
+      const effectiveSessionRelayId =
+        effectiveSessionId !== undefined
+          ? getRelayPtyId(args.connectionId, effectiveSessionId)
+          : undefined
       // Why: the renderer sets pane env for SSH too. Only forward it to the
       // remote when the relay hook path is enabled; otherwise a newer relay
       // could emit statuses this Orca build is not prepared to route.
@@ -1268,7 +1342,10 @@ export function registerPtyHandlers(
         // Why: daemon PTYs can emit prompt/startup bytes before spawn()
         // resolves. Runtime headless snapshots need the real pane geometry
         // for those early bytes; otherwise they default to 80x24 and wrap TUIs.
-        ptySizes.set(effectiveSessionId, { cols: args.cols, rows: args.rows })
+        ptySizes.set(effectiveSessionAppId ?? effectiveSessionId, {
+          cols: args.cols,
+          rows: args.rows
+        })
       }
       if (process.platform === 'win32' && !args.connectionId) {
         // Why: the renderer only models PowerShell as one shell family. Thread
@@ -1288,21 +1365,23 @@ export function registerPtyHandlers(
       } catch (err) {
         const rawMessage = err instanceof Error ? err.message : String(err)
         const spawnError = normalizeNodePtySpawnError(err)
-        if (effectiveSessionId !== undefined) {
-          ptySizes.delete(effectiveSessionId)
+        if (effectiveSessionAppId !== undefined) {
+          ptySizes.delete(effectiveSessionAppId)
         }
         if (
           args.connectionId &&
-          effectiveSessionId !== undefined &&
+          effectiveSessionRelayId !== undefined &&
           (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
             rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
         ) {
           // Why: expired remote reattach means the relay has already dropped
           // the backing PTY. Clear the durable lease so later session writes
           // cannot restore the stale pane binding.
-          clearProviderPtyState(effectiveSessionId)
-          deletePtyOwnership(effectiveSessionId)
-          store?.markSshRemotePtyLease(args.connectionId, effectiveSessionId, 'expired')
+          if (effectiveSessionAppId !== undefined) {
+            clearProviderPtyState(effectiveSessionAppId)
+            deletePtyOwnership(effectiveSessionAppId)
+          }
+          store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
         }
         // Why: when buildPtyHostEnv materialized a Pi overlay for this id
         // but provider.spawn failed, the overlay would leak.
@@ -1341,13 +1420,14 @@ export function registerPtyHandlers(
         }
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
+      const relayResultId = getRelayPtyId(args.connectionId, result.id)
       if (store && args.connectionId) {
         // Why: remote PTYs live in the SSH relay grace window after Orca
         // detaches. Persist their IDs immediately so reconnect can reattach
         // instead of treating the tab as a fresh shell.
         store.upsertSshRemotePtyLease({
           targetId: args.connectionId,
-          ptyId: result.id,
+          ptyId: relayResultId,
           ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
           ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
           ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
@@ -1391,7 +1471,7 @@ export function registerPtyHandlers(
             deletePtyOwnership(result.id)
           }
           if (!result.isReattach && args.connectionId && store) {
-            store.removeSshRemotePtyLease(args.connectionId, result.id)
+            store.removeSshRemotePtyLease(args.connectionId, relayResultId)
           }
           throw new Error(createTerminalSessionStateSaveFailureMessage())
         }
@@ -1537,7 +1617,7 @@ export function registerPtyHandlers(
     }
   )
 
-  ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
+  const writePtyInput = (args: { id: string; data: string }): boolean => {
     // Why: defense-in-depth for the mobile-presence lock. The renderer's
     // xterm.onData guard already drops desktop keystrokes when mobile is
     // driving, but a stale view between the main-side state flip and the
@@ -1545,9 +1625,50 @@ export function registerPtyHandlers(
     // This server-side check catches it. See
     // docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return
+      return false
     }
-    tryGetProviderForPty(args.id)?.write(args.id, args.data)
+    const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
+    if (!provider) {
+      return false
+    }
+    try {
+      lastInputAtByPty.set(args.id, performance.now())
+      provider.write(args.id, args.data)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const writePtyInputAccepted = (args: { id: string; data: string }): boolean => {
+    if (runtime?.getDriver(args.id).kind === 'mobile') {
+      return false
+    }
+    // Why: the acknowledgement is used to infer Ctrl+C/Escape actually reached
+    // the local PTY. SSH providers are fire-and-forget relay notifications, so
+    // they cannot truthfully acknowledge until the relay protocol grows a write
+    // request/response.
+    if (ptyOwnership.get(args.id) !== null) {
+      return false
+    }
+    const provider = tryGetProviderForPty(args.id)
+    if (!provider?.hasPty?.(args.id)) {
+      return false
+    }
+    try {
+      lastInputAtByPty.set(args.id, performance.now())
+      provider.write(args.id, args.data)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
+    writePtyInput(args)
+  })
+  ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
+    return writePtyInputAccepted(args)
   })
 
   // Why: resize is fire-and-forget — the renderer doesn't need a reply.
