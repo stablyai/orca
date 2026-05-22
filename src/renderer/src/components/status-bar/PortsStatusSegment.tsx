@@ -47,6 +47,13 @@ function PortAction({
   disabled?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    onClick(event)
+    if (event.detail > 0) {
+      event.currentTarget.blur()
+    }
+  }
+
   const button = (
     <Button
       type="button"
@@ -54,7 +61,7 @@ function PortAction({
       size="icon-xs"
       className="size-5 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/35"
       aria-label={label}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
     >
       {children}
@@ -113,8 +120,9 @@ function PortRow({
   const handleCopy = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-      void window.api.ui.writeClipboardText(addressForPort(port))
-      toast.success(`Copied ${port.port}`)
+      const address = addressForPort(port)
+      void window.api.ui.writeClipboardText(address)
+      toast.success(`Copied ${address}`)
     },
     [port]
   )
