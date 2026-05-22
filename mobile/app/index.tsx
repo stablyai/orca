@@ -6,15 +6,13 @@ import {
   Monitor,
   QrCode,
   Settings,
-  Bot,
-  Clock,
-  GitPullRequest,
   ChevronRight,
   Terminal,
   Plus,
   RefreshCw,
   PowerOff,
-  Edit3
+  Edit3,
+  ListTodo
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
@@ -579,12 +577,11 @@ export default function HomeScreen() {
     },
     [primaryConnectedHost, router]
   )
-  const renderTaskHomeCard = (inline = false) => (
+  const renderTaskHomeCard = () => (
     <Pressable
       disabled={!primaryConnectedHost}
       style={({ pressed }) => [
         styles.taskHomeCard,
-        inline && styles.taskHomeCardInline,
         !primaryConnectedHost && styles.quickActionDisabled,
         pressed && styles.hostCardPressed
       ]}
@@ -592,7 +589,18 @@ export default function HomeScreen() {
         openTasks()
       }}
     >
+      <View style={styles.taskHomeIcon}>
+        <ListTodo size={18} color={colors.textSecondary} />
+      </View>
       <View style={styles.taskHomeMain}>
+        <Text style={styles.taskHomeTitle}>Tasks</Text>
+        <Text style={styles.taskHomeSubtitle} numberOfLines={1}>
+          {primaryTaskProviders.length > 0
+            ? primaryTaskProviders.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
+            : 'No task sources connected'}
+        </Text>
+      </View>
+      <View style={styles.taskHomeTrailing}>
         <View
           style={styles.taskHomeProviderRow}
           accessibilityLabel={primaryTaskProviders
@@ -607,7 +615,6 @@ export default function HomeScreen() {
               hitSlop={8}
               style={({ pressed }) => [
                 styles.taskHomeProviderButton,
-                inline && styles.taskHomeProviderButtonInline,
                 pressed && styles.taskHomeProviderButtonPressed
               ]}
               onPress={(event) => {
@@ -715,25 +722,16 @@ export default function HomeScreen() {
               {stats && (
                 <View style={styles.statsRow}>
                   <View style={styles.statCard}>
-                    <View style={styles.statIcon}>
-                      <Bot size={14} color={colors.textMuted} />
-                    </View>
                     <Text style={styles.statValue}>
                       {stats.totalAgentsSpawned.toLocaleString()}
                     </Text>
                     <Text style={styles.statLabel}>Agents spawned</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <View style={styles.statIcon}>
-                      <Clock size={14} color={colors.textMuted} />
-                    </View>
                     <Text style={styles.statValue}>{formatDuration(stats.totalAgentTimeMs)}</Text>
                     <Text style={styles.statLabel}>Agent time</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <View style={styles.statIcon}>
-                      <GitPullRequest size={14} color={colors.textMuted} />
-                    </View>
                     <Text style={styles.statValue}>{stats.totalPRsCreated.toLocaleString()}</Text>
                     <Text style={styles.statLabel}>PRs created</Text>
                   </View>
@@ -801,61 +799,79 @@ export default function HomeScreen() {
               {/* ─── Resume card ─── */}
               {resumeWorktree ? (
                 <>
-                  <View style={styles.resumeTaskRow}>
-                    <View style={styles.resumeTaskColumnResume}>
-                      <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Resume</Text>
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.resumeCard,
-                          pressed && styles.hostCardPressed
-                        ]}
-                        onPress={() =>
-                          router.push(
-                            `/h/${resumeWorktree.hostId}/session/${encodeURIComponent(resumeWorktree.worktree.worktreeId)}`
-                          )
-                        }
-                      >
-                        <View style={styles.resumeIcon}>
-                          <Terminal size={18} color={colors.textSecondary} />
-                        </View>
-                        <View style={styles.resumeMain}>
-                          <Text style={styles.resumeTitle} numberOfLines={1}>
-                            {resumeWorktree.worktree.displayName}
-                          </Text>
-                          <View style={styles.resumeSub}>
-                            <View
-                              style={[
-                                styles.repoDot,
-                                { backgroundColor: repoColor(resumeWorktree.worktree.repo) }
-                              ]}
-                            />
-                            <Text style={styles.resumeSubText} numberOfLines={1}>
-                              {resumeWorktree.worktree.repo}
-                              {'  ·  '}
-                              {resumeWorktree.worktree.branch}
-                            </Text>
-                          </View>
-                        </View>
-                        <ChevronRight size={16} color={colors.textMuted} />
-                      </Pressable>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
+                    onPress={() =>
+                      router.push(
+                        `/h/${resumeWorktree.hostId}/session/${encodeURIComponent(resumeWorktree.worktree.worktreeId)}`
+                      )
+                    }
+                  >
+                    <View style={styles.resumeIcon}>
+                      <Terminal size={18} color={colors.textSecondary} />
                     </View>
-                    <View
-                      style={[
-                        styles.resumeTaskColumnTasks,
-                        primaryTaskProviders.length >= 3 && styles.resumeTaskColumnTasksWide
-                      ]}
-                    >
-                      <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Tasks</Text>
-                      {renderTaskHomeCard(true)}
+                    <View style={styles.resumeMain}>
+                      <Text style={styles.resumeTitle} numberOfLines={1}>
+                        {resumeWorktree.worktree.displayName}
+                      </Text>
+                      <View style={styles.resumeSub}>
+                        <View
+                          style={[
+                            styles.repoDot,
+                            { backgroundColor: repoColor(resumeWorktree.worktree.repo) }
+                          ]}
+                        />
+                        <Text style={styles.resumeSubText} numberOfLines={1}>
+                          {resumeWorktree.worktree.repo}
+                          {'  ·  '}
+                          {resumeWorktree.worktree.branch}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                    <ChevronRight size={16} color={colors.textMuted} />
+                  </Pressable>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  {renderTaskHomeCard()}
                 </>
               ) : (
                 <>
-                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Tasks</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
                   {renderTaskHomeCard()}
                 </>
               )}
+
+              {/* ─── Quick actions ─── */}
+              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
+              <View style={styles.quickActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
+                  onPress={() => router.push('/pair-scan')}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <QrCode size={16} color={colors.textSecondary} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!primaryConnectedHost}
+                  style={({ pressed }) => [
+                    styles.quickAction,
+                    !primaryConnectedHost && styles.quickActionDisabled,
+                    pressed && styles.hostCardPressed
+                  ]}
+                  onPress={() => {
+                    if (primaryConnectedHost) {
+                      router.push(`/h/${primaryConnectedHost.id}?action=newWorktree`)
+                    }
+                  }}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Plus size={16} color={colors.textSecondary} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>New Workspace</Text>
+                </Pressable>
+              </View>
 
               {/* ─── Account usage ─── */}
               {accountsHosts.length > 0 ? (
@@ -935,38 +951,6 @@ export default function HomeScreen() {
                   })}
                 </>
               ) : null}
-
-              {/* ─── Quick actions ─── */}
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
-              <View style={styles.quickActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
-                  onPress={() => router.push('/pair-scan')}
-                >
-                  <View style={styles.quickActionIcon}>
-                    <QrCode size={16} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
-                </Pressable>
-                <Pressable
-                  disabled={!primaryConnectedHost}
-                  style={({ pressed }) => [
-                    styles.quickAction,
-                    !primaryConnectedHost && styles.quickActionDisabled,
-                    pressed && styles.hostCardPressed
-                  ]}
-                  onPress={() => {
-                    if (primaryConnectedHost) {
-                      router.push(`/h/${primaryConnectedHost.id}?action=newWorktree`)
-                    }
-                  }}
-                >
-                  <View style={styles.quickActionIcon}>
-                    <Plus size={16} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>New Worktree</Text>
-                </Pressable>
-              </View>
             </View>
           }
         />
@@ -1115,12 +1099,12 @@ const styles = StyleSheet.create({
 
   /* ─── Hero / greeting ─── */
   hero: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md
   },
   heroTitle: {
     color: colors.textPrimary,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.3
   },
@@ -1129,7 +1113,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: spacing.xl
+    marginBottom: spacing.lg
   },
   statCard: {
     flex: 1,
@@ -1137,17 +1121,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: spacing.md
-  },
-  statIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6
   },
   statValue: {
     color: colors.textPrimary,
@@ -1172,6 +1147,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   },
+  sectionHeadingTightTop: {
+    marginTop: spacing.lg
+  },
 
   /* ─── List ─── */
   list: {
@@ -1188,7 +1166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: radii.card,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
@@ -1242,22 +1220,6 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Resume card ─── */
-  resumeTaskRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.sm
-  },
-  resumeTaskColumnResume: {
-    flex: 7,
-    minWidth: 0
-  },
-  resumeTaskColumnTasks: {
-    flex: 3,
-    minWidth: 0
-  },
-  resumeTaskColumnTasksWide: {
-    flex: 4
-  },
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1267,7 +1229,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
-    paddingVertical: 14
+    paddingVertical: 12
   },
   resumeIcon: {
     width: 46,
@@ -1312,17 +1274,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.card,
-    minHeight: 76,
+    minHeight: 72,
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
-    paddingVertical: 14
+    paddingVertical: 12
   },
-  taskHomeCardInline: {
-    paddingHorizontal: spacing.sm
+  taskHomeIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14
   },
   taskHomeMain: {
     flex: 1,
     minWidth: 0
+  },
+  taskHomeTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
+  taskHomeSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 3
+  },
+  taskHomeTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: spacing.sm
   },
   taskHomeProviderRow: {
     flexDirection: 'row',
@@ -1336,9 +1320,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.button
-  },
-  taskHomeProviderButtonInline: {
-    width: 30
   },
   taskHomeProviderButtonPressed: {
     backgroundColor: colors.bgRaised
