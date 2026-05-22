@@ -34,7 +34,9 @@ export function KeybindingsFileActions(): React.JSX.Element {
   const openKeybindingsFile = useAppStore((state) => state.openKeybindingsFile)
   const revealKeybindingsFile = useAppStore((state) => state.revealKeybindingsFile)
   const reloadKeybindings = useAppStore((state) => state.reloadKeybindings)
+  const openFiles = useAppStore((state) => state.openFiles)
   const openFile = useAppStore((state) => state.openFile)
+  const closeFile = useAppStore((state) => state.closeFile)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const floatingTerminalEnabled = useAppStore(
     (state) => state.settings?.floatingTerminalEnabled === true
@@ -51,6 +53,14 @@ export function KeybindingsFileActions(): React.JSX.Element {
       if (!filePath) {
         toast.error('Keybindings file is not available.')
         return
+      }
+      const existingFile = openFiles.find(
+        (file) => file.filePath === filePath && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      )
+      if (existingFile && !existingFile.isDirty) {
+        // Why: a prior denied read can leave a focused error tab. Reopen a
+        // clean tab after authorization so the editor retries the file load.
+        closeFile(existingFile.id)
       }
       openFile(
         {

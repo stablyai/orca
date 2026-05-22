@@ -115,7 +115,7 @@ export function ShortcutBindingRow({
       title={item.title}
       description={`${groupTitle} shortcut`}
       keywords={[...item.searchKeywords]}
-      className="grid grid-cols-1 gap-x-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_10rem_4rem] lg:items-center"
+      className="grid min-h-[54px] grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_10rem_4rem] lg:items-center"
     >
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
@@ -125,6 +125,15 @@ export function ShortcutBindingRow({
               Modified
             </Badge>
           ) : null}
+        </div>
+        <div
+          className={cn(
+            'h-[16px] overflow-hidden text-[11px] leading-4',
+            error ? 'text-destructive' : 'text-muted-foreground'
+          )}
+          aria-live="polite"
+        >
+          {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
         </div>
       </div>
 
@@ -188,16 +197,6 @@ export function ShortcutBindingRow({
             Reset
           </TooltipContent>
         </Tooltip>
-      </div>
-
-      <div
-        className={cn(
-          'h-[18px] overflow-hidden pt-0.5 text-[11px] leading-4 lg:col-span-4',
-          error ? 'text-destructive' : 'text-muted-foreground'
-        )}
-        aria-live="polite"
-      >
-        {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
       </div>
     </SearchableSetting>
   )
