@@ -39,7 +39,6 @@ import {
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
-  TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
@@ -57,8 +56,6 @@ import { TerminalWindowSection } from './TerminalWindowSection'
 import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
-import { TerminalQuickCommandsSection } from './TerminalQuickCommandsSection'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -89,9 +86,6 @@ export function TerminalPane({
   pwshAvailable
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const repos = useAppStore((state) => state.repos)
-  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const activeRepoId = activeWorktreeId ? getRepoIdFromWorktreeId(activeWorktreeId) : null
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
   const [themeSearchDark, setThemeSearchDark] = useState('')
@@ -164,39 +158,6 @@ export function TerminalPane({
           <p className="text-xs text-muted-foreground">
             Shell used when opening a new terminal pane. Takes effect for new terminals.
           </p>
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES) ? (
-      <section key="quick-commands" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Quick Commands</h3>
-          <p className="text-xs text-muted-foreground">
-            Save global and repository-specific terminal snippets for the right-click menu.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="Quick Commands"
-          description="Create, edit, and remove scoped terminal command snippets for the right-click menu."
-          keywords={[
-            'terminal',
-            'command',
-            'snippet',
-            'quick command',
-            'send',
-            'context menu',
-            'repo',
-            'repository'
-          ]}
-          className="space-y-3"
-        >
-          <TerminalQuickCommandsSection
-            commands={settings.terminalQuickCommands ?? []}
-            repos={repos}
-            activeRepoId={activeRepoId}
-            onChange={(terminalQuickCommands) => updateSettings({ terminalQuickCommands })}
-          />
         </SearchableSetting>
       </section>
     ) : null,

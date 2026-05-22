@@ -24,7 +24,8 @@ import {
   Mic,
   SquareTerminal,
   TextCursorInput,
-  UserCog
+  UserCog,
+  Zap
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -65,6 +66,8 @@ import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
 import { TasksPane } from './TasksPane'
 import { TASKS_PANE_SEARCH_ENTRIES } from './tasks-search'
+import { QuickCommandsPane } from './QuickCommandsPane'
+import { QUICK_COMMANDS_PANE_SEARCH_ENTRIES } from './quick-commands-search'
 import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
@@ -103,6 +106,7 @@ type SettingsNavTarget =
   | 'input'
   | 'floating-workspace'
   | 'terminal'
+  | 'quick-commands'
   | 'notifications'
   | 'computer-use'
   | 'developer-permissions'
@@ -520,9 +524,17 @@ function Settings(): React.JSX.Element {
       {
         id: 'terminal',
         title: 'Terminal',
-        description: 'Shells, terminal appearance, quick commands, and pane behavior.',
+        description: 'Shells, terminal appearance, and pane behavior.',
         icon: SquareTerminal,
         searchEntries: terminalPaneSearchEntries,
+        group: 'workflows'
+      },
+      {
+        id: 'quick-commands',
+        title: 'Quick Commands',
+        description: 'Saved terminal commands, scoped globally or per repository.',
+        icon: Zap,
+        searchEntries: QUICK_COMMANDS_PANE_SEARCH_ENTRIES,
         group: 'workflows'
       },
       ...(showDesktopOnlySettings
@@ -1075,7 +1087,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Shells, terminal appearance, quick commands, and pane behavior."
+                  description="Shells, terminal appearance, and pane behavior."
                   searchEntries={terminalPaneSearchEntries}
                   headerAction={
                     <Button
@@ -1103,6 +1115,17 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
                     />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="quick-commands"
+                  title="Quick Commands"
+                  description="Saved terminal commands, scoped globally or per repository."
+                  searchEntries={QUICK_COMMANDS_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('quick-commands') ? (
+                    <QuickCommandsPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 

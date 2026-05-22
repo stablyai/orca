@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type {
+  GlobalSettings,
   Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
@@ -10,6 +11,7 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -17,11 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import RepoDotLabel from '../repo/RepoDotLabel'
 
-type TerminalQuickCommandsSectionProps = {
-  commands: TerminalQuickCommand[]
-  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
-  activeRepoId: string | null
-  onChange: (commands: TerminalQuickCommand[]) => void
+type QuickCommandsPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
 type ScopeFilter = 'all' | 'global' | 'repo'
@@ -52,12 +52,14 @@ function getScopeLabel(
   return repo ? getRepoLabel(repo) : 'Missing repo'
 }
 
-export function TerminalQuickCommandsSection({
-  commands,
-  repos,
-  activeRepoId,
-  onChange
-}: TerminalQuickCommandsSectionProps): React.JSX.Element {
+export function QuickCommandsPane({
+  settings,
+  updateSettings
+}: QuickCommandsPaneProps): React.JSX.Element {
+  const repos = useAppStore((s) => s.repos)
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const commands = settings.terminalQuickCommands ?? []
+
   const [editor, setEditor] = useState<EditorState>(null)
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
   const [repoFilterId, setRepoFilterId] = useState(activeRepoId ?? '')
@@ -71,6 +73,7 @@ export function TerminalQuickCommandsSection({
       : repoFilterIsValid
         ? repoFilterId
         : (repos[0]?.id ?? '')
+
   const visibleCommands = commands.filter((command) => {
     const scope = getTerminalQuickCommandScope(command)
     if (scopeFilter === 'global') {
@@ -89,7 +92,9 @@ export function TerminalQuickCommandsSection({
     return createTerminalQuickCommandDraft({ type: 'global' })
   }
 
-  // Follow the active worktree until the user picks a repo; resume if that repo disappears.
+  // Why: follow the active worktree until the user picks a repo, and resume
+  // following automatically if the chosen repo disappears (e.g. removed from
+  // the workspace) so the filter never points at nothing.
   useEffect(() => {
     if (!activeRepoFilterId) {
       return
@@ -114,15 +119,17 @@ export function TerminalQuickCommandsSection({
   }
 
   const saveCommand = (next: TerminalQuickCommand): void => {
-    if (editor?.mode === 'edit') {
-      onChange(commands.map((command) => (command.id === next.id ? next : command)))
-    } else {
-      onChange([...commands, next])
-    }
+    const isEdit = commands.some((command) => command.id === next.id)
+    const nextList = isEdit
+      ? commands.map((command) => (command.id === next.id ? next : command))
+      : [...commands, next]
+    updateSettings({ terminalQuickCommands: nextList })
   }
 
   const removeCommand = (id: string): void => {
-    onChange(commands.filter((command) => command.id !== id))
+    updateSettings({
+      terminalQuickCommands: commands.filter((command) => command.id !== id)
+    })
   }
 
   return (
@@ -131,7 +138,8 @@ export function TerminalQuickCommandsSection({
         <div className="space-y-1">
           <Label>Saved Commands</Label>
           <p className="text-xs text-muted-foreground">
-            Commands are sent as plain terminal input to the active pane.
+            Commands are sent as plain terminal input to the active pane. Use Global commands for
+            tools that work everywhere, or Repository commands for project-specific scripts.
           </p>
         </div>
         <Button
