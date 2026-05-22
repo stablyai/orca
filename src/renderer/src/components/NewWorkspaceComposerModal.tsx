@@ -6,12 +6,8 @@ import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import {
-  shouldAllowComposerEnterSubmitTarget,
-  shouldSuppressEnterSubmit
-} from '@/lib/new-workspace-enter-guard'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
@@ -137,7 +133,6 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     undefined
   )
-  const keybindings = useAppStore((s) => s.keybindings)
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
     if (pref === 'blank') {
@@ -161,8 +156,7 @@ function QuickTabBody({
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
 
-  // The configured submit shortcut creates the workspace; Esc first blurs the
-  // focused input, matching the full-page composer.
+  // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
     if (!active) {
       return
@@ -192,7 +186,9 @@ function QuickTabBody({
         return
       }
 
-      if (!keybindingMatchesAction('composer.submit', event, getShortcutPlatform(), keybindings)) {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
@@ -201,15 +197,12 @@ function QuickTabBody({
       if (createDisabled) {
         return
       }
-      if (shouldSuppressEnterSubmit(event, false)) {
-        return
-      }
       event.preventDefault()
       void handleCreate()
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, keybindings, onClose])
+  }, [active, composerRef, createDisabled, handleCreate, onClose])
 
   return (
     <>

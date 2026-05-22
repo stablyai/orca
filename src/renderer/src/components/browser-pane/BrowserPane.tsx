@@ -20,6 +20,7 @@ import {
   ArrowRight,
   CircleCheck,
   Copy,
+  CornerDownLeft,
   Crosshair,
   ExternalLink,
   Globe,
@@ -62,6 +63,7 @@ import {
   redactKagiSessionToken
 } from '../../../../shared/browser-url'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
@@ -320,10 +322,8 @@ function PendingBrowserAnnotationCard({
 }): React.JSX.Element {
   const [comment, setComment] = useState('')
   const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
-  const keybindings = useAppStore((state) => state.keybindings)
-  const submitShortcut = useShortcutLabel('composer.submit')
   const trimmed = comment.trim()
-  const shortcutPlatform = getShortcutPlatform()
+  const submitModifierLabel = getScreenSubmitModifierLabel()
 
   return (
     <Popover
@@ -382,10 +382,7 @@ function PendingBrowserAnnotationCard({
               onCancel()
               return
             }
-            if (
-              keybindingMatchesAction('composer.submit', event, shortcutPlatform, keybindings) &&
-              !event.nativeEvent.isComposing
-            ) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               event.stopPropagation()
               if (trimmed) {
@@ -438,7 +435,8 @@ function PendingBrowserAnnotationCard({
             <MessageSquarePlus className="size-3.5" />
             Add
             <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-              <span>{submitShortcut}</span>
+              <span>{submitModifierLabel}</span>
+              <CornerDownLeft className="size-3" />
             </span>
           </Button>
         </div>

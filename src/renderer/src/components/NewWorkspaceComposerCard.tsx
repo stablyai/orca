@@ -2,17 +2,24 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
-import { Check, ChevronDown, FolderPlus, LoaderCircle, PlugZap, Settings2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  CornerDownLeft,
+  FolderPlus,
+  LoaderCircle,
+  PlugZap,
+  Settings2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -239,7 +246,7 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const submitShortcutKeys = useShortcutKeys('composer.submit')
+  const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
     return repo?.displayName ?? repo?.path ?? 'This repository'
@@ -639,9 +646,10 @@ export default function NewWorkspaceComposerCard({
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
           Create Workspace
-          {submitShortcutKeys.length > 0 ? (
-            <ShortcutKeyCombo keys={submitShortcutKeys} className="ml-1 text-current/80" />
-          ) : null}
+          <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
+            <span>{submitShortcutModifierLabel}</span>
+            <CornerDownLeft className="size-3" />
+          </span>
         </Button>
       </div>
     </div>

@@ -12,11 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
-import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
@@ -34,8 +32,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
-  const keybindings = useAppStore((s) => s.keybindings)
-  const submitShortcutLabel = useShortcutLabel('composer.submit')
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -179,17 +176,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (
-        e.key === 'Enter' &&
-        (!e.shiftKey ||
-          keybindingMatchesAction('composer.submit', e, getShortcutPlatform(), keybindings))
-      ) {
+      const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+      if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
         e.stopPropagation()
         handleSave()
       }
     },
-    [handleSave, keybindings]
+    [handleSave]
   )
 
   const handleIssueKeyDown = useCallback(
@@ -352,8 +346,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             />
             <p className="text-[10px] text-muted-foreground">
               Supports **markdown** — bold, lists, `code`, links. Press Enter or{' '}
-              {submitShortcutLabel !== 'Unassigned' ? `${submitShortcutLabel} to save, ` : ''}
-              Shift+Enter for a new line.
+              {submitShortcutLabel} to save, Shift+Enter for a new line.
             </p>
           </div>
         </div>
