@@ -1249,6 +1249,7 @@ const api = {
 
   keybindings: {
     get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
+    ensureFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:ensureFile'),
     setAction: (args: {
       actionId: KeybindingActionId
       bindings: string[] | null

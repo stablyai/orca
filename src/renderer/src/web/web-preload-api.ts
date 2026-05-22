@@ -511,6 +511,7 @@ function notifyWebKeybindingListeners(snapshot: KeybindingFileSnapshot): void {
 function createWebKeybindingsApi(): WebKeybindingsApi {
   return {
     get: () => Promise.resolve(getWebKeybindingSnapshot()),
+    ensureFile: () => Promise.resolve(getWebKeybindingSnapshot()),
     setAction: async ({ actionId, bindings }) => writeWebKeybindingAction(actionId, bindings),
     reload: () => {
       const snapshot = getWebKeybindingSnapshot()
