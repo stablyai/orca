@@ -128,8 +128,9 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
   // throw "cannot read dimensions" until the pane re-attaches. Swallow that
   // window quietly — the next visibility flip re-fits and re-restores.
   if (state.wasAtBottom) {
-    safeScrollCall(() => terminal.scrollToBottom())
-    forceViewportScrollbarSync(terminal)
+    if (safeScrollCall(() => terminal.scrollToBottom())) {
+      forceViewportScrollbarSync(terminal)
+    }
     return
   }
 
@@ -143,15 +144,23 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
   // reflow settles; keep the marker alive so each call consults the live
   // line. Callers (restoreScrollState, the timeout in
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
-  safeScrollCall(() => terminal.scrollToLine(targetLine))
-  forceViewportScrollbarSync(terminal)
+  if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
+    forceViewportScrollbarSync(terminal)
+  }
 }
 
-function safeScrollCall(fn: () => void): void {
+function safeScrollCall(fn: () => void): boolean {
   try {
     fn()
-  } catch {
-    /* xterm render service torn down — re-fit on next visibility flip restores it */
+    return true
+  } catch (err) {
+    // Why: xterm's renderer can null out internal dimensions during WebGL
+    // teardown, throwing "Cannot read properties of undefined (reading
+    // 'dimensions')". Tolerate that; surface anything else.
+    if (err instanceof TypeError && /dimensions/.test(err.message)) {
+      return false
+    }
+    throw err
   }
 }
 

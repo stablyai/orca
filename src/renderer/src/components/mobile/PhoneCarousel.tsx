@@ -6,7 +6,6 @@ import { TerminalSlide } from './slides/TerminalSlide'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
-const SLIDE_TRANSITION_MS = 320
 
 type Phase = 'normal' | 'reset'
 
@@ -28,6 +27,7 @@ export function PhoneCarousel(): React.JSX.Element {
     let cancelled = false
     let dwellTimer: ReturnType<typeof setTimeout> | null = null
     let tapTimer: ReturnType<typeof setTimeout> | null = null
+    let advanceTimer: ReturnType<typeof setTimeout> | null = null
     let resetTimer: ReturnType<typeof setTimeout> | null = null
 
     const schedule = (idx: number): void => {
@@ -44,7 +44,7 @@ export function PhoneCarousel(): React.JSX.Element {
             }
             setTappingSlide(null)
           }, 320)
-          setTimeout(() => {
+          advanceTimer = setTimeout(() => {
             if (cancelled) {
               return
             }
@@ -69,14 +69,6 @@ export function PhoneCarousel(): React.JSX.Element {
 
     schedule(0)
 
-    const onVisibility = (): void => {
-      if (document.hidden && dwellTimer) {
-        clearTimeout(dwellTimer)
-        dwellTimer = null
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-
     return () => {
       cancelled = true
       if (dwellTimer) {
@@ -85,10 +77,12 @@ export function PhoneCarousel(): React.JSX.Element {
       if (tapTimer) {
         clearTimeout(tapTimer)
       }
+      if (advanceTimer) {
+        clearTimeout(advanceTimer)
+      }
       if (resetTimer) {
         clearTimeout(resetTimer)
       }
-      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 
@@ -130,12 +124,4 @@ export function PhoneCarousel(): React.JSX.Element {
       </div>
     </div>
   )
-}
-
-// Re-export for convenience so consumers can import slide-transition
-// timing in tests.
-export const _slideTimings = {
-  DWELL_MS,
-  TAP_BEFORE_PUSH_MS,
-  SLIDE_TRANSITION_MS
 }

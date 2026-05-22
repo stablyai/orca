@@ -169,10 +169,11 @@ export function HeroFlow({
               <p className="mp-lead-sm">
                 Scan the QR with your phone or open the install link to grab Orca Mobile.
               </p>
-              <div className="mp-tab-toggle" role="tablist" aria-label="Phone platform">
+              <div className="mp-tab-toggle">
                 <button
                   type="button"
                   className={cn(platform === 'ios' && 'is-active')}
+                  aria-pressed={platform === 'ios'}
                   onClick={() => onPlatformChange('ios')}
                 >
                   iOS
@@ -180,6 +181,7 @@ export function HeroFlow({
                 <button
                   type="button"
                   className={cn(platform === 'android' && 'is-active')}
+                  aria-pressed={platform === 'android'}
                   onClick={() => onPlatformChange('android')}
                 >
                   Android
@@ -261,8 +263,16 @@ export function HeroFlow({
               </div>
             </div>
             <div className="mp-qr-stack">
-              <div className="mp-qr" aria-label="Pairing QR code">
-                {pairQrDataUrl ? <img src={pairQrDataUrl} alt="Pairing QR" /> : null}
+              <div
+                className="mp-qr"
+                aria-label="Pairing QR code"
+                aria-busy={pairLoading && !pairQrDataUrl}
+              >
+                {pairQrDataUrl ? (
+                  <img src={pairQrDataUrl} alt="Pairing QR" />
+                ) : pairLoading ? (
+                  <span className="mp-qr-loading">Generating…</span>
+                ) : null}
               </div>
               <button
                 type="button"

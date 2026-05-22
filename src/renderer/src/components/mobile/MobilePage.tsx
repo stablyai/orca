@@ -65,6 +65,10 @@ export default function MobilePage(): React.JSX.Element {
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
+  // Tracks the previous stage so we can set the paired-view baseline exactly
+  // once on entry into 'paired', avoiding a polling-stop race when devices
+  // change while already in paired view.
+  const lastStageRef = useRef<FlowStage | null>(null)
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
 
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
@@ -72,7 +76,10 @@ export default function MobilePage(): React.JSX.Element {
       const result = await window.api.mobile.listDevices()
       setDevices(result.devices)
       return result.devices
-    } catch {
+    } catch (err) {
+      // Log so a transient IPC failure (which routes the user to 'intro') is
+      // observable; keep returning [] so callers' behavior is unchanged.
+      console.error('mobile.listDevices failed', err)
       return []
     }
   }, [])
@@ -95,7 +102,19 @@ export default function MobilePage(): React.JSX.Element {
 
   const revokeDevice = useCallback(
     async (deviceId: string) => {
-      setRevokingDeviceIds((prev) => [...prev, deviceId])
+      // Dedupe rapid double-clicks: if a revoke for this id is already in
+      // flight, bail before issuing a second IPC call.
+      let alreadyRevoking = false
+      setRevokingDeviceIds((prev) => {
+        if (prev.includes(deviceId)) {
+          alreadyRevoking = true
+          return prev
+        }
+        return [...prev, deviceId]
+      })
+      if (alreadyRevoking) {
+        return
+      }
       try {
         await window.api.mobile.revokeDevice({ deviceId })
         const remaining = await loadDevices()
@@ -118,6 +137,9 @@ export default function MobilePage(): React.JSX.Element {
     if (stage !== 'flow') {
       return
     }
+    // Clear the previous QR synchronously so the user never sees a stale
+    // platform's image while the new one is rendering.
+    setInstallQrUrl(null)
     let cancelled = false
     void (async () => {
       try {
@@ -166,13 +188,20 @@ export default function MobilePage(): React.JSX.Element {
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
       setNetworkInterfaces(result.interfaces)
-      setSelectedAddress((current) => selectRefreshedNetworkAddress(current, result.interfaces))
+      // Resolve the new address before committing it so we can detect a real
+      // change and remint the QR — otherwise the QR keeps encoding the stale
+      // endpoint after a network refresh swaps the active interface.
+      const newAddress = selectRefreshedNetworkAddress(selectedAddress, result.interfaces)
+      setSelectedAddress(newAddress)
+      if (newAddress !== selectedAddress && hasGeneratedRef.current) {
+        void generatePairing(true, newAddress)
+      }
     } catch {
       // Network list is non-critical; the QR will still mint with default routing.
     } finally {
       setRefreshingNetworkInterfaces(false)
     }
-  }, [])
+  }, [selectedAddress, generatePairing])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -197,7 +226,8 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
       toast.success('Pairing code copied')
-    } catch {
+    } catch (err) {
+      console.error('writeClipboardText failed', err)
       toast.error('Failed to copy pairing code')
     }
   }, [pairingUrl])
@@ -238,18 +268,29 @@ export default function MobilePage(): React.JSX.Element {
     }
   }, [stage, devices.length, deviceCountAtPairStart])
 
-  // Why: re-baseline the polling counter whenever the paired view is shown
-  // so any subsequent pair (including ones initiated from a different
-  // surface) triggers a refresh.
+  // Why: set the paired-view polling baseline exactly once on entry into
+  // 'paired'. Re-baselining on every devices.length change opened a small
+  // window where polling stopped then resumed; capturing the count once on
+  // transition lets newly added devices flow through naturally.
   useEffect(() => {
-    if (stage === 'paired') {
+    if (stage === 'paired' && lastStageRef.current !== 'paired') {
       setDeviceCountAtPairStart(devices.length)
     }
-  }, [stage, devices.length])
+    lastStageRef.current = stage
+    // devices.length is intentionally excluded: we want to capture the count
+    // only at the moment of the stage transition, not re-run on every change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage])
 
   const enterFlow = (): void => {
     setStepIdx(0)
     setDeviceCountAtPairStart(devices.length)
+    // Force the auto-generate effect to mint a fresh pairing token on next
+    // entry into Step 2, and clear stale QR state so we never flash an
+    // expired code from a previous session.
+    hasGeneratedRef.current = false
+    setPairQrDataUrl(null)
+    setPairingUrl(null)
     setStage('flow')
   }
 
@@ -258,6 +299,10 @@ export default function MobilePage(): React.JSX.Element {
   const pairAnotherDevice = (): void => {
     setStepIdx(1)
     setDeviceCountAtPairStart(devices.length)
+    // Same reset as enterFlow — re-entering must mint a fresh pairing offer.
+    hasGeneratedRef.current = false
+    setPairQrDataUrl(null)
+    setPairingUrl(null)
     setStage('flow')
   }
 
@@ -283,7 +328,8 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
       toast.success('Install link copied')
-    } catch {
+    } catch (err) {
+      console.error('writeClipboardText failed', err)
       toast.error('Failed to copy link')
     }
   }
@@ -311,8 +357,10 @@ export default function MobilePage(): React.JSX.Element {
       event.preventDefault()
       closeMobilePage()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    // Why: bubble phase (no capture) so Radix popovers/selects get a chance
+    // to consume Escape first; the defaultPrevented check below then skips.
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [closeMobilePage])
 
   return (

@@ -311,13 +311,16 @@
   color: var(--foreground);
 }
 
+/* Why: stack both step screens in the same grid cell so the viewport
+   sizes to the tallest child. This keeps the back button at the same
+   Y on Step 1 and Step 2 even though Step 2 has more rows of content. */
 .mobile-page-root .mp-flow-viewport {
-  position: relative;
+  display: grid;
+  grid-template-areas: 'stack';
 }
 
 .mobile-page-root .mp-flow-screen {
-  position: absolute;
-  inset: 0;
+  grid-area: stack;
   transform: translateX(40px);
   opacity: 0;
   pointer-events: none;
@@ -327,7 +330,6 @@
 }
 
 .mobile-page-root .mp-flow-screen.is-active {
-  position: relative;
   transform: translateX(0);
   opacity: 1;
   pointer-events: auto;
@@ -344,6 +346,10 @@
   justify-content: space-between;
   margin-top: auto;
   padding-top: 16px;
+  /* Why: keep row height stable across steps so the back button doesn't jump
+     vertically when the right side switches between a 40px Continue button
+     and a placeholder span. */
+  min-height: calc(40px + 16px);
 }
 
 .mobile-page-root .mp-flow-continue {

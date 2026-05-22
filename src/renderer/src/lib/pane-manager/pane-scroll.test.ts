@@ -136,6 +136,22 @@ describe('scroll state', () => {
     expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
   })
 
+  it('swallows xterm dimensions errors from scrollToLine on the not-at-bottom branch', () => {
+    const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+    ;(terminal.scrollToLine as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100
+    }
+
+    expect(() => restoreScrollState(terminal, state)).not.toThrow()
+    expect(terminal.scrollToLine).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the visible line marker when resize reflow changes numeric line positions', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 300 })
     const marker = createMarker(160)
