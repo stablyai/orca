@@ -10,6 +10,9 @@ export type WorkspacePortGroup = {
 const portsByWorktreeCache = new WeakMap<WorkspacePortScanResult, Map<string, WorkspacePort[]>>()
 const workspaceGroupsCache = new WeakMap<WorkspacePortScanResult, WorkspacePortGroup[]>()
 const externalPortsCache = new WeakMap<WorkspacePortScanResult, WorkspacePort[]>()
+const EMPTY_PORTS_BY_WORKTREE = new Map<string, WorkspacePort[]>()
+const EMPTY_WORKSPACE_PORT_GROUPS: WorkspacePortGroup[] = []
+const EMPTY_EXTERNAL_PORTS: WorkspacePort[] = []
 
 function comparePorts(a: WorkspacePort, b: WorkspacePort): number {
   return a.port - b.port || (a.processName ?? '').localeCompare(b.processName ?? '')
@@ -18,14 +21,15 @@ function comparePorts(a: WorkspacePort, b: WorkspacePort): number {
 export function getWorkspacePortsByWorktreeId(
   scan: WorkspacePortScanResult | null | undefined
 ): Map<string, WorkspacePort[]> {
-  if (scan) {
-    const cached = portsByWorktreeCache.get(scan)
-    if (cached) {
-      return cached
-    }
+  if (!scan) {
+    return EMPTY_PORTS_BY_WORKTREE
+  }
+  const cached = portsByWorktreeCache.get(scan)
+  if (cached) {
+    return cached
   }
   const grouped = new Map<string, WorkspacePort[]>()
-  for (const port of scan?.ports ?? []) {
+  for (const port of scan.ports) {
     if (port.kind !== 'workspace') {
       continue
     }
@@ -39,23 +43,22 @@ export function getWorkspacePortsByWorktreeId(
   for (const ports of grouped.values()) {
     ports.sort(comparePorts)
   }
-  if (scan) {
-    portsByWorktreeCache.set(scan, grouped)
-  }
+  portsByWorktreeCache.set(scan, grouped)
   return grouped
 }
 
 export function getWorkspacePortGroups(
   scan: WorkspacePortScanResult | null | undefined
 ): WorkspacePortGroup[] {
-  if (scan) {
-    const cached = workspaceGroupsCache.get(scan)
-    if (cached) {
-      return cached
-    }
+  if (!scan) {
+    return EMPTY_WORKSPACE_PORT_GROUPS
+  }
+  const cached = workspaceGroupsCache.get(scan)
+  if (cached) {
+    return cached
   }
   const groupsByWorktreeId = new Map<string, WorkspacePortGroup>()
-  for (const port of scan?.ports ?? []) {
+  for (const port of scan.ports) {
     if (port.kind !== 'workspace') {
       continue
     }
@@ -78,24 +81,21 @@ export function getWorkspacePortGroups(
         a.displayName.localeCompare(b.displayName) ||
         (a.ports[0]?.port ?? 0) - (b.ports[0]?.port ?? 0)
     )
-  if (scan) {
-    workspaceGroupsCache.set(scan, groups)
-  }
+  workspaceGroupsCache.set(scan, groups)
   return groups
 }
 
 export function getExternalWorkspacePorts(
   scan: WorkspacePortScanResult | null | undefined
 ): WorkspacePort[] {
-  if (scan) {
-    const cached = externalPortsCache.get(scan)
-    if (cached) {
-      return cached
-    }
+  if (!scan) {
+    return EMPTY_EXTERNAL_PORTS
   }
-  const ports = (scan?.ports ?? []).filter((port) => port.kind !== 'workspace').sort(comparePorts)
-  if (scan) {
-    externalPortsCache.set(scan, ports)
+  const cached = externalPortsCache.get(scan)
+  if (cached) {
+    return cached
   }
+  const ports = scan.ports.filter((port) => port.kind !== 'workspace').sort(comparePorts)
+  externalPortsCache.set(scan, ports)
   return ports
 }

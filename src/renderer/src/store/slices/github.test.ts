@@ -2111,6 +2111,78 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
   })
 
+  it('does not fetch linked issue details when the issue card section is hidden', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false,
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedIssue: 123
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+    await Promise.resolve()
+
+    expect(mockApi.gh.issue).not.toHaveBeenCalled()
+  })
+
+  it('fetches linked issue details when the issue card section is visible', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['issue'],
+      rightSidebarOpen: false,
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedIssue: 123
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+    await Promise.resolve()
+
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({
+      repoPath,
+      repoId: 'repo-1',
+      number: 123
+    })
+  })
+
   it('enqueues active PR refresh IPC for connected SSH-backed repos', () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -2396,6 +2468,78 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       method: 'github.prForBranch',
       params: { repo: 'repo-1', branch, linkedPRNumber: null },
       timeoutMs: 30_000
+    })
+  })
+
+  it('does not refresh stale linked issues when the issue card section is hidden', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      rightSidebarOpen: false,
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            lastActivityAt: 1,
+            linkedIssue: 123
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshAllGitHub()
+    await Promise.resolve()
+
+    expect(mockApi.gh.issue).not.toHaveBeenCalled()
+  })
+
+  it('refreshes stale linked issues when the issue card section is visible', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['issue'],
+      rightSidebarOpen: false,
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            lastActivityAt: 1,
+            linkedIssue: 123
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshAllGitHub()
+    await Promise.resolve()
+
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({
+      repoPath,
+      repoId: 'repo-1',
+      number: 123
     })
   })
 })
