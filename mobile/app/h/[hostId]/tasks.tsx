@@ -22,7 +22,6 @@ import {
   ChevronLeft,
   ChevronUp,
   Copy,
-  ArrowRight,
   ExternalLink,
   GitBranch,
   Lock,
@@ -8724,48 +8723,9 @@ export default function MobileTasksScreen() {
                         )
                       }}
                     >
-                      <View style={styles.linearBoardCardHeader}>
-                        <Text style={styles.taskTitle} numberOfLines={3}>
-                          {issue.title}
-                        </Text>
-                        <View style={styles.taskQuickActionRow}>
-                          <Pressable
-                            style={[
-                              styles.taskQuickActionButton,
-                              creatingKey === `linear:${issue.id}` &&
-                                styles.taskQuickActionButtonDisabled
-                            ]}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Create workspace from ${issue.identifier}`}
-                            disabled={creatingKey === `linear:${issue.id}`}
-                            onPress={(event) => {
-                              event.stopPropagation()
-                              const task = createLinearTask(issue) as Extract<
-                                TaskItem,
-                                { provider: 'linear' }
-                              >
-                              if (workspaceRepos.length > 1) {
-                                setWorkspaceRepoPickerItem(task)
-                                return
-                              }
-                              openWorkspaceCreate(task)
-                            }}
-                          >
-                            <ArrowRight size={14} color={colors.textSecondary} />
-                          </Pressable>
-                          <Pressable
-                            style={styles.taskQuickActionButton}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Open ${issue.identifier} in Linear`}
-                            onPress={(event) => {
-                              event.stopPropagation()
-                              void Linking.openURL(issue.url)
-                            }}
-                          >
-                            <ExternalLink size={14} color={colors.textSecondary} />
-                          </Pressable>
-                        </View>
-                      </View>
+                      <Text style={styles.taskTitle} numberOfLines={3}>
+                        {issue.title}
+                      </Text>
                       <Text style={styles.subtitle} numberOfLines={2}>
                         {linearIssueSecondaryParts(issue, effectiveLinearDisplayProperties).join(
                           ' · '
@@ -8876,38 +8836,6 @@ export default function MobileTasksScreen() {
                     </View>
                   </View>
                   <View style={styles.linearListTrailing}>
-                    <View style={styles.taskQuickActionRow}>
-                      <Pressable
-                        style={[
-                          styles.taskQuickActionButton,
-                          creatingKey === linearTask.key && styles.taskQuickActionButtonDisabled
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Create workspace from ${issue.identifier}`}
-                        disabled={creatingKey === linearTask.key}
-                        onPress={(event) => {
-                          event.stopPropagation()
-                          if (workspaceRepos.length > 1) {
-                            setWorkspaceRepoPickerItem(linearTask)
-                            return
-                          }
-                          openWorkspaceCreate(linearTask)
-                        }}
-                      >
-                        <ArrowRight size={14} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        style={styles.taskQuickActionButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Open ${issue.identifier} in Linear`}
-                        onPress={(event) => {
-                          event.stopPropagation()
-                          void Linking.openURL(issue.url)
-                        }}
-                      >
-                        <ExternalLink size={14} color={colors.textSecondary} />
-                      </Pressable>
-                    </View>
                     {effectiveLinearDisplayProperties.has('state') ? (
                       <Pressable
                         style={[styles.statusPill, styles.linearStatePill]}
@@ -9109,36 +9037,6 @@ export default function MobileTasksScreen() {
                   ) : null}
                 </View>
                 <View style={styles.taskRowTrailing}>
-                  {actionableItem ? (
-                    <View style={styles.taskQuickActionRow}>
-                      <Pressable
-                        style={[
-                          styles.taskQuickActionButton,
-                          creatingKey === actionableItem.key && styles.taskQuickActionButtonDisabled
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Create workspace from ${item.title}`}
-                        disabled={creatingKey === actionableItem.key}
-                        onPress={(event) => {
-                          event.stopPropagation()
-                          openWorkspaceCreate(actionableItem)
-                        }}
-                      >
-                        <ArrowRight size={14} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        style={styles.taskQuickActionButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${taskExternalOpenLabel(item)}: ${item.title}`}
-                        onPress={(event) => {
-                          event.stopPropagation()
-                          void Linking.openURL(actionableItem.source.url)
-                        }}
-                      >
-                        <ExternalLink size={14} color={colors.textSecondary} />
-                      </Pressable>
-                    </View>
-                  ) : null}
                   <View style={styles.statusPill}>
                     <Text style={styles.statusText} numberOfLines={1}>
                       {item.status}
@@ -13440,29 +13338,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.xs
   },
-  linearBoardCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm
-  },
-  taskQuickActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  taskQuickActionButton: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  taskQuickActionButtonDisabled: {
-    opacity: 0.45
-  },
   statusText: {
     fontSize: 11,
     color: colors.textSecondary
@@ -13481,6 +13356,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm
   },
   paginationButton: {
+    width: 92,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.button,
