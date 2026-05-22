@@ -173,13 +173,18 @@ describe('AdvertisedUrlWatcher.ingest', () => {
 
   it('unbindPty drops buffered state for the PTY', () => {
     const watcher = bindFresh()
+    watcher.ingest(PTY, 'cached https://cached.example.com:3002/\n')
     watcher.ingest(PTY, 'partial https://example.com:3001') // no newline → buffered
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
     watcher.unbindPty(PTY)
     // After unbind, the buffer is gone, so a completing chunk on a fresh
     // binding would have to repeat the URL.
     watcher.bindPty(PTY, WORKTREE)
     watcher.ingest(PTY, '/now\n')
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
+    expect(watcher.lookupBest([WORKTREE], 3002)).toBeUndefined()
+    expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3002 })
   })
 
   it('different worktrees on the same port are tracked independently', () => {

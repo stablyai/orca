@@ -30,6 +30,7 @@ import {
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 
 const {
   MOCK_GIT_WORKTREES,
@@ -254,6 +255,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 })
 
 afterEach(() => {
+  advertisedUrlWatcher.clear()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
@@ -3433,6 +3435,17 @@ describe('OrcaRuntimeService', () => {
     const read = await runtime.readTerminal(handle)
     expect(read.handle).toBe(handle)
     expect(read.tail).toEqual(['ready'])
+  })
+
+  it('binds advertised URLs for renderer-restored PTYs that skip registerPty', () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    syncSinglePty(runtime, 'pty-restored')
+    runtime.onPtyData('pty-restored', 'Network: https://restored.example.com:3001/\n', 100)
+
+    expect(advertisedUrlWatcher.lookup(TEST_WORKTREE_ID, 3001)?.origin).toBe(
+      'https://restored.example.com:3001'
+    )
   })
 
   it('keeps preallocated terminal handles valid across renderer reloads', async () => {

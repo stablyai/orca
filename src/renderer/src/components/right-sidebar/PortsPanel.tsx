@@ -155,6 +155,57 @@ function customHostFromAdvertised(advertisedUrl: string | undefined): string | n
   }
 }
 
+type AdvertisedPortUrlFields = {
+  advertisedProtocol?: 'http' | 'https'
+  advertisedUrl?: string
+  remotePort: number
+}
+
+function advertisedProtocolForPort(port: AdvertisedPortUrlFields): 'http' | 'https' {
+  if (port.advertisedProtocol) {
+    return port.advertisedProtocol
+  }
+  if (port.advertisedUrl) {
+    try {
+      const protocol = new URL(port.advertisedUrl).protocol.replace(/:$/, '')
+      if (protocol === 'http' || protocol === 'https') {
+        return protocol
+      }
+    } catch {
+      // Fall through to the same port heuristic used for entries without an advertised URL.
+    }
+  }
+  return HTTPS_PORTS.has(port.remotePort) ? 'https' : 'http'
+}
+
+export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
+  // Why: older enriched entries may have advertisedUrl without advertisedProtocol;
+  // derive the URL once so the open action and labels do not drift.
+  const protocol = advertisedProtocolForPort(entry)
+  const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
+  return `${protocol}://${host}:${entry.localPort}`
+}
+
+function advertisedBrowserUrlForForwardedRow(entry: PortForwardEntry): string | null {
+  if (!customHostFromAdvertised(entry.advertisedUrl)) {
+    return null
+  }
+  return browserUrlForPortForwardEntry(entry)
+}
+
+function advertisedBrowserUrlForDetectedPort(port: DetectedPort): string | null {
+  const host = customHostFromAdvertised(port.advertisedUrl)
+  if (!host) {
+    return null
+  }
+  const protocol = advertisedProtocolForPort({
+    advertisedProtocol: port.advertisedProtocol,
+    advertisedUrl: port.advertisedUrl,
+    remotePort: port.port
+  })
+  return `${protocol}://${host}:${port.port}`
+}
+
 type PortForwardDialogState =
   | { mode: 'closed' }
   | {
@@ -725,19 +776,7 @@ function SshPortsPanel(): React.JSX.Element {
         toast.error('No workspace selected for the browser.')
         return
       }
-      // Why: prefer the dev server's printed protocol over the port-number
-      // heuristic — Vite on 3001 with HTTPS is a real scenario we cannot
-      // detect from `entry.remotePort` alone.
-      const protocol =
-        entry.advertisedProtocol ?? (HTTPS_PORTS.has(entry.remotePort) ? 'https' : 'http')
-      // Why: when the dev server advertised a custom hostname (e.g.
-      // `local.getmontecarlo.com`), reuse that host but with the local
-      // forward port. The user is expected to have a /etc/hosts mapping
-      // (or equivalent DNS) for the custom name to resolve locally; if
-      // they don't, no URL Orca picks here will work for a non-loopback
-      // custom host.
-      const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
-      createBrowserTab(activeWorktree.id, `${protocol}://${host}:${entry.localPort}`, {
+      createBrowserTab(activeWorktree.id, browserUrlForPortForwardEntry(entry), {
         activate: true
       })
     },
@@ -943,7 +982,7 @@ function ForwardedPortRow({
     [handleRemove]
   )
 
-  const advertisedHost = customHostFromAdvertised(entry.advertisedUrl)
+  const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
 
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
@@ -961,9 +1000,9 @@ function ForwardedPortRow({
             :{entry.localPort} → :{entry.remotePort}
           </span>
         </div>
-        {advertisedHost && (
+        {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            opens {entry.advertisedProtocol ?? 'http'}://{advertisedHost}:{entry.localPort}
+            opens {advertisedBrowserUrl}
           </div>
         )}
       </div>
@@ -973,8 +1012,8 @@ function ForwardedPortRow({
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
           title={
-            advertisedHost
-              ? `Open ${entry.advertisedProtocol ?? 'http'}://${advertisedHost}:${entry.localPort} in Orca Browser`
+            advertisedBrowserUrl
+              ? `Open ${advertisedBrowserUrl} in Orca Browser`
               : 'Open in Orca Browser'
           }
         >
@@ -1020,7 +1059,7 @@ function DetectedPortRow({
   port: DetectedPort & { targetId: string }
   onForward: () => void
 }): React.JSX.Element {
-  const advertisedHost = customHostFromAdvertised(port.advertisedUrl)
+  const advertisedBrowserUrl = advertisedBrowserUrlForDetectedPort(port)
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">
@@ -1030,9 +1069,9 @@ function DetectedPortRow({
             <span className="text-xs text-muted-foreground truncate">{port.processName}</span>
           )}
         </div>
-        {advertisedHost && (
+        {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            advertised as {port.advertisedProtocol ?? 'http'}://{advertisedHost}:{port.port}
+            advertised as {advertisedBrowserUrl}
           </div>
         )}
       </div>

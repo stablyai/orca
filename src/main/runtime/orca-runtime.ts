@@ -1983,7 +1983,6 @@ export class OrcaRuntimeService {
 
   registerPty(ptyId: string, worktreeId: string): void {
     this.recordPtyWorktree(ptyId, worktreeId, { connected: true })
-    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
   }
 
   onPtyData(ptyId: string, data: string, at: number): void {
@@ -9473,6 +9472,9 @@ export class OrcaRuntimeService {
         preview: state.preview ?? ''
       }
       this.ptysById.set(ptyId, pty)
+      // Why: restored/controller-discovered PTYs learn their worktree here
+      // without registerPty(), so URL enrichment must bind at this source.
+      advertisedUrlWatcher.bindPty(ptyId, worktreeId)
       return pty
     }
 
@@ -9492,6 +9494,9 @@ export class OrcaRuntimeService {
     if (state.preview !== undefined && state.preview.length > 0) {
       pty.preview = state.preview
     }
+    // Why: recordPtyWorktree is the common lifecycle point for every path that
+    // resolves a PTY's worktree, including renderer restore and controller list.
+    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
     return pty
   }
 

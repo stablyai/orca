@@ -152,10 +152,12 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       <div className="relative flex h-5 min-w-0 items-center">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex min-w-0 select-text items-baseline gap-1.5 truncate pr-14 text-[11px] text-muted-foreground">
-              <span className="shrink-0 truncate">{processLabel}</span>
+            <span className="flex min-w-0 select-text items-baseline gap-1.5 overflow-hidden pr-14 text-[11px] text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate">{processLabel}</span>
               <span className="shrink-0 text-muted-foreground/45">-</span>
-              <span className="truncate text-muted-foreground/70">{address}</span>
+              <span className="min-w-10 max-w-20 shrink-0 truncate text-right text-muted-foreground/70">
+                {address}
+              </span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

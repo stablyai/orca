@@ -64,6 +64,11 @@ function cacheKey(worktreeId: string, port: number): CacheKey {
   return `${worktreeId}::${port}`
 }
 
+function worktreeIdFromCacheKey(key: CacheKey, port: number): string {
+  const suffix = `::${port}`
+  return key.endsWith(suffix) ? key.slice(0, -suffix.length) : key
+}
+
 class PtyBuffer {
   private raw = ''
 
@@ -275,6 +280,20 @@ export class AdvertisedUrlWatcher {
     this.ptyToWorktree.delete(ptyId)
     this.buffers.delete(ptyId)
     this.pending.delete(ptyId)
+    const removedEvents: AdvertisedUrlChangeEvent[] = []
+    for (const [key, entry] of this.cache) {
+      if (entry.ptyId !== ptyId) {
+        continue
+      }
+      // Why: SSH forward enrichment has no listener PID to validate against,
+      // so PTY teardown is the only reliable expiry signal for that cache row.
+      this.cache.delete(key)
+      const worktreeId = worktreeIdFromCacheKey(key, entry.port)
+      removedEvents.push({ worktreeId, port: entry.port })
+    }
+    for (const event of removedEvents) {
+      this.emitChange(event)
+    }
   }
 
   ingest(ptyId: string, chunk: string, now?: number): void {

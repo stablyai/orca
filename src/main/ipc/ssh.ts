@@ -160,7 +160,8 @@ function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, target
 function broadcastDetectedPorts(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
-  ports: DetectedPort[]
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
   const win = getMainWindow()
   if (!win || win.isDestroyed()) {
@@ -168,7 +169,7 @@ function broadcastDetectedPorts(
   }
   win.webContents.send('ssh:detected-ports-changed', {
     targetId,
-    ports: enrichDetected(targetId, ports)
+    ports: enrichDetected(targetId, ports, options)
   })
 }
 
@@ -180,11 +181,20 @@ function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManage
   return enrichSshForwardEntries(raw, getWorktreeIdsForConnection(persistedStore, targetId))
 }
 
-function enrichDetected(targetId: string, ports: DetectedPort[]): DetectedPort[] {
+function enrichDetected(
+  targetId: string,
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
+): DetectedPort[] {
   if (!persistedStore) {
     return ports
   }
-  return enrichSshDetectedPorts(ports, getWorktreeIdsForConnection(persistedStore, targetId))
+  return enrichSshDetectedPorts(
+    ports,
+    getWorktreeIdsForConnection(persistedStore, targetId),
+    undefined,
+    options
+  )
 }
 
 // Why: after user-initiated add/remove/update the runtime manager is the
@@ -286,7 +296,11 @@ function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null)
       }
       const scanner = session.getPortScanner()
       if (scanner) {
-        broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId))
+        // Why: watcher changes can arrive before the next SSH scan refreshes
+        // listener PIDs; cached scanner rows must not pin a fresh URL stale.
+        broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId), {
+          validatePid: false
+        })
       }
       broadcastPortForwards(getMainWindow, targetId)
     }

@@ -150,4 +150,33 @@ describe('enrichSshDetectedPorts', () => {
 
     expect(calls).toEqual([[['wt'], 3001, 4242]])
   })
+
+  it('can enrich cached scanner rows without validating their PID', () => {
+    const calls: unknown[][] = []
+    const watcher = {
+      lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
+        calls.push([...args])
+        return {
+          origin: 'https://local.example.com:3001',
+          host: 'local.example.com',
+          hostKind: 'custom',
+          protocol: 'https',
+          port: 3001,
+          ptyId: 'pty',
+          lastSeenAt: 0
+        }
+      }
+    }
+
+    const enriched = enrichSshDetectedPorts(
+      [{ port: 3001, host: '127.0.0.1', pid: 4242, processName: 'node' }],
+      ['wt'],
+      watcher,
+      { validatePid: false }
+    )
+
+    expect(calls).toEqual([[['wt'], 3001, undefined]])
+    expect(enriched[0].pid).toBe(4242)
+    expect(enriched[0].advertisedUrl).toBe('https://local.example.com:3001')
+  })
 })

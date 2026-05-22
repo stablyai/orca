@@ -49,6 +49,9 @@ export function getConnectionIdsForWorktree(
 }
 
 type EnrichmentTarget = { advertisedUrl?: string; advertisedProtocol?: 'http' | 'https' }
+type SshDetectedPortEnrichmentOptions = {
+  validatePid?: boolean
+}
 
 function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: AdvertisedUrl): T {
   // Spread to keep callers' inputs immutable — important for the broadcast
@@ -59,7 +62,8 @@ function applyAdvertisedUrl<T extends EnrichmentTarget>(target: T, found: Advert
 export function enrichSshDetectedPorts(
   ports: readonly DetectedPort[],
   worktreeIds: readonly string[],
-  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest'> = advertisedUrlWatcher
+  watcher: Pick<AdvertisedUrlWatcher, 'lookupBest'> = advertisedUrlWatcher,
+  options: SshDetectedPortEnrichmentOptions = {}
 ): DetectedPort[] {
   if (worktreeIds.length === 0 || ports.length === 0) {
     return [...ports]
@@ -68,7 +72,11 @@ export function enrichSshDetectedPorts(
     // Why: pass the remote listener PID so the watcher can evict stale URLs
     // when the port has been reused by a different process. The relay-side
     // scanner reads /proc/net/tcp and includes the PID when available.
-    const found = watcher.lookupBest(worktreeIds, port.port, port.pid)
+    const found = watcher.lookupBest(
+      worktreeIds,
+      port.port,
+      options.validatePid === false ? undefined : port.pid
+    )
     return found ? applyAdvertisedUrl(port, found) : port
   })
 }
