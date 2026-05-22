@@ -19,6 +19,14 @@ export type GitHistoryPanelState =
 const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
 const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
 const MAX_GIT_HISTORY_PANEL_HEIGHT = 520
+const MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT = '33vh'
+
+type GitHistoryResizeSession = {
+  startY: number
+  startHeight: number
+  previousCursor: string
+  previousUserSelect: string
+}
 
 function clampGitHistoryPanelHeight(height: number): number {
   return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
@@ -77,29 +85,14 @@ function GitHistoryRow({
   const visibleRefs = refs.slice(0, 2)
   const hiddenRefs = refs.slice(2)
   const rowTooltip = item.message || item.subject
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_4.5rem_3.25rem_3.75rem] grid-rows-[auto_auto] items-start gap-x-1.5 px-3 py-1 text-left text-xs transition-colors',
-        canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
-        !canOpenCommit && 'cursor-default',
-        isBoundaryNode && 'text-muted-foreground'
-      )}
-      title={rowTooltip}
-      aria-disabled={!canOpenCommit}
-      aria-label={
-        canOpenCommit ? `Open commit ${item.displayId ?? item.id}: ${item.subject}` : item.subject
-      }
-      data-testid="git-history-row"
-      tabIndex={canOpenCommit ? undefined : -1}
-      onClick={() => {
-        if (canOpenCommit) {
-          onOpenCommit?.(item)
-        }
-      }}
-    >
+  const rowClassName = cn(
+    'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_4.5rem_3.25rem_3.75rem] grid-rows-[auto_auto] items-start gap-x-1.5 px-3 py-1 text-left text-xs transition-colors',
+    canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
+    !canOpenCommit && 'cursor-default',
+    isBoundaryNode && 'text-muted-foreground'
+  )
+  const rowContent = (
+    <>
       <div className="row-span-2">
         <GitHistoryGraphSvg viewModel={viewModel} />
       </div>
@@ -162,6 +155,29 @@ function GitHistoryRow({
           </div>
         )}
       </div>
+    </>
+  )
+
+  if (!canOpenCommit) {
+    return (
+      <div className={rowClassName} title={rowTooltip} data-testid="git-history-row">
+        {rowContent}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={rowClassName}
+      title={rowTooltip}
+      aria-label={`Open commit ${item.displayId ?? item.id}: ${item.subject}`}
+      data-testid="git-history-row"
+      onClick={() => {
+        onOpenCommit?.(item)
+      }}
+    >
+      {rowContent}
     </button>
   )
 }
@@ -199,15 +215,16 @@ export function GitHistoryPanel({
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
-  const resizeSessionRef = useRef<{ startY: number; startHeight: number } | null>(null)
+  const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
   const stopResize = useCallback((): void => {
-    if (!resizeSessionRef.current) {
+    const session = resizeSessionRef.current
+    if (!session) {
       return
     }
     resizeSessionRef.current = null
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
+    document.body.style.cursor = session.previousCursor
+    document.body.style.userSelect = session.previousUserSelect
   }, [])
 
   const handleResizePointerMove = useCallback((event: PointerEvent): void => {
@@ -228,6 +245,7 @@ export function GitHistoryPanel({
       window.removeEventListener('pointerup', stopResize)
       window.removeEventListener('pointercancel', stopResize)
       window.removeEventListener('blur', stopResize)
+      stopResize()
     }
   }, [handleResizePointerMove, stopResize])
 
@@ -237,7 +255,12 @@ export function GitHistoryPanel({
         return
       }
       event.preventDefault()
-      resizeSessionRef.current = { startY: event.clientY, startHeight: panelHeight }
+      resizeSessionRef.current = {
+        startY: event.clientY,
+        startHeight: panelHeight,
+        previousCursor: document.body.style.cursor,
+        previousUserSelect: document.body.style.userSelect
+      }
       document.body.style.cursor = 'row-resize'
       document.body.style.userSelect = 'none'
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -263,7 +286,9 @@ export function GitHistoryPanel({
   }, [])
 
   const expandedBodyClassName = 'overflow-y-auto scrollbar-sleek'
-  const expandedBodyStyle = { height: panelHeight }
+  const expandedBodyStyle = {
+    height: `min(${panelHeight}px, ${MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT})`
+  }
 
   return (
     <div className="relative">

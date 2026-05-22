@@ -1273,6 +1273,8 @@ function SourceControlInner(): React.JSX.Element {
   }, [entries])
 
   const normalizedFilter = filterQuery.toLowerCase()
+  const isGitHistoryVisible =
+    scope === 'all' && !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
 
   const filteredGrouped = useMemo(() => {
     if (!normalizedFilter) {
@@ -2920,7 +2922,8 @@ function SourceControlInner(): React.JSX.Element {
       !worktreePath ||
       isFolder ||
       !isBranchVisible ||
-      !isGitHistoryExpanded
+      !isGitHistoryExpanded ||
+      !isGitHistoryVisible
     ) {
       return
     }
@@ -2975,6 +2978,7 @@ function SourceControlInner(): React.JSX.Element {
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
+    isGitHistoryVisible,
     worktreePath
   ])
 
@@ -2998,7 +3002,7 @@ function SourceControlInner(): React.JSX.Element {
   useEffect(() => {
     // Why: history shells out to git. Defer the first load until the user
     // expands Graph so source control stays cheap for large/remote repos.
-    if (!isBranchVisible || !isGitHistoryExpanded) {
+    if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
     void refreshGitHistoryRef.current()
@@ -3008,6 +3012,7 @@ function SourceControlInner(): React.JSX.Element {
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
+    isGitHistoryVisible,
     worktreePath
   ])
 
@@ -4089,24 +4094,20 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           )}
 
-          {scope === 'all' &&
-            !normalizedFilter &&
-            activeWorktreeId &&
-            worktreePath &&
-            !isFolder && (
-              // Why: the graph is reference context for the whole panel, so when
-              // file sections are short it should occupy the bottom, and when the
-              // pane scrolls it should remain docked as branch context.
-              <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
-                <GitHistoryPanel
-                  state={gitHistoryState}
-                  collapsed={collapsedSections.has('history')}
-                  onToggle={() => toggleSection('history')}
-                  onRefresh={() => void refreshGitHistory()}
-                  onOpenCommit={(item) => void openHistoryCommitDiff(item)}
-                />
-              </div>
-            )}
+          {isGitHistoryVisible && (
+            // Why: the graph is reference context for the whole panel, so when
+            // file sections are short it should occupy the bottom, and when the
+            // pane scrolls it should remain docked as branch context.
+            <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
+              <GitHistoryPanel
+                state={gitHistoryState}
+                collapsed={collapsedSections.has('history')}
+                onToggle={() => toggleSection('history')}
+                onRefresh={() => void refreshGitHistory()}
+                onOpenCommit={(item) => void openHistoryCommitDiff(item)}
+              />
+            </div>
+          )}
         </div>
 
         {selectedKeys.size > 0 && (
