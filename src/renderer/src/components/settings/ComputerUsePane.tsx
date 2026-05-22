@@ -6,7 +6,12 @@ import type {
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
 } from '../../../../shared/computer-use-permissions-types'
-import { COMPUTER_USE_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  COMPUTER_USE_SKILL_INSTALL_COMMAND,
+  COMPUTER_USE_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import { AgentSkillInstalledIndicator } from '../AgentSkillInstalledIndicator'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { SettingsSearchEntry } from './settings-search'
@@ -73,6 +78,7 @@ export function ComputerUsePane(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
+  const { installed: computerUseSkillInstalled } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME)
 
   const stateById = useMemo(
     () => new Map(states.map((state) => [state.id, state.status] as const)),
@@ -237,6 +243,7 @@ export function ComputerUsePane(): React.JSX.Element {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {computerUseSkillInstalled ? <AgentSkillInstalledIndicator /> : null}
         </div>
       </div>
     </div>

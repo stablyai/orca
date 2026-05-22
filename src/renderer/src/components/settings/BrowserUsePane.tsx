@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
 import {
   BROWSER_USE_ENABLED_STORAGE_KEY,
   BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
 } from '@/lib/browser-use-setup-state'
+import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -93,16 +97,18 @@ export function BrowserUseSetup({
   const cliEnabled = cliStatus?.state === 'installed'
   const cliSupported = cliStatus?.supported ?? false
 
-  // Why: the skill install step is a copy-and-run command that happens in the
-  // user's terminal. We cannot detect completion from the app, so we let the
-  // user mark it done explicitly after copying — this avoids falsely implying
-  // progress and keeps the guided flow honest.
-  const [skillInstalled, setSkillInstalled] = useState<boolean>(() => {
+  // Why: discovery can only see local skill roots. Keep the manual marker as a
+  // fallback for custom installs while preferring detected local completion.
+  const [skillMarkedInstalled, setSkillMarkedInstalled] = useState<boolean>(() => {
     return localStorage.getItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY) === '1'
   })
+  const { installed: skillDetected } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    enabled: browserUseEnabled
+  })
+  const skillInstalled = skillDetected || skillMarkedInstalled
 
   const markSkillInstalled = (value: boolean): void => {
-    setSkillInstalled(value)
+    setSkillMarkedInstalled(value)
     localStorage.setItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
   }
 
@@ -311,9 +317,11 @@ export function BrowserUseSetup({
           <BrowserUseSkillStep
             command={ORCA_CLI_SKILL_INSTALL_COMMAND}
             skillInstalled={skillInstalled}
+            skillDetected={skillDetected}
+            skillMarkedInstalled={skillMarkedInstalled}
             disabled={!cliEnabled}
             onCopy={() => void handleCopySkillCommand()}
-            onToggleInstalled={() => markSkillInstalled(!skillInstalled)}
+            onToggleInstalled={() => markSkillInstalled(!skillMarkedInstalled)}
           />
         </SearchableSetting>
       ) : null}

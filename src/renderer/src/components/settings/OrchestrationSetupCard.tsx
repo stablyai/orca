@@ -1,6 +1,9 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Terminal } from 'lucide-react'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
+import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
 import { Button } from '@/components/ui/button'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 
@@ -15,6 +18,8 @@ export function OrchestrationSetupCard(props: {
   const { compact, terminalHeightPx } = props
   const [showTerminal, setShowTerminal] = useState(false)
   const [buttonVisible, setButtonVisible] = useState(true)
+  const { installed: skillInstalled, refresh: refreshSkillInstalled } =
+    useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME)
 
   useEffect(() => {
     if (!showTerminal) {
@@ -25,11 +30,28 @@ export function OrchestrationSetupCard(props: {
     return () => window.clearTimeout(timer)
   }, [showTerminal])
 
+  useEffect(() => {
+    if (!showTerminal || skillInstalled) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      void refreshSkillInstalled()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [refreshSkillInstalled, showTerminal, skillInstalled])
+
   const button = (
-    <Button variant="default" size="sm" onClick={() => setShowTerminal(true)}>
-      <Terminal aria-hidden />
-      Install the skill
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant={skillInstalled ? 'outline' : 'default'}
+        size="sm"
+        onClick={() => setShowTerminal(true)}
+      >
+        <Terminal aria-hidden />
+        Install the skill
+      </Button>
+      {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
+    </div>
   )
 
   const terminal = showTerminal ? (

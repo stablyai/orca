@@ -1,4 +1,5 @@
 import { Copy } from 'lucide-react'
+import { AgentSkillInstalledIndicator } from '../AgentSkillInstalledIndicator'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { StepBadge } from './BrowserUseStepBadge'
@@ -6,6 +7,8 @@ import { StepBadge } from './BrowserUseStepBadge'
 type Props = {
   command: string
   skillInstalled: boolean
+  skillDetected: boolean
+  skillMarkedInstalled: boolean
   disabled?: boolean
   onCopy: () => void
   onToggleInstalled: () => void
@@ -14,6 +17,8 @@ type Props = {
 export function BrowserUseSkillStep({
   command,
   skillInstalled,
+  skillDetected,
+  skillMarkedInstalled,
   disabled = false,
   onCopy,
   onToggleInstalled
@@ -50,21 +55,26 @@ export function BrowserUseSkillStep({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <span>
-            {skillInstalled
-              ? 'Marked as installed on this machine.'
-              : "Check off once you've run it on this computer."}
+            {skillDetected
+              ? 'Detected as installed on this machine.'
+              : skillMarkedInstalled
+                ? 'Marked as installed on this machine.'
+                : "Check off once you've run it on this computer."}
           </span>
-          <button
-            type="button"
-            className="underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:hover:text-muted-foreground"
-            onClick={onToggleInstalled}
-            disabled={disabled}
-          >
-            {skillInstalled ? 'Undo' : 'I ran it'}
-          </button>
+          {!skillDetected ? (
+            <button
+              type="button"
+              className="underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:hover:text-muted-foreground"
+              onClick={onToggleInstalled}
+              disabled={disabled}
+            >
+              {skillMarkedInstalled ? 'Undo' : 'I ran it'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

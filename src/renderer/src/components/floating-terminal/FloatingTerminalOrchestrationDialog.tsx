@@ -10,11 +10,14 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
+import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { AgentSkillInstalledIndicator } from '../AgentSkillInstalledIndicator'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -34,6 +37,10 @@ export function FloatingTerminalOrchestrationDialog({
   const [cliLoading, setCliLoading] = useState(false)
   const [cliBusy, setCliBusy] = useState(false)
   const [skillBusy, setSkillBusy] = useState(false)
+  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
+    ORCHESTRATION_SKILL_NAME,
+    { enabled: open }
+  )
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
@@ -51,6 +58,16 @@ export function FloatingTerminalOrchestrationDialog({
       void refreshCliStatus()
     }
   }, [open, refreshCliStatus])
+
+  useEffect(() => {
+    if (!open || skillInstalled) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      void refreshSkillInstalled()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [open, refreshSkillInstalled, skillInstalled])
 
   const cliInstalled = cliStatus?.state === 'installed'
   const cliSupported = cliStatus?.supported ?? false
@@ -175,20 +192,23 @@ export function FloatingTerminalOrchestrationDialog({
                     Paste this command into the terminal so agents learn orchestration.
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => void handlePasteSkillCommand()}
-                  disabled={skillBusy}
-                  className="shrink-0 gap-1.5"
-                >
-                  {skillBusy ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Clipboard className="size-3.5" />
-                  )}
-                  {activeTabId ? 'Paste' : 'Copy'}
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void handlePasteSkillCommand()}
+                    disabled={skillBusy}
+                    className="shrink-0 gap-1.5"
+                  >
+                    {skillBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Clipboard className="size-3.5" />
+                    )}
+                    {activeTabId ? 'Paste' : 'Copy'}
+                  </Button>
+                  {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
+                </div>
               </div>
               <div className="flex min-w-0 items-center gap-2 rounded bg-background px-2 py-1.5">
                 <code className="min-w-0 flex-1 text-[11px] leading-relaxed break-all whitespace-normal text-muted-foreground">

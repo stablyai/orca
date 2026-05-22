@@ -1,8 +1,13 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Terminal } from 'lucide-react'
 import { toast } from 'sonner'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
+import { useInstalledAgentSkill } from '@/hooks/useInstalledAgentSkills'
+import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
 import { Button } from '@/components/ui/button'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 
@@ -17,6 +22,8 @@ export function OrcaCliSkillSetupCard(props: {
   const { compact, terminalHeightPx } = props
   const [showTerminal, setShowTerminal] = useState(false)
   const [buttonVisible, setButtonVisible] = useState(true)
+  const { installed: skillInstalled, refresh: refreshSkillInstalled } =
+    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME)
 
   useEffect(() => {
     if (!showTerminal) {
@@ -26,6 +33,16 @@ export function OrcaCliSkillSetupCard(props: {
     const timer = window.setTimeout(() => setButtonVisible(false), TERMINAL_REVEAL_MS)
     return () => window.clearTimeout(timer)
   }, [showTerminal])
+
+  useEffect(() => {
+    if (!showTerminal || skillInstalled) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      void refreshSkillInstalled()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [refreshSkillInstalled, showTerminal, skillInstalled])
 
   // Why: matches the onboarding flow (runOnboardingFeatureSetup) — registering
   // the `orca` CLI is a prerequisite for the skill, so we do it implicitly when
@@ -47,10 +64,17 @@ export function OrcaCliSkillSetupCard(props: {
   }
 
   const button = (
-    <Button variant="default" size="sm" onClick={() => void handleInstall()}>
-      <Terminal aria-hidden />
-      Install the skill
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant={skillInstalled ? 'outline' : 'default'}
+        size="sm"
+        onClick={() => void handleInstall()}
+      >
+        <Terminal aria-hidden />
+        Install the skill
+      </Button>
+      {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
+    </div>
   )
 
   const terminal = showTerminal ? (
