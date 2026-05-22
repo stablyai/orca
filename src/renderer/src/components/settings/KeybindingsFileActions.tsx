@@ -103,15 +103,18 @@ export function KeybindingsFileActions(): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-border bg-card p-3 text-card-foreground shadow-xs">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <p className="text-xs font-medium">Keybindings File</p>
-          <p className="truncate font-mono text-xs text-muted-foreground">
+    <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2 text-card-foreground shadow-xs">
+      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p className="shrink-0 text-xs font-medium">Keybindings JSON</p>
+            <p className="text-xs text-muted-foreground">The visual editor saves here.</p>
+          </div>
+          <p className="truncate font-mono text-[11px] leading-4 text-muted-foreground">
             {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5">
+        <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
           <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-xs">
             <Button
               type="button"
@@ -121,7 +124,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
               onClick={() => void editKeybindingsInOrca()}
             >
               <FileText className="size-3" />
-              Edit in Orca
+              Edit File in Orca
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
