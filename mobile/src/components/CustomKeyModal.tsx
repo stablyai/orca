@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Switch } from 'react-native'
+import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
@@ -8,7 +8,8 @@ import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
   TERMINAL_SHORTCUT_SPECIAL_KEYS,
-  type TerminalShortcutModifier
+  type TerminalShortcutModifier,
+  type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
 
 export const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
@@ -20,13 +21,41 @@ export type CustomKey = {
   enter: boolean
 }
 
-type Step = 'choose-type' | 'shortcut-combo' | 'text-macro'
+type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
-const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string }[] = [
+// Why: Alt is rendered with the ⌥ glyph because on macOS hosts the Option key
+// is the only modifier that produces an ESC-prefixed byte sequence terminals
+// can read. Cmd is intentionally absent — macOS swallows it before keystrokes
+// reach the shell, so there's nothing to encode.
+const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string; glyph?: string }[] = [
   { id: 'ctrl', label: 'Ctrl' },
-  { id: 'alt', label: 'Alt' },
+  { id: 'alt', label: 'Alt', glyph: '⌥' },
   { id: 'shift', label: 'Shift' }
 ]
+
+// Why: special keys are grouped by purpose so the picker reads as three small
+// fixed grids rather than one ragged wrap row that clipped F7-F12.
+const SPECIAL_KEY_GROUPS: { title: string; ids: string[]; columns: number }[] = [
+  {
+    title: 'Editing',
+    ids: ['escape', 'tab', 'enter', 'backspace', 'delete', 'insert', 'space'],
+    columns: 4
+  },
+  {
+    title: 'Navigation',
+    ids: ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight', 'home', 'end', 'pageUp', 'pageDown'],
+    columns: 4
+  },
+  {
+    title: 'Function',
+    ids: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'],
+    columns: 6
+  }
+]
+
+const SPECIAL_KEY_BY_ID: Record<string, TerminalShortcutSpecialKey> = Object.fromEntries(
+  TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => [key.id, key])
+)
 
 type Props = {
   visible: boolean
@@ -83,6 +112,17 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
     [shortcutKey, shortcutModifiers]
   )
 
+  const previewKeyLabel = useMemo(() => {
+    const special = SPECIAL_KEY_BY_ID[shortcutKey]
+    if (special) return special.label
+    return shortcutKey.length === 1 ? shortcutKey.toUpperCase() : shortcutKey
+  }, [shortcutKey])
+
+  const orderedActiveModifiers = useMemo(
+    () => SHORTCUT_MODIFIERS.filter((m) => shortcutModifiers.includes(m.id)),
+    [shortcutModifiers]
+  )
+
   const toggleShortcutModifier = useCallback((modifier: TerminalShortcutModifier) => {
     setShortcutModifiers((current) =>
       current.includes(modifier)
@@ -92,10 +132,21 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
   }, [])
 
   const handleShortcutKeyInput = useCallback((value: string) => {
+    if (value === '') {
+      // Why: allow the field to go empty so backspace works; the Save button
+      // stays disabled until a valid key is entered.
+      setShortcutKey('')
+      return
+    }
     const next = normalizeShortcutKeyInput(value)
     if (next) {
       setShortcutKey(next)
     }
+  }, [])
+
+  const handleSpecialKeyPick = useCallback((id: string) => {
+    setShortcutKey(id)
+    setStep('shortcut-combo')
   }, [])
 
   const handleShortcutSave = useCallback(() => {
@@ -113,6 +164,13 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
   }, [addKey, macroLabel, macroText, macroEnter])
 
   const showBack = step !== 'choose-type'
+  const onBack = useCallback(() => {
+    if (step === 'special-keys') {
+      setStep('shortcut-combo')
+    } else {
+      setStep('choose-type')
+    }
+  }, [step])
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
@@ -120,7 +178,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
         {showBack ? (
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={() => setStep('choose-type')}
+            onPress={onBack}
             accessibilityLabel="Back"
           >
             <ChevronLeft size={18} color={colors.textSecondary} />
@@ -131,6 +189,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
         <Text style={styles.title}>
           {step === 'choose-type' && 'Add Shortcut'}
           {step === 'shortcut-combo' && 'Shortcut Combo'}
+          {step === 'special-keys' && 'Pick a key'}
           {step === 'text-macro' && 'Text Macro'}
         </Text>
         <View style={styles.backSpacer} />
@@ -157,82 +216,122 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
       )}
 
       {step === 'shortcut-combo' && (
-        <View style={styles.group}>
-          <View style={styles.shortcutForm}>
-            <Text style={styles.fieldLabel}>Modifiers</Text>
-            <View style={styles.modifierRow}>
+        <View style={styles.shortcutForm}>
+          <View style={styles.preview}>
+            {orderedActiveModifiers.map((modifier, index) => (
+              <View key={modifier.id} style={styles.previewKeycapRow}>
+                {index > 0 ? <Text style={styles.previewPlus}>+</Text> : null}
+                <View style={[styles.keycap, styles.keycapModifier]}>
+                  <Text style={styles.keycapModifierText}>{modifier.label}</Text>
+                </View>
+              </View>
+            ))}
+            {orderedActiveModifiers.length > 0 ? <Text style={styles.previewPlus}>+</Text> : null}
+            <View style={[styles.keycap, !shortcutPreview && styles.keycapWarn]}>
+              <Text style={[styles.keycapText, !shortcutPreview && styles.keycapTextWarn]}>
+                {previewKeyLabel}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Modifiers</Text>
+            <View style={styles.mods}>
               {SHORTCUT_MODIFIERS.map((modifier) => {
                 const selected = shortcutModifiers.includes(modifier.id)
                 return (
                   <Pressable
                     key={modifier.id}
                     style={({ pressed }) => [
-                      styles.modifierPill,
-                      selected && styles.modifierPillSelected,
-                      pressed && styles.modifierPillPressed
+                      styles.chip,
+                      selected && styles.chipSelected,
+                      pressed && !selected && styles.chipPressed
                     ]}
                     onPress={() => toggleShortcutModifier(modifier.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                   >
-                    <Text
-                      style={[styles.modifierPillText, selected && styles.modifierPillTextSelected]}
-                    >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                       {modifier.label}
                     </Text>
+                    {modifier.glyph ? (
+                      <Text style={[styles.chipGlyph, selected && styles.chipGlyphSelected]}>
+                        {modifier.glyph}
+                      </Text>
+                    ) : null}
                   </Pressable>
                 )
               })}
             </View>
+          </View>
 
-            <Text style={styles.fieldLabel}>Key</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Key</Text>
             <TextInput
-              style={styles.fieldInput}
+              style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
-              placeholder="C"
+              placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={1}
             />
-
-            <Text style={styles.fieldLabel}>Special Keys</Text>
-            <ScrollView style={styles.keyGridScroll} contentContainerStyle={styles.keyGrid}>
-              {TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => {
-                const selected = shortcutKey === key.id
-                return (
-                  <Pressable
-                    key={key.id}
-                    style={({ pressed }) => [
-                      styles.keyCell,
-                      selected && styles.keyCellSelected,
-                      pressed && styles.keyCellPressed
-                    ]}
-                    onPress={() => setShortcutKey(key.id)}
-                    accessibilityLabel={key.accessibilityLabel}
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.keyCellText, selected && styles.keyCellTextSelected]}>
-                      {key.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </ScrollView>
-
-            <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>Preview</Text>
-              <Text style={styles.previewValue}>{shortcutPreview?.label ?? 'Unsupported'}</Text>
-            </View>
             <Pressable
-              style={[styles.saveButton, !shortcutPreview && styles.saveButtonDisabled]}
-              disabled={!shortcutPreview}
-              onPress={handleShortcutSave}
+              style={({ pressed }) => [styles.moreLink, pressed && styles.moreLinkPressed]}
+              onPress={() => setStep('special-keys')}
             >
-              <Text style={styles.saveButtonText}>Add Shortcut</Text>
+              <Text style={styles.moreLinkText}>More keys — Tab, arrows, F1–F12…</Text>
             </Pressable>
           </View>
+
+          <Pressable
+            style={[styles.saveButton, !shortcutPreview && styles.saveButtonDisabled]}
+            disabled={!shortcutPreview}
+            onPress={handleShortcutSave}
+          >
+            <Text
+              style={[styles.saveButtonText, !shortcutPreview && styles.saveButtonTextDisabled]}
+            >
+              Add
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {step === 'special-keys' && (
+        <View style={styles.specialKeysForm}>
+          {SPECIAL_KEY_GROUPS.map((group) => (
+            <View key={group.title} style={styles.specialGroup}>
+              <Text style={styles.specialGroupTitle}>{group.title}</Text>
+              <View style={styles.keyGrid}>
+                {group.ids.map((id) => {
+                  const key = SPECIAL_KEY_BY_ID[id]
+                  if (!key) return null
+                  const selected = shortcutKey === id
+                  const flexBasis = `${100 / group.columns}%` as const
+                  return (
+                    <View key={id} style={[styles.keyCellWrap, { flexBasis }]}>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.keyCell,
+                          selected && styles.keyCellSelected,
+                          pressed && !selected && styles.keyCellPressed
+                        ]}
+                        onPress={() => handleSpecialKeyPick(id)}
+                        accessibilityLabel={key.accessibilityLabel}
+                        accessibilityState={{ selected }}
+                      >
+                        <Text style={[styles.keyCellText, selected && styles.keyCellTextSelected]}>
+                          {key.label}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          ))}
         </View>
       )}
 
@@ -273,7 +372,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
               disabled={!macroText.trim()}
               onPress={handleMacroSave}
             >
-              <Text style={styles.saveButtonText}>Add Shortcut</Text>
+              <Text
+                style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
+              >
+                Add Shortcut
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -336,53 +439,158 @@ const styles = StyleSheet.create({
     color: colors.textMuted
   },
   shortcutForm: {
-    padding: spacing.md,
+    paddingTop: spacing.sm
+  },
+  preview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg + spacing.xs,
+    flexWrap: 'wrap'
+  },
+  previewKeycapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm
   },
-  modifierRow: {
-    flexDirection: 'row',
-    gap: spacing.xs
+  previewPlus: {
+    color: colors.textMuted,
+    fontSize: 16
   },
-  modifierPill: {
-    flex: 1,
+  keycap: {
+    minWidth: 48,
+    height: 48,
+    paddingHorizontal: spacing.md,
+    borderRadius: 10,
+    backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase,
-    borderRadius: radii.button,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  keycapModifier: {
+    minWidth: 0
+  },
+  keycapWarn: {
+    borderColor: colors.statusAmber
+  },
+  keycapText: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 17,
+    fontWeight: '600'
+  },
+  keycapTextWarn: {
+    color: colors.statusAmber
+  },
+  keycapModifierText: {
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  section: {
+    marginTop: spacing.md
+  },
+  sectionLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+    paddingLeft: 2
+  },
+  mods: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  chip: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: colors.bgPanel,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4
+  },
+  chipSelected: {
+    backgroundColor: colors.textPrimary
+  },
+  chipPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  chipText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  chipTextSelected: {
+    color: colors.bgBase
+  },
+  chipGlyph: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: typography.monoFamily
+  },
+  chipGlyphSelected: {
+    color: 'rgba(10,10,10,0.5)'
+  },
+  keyInput: {
+    width: '100%',
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 22,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  moreLink: {
     paddingVertical: spacing.sm,
     alignItems: 'center'
   },
-  modifierPillSelected: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary
+  moreLinkPressed: {
+    opacity: 0.6
   },
-  modifierPillPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  modifierPillText: {
+  moreLinkText: {
     color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+    fontSize: 13,
+    textDecorationLine: 'underline'
   },
-  modifierPillTextSelected: {
-    color: colors.bgBase
+  specialKeysForm: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+    gap: spacing.md
   },
-  keyGridScroll: {
-    maxHeight: 154
+  specialGroup: {
+    gap: spacing.xs
+  },
+  specialGroupTitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    paddingLeft: 2,
+    marginBottom: spacing.xs
   },
   keyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-    justifyContent: 'center',
-    paddingVertical: spacing.xs
+    marginHorizontal: -spacing.xs / 2
+  },
+  keyCellWrap: {
+    paddingHorizontal: spacing.xs / 2,
+    paddingVertical: spacing.xs / 2
   },
   keyCell: {
-    minWidth: 42,
-    height: 38,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgBase,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: colors.bgPanel,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -393,7 +601,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textPrimary
   },
   keyCellText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: typography.monoFamily
@@ -421,26 +629,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
-  previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.bgBase,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  previewLabel: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  previewValue: {
-    fontSize: 14,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -452,17 +640,21 @@ const styles = StyleSheet.create({
     color: colors.textPrimary
   },
   saveButton: {
+    marginTop: spacing.md,
     backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
     alignItems: 'center'
   },
   saveButtonDisabled: {
-    opacity: 0.5
+    backgroundColor: colors.bgRaised
   },
   saveButtonText: {
     color: colors.bgBase,
-    fontSize: typography.bodySize,
+    fontSize: 15,
     fontWeight: '600'
+  },
+  saveButtonTextDisabled: {
+    color: colors.textMuted
   }
 })
