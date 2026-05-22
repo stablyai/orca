@@ -294,19 +294,6 @@ type LinearTeam = {
   key: string
 }
 
-type LinearLabel = {
-  id: string
-  name: string
-  color?: string | null
-}
-
-type LinearMember = {
-  id: string
-  displayName?: string | null
-  name?: string | null
-  email?: string | null
-}
-
 type DetailComment = {
   id: string | number
   author?: string
@@ -2170,7 +2157,7 @@ export default function MobileTasksScreen() {
   const [workspaceSparsePresets, setWorkspaceSparsePresets] = useState<SparsePreset[]>([])
   const [workspaceSparsePresetsLoading, setWorkspaceSparsePresetsLoading] = useState(false)
   const [workspaceSparsePresetsLoaded, setWorkspaceSparsePresetsLoaded] = useState(false)
-  const [workspaceSparsePresetsError, setWorkspaceSparsePresetsError] = useState('')
+  const [_workspaceSparsePresetsError, setWorkspaceSparsePresetsError] = useState('')
   const [workspaceSparseReloadKey, setWorkspaceSparseReloadKey] = useState(0)
   const [workspaceSparsePresetId, setWorkspaceSparsePresetId] = useState<string | null>(null)
   const [workspaceSparseDraft, setWorkspaceSparseDraft] = useState<WorkspaceSparseDraft | null>(
@@ -2197,15 +2184,8 @@ export default function MobileTasksScreen() {
   const [creatingKey, setCreatingKey] = useState<string | null>(null)
   const [mutatingStatus, setMutatingStatus] = useState(false)
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
-  const [linearLabels, setLinearLabels] = useState<LinearLabel[]>([])
-  const [linearMembers, setLinearMembers] = useState<LinearMember[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
   const [linearCommentDraft, setLinearCommentDraft] = useState('')
-  const [linearEstimateDraft, setLinearEstimateDraft] = useState('')
-  const [linearProjectSearch, setLinearProjectSearch] = useState('')
-  const [linearProjects, setLinearProjects] = useState<LinearProject[]>([])
-  const [linearProjectsLoading, setLinearProjectsLoading] = useState(false)
-  const [linearProjectsError, setLinearProjectsError] = useState('')
   const [linearSubIssueTitle, setLinearSubIssueTitle] = useState('')
   const [taskStateHydrated, setTaskStateHydrated] = useState(false)
   const [runtimeTaskSettings, setRuntimeTaskSettings] = useState<RuntimeTaskSettings>({})
@@ -3623,56 +3603,31 @@ export default function MobileTasksScreen() {
   useEffect(() => {
     if (!linearMetadataItem || !client) {
       setLinearStates([])
-      setLinearLabels([])
-      setLinearMembers([])
       setLinearCommentDraft('')
-      setLinearEstimateDraft('')
-      setLinearProjectSearch('')
-      setLinearProjects([])
-      setLinearProjectsLoading(false)
-      setLinearProjectsError('')
       setLinearSubIssueTitle('')
       return
     }
     let stale = false
     setLinearStatesLoading(true)
     setLinearCommentDraft('')
-    setLinearProjectSearch('')
-    setLinearProjects([])
-    setLinearProjectsError('')
     setLinearSubIssueTitle('')
-    setLinearEstimateDraft(
-      linearMetadataItem.source.estimate === null ||
-        linearMetadataItem.source.estimate === undefined
-        ? ''
-        : String(linearMetadataItem.source.estimate)
-    )
     const baseParams = {
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
     }
-    void Promise.all([
-      client.sendRequest('linear.teamStates', baseParams),
-      client.sendRequest('linear.teamLabels', baseParams),
-      client.sendRequest('linear.teamMembers', baseParams)
-    ])
-      .then(([statesResponse, labelsResponse, membersResponse]) => {
+    void client
+      .sendRequest('linear.teamStates', baseParams)
+      .then((statesResponse) => {
         if (stale) return
         if (isSuccess(statesResponse)) {
           setLinearStates(statesResponse.result as LinearState[])
         } else {
           setLinearStates([])
         }
-        setLinearLabels(isSuccess(labelsResponse) ? (labelsResponse.result as LinearLabel[]) : [])
-        setLinearMembers(
-          isSuccess(membersResponse) ? (membersResponse.result as LinearMember[]) : []
-        )
       })
       .catch(() => {
         if (!stale) {
           setLinearStates([])
-          setLinearLabels([])
-          setLinearMembers([])
         }
       })
       .finally(() => {
@@ -3682,59 +3637,6 @@ export default function MobileTasksScreen() {
       stale = true
     }
   }, [client, linearMetadataItem])
-
-  useEffect(() => {
-    if (!client || actionItem?.provider !== 'linear') {
-      setLinearProjects([])
-      setLinearProjectsLoading(false)
-      setLinearProjectsError('')
-      return
-    }
-    const query = linearProjectSearch.trim()
-    if (!query) {
-      setLinearProjects([])
-      setLinearProjectsLoading(false)
-      setLinearProjectsError('')
-      return
-    }
-
-    let stale = false
-    setLinearProjectsLoading(true)
-    setLinearProjectsError('')
-    const timeout = setTimeout(() => {
-      void client
-        .sendRequest(
-          'linear.listProjects',
-          {
-            query,
-            limit: 20,
-            workspaceId: actionItem.source.workspaceId
-          },
-          { timeoutMs: 30_000 }
-        )
-        .then((response) => {
-          if (stale) return
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          setLinearProjects(response.result as LinearProject[])
-        })
-        .catch((err) => {
-          if (!stale) {
-            setLinearProjects([])
-            setLinearProjectsError(err instanceof Error ? err.message : 'Failed to load projects')
-          }
-        })
-        .finally(() => {
-          if (!stale) setLinearProjectsLoading(false)
-        })
-    }, 150)
-
-    return () => {
-      stale = true
-      clearTimeout(timeout)
-    }
-  }, [actionItem, client, linearProjectSearch])
 
   useEffect(() => {
     if (!actionItem) {
@@ -4345,13 +4247,6 @@ export default function MobileTasksScreen() {
     workspaceCreateDraft?.item.provider === 'linear' && workspaceRepos.length > 1
   const workspaceSparseCheckoutAvailable =
     workspaceCreateTargetRepo != null && !workspaceCreateTargetRepo.connectionId
-  const selectedWorkspaceSparsePreset = useMemo(
-    () =>
-      workspaceSparsePresetId
-        ? (workspaceSparsePresets.find((preset) => preset.id === workspaceSparsePresetId) ?? null)
-        : null,
-    [workspaceSparsePresetId, workspaceSparsePresets]
-  )
   const workspaceSparseDraftParsed = useMemo(
     () =>
       workspaceSparseDraft
@@ -7223,140 +7118,6 @@ export default function MobileTasksScreen() {
     [client, loadTasks, mutatingStatus]
   )
 
-  const updateLinearIssueMetadata = useCallback(
-    async (
-      item: Extract<TaskItem, { provider: 'linear' }>,
-      updates: {
-        priority?: number
-        estimate?: number | null
-        assigneeId?: string | null
-        labelIds?: string[]
-        projectId?: string | null
-      }
-    ): Promise<void> => {
-      if (!client || mutatingStatus) return
-      setMutatingStatus(true)
-      setError('')
-      try {
-        const response = await client.sendRequest('linear.updateIssue', {
-          id: item.source.id,
-          workspaceId: item.source.workspaceId,
-          updates
-        })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        setActionItem((current) => {
-          if (!current || current.provider !== 'linear' || current.source.id !== item.source.id) {
-            return current
-          }
-          const nextLabels =
-            updates.labelIds !== undefined
-              ? linearLabels
-                  .filter((label) => updates.labelIds?.includes(label.id))
-                  .map((label) => label.name)
-              : current.source.labels
-          const nextAssignee =
-            updates.assigneeId !== undefined
-              ? updates.assigneeId === null
-                ? undefined
-                : (() => {
-                    const member = linearMembers.find((entry) => entry.id === updates.assigneeId)
-                    const displayName = member?.displayName ?? member?.name ?? member?.email
-                    return displayName
-                      ? { id: updates.assigneeId, displayName }
-                      : current.source.assignee
-                  })()
-              : current.source.assignee
-          const nextProject =
-            updates.projectId !== undefined
-              ? updates.projectId === null
-                ? undefined
-                : (linearProjects.find((project) => project.id === updates.projectId) ??
-                  current.source.project)
-              : current.source.project
-          return {
-            ...current,
-            source: {
-              ...current.source,
-              ...(updates.priority !== undefined ? { priority: updates.priority } : {}),
-              ...(updates.estimate !== undefined ? { estimate: updates.estimate } : {}),
-              ...(updates.labelIds !== undefined
-                ? { labelIds: updates.labelIds, labels: nextLabels }
-                : {}),
-              project: nextProject,
-              assignee: nextAssignee
-            }
-          }
-        })
-        setDetailPayload((current) =>
-          current?.provider === 'linear'
-            ? {
-                ...current,
-                ...(updates.labelIds !== undefined
-                  ? {
-                      labels: linearLabels
-                        .filter((label) => updates.labelIds?.includes(label.id))
-                        .map((label) => label.name)
-                    }
-                  : {}),
-                ...(updates.assigneeId !== undefined
-                  ? {
-                      assignee:
-                        updates.assigneeId === null
-                          ? undefined
-                          : (() => {
-                              const member = linearMembers.find(
-                                (entry) => entry.id === updates.assigneeId
-                              )
-                              return (
-                                member?.displayName ??
-                                member?.name ??
-                                member?.email ??
-                                current.assignee
-                              )
-                            })()
-                    }
-                  : {}),
-                ...(updates.projectId !== undefined
-                  ? {
-                      project:
-                        updates.projectId === null
-                          ? undefined
-                          : (linearProjects.find((project) => project.id === updates.projectId) ??
-                            current.project)
-                    }
-                  : {})
-              }
-            : current
-        )
-        await loadTasks({ silent: true })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update Linear issue')
-      } finally {
-        setMutatingStatus(false)
-      }
-    },
-    [client, linearLabels, linearMembers, linearProjects, loadTasks, mutatingStatus]
-  )
-
-  const updateLinearEstimateDraft = useCallback(
-    async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
-      const trimmed = linearEstimateDraft.trim()
-      if (!trimmed) {
-        await updateLinearIssueMetadata(item, { estimate: null })
-        return
-      }
-      const estimate = Number(trimmed)
-      if (!Number.isInteger(estimate) || estimate < 0) {
-        setError('Estimate must be a non-negative integer')
-        return
-      }
-      await updateLinearIssueMetadata(item, { estimate })
-    },
-    [linearEstimateDraft, updateLinearIssueMetadata]
-  )
-
   const addLinearComment = useCallback(
     async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
       if (!client || mutatingStatus) return
@@ -8949,8 +8710,6 @@ export default function MobileTasksScreen() {
             const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
             const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
             const branchSummary = hostedBranchSummary(item)
-            const actionableItem =
-              item.provider === 'gitlabTodo' ? null : (item as ActionableTaskItem)
             return (
               <Pressable
                 style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
