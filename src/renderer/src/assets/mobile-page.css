@@ -85,6 +85,18 @@
   position: relative;
   z-index: 1;
   max-width: 660px;
+  display: flex;
+  flex-direction: column;
+  /* Why: min-height (rather than fixed height) keeps the intro/flow
+     screens at a uniform 420px box for centering, while letting the
+     paired view grow when the device list needs more room. */
+  min-height: 420px;
+}
+
+.mobile-page-root .mp-hero-copy > * {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .mobile-page-root .mp-eyebrow-row {
@@ -120,39 +132,131 @@
   line-height: 1.55;
 }
 
+.mobile-page-root .mp-paired-list {
+  list-style: none;
+  margin: 18px 0 0;
+  /* Why: right padding reserves space for the scrollbar so it doesn't
+     sit on top of the row's right edge when the list overflows. */
+  padding: 0 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 452px;
+  /* Why: cap so 4 rows fit fully and the 5th onward scrolls. Rows render
+     at ~64px each plus 8px gap, so 4 × 64 + 3 × 8 ≈ 280px. */
+  max-height: 288px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mobile-page-root .mp-paired-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+.mobile-page-root .mp-paired-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-paired-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-page-root .mp-paired-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-paired-name {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-page-root .mp-paired-meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.mobile-page-root .mp-paired-revoke {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.mobile-page-root .mp-paired-revoke:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--destructive, oklch(0.6 0.2 25)) 12%, transparent);
+  color: var(--destructive, oklch(0.6 0.2 25));
+}
+
+.mobile-page-root .mp-paired-revoke[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-paired-revoke svg {
+  width: 14px;
+  height: 14px;
+}
+
 .mobile-page-root .mp-cta-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
-  margin-bottom: 28px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 .mobile-page-root .mp-primary-action {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 54px;
+  gap: 8px;
+  height: 40px;
   border: 0;
   border-radius: 999px;
   background: var(--primary);
   color: var(--primary-foreground);
-  padding: 0 28px;
-  font-size: 17px;
+  padding: 0 18px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   transition:
-    transform 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.mobile-page-root .mp-primary-action:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--foreground) 40%, transparent);
+    background 140ms ease,
+    color 140ms ease;
 }
 
 .mobile-page-root .mp-primary-action svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 /* Step flow ─────────────────────────────────────────────────────── */
@@ -189,7 +293,6 @@
 
 .mobile-page-root .mp-flow-viewport {
   position: relative;
-  min-height: 360px;
 }
 
 .mobile-page-root .mp-flow-screen {
@@ -219,11 +322,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 
-.mobile-page-root .mp-flow-back,
 .mobile-page-root .mp-flow-continue {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -233,31 +337,44 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
+  background: var(--primary);
+  color: var(--primary-foreground);
   transition:
     background 140ms ease,
     color 140ms ease,
     opacity 140ms ease;
 }
 
-.mobile-page-root .mp-flow-back svg,
 .mobile-page-root .mp-flow-continue svg {
   width: 13px;
   height: 13px;
 }
 
 .mobile-page-root .mp-flow-back {
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  color: var(--foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 140ms ease;
 }
 
 .mobile-page-root .mp-flow-back:hover {
-  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  color: var(--foreground);
 }
 
-.mobile-page-root .mp-flow-continue {
-  background: var(--primary);
-  color: var(--primary-foreground);
+.mobile-page-root .mp-flow-back svg {
+  width: 12px;
+  height: 12px;
 }
 
 .mobile-page-root .mp-flow-continue.is-hidden {
@@ -355,6 +472,201 @@
   display: block;
   width: 116px;
   height: 116px;
+}
+
+.mobile-page-root .mp-qr-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-page-root .mp-link-under {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.mobile-page-root .mp-link-under:hover:not([disabled]) {
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-link-under[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Step 1 (Get the app) — borderless layout, page-1 typography */
+.mobile-page-root .mp-step2-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Why: align the QR's top with the body copy ("Scan the QR…") instead
+   of the eyebrow row above it. The eyebrow row is ~22px tall + 22px
+   margin-bottom, and the h2 is ~38px line-height with no top margin —
+   so push the QR down by roughly that combined height. */
+.mobile-page-root .mp-step2-layout > .mp-qr,
+.mobile-page-root .mp-step2-layout > .mp-qr-stack {
+  margin-top: 88px;
+}
+
+.mobile-page-root .mp-step2-copy {
+  min-width: 0;
+}
+
+.mobile-page-root .mp-h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.mobile-page-root .mp-lead-sm {
+  max-width: 420px;
+  margin: 14px 0 22px;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.55;
+}
+
+.mobile-page-root .mp-tab-toggle {
+  display: inline-flex;
+  gap: 18px;
+  margin: 2px 0 22px;
+}
+
+.mobile-page-root .mp-tab-toggle button {
+  border: 0;
+  background: transparent;
+  padding: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mobile-page-root .mp-tab-toggle button.is-active {
+  color: var(--foreground);
+  border-bottom-color: var(--foreground);
+}
+
+.mobile-page-root .mp-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.mobile-page-root .mp-text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 140ms ease;
+}
+
+.mobile-page-root .mp-text-link:hover {
+  opacity: 1;
+}
+
+.mobile-page-root .mp-text-link svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mobile-page-root .mp-text-link[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-network-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.mobile-page-root .mp-network-label {
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-network-select {
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.mobile-page-root .mp-network-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.mobile-page-root .mp-network-refresh:hover:not([disabled]) {
+  background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-network-refresh[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-network-refresh svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mobile-page-root .mp-network-refresh.is-spinning svg {
+  animation: mp-network-refresh-spin 900ms linear infinite;
+}
+
+@keyframes mp-network-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mobile-page-root .mp-action-divider {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 /* Pairing settings card */

@@ -1,9 +1,28 @@
 import { cn } from '../../lib/utils'
+import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
 
-const STEP_TITLES = ['Get the app', 'Pair this Mac'] as const
+export type PairedDevice = {
+  deviceId: string
+  name: string
+  pairedAt: number
+  lastSeenAt: number
+}
+
+// Why: header copy needs to refer to the *user's* device by its native name.
+function getDeviceLabel(): string {
+  const ua = navigator.userAgent
+  if (ua.includes('Mac')) {
+    return 'Mac'
+  }
+  if (ua.includes('Windows')) {
+    return 'PC'
+  }
+  return 'computer'
+}
 
 export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Element {
   return (
@@ -26,6 +45,69 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
   )
 }
 
+type HeroPairedProps = {
+  devices: readonly PairedDevice[]
+  onPairAnother: () => void
+  onRevoke: (deviceId: string) => void
+  revokingDeviceIds: readonly string[]
+}
+
+export function HeroPaired({
+  devices,
+  onPairAnother,
+  onRevoke,
+  revokingDeviceIds
+}: HeroPairedProps): React.JSX.Element {
+  return (
+    <div>
+      <div className="mp-eyebrow-row">
+        <span className="mp-eyebrow">Orca Mobile</span>
+      </div>
+      <h1 className="mp-h1">
+        {devices.length === 1 ? 'Your phone is paired.' : 'Your phones are paired.'}
+      </h1>
+      <p className="mp-lead-sm">
+        Open Orca Mobile to pick up where you left off, or pair another device.
+      </p>
+      <ul className="mp-paired-list">
+        {devices.map((device) => {
+          const revoking = revokingDeviceIds.includes(device.deviceId)
+          return (
+            <li key={device.deviceId} className="mp-paired-row">
+              <div className="mp-paired-icon">
+                <PhoneSmallIcon />
+              </div>
+              <div className="mp-paired-main">
+                <div className="mp-paired-name">{device.name}</div>
+                <div className="mp-paired-meta">
+                  Paired {new Date(device.pairedAt).toLocaleDateString()}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="mp-paired-revoke"
+                onClick={() => onRevoke(device.deviceId)}
+                disabled={revoking}
+                aria-label={`Revoke ${device.name}`}
+                title="Revoke device"
+              >
+                <TrashIcon />
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="mp-flow-actions">
+        <button type="button" className="mp-flow-back" onClick={onPairAnother}>
+          <ArrowLeftIcon />
+          Pair another device
+        </button>
+        <span />
+      </div>
+    </div>
+  )
+}
+
 type HeroFlowProps = {
   stepIdx: StepIndex
   platform: Platform
@@ -35,12 +117,18 @@ type HeroFlowProps = {
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
-  pairEndpoint: string | null
   pairingUrl: string | null
   pairLoading: boolean
   onRegeneratePairing: () => void
+  onCopyPairingCode: () => void
+  networkInterfaces: readonly MobileNetworkInterface[]
+  selectedAddress: string | undefined
+  onSelectedAddressChange: (address: string) => void
+  onRefreshNetworkInterfaces: () => void
+  refreshingNetworkInterfaces: boolean
   onBack: () => void
   onContinue: () => void
+  onDone?: () => void
 }
 
 export function HeroFlow({
@@ -52,128 +140,137 @@ export function HeroFlow({
   onOpenInstallUrl,
   onCopyInstallUrl,
   pairQrDataUrl,
-  pairEndpoint,
   pairingUrl,
   pairLoading,
   onRegeneratePairing,
+  onCopyPairingCode,
+  networkInterfaces,
+  selectedAddress,
+  onSelectedAddressChange,
+  onRefreshNetworkInterfaces,
+  refreshingNetworkInterfaces,
   onBack,
-  onContinue
+  onContinue,
+  onDone
 }: HeroFlowProps): React.JSX.Element {
   const isLast = stepIdx === 1
 
   return (
     <div>
-      <div className="mp-flow-header">
-        <div className="mp-flow-step-head">
-          <div className="mp-step-num">{stepIdx + 1}</div>
-          <div className="mp-step-title">{STEP_TITLES[stepIdx]}</div>
-        </div>
-      </div>
-
       <div className="mp-flow-viewport">
         <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
-          <div className="mp-step-body">
-            <div className="mp-platform-toggle" role="tablist" aria-label="Phone platform">
-              <button
-                type="button"
-                className={cn(platform === 'ios' && 'is-active')}
-                onClick={() => onPlatformChange('ios')}
-              >
-                iOS
-              </button>
-              <button
-                type="button"
-                className={cn(platform === 'android' && 'is-active')}
-                onClick={() => onPlatformChange('android')}
-              >
-                Android
-              </button>
+          <div className="mp-step2-layout">
+            <div className="mp-step2-copy">
+              <div className="mp-eyebrow-row">
+                <div className="mp-step-num">{stepIdx + 1}</div>
+                <span className="mp-eyebrow">Step 1 of 2</span>
+              </div>
+              <h2 className="mp-h2">Get the app.</h2>
+              <p className="mp-lead-sm">
+                Scan the QR with your phone or open the install link to grab Orca Mobile.
+              </p>
+              <div className="mp-tab-toggle" role="tablist" aria-label="Phone platform">
+                <button
+                  type="button"
+                  className={cn(platform === 'ios' && 'is-active')}
+                  onClick={() => onPlatformChange('ios')}
+                >
+                  iOS
+                </button>
+                <button
+                  type="button"
+                  className={cn(platform === 'android' && 'is-active')}
+                  onClick={() => onPlatformChange('android')}
+                >
+                  Android
+                </button>
+              </div>
+              <div className="mp-inline-actions">
+                <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
+                  {installCopy.ctaLabel}
+                </button>
+                <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
+                  <CopyIcon />
+                  Copy install link
+                </button>
+              </div>
             </div>
-
-            <div className="mp-install-row">
-              <div>
-                <div>{installCopy.description}</div>
-                <div className="mp-small-actions">
-                  <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
-                    {installCopy.ctaLabel}
-                  </button>
-                  <button type="button" className="mp-ghost-action" onClick={onCopyInstallUrl}>
-                    <CopyIcon />
-                    Copy link
-                  </button>
-                </div>
-              </div>
-              <div className="mp-qr" aria-label="Install QR code">
-                {installQrUrl ? <img src={installQrUrl} alt="Install QR" /> : null}
-              </div>
+            <div className="mp-qr" aria-label="Install QR code">
+              {installQrUrl ? <img src={installQrUrl} alt="Install QR" /> : null}
             </div>
           </div>
         </div>
 
         <div className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}>
-          <div className="mp-step-body">
-            From the phone, hit <strong>Pair Desktop</strong> and scan the QR below.
-            <div className="mp-pair-settings" role="group" aria-label="Pairing details">
-              <div className="mp-pair-row">
-                <span className="mp-pair-icon" aria-hidden>
-                  <ServerIcon />
-                </span>
-                <span className="mp-pair-label">Endpoint</span>
-                <span className="mp-pair-value">
-                  {pairEndpoint ?? (pairLoading ? 'Generating…' : 'Not generated yet')}
-                </span>
+          <div className="mp-step2-layout">
+            <div className="mp-step2-copy">
+              <div className="mp-eyebrow-row">
+                <div className="mp-step-num">2</div>
+                <span className="mp-eyebrow">Step 2 of 2</span>
               </div>
-              <div className="mp-pair-separator" />
-              <div className="mp-pair-row mp-pair-row-qr">
-                <span className="mp-pair-icon" aria-hidden>
-                  <QrIcon />
-                </span>
-                <span className="mp-pair-label">Pairing QR</span>
-                <div className="mp-qr" aria-label="Pairing QR code">
-                  {pairQrDataUrl ? <img src={pairQrDataUrl} alt="Pairing QR" /> : null}
-                </div>
+              <h2 className="mp-h2">Pair this {getDeviceLabel()}.</h2>
+              <p className="mp-lead-sm">
+                Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.
+              </p>
+
+              <div className="mp-network-row">
+                <span className="mp-network-label">Network</span>
+                <Select
+                  value={selectedAddress ?? ''}
+                  onValueChange={onSelectedAddressChange}
+                  disabled={networkInterfaces.length === 0}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="mp-network-select"
+                    aria-label="Network interface to advertise"
+                  >
+                    <SelectValue placeholder="No interfaces found" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {networkInterfaces.map((iface) => (
+                      <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
+                        {iface.address} ({iface.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
+                  onClick={onRefreshNetworkInterfaces}
+                  disabled={refreshingNetworkInterfaces}
+                  aria-label="Refresh network interfaces"
+                  title="Refresh network interfaces"
+                >
+                  <RefreshIcon />
+                </button>
               </div>
-              {pairingUrl ? (
-                <>
-                  <div className="mp-pair-separator" />
-                  <div className="mp-pair-row">
-                    <span className="mp-pair-icon" aria-hidden>
-                      <LinkIcon />
-                    </span>
-                    <span className="mp-pair-label">Pairing URL</span>
-                    <span
-                      className="mp-pair-value"
-                      style={{
-                        maxWidth: 220,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {pairingUrl}
-                    </span>
-                  </div>
-                </>
-              ) : null}
+
+              <div className="mp-inline-actions">
+                <span className="mp-action-divider">Can&apos;t scan?</span>
+                <button
+                  type="button"
+                  className="mp-text-link"
+                  onClick={onCopyPairingCode}
+                  disabled={!pairingUrl || pairLoading}
+                >
+                  <CopyIcon />
+                  Copy pairing code
+                </button>
+              </div>
             </div>
-            <div className="mp-pair-settings">
+            <div className="mp-qr-stack">
+              <div className="mp-qr" aria-label="Pairing QR code">
+                {pairQrDataUrl ? <img src={pairQrDataUrl} alt="Pairing QR" /> : null}
+              </div>
               <button
                 type="button"
-                className="mp-pair-action-row"
+                className="mp-link-under"
                 onClick={onRegeneratePairing}
                 disabled={pairLoading}
               >
-                <span className="mp-pair-icon" aria-hidden>
-                  <RotateIcon />
-                </span>
-                <span className="mp-pair-label">
-                  {pairLoading
-                    ? 'Generating…'
-                    : pairQrDataUrl
-                      ? 'Regenerate pairing code'
-                      : 'Generate pairing code'}
-                </span>
-                <span className="mp-pair-meta">Rotates each tap</span>
+                {pairLoading ? 'Generating…' : pairQrDataUrl ? 'Regenerate code' : 'Generate code'}
               </button>
             </div>
           </div>
@@ -185,15 +282,21 @@ export function HeroFlow({
           <ArrowLeftIcon />
           Back
         </button>
-        <button
-          type="button"
-          className={cn('mp-flow-continue', isLast && 'is-hidden')}
-          onClick={onContinue}
-          aria-hidden={isLast}
-        >
-          Continue
-          <ArrowRightIcon />
-        </button>
+        {isLast ? (
+          onDone ? (
+            <button type="button" className="mp-primary-action" onClick={onDone}>
+              Done
+              <ArrowRightIcon />
+            </button>
+          ) : (
+            <span />
+          )
+        ) : (
+          <button type="button" className="mp-flow-continue" onClick={onContinue}>
+            Continue
+            <ArrowRightIcon />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -225,43 +328,32 @@ function CopyIcon(): React.JSX.Element {
   )
 }
 
-function ServerIcon(): React.JSX.Element {
+function PhoneSmallIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <line x1="8" y1="21" x2="16" y2="21" />
-      <line x1="12" y1="17" x2="12" y2="21" />
+      <rect x="6" y="3" width="12" height="18" rx="2.5" />
+      <line x1="11" y1="18" x2="13" y2="18" />
     </svg>
   )
 }
 
-function QrIcon(): React.JSX.Element {
+function TrashIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <path d="M14 14h3v3" />
-      <path d="M21 14v3" />
-      <path d="M14 21h3" />
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
     </svg>
   )
 }
 
-function RotateIcon(): React.JSX.Element {
+function RefreshIcon(): React.JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <path d="M21 4v5h-5" />
-    </svg>
-  )
-}
-
-function LinkIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1" />
-      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1" />
+      <path d="M3 12a9 9 0 0 0 15 6.7" />
+      <path d="M3 20v-5h5" />
     </svg>
   )
 }
