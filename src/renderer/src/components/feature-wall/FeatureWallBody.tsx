@@ -33,7 +33,7 @@ const KBD_CLASS =
 
 function Bullet(props: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <li className={cn('flex items-start gap-2.5 text-[17px] leading-[1.55]', props.className)}>
+    <li className={cn('flex items-start gap-2.5 text-[17px] leading-relaxed', props.className)}>
       <span className="mt-[9px] inline-block size-1.5 shrink-0 rounded-full bg-foreground/40" />
       <span>{props.children}</span>
     </li>

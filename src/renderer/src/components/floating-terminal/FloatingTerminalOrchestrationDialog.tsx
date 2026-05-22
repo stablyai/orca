@@ -20,7 +20,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import { AgentSkillInstalledIndicator } from '../AgentSkillInstalledIndicator'
+import { IntegrationStatusPill } from '../integration-status-pill'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -96,6 +96,9 @@ export function FloatingTerminalOrchestrationDialog({
   }
 
   const handlePasteSkillCommand = async (): Promise<void> => {
+    if (skillInstalled) {
+      return
+    }
     setSkillBusy(true)
     try {
       localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -192,41 +195,48 @@ export function FloatingTerminalOrchestrationDialog({
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm font-medium">Orchestration skill</p>
                   <p className="text-xs text-muted-foreground">
-                    Paste this command into the terminal so agents learn orchestration.
+                    {skillInstalled
+                      ? 'Detected on this machine. Agents can use inter-agent orchestration.'
+                      : 'Paste this command into the terminal so agents learn orchestration.'}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => void handlePasteSkillCommand()}
-                    disabled={skillBusy}
-                    className="shrink-0 gap-1.5"
-                  >
-                    {skillBusy ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Clipboard className="size-3.5" />
-                    )}
-                    {activeTabId ? 'Paste' : 'Copy'}
-                  </Button>
-                  {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
+                  {skillInstalled ? (
+                    <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => void handlePasteSkillCommand()}
+                      disabled={skillBusy}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {skillBusy ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Clipboard className="size-3.5" />
+                      )}
+                      {activeTabId ? 'Paste' : 'Copy'}
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="flex min-w-0 items-center gap-2 rounded bg-background px-2 py-1.5">
-                <code className="min-w-0 flex-1 text-[11px] leading-relaxed break-all whitespace-normal text-muted-foreground">
-                  {ORCHESTRATION_SKILL_INSTALL_COMMAND}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="shrink-0"
-                  onClick={() => void handleCopySkillCommand()}
-                  aria-label="Copy orchestration skill install command"
-                >
-                  <Copy className="size-3.5" />
-                </Button>
-              </div>
+              {!skillInstalled ? (
+                <div className="flex min-w-0 items-center gap-2 rounded bg-background px-2 py-1.5">
+                  <code className="min-w-0 flex-1 text-[11px] leading-relaxed break-all whitespace-normal text-muted-foreground">
+                    {ORCHESTRATION_SKILL_INSTALL_COMMAND}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0"
+                    onClick={() => void handleCopySkillCommand()}
+                    aria-label="Copy orchestration skill install command"
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

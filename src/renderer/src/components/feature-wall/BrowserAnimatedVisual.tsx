@@ -541,12 +541,19 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                 <NavGlyph>›</NavGlyph>
                 <NavGlyph>↻</NavGlyph>
               </span>
-              <div className="flex flex-1 items-center gap-1.5 rounded-md border border-border bg-card px-2 py-[3px] font-mono text-[11px]">
-                <span className="text-emerald-600">🔒</span>
-                <span className="text-foreground">localhost:3000</span>
-                <span className="text-muted-foreground transition-colors duration-200">
-                  {showSignup ? '/signup' : '/pricing'}
-                </span>
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border border-border bg-card px-2 py-[3px] font-mono text-[11px]">
+                {isSplit ? (
+                  <span className="truncate text-muted-foreground transition-colors duration-200">
+                    {`...${showSignup ? '/signup' : '/pricing'}`}
+                  </span>
+                ) : (
+                  <>
+                    <span className="truncate text-foreground">localhost:3000</span>
+                    <span className="truncate text-muted-foreground transition-colors duration-200">
+                      {showSignup ? '/signup' : '/pricing'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

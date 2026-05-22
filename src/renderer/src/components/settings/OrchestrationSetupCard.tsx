@@ -1,98 +1,48 @@
-import { useEffect, useState, type JSX } from 'react'
-import { Terminal } from 'lucide-react'
+import { type JSX } from 'react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
-import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
-import { Button } from '@/components/ui/button'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
-
-// Matches the slide-in duration in OnboardingInlineCommandTerminal so the
-// button only fades after the terminal has finished revealing.
-const TERMINAL_REVEAL_MS = 700
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
 export function OrchestrationSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
 }): JSX.Element {
   const { compact, terminalHeightPx } = props
-  const [showTerminal, setShowTerminal] = useState(false)
-  const [buttonVisible, setButtonVisible] = useState(true)
-  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
-    ORCHESTRATION_SKILL_NAME,
-    { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
-  )
+  const {
+    installed: skillInstalled,
+    loading: skillLoading,
+    error: skillError,
+    refresh: refreshSkillInstalled
+  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
 
-  useEffect(() => {
-    if (!showTerminal) {
-      setButtonVisible(true)
-      return
-    }
-    const timer = window.setTimeout(() => setButtonVisible(false), TERMINAL_REVEAL_MS)
-    return () => window.clearTimeout(timer)
-  }, [showTerminal])
-
-  useEffect(() => {
-    if (!showTerminal || skillInstalled) {
-      return
-    }
-    const timer = window.setInterval(() => {
-      void refreshSkillInstalled()
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [refreshSkillInstalled, showTerminal, skillInstalled])
-
-  const button = (
-    <div className="flex items-center gap-2">
-      <Button
-        variant={skillInstalled ? 'outline' : 'default'}
-        size="sm"
-        onClick={() => setShowTerminal(true)}
-      >
-        <Terminal aria-hidden />
-        Install the skill
-      </Button>
-      {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
-    </div>
-  )
-
-  const terminal = showTerminal ? (
-    <OnboardingInlineCommandTerminal
+  const setupPanel = (
+    <AgentSkillSetupPanel
+      className={compact ? 'w-full max-w-[520px]' : undefined}
+      title="Orchestration skill"
+      detectedDescription="Detected on this machine. Agents can use inter-agent orchestration."
+      missingDescription="Agents need this skill before they can use inter-agent orchestration. If you already installed it, click Re-check instead of running the installer again."
       command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
-      title="Orchestration setup"
-      ariaLabel="Orchestration skill install command"
-      description="Press Enter to install the orchestration skill. Confirm npx if asked."
-      worktreeId="feature-wall-orchestration-skill-terminal"
+      terminalTitle="Orchestration setup"
+      terminalAriaLabel="Orchestration skill install terminal"
+      terminalWorktreeId="feature-wall-orchestration-skill-terminal"
+      installed={skillInstalled}
+      detected={skillInstalled}
+      loading={skillLoading}
+      error={skillError}
       terminalHeightPx={terminalHeightPx}
+      showRecheckWhenInstalled={false}
+      onRecheck={refreshSkillInstalled}
     />
-  ) : null
+  )
 
   if (compact) {
-    return (
-      <div className="relative flex min-h-24 flex-1 items-center justify-center pt-3">
-        <div
-          aria-hidden={!buttonVisible}
-          className={`transition-opacity duration-300 ${
-            buttonVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
-        >
-          {button}
-        </div>
-        {terminal ? (
-          // Why: absolute-positioned overlay so the terminal grows over the
-          // button instead of pushing the feature wall layout around.
-          <div className="pointer-events-auto absolute inset-x-0 top-1/2 z-10 -translate-y-1/2">
-            {terminal}
-          </div>
-        ) : null}
-      </div>
-    )
+    return <div className="flex min-h-24 flex-1 items-center justify-center pt-3">{setupPanel}</div>
   }
-  if (terminal) {
-    return terminal
-  }
-  return <div className="flex">{button}</div>
+  return <div className="flex">{setupPanel}</div>
 }

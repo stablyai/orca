@@ -39,17 +39,15 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
     description: 'Track every running agent in each workspace.',
     bullets: [
       'Run several agents in one workspace and see exactly which one needs you.',
-      'Realtime status (working, asking for permission, finished) for every running agent.',
-      'Works with every major coding agent and CLI we ship support for.'
+      'Realtime status (working, asking for permission, finished) for every running agent.'
     ]
   },
   {
     id: 'orchestration',
     name: 'Orchestration',
     subtitle: 'Orchestration',
-    description: 'Give agents the power to work together.',
-    bulletsLeadIn:
-      'With the Orca CLI, agents can spin up focused workspaces, coordinate with each other, and keep complex jobs moving without you managing every handoff.',
+    description:
+      'Enable agents to spin up focused workspaces, coordinate with each other, and keep complex jobs moving without you managing every handoff, with the Orca CLI.',
     bullets: [
       {
         leadIn: 'Create clean lanes for parallel work.',

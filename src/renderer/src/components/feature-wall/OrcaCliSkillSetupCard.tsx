@@ -1,5 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
-import { Terminal } from 'lucide-react'
+import { type JSX } from 'react'
 import { toast } from 'sonner'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
@@ -10,50 +9,27 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
-import { AgentSkillInstalledIndicator } from '@/components/AgentSkillInstalledIndicator'
-import { Button } from '@/components/ui/button'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
-
-// Why: matches the slide-in duration in OnboardingInlineCommandTerminal so
-// the trigger button only fades after the terminal has finished revealing.
-const TERMINAL_REVEAL_MS = 700
+import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 
 export function OrcaCliSkillSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
 }): JSX.Element {
   const { compact, terminalHeightPx } = props
-  const [showTerminal, setShowTerminal] = useState(false)
-  const [buttonVisible, setButtonVisible] = useState(true)
-  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
-    ORCA_CLI_SKILL_NAME,
-    { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
-  )
-
-  useEffect(() => {
-    if (!showTerminal) {
-      setButtonVisible(true)
-      return
-    }
-    const timer = window.setTimeout(() => setButtonVisible(false), TERMINAL_REVEAL_MS)
-    return () => window.clearTimeout(timer)
-  }, [showTerminal])
-
-  useEffect(() => {
-    if (!showTerminal || skillInstalled) {
-      return
-    }
-    const timer = window.setInterval(() => {
-      void refreshSkillInstalled()
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [refreshSkillInstalled, showTerminal, skillInstalled])
+  const {
+    installed: skillInstalled,
+    loading: skillLoading,
+    error: skillError,
+    refresh: refreshSkillInstalled
+  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
 
   // Why: matches the onboarding flow (runOnboardingFeatureSetup) — registering
   // the `orca` CLI is a prerequisite for the skill, so we do it implicitly when
   // the user opts into setup. Failures surface as a toast but don't block the
   // terminal, since the user may already have it installed via another path.
-  const handleInstall = async (): Promise<void> => {
+  const handleBeforeOpenTerminal = async (): Promise<void> => {
     try {
       const status = await window.api.cli.getInstallStatus()
       if (status.supported && status.state !== 'installed') {
@@ -65,55 +41,31 @@ export function OrcaCliSkillSetupCard(props: {
       )
     }
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
-    setShowTerminal(true)
   }
 
-  const button = (
-    <div className="flex items-center gap-2">
-      <Button
-        variant={skillInstalled ? 'outline' : 'default'}
-        size="sm"
-        onClick={() => void handleInstall()}
-      >
-        <Terminal aria-hidden />
-        Install the skill
-      </Button>
-      {skillInstalled ? <AgentSkillInstalledIndicator /> : null}
-    </div>
+  const setupPanel = (
+    <AgentSkillSetupPanel
+      className={compact ? 'w-full max-w-[520px]' : undefined}
+      title="CLI skill"
+      detectedDescription="Detected on this machine. Agents know how to use Orca and report status."
+      missingDescription="Agents need this skill before they can use Orca and report status. If you already installed it, click Re-check instead of running the installer again."
+      command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+      terminalTitle="CLI skill setup"
+      terminalAriaLabel="CLI skill install terminal"
+      terminalWorktreeId="feature-wall-orca-cli-skill-terminal"
+      installed={skillInstalled}
+      detected={skillInstalled}
+      loading={skillLoading}
+      error={skillError}
+      terminalHeightPx={terminalHeightPx}
+      onBeforeOpenTerminal={handleBeforeOpenTerminal}
+      showRecheckWhenInstalled={false}
+      onRecheck={refreshSkillInstalled}
+    />
   )
 
-  const terminal = showTerminal ? (
-    <OnboardingInlineCommandTerminal
-      command={ORCA_CLI_SKILL_INSTALL_COMMAND}
-      title="Orca CLI setup"
-      ariaLabel="Orca CLI skill install command"
-      description="Press Enter to install the Orca CLI skill. Confirm npx if asked."
-      worktreeId="feature-wall-orca-cli-skill-terminal"
-      terminalHeightPx={terminalHeightPx}
-    />
-  ) : null
-
   if (compact) {
-    return (
-      <div className="relative flex min-h-24 flex-1 items-center justify-center pt-3">
-        <div
-          aria-hidden={!buttonVisible}
-          className={`transition-opacity duration-300 ${
-            buttonVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
-        >
-          {button}
-        </div>
-        {terminal ? (
-          <div className="pointer-events-auto absolute inset-x-0 top-1/2 z-10 -translate-y-1/2">
-            {terminal}
-          </div>
-        ) : null}
-      </div>
-    )
+    return <div className="flex min-h-24 flex-1 items-center justify-center pt-3">{setupPanel}</div>
   }
-  if (terminal) {
-    return terminal
-  }
-  return <div className="flex">{button}</div>
+  return <div className="flex">{setupPanel}</div>
 }

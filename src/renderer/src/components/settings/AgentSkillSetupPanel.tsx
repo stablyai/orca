@@ -20,10 +20,13 @@ type AgentSkillSetupPanelProps = {
   loading: boolean
   error: string | null
   installDisabled?: boolean
+  terminalHeightPx?: number
   leading?: ReactNode
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant
   className?: string
+  onBeforeOpenTerminal?: () => void | Promise<void>
+  showRecheckWhenInstalled?: boolean
   onRecheck: () => void | Promise<void>
 }
 
@@ -40,10 +43,13 @@ export function AgentSkillSetupPanel({
   loading,
   error,
   installDisabled = false,
+  terminalHeightPx,
   leading,
   icon,
   variant = 'card',
   className,
+  onBeforeOpenTerminal,
+  showRecheckWhenInstalled = true,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
@@ -90,22 +96,32 @@ export function AgentSkillSetupPanel({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setTerminalOpen(true)}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await onBeforeOpenTerminal?.()
+                  } finally {
+                    setTerminalOpen(true)
+                  }
+                })()
+              }}
               disabled={terminalOpen || installDisabled}
             >
               <Terminal className="size-3.5" />
               Install
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => void onRecheck()}
-            disabled={loading}
-          >
-            Re-check
-          </Button>
+          {!installed || showRecheckWhenInstalled ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void onRecheck()}
+              disabled={loading}
+            >
+              Re-check
+            </Button>
+          ) : null}
         </div>
       </div>
       {!installed && terminalOpen ? (
@@ -116,6 +132,7 @@ export function AgentSkillSetupPanel({
             title={terminalTitle}
             ariaLabel={terminalAriaLabel}
             description="Press Enter to run the installer. If you already installed this skill, skip this terminal and click Re-check instead."
+            terminalHeightPx={terminalHeightPx}
           />
         </div>
       ) : null}

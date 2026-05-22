@@ -132,7 +132,7 @@ export function NotificationsPage(props: { active: boolean }): JSX.Element {
         </div>
       </div>
 
-      <div className="absolute inset-x-2 bottom-2 flex items-center gap-2.5 rounded-lg border border-foreground/[0.08] bg-card px-2.5 py-2 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+      <div className="absolute bottom-2 left-2 flex w-fit max-w-[calc(100%-1rem)] items-center gap-2.5 rounded-lg border border-foreground/[0.08] bg-card px-2.5 py-2 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
         {ready ? (
           <>
             <span
@@ -144,9 +144,6 @@ export function NotificationsPage(props: { active: boolean }): JSX.Element {
             <span className="text-[12px] leading-tight">
               <strong className="font-semibold">You&rsquo;re all set.</strong>{' '}
               <span className="text-muted-foreground">Agent notifications are on.</span>
-            </span>
-            <span className="ml-auto inline-flex h-7 shrink-0 items-center rounded-full bg-emerald-500/12 px-2.5 text-[11px] font-semibold text-emerald-700">
-              On
             </span>
           </>
         ) : (
