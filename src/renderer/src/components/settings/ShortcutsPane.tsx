@@ -7,9 +7,11 @@ import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   getKeybindingDefinition,
+  keybindingFromInputForAction,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingDefinition,
+  type KeybindingInput,
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
 import { useAppStore } from '../../store'
@@ -75,10 +77,6 @@ function removeBindingOverride(
   return next
 }
 
-function bindingInputValue(actionId: KeybindingActionId, overrides: KeybindingOverrides): string {
-  return getEffectiveKeybindingsForAction(actionId, platform, overrides).join(', ')
-}
-
 function hasCommonBindingOverride(
   snapshot: ReturnType<typeof useAppStore.getState>['keybindingSnapshot'],
   actionId: KeybindingActionId
@@ -98,8 +96,8 @@ export function ShortcutsPane(): React.JSX.Element {
   const reloadKeybindings = useAppStore((state) => state.reloadKeybindings)
   const openKeybindingsFile = useAppStore((state) => state.openKeybindingsFile)
   const revealKeybindingsFile = useAppStore((state) => state.revealKeybindingsFile)
-  const [drafts, setDrafts] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
+  const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
 
   const groups = useMemo(groupDefinitions, [])
   const groupEntries = useMemo<Record<string, SettingsSearchEntry[]>>(
@@ -132,22 +130,25 @@ export function ShortcutsPane(): React.JSX.Element {
     return result
   }, [keybindings])
 
-  const commitBinding = async (actionId: KeybindingActionId): Promise<void> => {
-    const draft = drafts[actionId] ?? bindingInputValue(actionId, keybindings)
-    const normalized = normalizeKeybindingListForAction(actionId, draft)
-    if (!Array.isArray(normalized)) {
+  const saveBindings = async (
+    actionId: KeybindingActionId,
+    normalized: string[]
+  ): Promise<boolean> => {
+    const normalizedResult = normalizeKeybindingListForAction(actionId, normalized.join(', '))
+    if (!Array.isArray(normalizedResult)) {
       setErrors((prev) => ({
         ...prev,
-        [actionId]: normalized.ok ? 'Unable to parse shortcut.' : normalized.error
+        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
       }))
-      return
+      return false
     }
 
     const defaults = getEffectiveKeybindingsForAction(actionId, platform, {})
     const next =
-      sameBindings(normalized, defaults) || (normalized.length === 0 && defaults.length === 0)
+      sameBindings(normalizedResult, defaults) ||
+      (normalizedResult.length === 0 && defaults.length === 0)
         ? removeBindingOverride(keybindings, actionId)
-        : { ...keybindings, [actionId]: normalized }
+        : { ...keybindings, [actionId]: normalizedResult }
     const blockingConflict = findKeybindingConflicts(platform, next).find((conflict) =>
       conflict.actionIds.includes(actionId)
     )
@@ -160,28 +161,46 @@ export function ShortcutsPane(): React.JSX.Element {
         ...prev,
         [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
       }))
-      return
+      return false
     }
 
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
     try {
       const matchesDefault =
-        sameBindings(normalized, defaults) || (normalized.length === 0 && defaults.length === 0)
+        sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)
       await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? resetKeybindingOverride(actionId)
-        : setKeybindingOverride(actionId, normalized))
-      setDrafts((prev) => ({ ...prev, [actionId]: normalized.join(', ') }))
+        : setKeybindingOverride(actionId, normalizedResult))
+      return true
     } catch (error) {
       setErrors((prev) => ({
         ...prev,
         [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
       }))
+      return false
+    }
+  }
+
+  const captureBinding = async (
+    actionId: KeybindingActionId,
+    input: KeybindingInput
+  ): Promise<void> => {
+    const captured = keybindingFromInputForAction(actionId, input, platform)
+    if (!captured.ok) {
+      setErrors((prev) => ({ ...prev, [actionId]: captured.error }))
+      return
+    }
+
+    // Why: the visual editor records one chord at a time; users can still
+    // manage multi-binding arrays directly in keybindings.json.
+    if (await saveBindings(actionId, [captured.value])) {
+      setRecordingActionId(null)
     }
   }
 
   const resetBinding = async (actionId: KeybindingActionId): Promise<void> => {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
-    setDrafts((prev) => ({ ...prev, [actionId]: undefined }))
     try {
       await (hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? setKeybindingOverride(actionId, getEffectiveKeybindingsForAction(actionId, platform, {}))
@@ -196,7 +215,6 @@ export function ShortcutsPane(): React.JSX.Element {
 
   const disableBinding = async (actionId: KeybindingActionId): Promise<void> => {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
-    setDrafts((prev) => ({ ...prev, [actionId]: '' }))
     try {
       await disableKeybindingAction(actionId)
     } catch (error) {
@@ -205,10 +223,6 @@ export function ShortcutsPane(): React.JSX.Element {
         [actionId]: error instanceof Error ? error.message : 'Failed to disable shortcut.'
       }))
     }
-  }
-
-  const setDraftValue = (actionId: KeybindingActionId, value: string): void => {
-    setDrafts((prev) => ({ ...prev, [actionId]: value }))
   }
 
   const clearError = (actionId: KeybindingActionId): void => {
@@ -326,7 +340,6 @@ export function ShortcutsPane(): React.JSX.Element {
                       platform,
                       keybindings
                     )
-                    const draft = drafts[item.id] ?? effective.join(', ')
                     const modified = hasOwnBindingOverride(keybindings, item.id)
                     const warnings = conflictByAction.get(item.id) ?? []
 
@@ -337,13 +350,17 @@ export function ShortcutsPane(): React.JSX.Element {
                         groupTitle={group.title}
                         platform={platform}
                         effective={effective}
-                        draft={draft}
                         modified={modified}
                         error={errors[item.id]}
                         warnings={warnings}
-                        onDraftChange={setDraftValue}
+                        recording={recordingActionId === item.id}
+                        onStartRecording={(actionId) => {
+                          setRecordingActionId(actionId)
+                          clearError(actionId)
+                        }}
+                        onCancelRecording={() => setRecordingActionId(null)}
+                        onCapture={(actionId, input) => void captureBinding(actionId, input)}
                         onClearError={clearError}
-                        onCommit={(actionId) => void commitBinding(actionId)}
                         onDisable={(actionId) => void disableBinding(actionId)}
                         onReset={(actionId) => void resetBinding(actionId)}
                       />
