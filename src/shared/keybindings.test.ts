@@ -232,4 +232,61 @@ describe('keybindings', () => {
       )
     ).toBe(true)
   })
+
+  it('correctly matches BracketLeft and BracketRight on JIS keyboards', () => {
+    // On a JIS keyboard, the `[` key has code 'BracketRight' and key '{' when shifted.
+    const jisLeftBracketShifted = {
+      key: '{',
+      code: 'BracketRight',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: true
+    }
+
+    // On a JIS keyboard, the `]` key has code 'Backslash' and key '}' when shifted.
+    const jisRightBracketShifted = {
+      key: '}',
+      code: 'Backslash',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: true
+    }
+
+    // Mod+Shift+BracketLeft should match JIS `[` key (which produces '{')
+    expect(
+      keybindingMatchesAction('tab.previousSameType', jisLeftBracketShifted, 'darwin', {
+        'tab.previousSameType': ['Mod+Shift+BracketLeft']
+      })
+    ).toBe(true)
+
+    // Mod+Shift+BracketLeft should NOT match JIS `]` key (which produces '}')
+    expect(
+      keybindingMatchesAction('tab.previousSameType', jisRightBracketShifted, 'darwin', {
+        'tab.previousSameType': ['Mod+Shift+BracketLeft']
+      })
+    ).toBe(false)
+
+    // Mod+Shift+BracketRight should match JIS `]` key (which produces '}')
+    expect(
+      keybindingMatchesAction('tab.nextSameType', jisRightBracketShifted, 'darwin', {
+        'tab.nextSameType': ['Mod+Shift+BracketRight']
+      })
+    ).toBe(true)
+
+    // Mod+Shift+BracketRight should NOT match JIS `[` key (which produces '{')
+    expect(
+      keybindingMatchesAction('tab.nextSameType', jisLeftBracketShifted, 'darwin', {
+        'tab.nextSameType': ['Mod+Shift+BracketRight']
+      })
+    ).toBe(false)
+
+    // Ensure JIS `]` key doesn't accidentally trigger a Backslash shortcut
+    expect(
+      keybindingMatchesAction('terminal.splitRight', jisRightBracketShifted, 'darwin', {
+        'terminal.splitRight': ['Mod+Shift+Backslash']
+      })
+    ).toBe(false)
+  })
 })

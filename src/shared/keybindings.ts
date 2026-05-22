@@ -1172,9 +1172,15 @@ function keyMatches(parsedKey: string, input: KeybindingInput): boolean {
   const code = input.code ?? ''
   switch (parsedKey) {
     case 'BracketLeft':
-      return code === 'BracketLeft'
+      if (key === ']' || key === '}') {
+        return false
+      }
+      return code === 'BracketLeft' || key === '[' || key === '{'
     case 'BracketRight':
-      return code === 'BracketRight'
+      if (key === '[' || key === '{') {
+        return false
+      }
+      return code === 'BracketRight' || key === ']' || key === '}'
     case 'Minus':
       // Why: shifted "_" is terminal undo/readline input. Users who want it
       // as zoom-out can bind it explicitly instead of having the default steal it.
@@ -1191,6 +1197,11 @@ function keyMatches(parsedKey: string, input: KeybindingInput): boolean {
       return code === 'NumpadSubtract' || key === 'Subtract'
     case 'Enter':
       return key === 'Enter' && (code === 'Enter' || code === 'NumpadEnter' || code === '')
+    case 'Backslash':
+      if (key === ']' || key === '}') {
+        return false
+      }
+      return code === 'Backslash' || key === '\\' || key === '|'
     default:
       return key === parsedKey || code === parsedKey
   }
