@@ -6,7 +6,16 @@ import {
   useVirtualizer
 } from '@tanstack/react-virtual'
 import type { Range } from '@tanstack/react-virtual'
-import { ChevronDown, CircleX, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleX,
+  Ellipsis,
+  Palette,
+  Plus,
+  SlidersHorizontal,
+  Trash2,
+  Workflow
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   getAllWorktreesFromState,
@@ -24,6 +33,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -111,6 +121,7 @@ import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
+import { getRepositoryBadgeColorSectionId } from '@/components/settings/repository-settings-targets'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -187,6 +198,7 @@ type VirtualizedWorktreeViewportProps = {
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
+  handleOpenRepoSettings: (repoId: string, sectionId?: string) => void
   handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
@@ -477,6 +489,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
+  handleOpenRepoSettings,
   handleRemoveRepo,
   activeModal,
   pendingRevealWorktree,
@@ -1886,6 +1899,30 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           onClick={(event) => event.stopPropagation()}
                         >
                           <DropdownMenuItem
+                            onSelect={() => {
+                              if (row.repo) {
+                                handleOpenRepoSettings(row.repo.id)
+                              }
+                            }}
+                          >
+                            <SlidersHorizontal className="size-3.5" />
+                            Repo Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              if (row.repo) {
+                                handleOpenRepoSettings(
+                                  row.repo.id,
+                                  getRepositoryBadgeColorSectionId(row.repo.id)
+                                )
+                              }
+                            }}
+                          >
+                            <Palette className="size-3.5" />
+                            Change Repo Color
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
                             variant="destructive"
                             onSelect={() => {
                               if (row.repo) {
@@ -2273,6 +2310,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const activeView = useAppStore((s) => s.activeView)
@@ -2734,6 +2773,14 @@ const WorktreeList = React.memo(function WorktreeList({
     [openModal]
   )
 
+  const handleOpenRepoSettings = useCallback(
+    (repoId: string, sectionId?: string) => {
+      openSettingsTarget({ pane: 'repo', repoId, ...(sectionId ? { sectionId } : {}) })
+      openSettingsPage()
+    },
+    [openSettingsPage, openSettingsTarget]
+  )
+
   const handleRemoveRepo = useCallback(
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
@@ -2891,6 +2938,7 @@ const WorktreeList = React.memo(function WorktreeList({
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
+      handleOpenRepoSettings={handleOpenRepoSettings}
       handleRemoveRepo={handleRemoveRepo}
       activeModal={activeModal}
       pendingRevealWorktree={pendingRevealWorktree}

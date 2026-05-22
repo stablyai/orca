@@ -15,6 +15,7 @@ import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { getRepositoryBadgeColorSectionId } from './repository-settings-targets'
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -290,6 +291,7 @@ export function RepositoryPane({
           description="Repo-specific display details for the sidebar and tabs."
           keywords={[repo.displayName, repo.path, 'repository name', 'color', 'badge']}
           className="space-y-2"
+          id={getRepositoryBadgeColorSectionId(repo.id)}
         >
           <Label className="text-sm font-semibold">Display Name</Label>
           <div className="flex items-center gap-3">
