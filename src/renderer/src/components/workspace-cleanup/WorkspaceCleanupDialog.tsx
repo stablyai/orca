@@ -44,20 +44,11 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
 
 type CleanupView = WorkspaceCleanupTier | 'hidden'
 
-const SCAN_LOADING_STEPS = [
-  {
-    title: 'Finding inactive workspaces',
-    detail: 'Listing old worktrees before any cleanup decision is made.'
-  },
-  {
-    title: 'Checking git safety',
-    detail: 'Looking for changed files and commits that only exist locally.'
-  },
-  {
-    title: 'Protecting active work',
-    detail: 'Skipping workspaces with open tabs, terminals, live agents, or unavailable remotes.'
-  }
-] as const
+const SCAN_LOADING_STATUS = {
+  title: 'Checking workspace safety',
+  detail:
+    'Scanning worktrees and git state, then combining open tab, terminal, live agent, and remote availability signals before suggesting deletions.'
+} as const
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'main-worktree': 'Main workspace',
@@ -202,7 +193,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
   const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(() => new Set())
-  const [loadingStepIndex, setLoadingStepIndex] = useState(0)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
 
@@ -224,19 +214,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     }
     setRepoSelection(new Set(eligibleRepoIds))
   }, [eligibleRepoIds, open])
-
-  useEffect(() => {
-    if (!open || !loading) {
-      setLoadingStepIndex(0)
-      return
-    }
-
-    const timer = window.setInterval(() => {
-      setLoadingStepIndex((index) => (index + 1) % SCAN_LOADING_STEPS.length)
-    }, 2600)
-
-    return () => window.clearInterval(timer)
-  }, [loading, open])
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
   const effectiveRepoSelection = useMemo<ReadonlySet<string>>(() => {
@@ -318,7 +295,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const inactiveCount = filteredCandidates.length
   const hasAnyCandidates = candidates.length > 0
   const initialLoading = loading && !scan
-  const loadingStep = SCAN_LOADING_STEPS[loadingStepIndex]
   const activeRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
   const activeQueueableRows = useMemo(
     () => activeRows.filter(canQueueWorkspaceCleanupCandidate),
@@ -511,8 +487,12 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-5 py-3">
                 <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
                 <div className="min-w-0">
-                  <div className="text-xs font-medium text-foreground">{loadingStep.title}</div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">{loadingStep.detail}</div>
+                  <div className="text-xs font-medium text-foreground">
+                    {SCAN_LOADING_STATUS.title}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {SCAN_LOADING_STATUS.detail}
+                  </div>
                 </div>
               </div>
             ) : hasAnyCandidates ? (
