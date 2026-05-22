@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { mkdtemp, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
 import {
   addWorktree,
@@ -499,6 +501,26 @@ function deferred<T>(): {
     reject = rej
   })
   return { promise, resolve, reject }
+}
+
+function createStaleRuntimeWorktreeStore(worktreeId: string) {
+  const metaById: Record<string, WorktreeMeta> = {
+    [worktreeId]: makeWorktreeMeta()
+  }
+  const removeWorktreeMeta = vi.fn((id: string) => {
+    delete metaById[id]
+  })
+  const runtimeStore = {
+    ...store,
+    getAllWorktreeMeta: () => metaById,
+    getWorktreeMeta: (id: string) => metaById[id],
+    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+      return metaById[id]
+    },
+    removeWorktreeMeta
+  }
+  return { runtimeStore, removeWorktreeMeta }
 }
 
 const store = {
@@ -7617,6 +7639,89 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('coalesces concurrent runtime worktree removals for the same worktree id', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const removeStarted = deferred<void>()
+    const finishRemoval = deferred<void>()
+    vi.mocked(removeWorktree).mockImplementation(async () => {
+      removeStarted.resolve()
+      await finishRemoval.promise
+    })
+
+    const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+
+    await removeStarted.promise
+    await Promise.resolve()
+    expect(removeWorktree).toHaveBeenCalledTimes(1)
+
+    finishRemoval.resolve()
+    await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
+  })
+
+  it('treats forced runtime deletion of an already-missing unregistered worktree as cleanup', async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-'))
+    const missingWorktreePath = join(parentDir, 'already-deleted')
+    const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const notifier = { worktreesChanged: vi.fn() }
+    runtime.setNotifier(notifier as never)
+
+    try {
+      vi.mocked(listWorktrees).mockResolvedValueOnce([
+        {
+          path: missingWorktreePath,
+          head: 'abc',
+          branch: 'feature/already-deleted',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      await runtime.showManagedWorktree(worktreeId)
+      vi.mocked(listWorktrees).mockResolvedValueOnce([])
+
+      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('still rejects forced runtime unregistered delete paths that exist on disk', async () => {
+    const existingWorktreePath = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-existing-'))
+    const worktreeId = `${TEST_REPO_ID}::${existingWorktreePath}`
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      vi.mocked(listWorktrees).mockResolvedValueOnce([
+        {
+          path: existingWorktreePath,
+          head: 'abc',
+          branch: 'feature/still-present',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      await runtime.showManagedWorktree(worktreeId)
+      vi.mocked(listWorktrees).mockResolvedValueOnce([])
+
+      await expect(runtime.removeManagedWorktree(worktreeId, true)).rejects.toThrow(
+        'Refusing to delete unregistered worktree path'
+      )
+
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+    } finally {
+      await rm(existingWorktreePath, { recursive: true, force: true })
+    }
   })
 
   it('rejects CLI worktree removal when the target contains another registered worktree', async () => {
