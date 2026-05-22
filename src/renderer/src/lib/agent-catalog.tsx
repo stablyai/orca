@@ -7,6 +7,8 @@ export type AgentCatalogEntry = {
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
+  /** Direct image URL for agents whose project identity is not represented by their favicon. */
+  iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
@@ -26,7 +28,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     id: 'openclaude',
     label: 'OpenClaude',
     cmd: 'openclaude',
-    faviconDomain: 'github.com',
+    iconUrl: 'https://github.com/Gitlawb.png?size=256',
     homepageUrl: 'https://github.com/Gitlawb/openclaude'
   },
   {
@@ -417,6 +419,18 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
+  if (catalogEntry?.iconUrl) {
+    return (
+      <img
+        src={catalogEntry.iconUrl}
+        width={size}
+        height={size}
+        alt=""
+        aria-hidden
+        style={{ borderRadius: 2 }}
+      />
+    )
+  }
   if (catalogEntry?.faviconDomain) {
     // Why: agents without a published SVG icon use their site favicon via
     // Google's favicon service — same source the README uses for the agent badge list.
