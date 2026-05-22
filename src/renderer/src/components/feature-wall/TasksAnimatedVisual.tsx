@@ -3,6 +3,7 @@ import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { ClaudeIcon } from '../status-bar/icons'
+import { FeatureWallClickRing } from './FeatureWallClickRing'
 
 type Issue = {
   number: number
@@ -28,7 +29,7 @@ const HOVER_SETTLE_MS = 700
 const HOVER_TO_BUTTON_MS = 700
 const PRESS_MS = 360
 const CREATING_MS = 2000
-const READY_MS = 1400
+const READY_MS = 2400
 const RESET_MS = 500
 
 function CursorIcon(): JSX.Element {
@@ -204,9 +205,13 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
     phase.kind === 'ready'
       ? phase.issueIdx
       : -1
-  const showWorkspace = phase.kind === 'creating' || phase.kind === 'ready'
-  const workspaceIssue = showWorkspace ? ISSUES[phase.issueIdx] : null
-  const agentRunning = phase.kind === 'creating'
+  // Why: the dropdown appears as soon as the workspace starts being created so
+  // the user sees a "Creating workspace" beat, but the workspace card itself
+  // only materialises once the workspace is ready — at which point the Claude
+  // agent inside it is already working.
+  const showDropdown = phase.kind === 'creating' || phase.kind === 'ready'
+  const workspaceCreating = phase.kind === 'creating'
+  const workspaceIssue = phase.kind === 'ready' ? ISSUES[phase.issueIdx] : null
 
   return (
     <div
@@ -267,41 +272,44 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
 
       <div
         className={`overflow-hidden transition-all duration-[320ms] ease-out ${
-          showWorkspace
+          showDropdown
             ? 'mt-2.5 max-h-[200px] border-t border-border/80 pt-2.5 opacity-100'
             : 'mt-0 max-h-0 border-t border-transparent pt-0 opacity-0'
         }`}
       >
+        <div className="flex items-center gap-1.5 px-1 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          {workspaceCreating ? (
+            <span className="inline-block size-[9px] animate-spin rounded-full border-[1.5px] border-yellow-500 border-t-transparent" />
+          ) : (
+            <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+          )}
+          <span>{workspaceCreating ? 'Creating workspace' : 'Workspace ready'}</span>
+        </div>
         {workspaceIssue ? (
-          <>
-            <div className="flex items-center gap-1.5 px-1 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-              {agentRunning ? (
-                <span className="inline-block size-[9px] animate-spin rounded-full border-[1.5px] border-yellow-500 border-t-transparent" />
-              ) : (
-                <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
-              )}
-              <span>{agentRunning ? 'Creating workspace' : 'Workspace ready'}</span>
-            </div>
-            <div className="rounded-[10px] bg-foreground/[0.05] px-2 py-2.5 shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]">
-              <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
-                <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
-                <div className="min-w-0">
-                  <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
-                    {workspaceIssue.title}
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2.5 pl-[30px] pr-2 pt-2.5 pb-0.5">
-                <div className="grid grid-cols-[16px_16px_minmax(0,1fr)] items-center gap-2.5">
-                  <span className="inline-flex size-4 items-center justify-center">
-                    <AgentStateDot state={agentRunning ? 'working' : 'done'} size="md" />
-                  </span>
-                  <ClaudeIcon size={14} />
-                  <span className="block h-[9px] w-[64%] rounded-[5px] bg-foreground/[0.16]" />
+          <div
+            key={workspaceIssue.number}
+            className="animate-[tasks-workspace-in_320ms_cubic-bezier(.2,.8,.2,1)_both] rounded-[10px] bg-foreground/[0.05] px-2 py-2.5 shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]"
+          >
+            <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
+              <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+              <div className="min-w-0">
+                <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
+                  {workspaceIssue.title}
                 </div>
               </div>
             </div>
-          </>
+            <div className="flex flex-col gap-2.5 pl-[30px] pr-2 pt-2.5 pb-0.5">
+              <div className="grid grid-cols-[16px_16px_minmax(0,1fr)] items-center gap-2.5">
+                <span className="inline-flex size-4 items-center justify-center">
+                  <AgentStateDot state="working" size="md" />
+                </span>
+                <ClaudeIcon size={14} />
+                <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
+                  Reading issue #{workspaceIssue.number}…
+                </span>
+              </div>
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -314,12 +322,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       >
         <div className="relative">
           <CursorIcon />
-          {phase.kind === 'pressing' ? (
-            <span
-              key={rippleKey}
-              className="absolute -left-1.5 -top-1.5 size-7 animate-[ping_480ms_ease-out_forwards] rounded-full border-2 border-foreground/50"
-            />
-          ) : null}
+          {phase.kind === 'pressing' ? <FeatureWallClickRing key={rippleKey} /> : null}
         </div>
       </div>
     </div>

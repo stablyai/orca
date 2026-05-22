@@ -9,9 +9,8 @@ export type FeatureWallWorkflowId =
   | 'tasks'
   | 'workspaces'
   | 'agents-orchestration'
-  | 'build-surface'
+  | 'workbench'
   | 'review'
-  | 'remote-development'
 
 // Renderer-only action discriminator. Resolved to a real store call in
 // FeatureWallModal — kept as an ID here so this module stays import-safe
@@ -21,18 +20,27 @@ export type FeatureWallInAppActionId =
   | 'open-integrations-settings'
   | 'open-agent-settings'
   | 'focus-terminal'
-  | 'open-ssh-settings'
 
 export type FeatureWallPrimaryCta =
   | { kind: 'in-app'; action: FeatureWallInAppActionId; label: string }
   | { kind: 'docs'; label: string; url: string }
+
+// Bullets can be a plain sentence or a {leadIn, body} pair so workflows that
+// want a short bold "headline" segment (e.g. workbench → "Splits, by keystroke
+// or right-click.") can render it inline before the rest of the bullet copy.
+export type FeatureWallWorkflowBullet =
+  | string
+  | {
+      readonly leadIn: string
+      readonly body: string
+    }
 
 export type FeatureWallWorkflow = {
   id: FeatureWallWorkflowId
   title: string
   meta: string
   lede: string
-  bullets: readonly string[]
+  bullets: readonly FeatureWallWorkflowBullet[]
   primaryTileId: FeatureWallMediaTileId
   relatedTileIds: readonly FeatureWallMediaTileId[]
   primaryCta: FeatureWallPrimaryCta
@@ -47,11 +55,11 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     id: 'workspaces',
     title: 'Workspaces',
     meta: 'Isolated work · Context kept together',
-    lede: 'Each piece of work gets its own workspace — isolated branch, terminal, editor, and agent state, all kept together.',
+    lede: 'Each piece of work gets its own workspace: isolated branch, terminal, editor, and agent state, all kept together.',
     bullets: [
-      'Run agents in parallel — one workspace per task, no cross-talk.',
-      'Switch instantly — terminal, files, and browser restore intact.',
-      'Sleep a workspace to free memory — wake it later with state intact.'
+      'Run agents in parallel: one workspace per task, no cross-talk.',
+      'Switch instantly. Terminal, files, and browser restore intact.',
+      'Sleep a workspace to free memory. Wake it later with state intact.'
     ],
     primaryTileId: 'tile-01',
     relatedTileIds: ['tile-10'],
@@ -79,7 +87,7 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
   },
   {
     id: 'agents-orchestration',
-    title: 'Agents & orchestration',
+    title: 'Agents',
     meta: 'Agents · Usage · Orca CLI',
     lede: 'Run several agents at once, track their progress, and let automation drive Orca when it helps.',
     bullets: [
@@ -97,14 +105,19 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     docsUrl: 'https://www.onorca.dev/docs/agents/supported'
   },
   {
-    id: 'build-surface',
-    title: 'Build surface',
+    id: 'workbench',
+    title: 'Workbench',
     meta: 'Terminal · Editor · Browser · Files',
-    lede: 'Use the core tools for building and inspecting changes from one workspace.',
+    lede: 'A fast configurable terminal — tabs, splits, and your own profile in every workspace.',
     bullets: [
-      'Work in a fast terminal and Monaco editor next to your code.',
-      'Use the embedded browser and Design Mode to inspect product UI.',
-      'Preview PDFs, images, CSV, Markdown, and image diffs without leaving Orca.'
+      {
+        leadIn: 'Splits, by keystroke or right-click.',
+        body: '⌘D splits right, ⌘⇧D splits down — keep one workspace, run several things at once.'
+      },
+      {
+        leadIn: 'Configurable.',
+        body: 'Bring your own profile — fonts, theme, shell — same setup in every workspace.'
+      }
     ],
     primaryTileId: 'tile-02',
     relatedTileIds: ['tile-07', 'tile-05', 'tile-12'],
@@ -113,7 +126,7 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
   },
   {
     id: 'review',
-    title: 'Review',
+    title: 'Code Review',
     meta: 'Diffs · Comments · PRs',
     lede: 'Review what changed, leave focused feedback, and send it back to the agent.',
     bullets: [
@@ -133,25 +146,6 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
       url: 'https://www.onorca.dev/docs/review/annotate-ai-diff'
     },
     docsUrl: 'https://www.onorca.dev/docs/review/annotate-ai-diff'
-  },
-  {
-    id: 'remote-development',
-    title: 'Remote development',
-    meta: 'Remote machines',
-    lede: 'Use Orca with remote machines when the work needs more compute or a different environment.',
-    bullets: [
-      'Run agents and tools on the remote machine.',
-      'Keep the same Orca workflow for local and remote work.',
-      'Move between remote and local workspaces in the same window.'
-    ],
-    primaryTileId: 'tile-06',
-    relatedTileIds: [],
-    primaryCta: {
-      kind: 'in-app',
-      action: 'open-ssh-settings',
-      label: 'Open SSH settings'
-    },
-    docsUrl: 'https://www.onorca.dev/docs/ssh'
   }
 ] as const
 

@@ -12,7 +12,6 @@ import {
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
-  ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
@@ -175,7 +174,6 @@ export async function runOnboardingFeatureSetup(
   let computerUsePermissionsOpened = false
 
   deps.setStorageItem(BROWSER_USE_ENABLED_STORAGE_KEY, selection.browserUse ? '1' : '0')
-  deps.setStorageItem(ORCHESTRATION_ENABLED_STORAGE_KEY, selection.orchestration ? '1' : '0')
   if (selection.orchestration) {
     deps.removeStorageItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
   }

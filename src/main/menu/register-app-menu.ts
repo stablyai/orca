@@ -1,4 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
+import { FEATURE_WALL_ENABLED } from '../../shared/feature-wall-build-flag'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -265,15 +266,16 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
-  // Why: the feature tour is product education, so it belongs under Help on
-  // every platform. macOS still keeps About/Updates in the app menu, while
-  // Windows/Linux keep those entries here because they have no app menu.
+  // Why: this tour still needs telemetry before release; disabled builds must
+  // not expose even the Help-menu entry.
+  const featureTourItems: Electron.MenuItemConstructorOptions[] = FEATURE_WALL_ENABLED
+    ? [{ type: 'separator' }, featureTourItem]
+    : []
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: 'Help',
     submenu: [
       crashReportItem,
-      { type: 'separator' },
-      featureTourItem,
+      ...featureTourItems,
       ...(isMac
         ? []
         : ([

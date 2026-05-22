@@ -44,7 +44,6 @@ import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
-import { FeatureTourNudge } from './components/feature-wall/FeatureTourNudge'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
@@ -98,6 +97,7 @@ import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
+import { FEATURE_WALL_ENABLED } from '../../shared/feature-wall-build-flag'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -181,7 +181,16 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
-const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
+// Why: the feature wall is intentionally compile-time gated until rollout.
+// Do not remove this when the flag is temporarily true for product testing.
+const FeatureWallModal = FEATURE_WALL_ENABLED
+  ? lazy(() => import('./components/feature-wall/FeatureWallModal'))
+  : null
+const FeatureTourNudge = FEATURE_WALL_ENABLED
+  ? lazy(async () => ({
+      default: (await import('./components/feature-wall/FeatureTourNudge')).FeatureTourNudge
+    }))
+  : null
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
@@ -1547,7 +1556,9 @@ function App(): React.JSX.Element {
         <Suspense fallback={null}>
           {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
           {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
-          {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
+          {FeatureWallModal && mountedLazyModalIds.has('feature-wall') ? (
+            <FeatureWallModal />
+          ) : null}
           {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
         </Suspense>
         {/* Why: mount PetOverlay only when the experimental flag is on AND
@@ -1560,7 +1571,11 @@ function App(): React.JSX.Element {
           </Suspense>
         ) : null}
         <UpdateCard />
-        <FeatureTourNudge />
+        {FeatureTourNudge ? (
+          <Suspense fallback={null}>
+            <FeatureTourNudge />
+          </Suspense>
+        ) : null}
         <StarNagCard />
         {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates

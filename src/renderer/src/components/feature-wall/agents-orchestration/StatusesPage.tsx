@@ -3,7 +3,7 @@ import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, OpenAIIcon, OpenCodeGoIcon } from '../../status-bar/icons'
+import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { cn } from '@/lib/utils'
 
 type ClaudeActivity = { kind: 'tool'; tool: string; arg: string } | { kind: 'msg'; text: ReactNode }
@@ -15,7 +15,7 @@ const CLAUDE_ACTIVITIES: readonly ClaudeActivity[] = [
   { kind: 'msg', text: 'Typecheck passes. Pulling on the login route next.' },
   { kind: 'tool', tool: 'Read', arg: 'routes/login.ts' },
   { kind: 'tool', tool: 'Edit', arg: 'middleware/session.ts' },
-  { kind: 'msg', text: 'Should be safe — adding tests for the redirect path.' },
+  { kind: 'msg', text: 'Adding tests for the redirect path.' },
   { kind: 'tool', tool: 'Bash', arg: 'pnpm test auth' },
   { kind: 'tool', tool: 'Edit', arg: 'auth.test.ts' }
 ]
@@ -62,16 +62,18 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
   }, [active, reducedMotion])
 
   return (
-    <div className="flex h-full flex-col gap-2.5">
+    <div className="flex h-full flex-col gap-5">
       <SupportedAgentsMarquee reducedMotion={reducedMotion} />
       <div className="rounded-[10px] bg-foreground/[0.05] px-2 py-2.5 shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]">
         <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
           <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
-          <div className="truncate text-[14px] font-semibold leading-[1.2]">redesign auth flow</div>
+          <div className="truncate text-[15.5px] font-semibold leading-[1.2]">
+            redesign auth flow
+          </div>
         </div>
-        <div className="flex flex-col gap-2 pl-[30px] pr-2 pt-2 pb-0.5">
+        <div className="flex flex-col gap-3 pl-[30px] pr-2 pt-2.5 pb-1">
           <AgentRow
-            icon={<OpenAIIcon size={14} />}
+            icon={<OpenAIIcon size={18} />}
             name="Codex"
             state={revealed.codex ? 'permission' : 'working'}
             permission={revealed.codex}
@@ -84,7 +86,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
               <Skel widthPct={64} />
             )}
           </AgentRow>
-          <AgentRow icon={<ClaudeIcon size={14} />} name="Claude" state="working">
+          <AgentRow icon={<ClaudeIcon size={18} />} name="Claude" state="working">
             {revealed.claude ? (
               <span
                 className={cn(
@@ -98,7 +100,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
               <Skel widthPct={78} />
             )}
           </AgentRow>
-          <AgentRow icon={<OpenCodeGoIcon size={14} />} name="OpenCode" state="done">
+          <AgentRow icon={<AgentIcon agent="opencode" size={18} />} name="OpenCode" state="done">
             {revealed.opencode ? (
               <span>
                 Updated <CodeChip>src/auth/session.test.ts</CodeChip>
@@ -121,22 +123,22 @@ function AgentRow(props: {
   children: ReactNode
 }): JSX.Element {
   return (
-    <div className="grid grid-cols-[16px_16px_minmax(0,1fr)] items-start gap-2.5">
-      <span className="mt-px inline-flex size-4 items-center justify-center">
+    <div
+      className="grid grid-cols-[18px_20px_minmax(0,1fr)] items-center gap-3"
+      aria-label={props.name}
+    >
+      <span className="inline-flex size-[18px] items-center justify-center">
         <AgentStateDot state={props.state} size="md" />
       </span>
-      <span className="mt-px inline-flex size-4 items-center justify-center">{props.icon}</span>
-      <div className="min-w-0 flex flex-col gap-px">
-        <span className="text-[11px] font-semibold leading-[1.15]">{props.name}</span>
-        <span
-          className={cn(
-            'truncate text-[11.5px] leading-[1.3]',
-            props.permission ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground'
-          )}
-        >
-          {props.children}
-        </span>
-      </div>
+      <span className="inline-flex size-5 items-center justify-center">{props.icon}</span>
+      <span
+        className={cn(
+          'truncate text-[13px] leading-[1.3]',
+          props.permission ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground'
+        )}
+      >
+        {props.children}
+      </span>
     </div>
   )
 }
@@ -159,7 +161,7 @@ function ClaudeActivityLine(props: { activity: ClaudeActivity }): JSX.Element {
 
 function CodeChip(props: { children: ReactNode }): JSX.Element {
   return (
-    <code className="rounded-[3px] bg-foreground/[0.06] px-1 py-px font-mono text-[11px] text-foreground">
+    <code className="rounded-[3px] bg-foreground/[0.06] px-1 py-px font-mono text-[12px] text-foreground">
       {props.children}
     </code>
   )

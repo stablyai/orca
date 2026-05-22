@@ -6,7 +6,6 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
-  hasOrchestrationSetupMarker,
   isOrchestrationSetupDismissed,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
@@ -60,7 +59,7 @@ export function FloatingTerminalPanel({
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
-    () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
+    () => !isOrchestrationSetupDismissed()
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
@@ -124,10 +123,6 @@ export function FloatingTerminalPanel({
   const refreshOrchestrationSetupVisibility = useCallback(async (): Promise<void> => {
     if (isOrchestrationSetupDismissed()) {
       setShowOrchestrationSetup(false)
-      return
-    }
-    if (!hasOrchestrationSetupMarker()) {
-      setShowOrchestrationSetup(true)
       return
     }
     try {

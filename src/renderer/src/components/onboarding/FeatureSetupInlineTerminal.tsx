@@ -57,7 +57,7 @@ export function FeatureSetupInlineTerminal({
       command={command}
       title="Skill setup"
       ariaLabel="Skill setup command"
-      description="Press Enter to run the command and confirm npm if asked. You can also set this up later in Settings."
+      description="Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings."
       onOpened={trackTerminalOpened}
       onInteracted={trackTerminalInteraction}
     />

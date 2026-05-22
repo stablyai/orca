@@ -80,6 +80,7 @@ import {
 } from './crash-reporting/crash-breadcrumb-store'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
 import { isCrashReportReason } from '../shared/crash-reporting'
+import { FEATURE_WALL_ENABLED } from '../shared/feature-wall-build-flag'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -407,6 +408,9 @@ function openMainWindow(): BrowserWindow {
 }
 
 function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
+  if (!FEATURE_WALL_ENABLED) {
+    return
+  }
   const webContents =
     targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
   webContents?.send('ui:openFeatureTour')
@@ -795,10 +799,12 @@ app.whenReady().then(async () => {
         : null,
     prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
   })
-  disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
-    stats,
-    getWindow: () => mainWindow
-  })
+  disposeFeatureWallFirstAgentTour = FEATURE_WALL_ENABLED
+    ? registerFeatureWallFirstAgentTour({
+        stats,
+        getWindow: () => mainWindow
+      })
+    : null
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()

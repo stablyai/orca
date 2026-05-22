@@ -19,10 +19,19 @@ const DISCONNECTED_TASKS_WORKFLOW_COPY: Pick<
   }
 }
 
+export type FeatureWallTaskSourcePresentation = {
+  workflow: FeatureWallWorkflow
+  hasConnectedTaskSource: boolean
+  // True until the first preflight + Linear status check has resolved. Callers
+  // should treat unknown state as "don't show the disconnected setup affordance
+  // yet" so we don't flash inline integration rows for a connected user.
+  isCheckingTaskSources: boolean
+}
+
 export function useFeatureWallTaskSourcePresentation(
   isOpen: boolean,
   selected: FeatureWallWorkflow
-): FeatureWallWorkflow {
+): FeatureWallTaskSourcePresentation {
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -57,9 +66,10 @@ export function useFeatureWallTaskSourcePresentation(
   const isCheckingTaskSources =
     preflightStatusLoading || !preflightStatusChecked || !linearStatusChecked
 
-  if (selected.id !== 'tasks' || hasConnectedTaskSource || isCheckingTaskSources) {
-    return selected
-  }
+  const workflow =
+    selected.id !== 'tasks' || hasConnectedTaskSource || isCheckingTaskSources
+      ? selected
+      : { ...selected, ...DISCONNECTED_TASKS_WORKFLOW_COPY }
 
-  return { ...selected, ...DISCONNECTED_TASKS_WORKFLOW_COPY }
+  return { workflow, hasConnectedTaskSource, isCheckingTaskSources }
 }

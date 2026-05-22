@@ -15,6 +15,7 @@ type OnboardingInlineCommandTerminalProps = {
   title: string
   description: string
   ariaLabel: string
+  terminalHeightPx?: number
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
 }
@@ -24,6 +25,7 @@ export function OnboardingInlineCommandTerminal({
   title,
   description,
   ariaLabel,
+  terminalHeightPx = 280,
   onOpened,
   onInteracted
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
@@ -175,7 +177,8 @@ export function OnboardingInlineCommandTerminal({
           <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
         </div>
         <div
-          className="relative h-[280px] min-h-0 bg-background"
+          className="relative min-h-0 bg-background"
+          style={{ height: terminalHeightPx }}
           onKeyDownCapture={(event) => onInteracted?.('keyboard', event)}
           onPointerDownCapture={() => onInteracted?.('pointer')}
         >

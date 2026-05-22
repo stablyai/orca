@@ -1254,6 +1254,36 @@
   animation: feature-wall-marquee-flow 36s linear infinite;
 }
 
+/* Shared click pulse for feature-wall fake cursors. Matches the Editor tour
+   ring so every animated mouse click reads as the same interaction. */
+.feature-wall-click-ring {
+  animation: feature-wall-click-ring 460ms ease-out forwards;
+}
+
+@keyframes feature-wall-click-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Why: smooth reveal for the Tasks-tile workspace card so it eases in once the
+   workspace flips from "Creating" to "Ready" instead of popping in. */
+@keyframes tasks-workspace-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Why: orchestrator → child connector arrows. Faint dashed strokes drawn in
    JS so endpoints follow the real card geometry as cards animate between
    phase 1 (parent + nested child) and phase 2 (parent + spawned peer). */
@@ -1337,53 +1367,6 @@
   animation: feature-wall-msg-pop 1100ms ease-out;
 }
 
-/* Phase-1 vs phase-2 visibility for the orchestration page. Lineage chip +
-   nested child collapse cleanly into the parent so the spawn slot in phase
-   2 sits flush below the orchestrator with no phantom gap. */
-.feature-wall-orch-stage [data-feature-wall-collapsible] {
-  overflow: hidden;
-  transition:
-    opacity 420ms ease,
-    transform 420ms cubic-bezier(0.4, 0, 0.2, 1),
-    max-height 420ms cubic-bezier(0.4, 0, 0.2, 1),
-    margin 420ms cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: opacity, transform, max-height;
-}
-.feature-wall-orch-stage[data-phase='1'] [data-feature-wall-collapsible='lineage-chip'] {
-  max-height: 36px;
-  opacity: 1;
-  transform: none;
-}
-.feature-wall-orch-stage[data-phase='1'] [data-feature-wall-collapsible='child'] {
-  max-height: 200px;
-  opacity: 1;
-  transform: none;
-}
-.feature-wall-orch-stage[data-phase='2'] [data-feature-wall-collapsible='lineage-chip'],
-.feature-wall-orch-stage[data-phase='2'] [data-feature-wall-collapsible='child'] {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(18px);
-  max-height: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-/* Spawn slot grows out of the orchestrator card in phase 2. Starts
-   compressed against the parent's bottom edge then expands. */
-.feature-wall-spawn {
-  position: relative;
-  opacity: 0;
-  transform-origin: 50% 0;
-  transform: translateY(-32px) scaleY(0.4) scaleX(0.92);
-  transition:
-    opacity 520ms ease,
-    transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.feature-wall-spawn.visible {
-  opacity: 1;
-  transform: none;
-}
 @keyframes feature-wall-orch-spin {
   to {
     transform: rotate(360deg);
@@ -1397,13 +1380,39 @@
   border-radius: 999px;
   animation: feature-wall-orch-spin 800ms linear infinite;
 }
-.feature-wall-spawn[data-state='ready'] .feature-wall-spawn-spinner {
-  border-color: rgb(16 185 129);
-  border-top-color: rgb(16 185 129);
-  animation: none;
+
+/* "Creating workspaces…" placeholder shown before the child workspaces
+   reveal. Once the orchestrator finishes spawning, the wrapper collapses
+   and the real child cards take its place. */
+.feature-wall-creating-children {
+  overflow: hidden;
+  opacity: 1;
+  max-height: 60px;
+  transition:
+    opacity 220ms ease,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* Each agent row in the spawned card stays collapsed until *its* dispatch
-   bubble lands on it, so the card visibly grows taller as work arrives. */
+.feature-wall-creating-children[data-hidden='true'] {
+  opacity: 0;
+  max-height: 0;
+  pointer-events: none;
+}
+
+/* Children container fades in once the orchestrator finishes creating. */
+.feature-wall-children-wrapper {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+.feature-wall-children-wrapper[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Each child agent row stays collapsed until *its* dispatch bubble lands on
+   it, so the child workspace visibly gains an agent as work arrives. */
 .feature-wall-spawn-row {
   overflow: hidden;
   opacity: 1;

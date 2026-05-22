@@ -88,7 +88,7 @@ function Popover(props: {
         'border-border text-foreground',
         'shadow-[0_16px_38px_rgba(24,24,27,0.18),0_2px_6px_rgba(24,24,27,0.08)]'
       )}
-      style={{ left: 40, bottom: 50, width: 320 }}
+      style={{ left: 40, bottom: 70, width: 320 }}
     >
       <div className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-2.5">
         <span className="inline-flex size-6 items-center justify-center rounded-[5px] bg-foreground/[0.06] text-foreground">
@@ -257,7 +257,7 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
   const codexMeta = props.swapped ? '100% 5h · 96% wk' : '4% 47m'
   return (
     <div
-      className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-3.5 rounded-lg border border-border bg-muted/60 px-3.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"
+      className="absolute bottom-[22px] left-1/2 flex -translate-x-1/2 items-center gap-3.5 rounded-lg border border-border bg-muted/60 px-3.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"
       style={{ width: 340 }}
     >
       <div className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-muted-foreground">

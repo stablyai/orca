@@ -13,12 +13,13 @@ export function AgentsOrchestrationVisual(props: {
   reducedMotion: boolean
   activeStepId: AgentsStepId
   widthPx?: number
+  heightPx?: number
 }): JSX.Element {
-  const { reducedMotion, activeStepId, widthPx } = props
+  const { reducedMotion, activeStepId, widthPx, heightPx } = props
   return (
     <div
       className="relative flex flex-col text-foreground"
-      style={{ width: widthPx ?? PANEL_WIDTH_PX, height: PANEL_HEIGHT_PX }}
+      style={{ width: widthPx ?? PANEL_WIDTH_PX, height: heightPx ?? PANEL_HEIGHT_PX }}
     >
       <Page active={activeStepId === 'statuses'}>
         <StatusesPage active={activeStepId === 'statuses'} reducedMotion={reducedMotion} />

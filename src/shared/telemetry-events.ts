@@ -166,9 +166,8 @@ export const featureWallWorkflowIdSchema = z.enum([
   'tasks',
   'workspaces',
   'agents-orchestration',
-  'build-surface',
-  'review',
-  'remote-development'
+  'workbench',
+  'review'
 ])
 export type FeatureWallWorkflowIdTelemetry = z.infer<typeof featureWallWorkflowIdSchema>
 

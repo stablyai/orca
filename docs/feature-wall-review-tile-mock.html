@@ -73,8 +73,8 @@
         padding: 0;
         color: var(--fg);
         overflow: visible;
-        height: 392px;
-        width: 560px;
+        height: 416px;
+        width: 480px;
         display: flex;
         flex-direction: column;
         gap: 10px;
@@ -808,10 +808,10 @@
       .pr-icon-btn:hover { background: rgba(24,24,27,0.05); color: var(--fg); }
       .pr-icon-btn svg { width: 13px; height: 13px; }
       .pr-view-body {
-        padding: 6px 12px 10px;
+        padding: 10px 12px 18px;
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 5px;
         min-height: 0;
       }
       .pr-number-row {
@@ -843,6 +843,7 @@
         font-weight: 600;
         line-height: 1.35;
         color: var(--fg);
+        margin-bottom: 2px;
       }
       .pr-view-meta {
         font-size: 10.5px;
@@ -861,6 +862,7 @@
         color: #fff;
         font-size: 11.5px;
         font-weight: 700;
+        margin-bottom: 2px;
         box-shadow: 0 1px 2px rgba(22,163,74,0.18);
         transition: box-shadow 220ms ease, filter 220ms ease;
       }
@@ -1023,26 +1025,41 @@
         padding: 4px 2px;
       }
 
-      /* Source Control mini-sidebar: just the commit area (textarea + split
-         button), since that's what carries the AI-commit-message story. We
-         intentionally strip the rest of the sidebar — file list, header,
-         branch row — to keep the visual quiet. */
+      /* Source Control mini-sidebar — mirrors the real Source Control panel
+         the user sees in Orca: ahead-count header, filter input, message
+         textarea + split Commit button, then a CHANGES section with file
+         rows. The file rows are the surface the "reading" pulse animates
+         over so it's obvious the AI is using the diff. */
       .sc-card {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 10px;
         background: #fff;
         border: 1px solid var(--border);
         border-radius: 10px;
+        overflow: hidden;
         box-shadow: 0 1px 2px rgba(24,24,27,0.04);
       }
-      .sc-card .sc-meta {
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--muted-fg);
+      .sc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .sc-header .ahead {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--fg);
+      }
+      .sc-header .ahead svg { width: 12px; height: 12px; color: var(--muted-fg); }
+      .sc-commit-area {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 10px;
       }
       .sc-textarea {
         position: relative;
@@ -1050,7 +1067,7 @@
         border-radius: 6px;
         background: var(--editor-surface);
         padding: 6px 26px 6px 8px;
-        min-height: 86px;
+        min-height: 56px;
         font-family: 'Geist', system-ui, sans-serif;
         font-size: 12px;
         line-height: 1.45;
@@ -1087,14 +1104,24 @@
         color: var(--muted-fg);
         background: transparent;
         cursor: pointer;
+        transition: color 160ms ease, background 160ms ease;
       }
       .sc-sparkle:hover { background: rgba(24,24,27,0.06); color: var(--fg); }
+      /* "Reading" state: tint the chip violet so it reads as the active
+         AI-assist affordance, without rotating the icon (the file-row pulse
+         is what carries the "scanning" signal). */
+      .sc-sparkle.scanning {
+        color: rgb(109 40 217);
+        background: color-mix(in srgb, rgb(139 92 246) 18%, transparent);
+      }
       .sc-sparkle svg { width: 14px; height: 14px; }
       @keyframes spin { to { transform: rotate(360deg); } }
       .sc-split {
         display: flex;
         align-items: stretch;
       }
+      /* Quiet secondary fill — keeps the AI sparkle/scan as the focal cue
+         and lets the brief green flash on .ready stand out by contrast. */
       .sc-split .primary {
         flex: 1;
         display: inline-flex;
@@ -1102,12 +1129,13 @@
         justify-content: center;
         gap: 5px;
         padding: 5px 10px;
-        background: var(--fg);
-        color: #fff;
+        background: var(--secondary, #f5f5f5);
+        color: var(--secondary-foreground, #171717);
         font-size: 11px;
         font-weight: 500;
         border-radius: 6px 0 0 6px;
-        border: 1px solid var(--fg);
+        border: 1px solid var(--border);
+        transition: background 240ms ease, border-color 240ms ease, color 240ms ease;
       }
       .sc-split .primary svg { width: 12px; height: 12px; }
       .sc-split .chev {
@@ -1115,86 +1143,182 @@
         align-items: center;
         justify-content: center;
         width: 22px;
-        background: var(--fg);
-        color: #fff;
+        background: var(--secondary, #f5f5f5);
+        color: var(--muted-fg);
         border-radius: 0 6px 6px 0;
-        border: 1px solid var(--fg);
-        border-left: 1px solid rgba(255,255,255,0.18);
+        border: 1px solid var(--border);
+        border-left: 1px solid var(--border);
+        transition: background 240ms ease, border-color 240ms ease, color 240ms ease;
       }
       .sc-split .chev svg { width: 12px; height: 12px; }
+      /* Brief green flash when the AI finishes filling the commit message —
+         mirrors the same beat applied to the Create PR button. */
+      .sc-split.ready .primary,
+      .sc-split.ready .chev {
+        background: color-mix(in srgb, rgb(34 197 94) 28%, var(--secondary, #f5f5f5));
+        border-color: rgb(34 197 94);
+        color: rgb(21 128 61);
+      }
+      .sc-split.ready .chev { border-left-color: rgba(34, 197, 94, 0.55); }
 
-      /* PR dialog */
+      .sc-changes-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted-fg);
+      }
+      .sc-changes-header .view-all {
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--muted-fg);
+      }
+      .sc-files {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        padding: 2px 6px 8px;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .sc-file {
+        display: grid;
+        grid-template-columns: 14px minmax(0,1fr) 12px;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.35;
+        color: var(--fg);
+        position: relative;
+        transition: background 220ms ease;
+      }
+      .sc-file .ficon { color: rgb(180 83 9); }
+      .sc-file .ficon svg { width: 12px; height: 12px; }
+      .sc-file .fname {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sc-file .fmark {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        text-align: right;
+        color: rgb(180 83 9);
+      }
+      /* "Reading" pulse — sweeps through the file rows while the AI assembles
+         a commit message, so the source-of-truth (diff) is visibly tied to
+         the typed message. Violet = AI/agent action across the app. */
+      .sc-file.reading {
+        background: color-mix(in srgb, rgb(139 92 246) 14%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, rgb(139 92 246) 28%, transparent);
+      }
+
+      /* PR dialog — matches the .sc-card chrome so the two cards read as one
+         design language (same border, radius, and elevation). The header
+         block + "Reading diff" status row are mirrors of the SC sidebar's
+         own header block, anchoring the dialog to the same diff context. */
       .pr-dialog {
         background: #fff;
         border: 1px solid var(--border);
         border-radius: 10px;
-        box-shadow: 0 18px 40px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05);
-        padding: 12px 14px 10px;
+        box-shadow: 0 1px 2px rgba(24,24,27,0.04);
         display: flex;
         flex-direction: column;
-        gap: 8px;
         min-width: 0;
+        overflow: hidden;
       }
-      .pr-dialog .pr-head {
+      .pr-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: 6px;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--border);
       }
-      .pr-dialog .pr-title-text {
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .pr-dialog .pr-gen-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 4px 9px;
-        border-radius: 5px;
+      .pr-meta {
         font-size: 11px;
         font-weight: 500;
         color: var(--fg);
-        background: #fff;
-        border: 1px solid var(--border);
-        cursor: pointer;
       }
-      .pr-dialog .pr-gen-btn:hover { background: rgba(24,24,27,0.05); }
-      .pr-dialog .pr-gen-btn svg { width: 12px; height: 12px; }
-      .pr-dialog .pr-desc {
-        font-size: 10.5px;
+      .pr-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 10px 10px;
+      }
+      /* "Generate with AI" mirrors the .sc-sparkle: icon-only chip in the
+         header so the AI-assist affordance reads identically on both cards
+         without forcing the title to wrap. */
+      .pr-dialog .pr-gen-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border-radius: 4px;
         color: var(--muted-fg);
-        margin-top: -4px;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        transition: color 160ms ease, background 160ms ease;
       }
+      .pr-dialog .pr-gen-btn:hover { background: rgba(24,24,27,0.06); color: var(--fg); }
+      .pr-dialog .pr-gen-btn.scanning {
+        color: rgb(109 40 217);
+        background: color-mix(in srgb, rgb(139 92 246) 18%, transparent);
+      }
+      .pr-dialog .pr-gen-btn svg { width: 14px; height: 14px; }
 
+      .pr-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
       .pr-field-label {
-        font-size: 10.5px;
-        font-weight: 500;
-        color: var(--fg);
-        margin-bottom: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted-fg);
       }
       .pr-base-row {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 3px 8px;
+        gap: 5px;
+        padding: 4px 9px;
         border: 1px solid var(--border);
-        border-radius: 999px;
-        font-size: 10.5px;
+        border-radius: 6px;
+        font-size: 11px;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         color: var(--fg);
-        background: rgba(24,24,27,0.04);
+        background: var(--editor-surface);
+        align-self: flex-start;
       }
-      .pr-base-row svg { width: 10px; height: 10px; color: var(--muted-fg); }
+      .pr-base-row svg { width: 11px; height: 11px; color: var(--muted-fg); }
+      /* Inputs mirror the .sc-textarea: same surface, radius, padding, and
+         12px Geist body — so the typed PR title/body reads the same as the
+         typed commit message. */
       .pr-input {
         position: relative;
-        padding: 5px 8px;
+        padding: 6px 8px;
         border: 1px solid var(--border);
         border-radius: 6px;
         background: var(--editor-surface);
-        min-height: 24px;
-        font-size: 11.5px;
+        min-height: 28px;
+        font-size: 12px;
         font-family: 'Geist', system-ui, sans-serif;
-        line-height: 1.35;
+        line-height: 1.45;
         color: var(--fg);
         white-space: pre-wrap;
         word-break: break-word;
@@ -1203,7 +1327,11 @@
       .pr-input.empty .placeholder {
         color: rgba(113,113,122,0.7);
       }
-      .pr-input.body { min-height: 64px; }
+      .pr-input.body {
+        min-height: 50px;
+        font-size: 11px;
+        line-height: 1.4;
+      }
 
       .pr-footer {
         display: flex;
@@ -1212,22 +1340,40 @@
         justify-content: flex-end;
         margin-top: 2px;
       }
+      /* Cancel reads as a quiet ghost button so it doesn't compete with
+         Create PR (the affirmative action). Create PR is sized slightly
+         larger than Cancel so the affirmative click target dominates. */
       .pr-footer .btn {
         font-size: 11px;
         font-weight: 500;
-        padding: 5px 11px;
-        border-radius: 5px;
+        padding: 5px 10px;
+        border-radius: 6px;
         line-height: 1;
         border: 1px solid transparent;
+        outline: none;
       }
+      .pr-footer .btn:focus,
+      .pr-footer .btn:focus-visible { outline: none; }
       .pr-footer .btn.outline {
-        background: #fff;
-        color: var(--fg);
-        border-color: var(--border);
+        background: transparent;
+        color: var(--muted-fg);
+        border-color: transparent;
       }
+      .pr-footer .btn.outline:hover { background: rgba(24,24,27,0.05); color: var(--fg); }
       .pr-footer .btn.solid {
-        background: var(--fg);
-        color: #fff;
+        background: var(--secondary, #f5f5f5);
+        color: var(--secondary-foreground, #171717);
+        border-color: var(--border);
+        font-size: 12px;
+        padding: 7px 14px;
+        transition: background 240ms ease, border-color 240ms ease, color 240ms ease, box-shadow 240ms ease;
+      }
+      /* Brief green flash when AI finishes filling the PR fields — fades
+         out before the success ring fires on click. */
+      .pr-footer .btn.solid.ready {
+        background: color-mix(in srgb, rgb(34 197 94) 28%, var(--secondary, #f5f5f5));
+        border-color: rgb(34 197 94);
+        color: rgb(21 128 61);
       }
 
       /* Cursor used by both pages — anchored to a parent .page via JS. */
@@ -1301,6 +1447,14 @@
         <path d="m3 17 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="m3 7 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
+      <symbol id="icon-github" viewBox="0 0 24 24">
+        <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 18c-4.51 2-5-2-7-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-terminal" viewBox="0 0 24 24">
+        <path d="m4 17 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 19h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
       <symbol id="icon-send" viewBox="0 0 16 16">
         <path d="M2 8 14 3l-4 11-2-5-6-1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
       </symbol>
@@ -1343,6 +1497,12 @@
       <symbol id="cursor-arrow" viewBox="0 0 16 16">
         <path d="M2 1.5 L2 12 L5 9 L7.2 14.5 L9.5 13.6 L7.3 8 L11.5 8 Z"
               fill="#fff" stroke="#18181b" stroke-width="1" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-arrow-up" viewBox="0 0 16 16">
+        <path d="M8 3v10M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-filter" viewBox="0 0 16 16">
+        <path d="M2 4h12M4 8h8M6 12h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </symbol>
     </svg>
 
@@ -1432,7 +1592,7 @@
                 </p>
               </div>
 
-              <div class="grid items-start gap-7 px-9 pb-9 pt-3"
+              <div class="grid items-start gap-4 px-9 pb-9 pt-3"
                    style="grid-template-columns: minmax(0,1fr) auto;">
                 <aside class="flex flex-col gap-5 min-w-0">
                   <div class="modal-bullets-stage" data-bullets-stage>
@@ -1489,13 +1649,12 @@
       // ─── Step config (drives the rail substeps + pages) ────────────────
       const STEPS = [
         { id: 'notes', name: 'Notes', subtitle: 'Notes & diffs', desc: 'Review code diffs, leave notes on the exact lines that need attention, and send them to any agent in one click.' },
-        { id: 'pr-view', name: 'PR checks', subtitle: 'PR checks & comments', desc: 'See the hosted PR status and merge from inside Orca.' },
+        { id: 'pr-view', name: 'PR checks', subtitle: 'PR checks & comments', desc: 'Open Checks to see PR details, CI, comments, conflicts, and merge readiness in one place.' },
         { id: 'ship', name: 'AI commit & PR', subtitle: 'AI commit & PR', desc: 'Let AI write your commit message and pull request from the diff — both fully editable before they go out.' }
       ]
 
-      const PAGE_INTROS = {
-        'pr-view': 'Open the Checks page to view pull request details, CI status, review comments, merge readiness, and conflicts, then merge the PR from Orca without leaving your workspace.'
-      }
+      const PAGE_INTROS = {}
+      const MOCK_GITHUB_CONNECTED = false
 
       const PAGE_BULLETS = {
         notes: [
@@ -1510,16 +1669,16 @@
         ],
         'pr-view': [
           {
-            leadIn: 'Know where the PR stands.',
-            body: 'See the PR title, number, state, last update, readiness badges, and conflict status in one compact panel.'
+            leadIn: 'Know the PR state.',
+            body: 'See title, number, status, readiness, and conflicts at a glance.'
           },
           {
-            leadIn: 'Track every check.',
-            body: 'Scan passing, failing, and pending CI results, then jump into the specific check when you need the full log.'
+            leadIn: 'Track CI.',
+            body: 'Scan check results and open full logs when needed.'
           },
           {
-            leadIn: 'Read review activity in context.',
-            body: 'View PR comments and inline review threads, filter human vs bot feedback, and see which conversations are resolved.'
+            leadIn: 'Read comments.',
+            body: 'View PR comments and inline threads, including resolved and bot feedback.'
           }
         ],
         ship: [
@@ -1566,7 +1725,7 @@
             const content =
               typeof b === 'string'
                 ? b
-                : `<strong>${b.leadIn}</strong><br><span>${b.body}</span>`
+                : `<strong>${b.leadIn}</strong> <span>${b.body}</span>`
             li.innerHTML = `
               <span class="mt-[8px] inline-block size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
               <span>${content}</span>
@@ -1574,6 +1733,39 @@
             ul.appendChild(li)
           }
           wrap.appendChild(ul)
+          if (step.id === 'pr-view' && !MOCK_GITHUB_CONNECTED) {
+            const github = document.createElement('div')
+            github.className = 'mt-5 rounded-xl border border-zinc-200 bg-zinc-50/50 p-4'
+            github.innerHTML = `
+              <div class="flex flex-col gap-3">
+                <div class="flex items-start gap-3">
+                  <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-900">
+                    ${svgUse('icon-github', 18)}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-[15px] font-semibold leading-tight text-zinc-900">GitHub</h3>
+                      <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        <span class="size-1.5 rounded-full bg-amber-500"></span>
+                        Sign in needed
+                      </span>
+                    </div>
+                    <p class="mt-1 text-[13px] leading-relaxed text-zinc-500">Pull requests, issues, and check status.</p>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button class="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-900">
+                    ${svgUse('icon-terminal', 14)}
+                    Sign in
+                  </button>
+                  <button class="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-600">
+                    Re-check
+                  </button>
+                </div>
+              </div>
+            `
+            wrap.appendChild(github)
+          }
           host.appendChild(wrap)
         })
       }
@@ -1908,40 +2100,67 @@
       }
 
       // ─── Generate page ──────────────────────────────────────────────────
+      // Files mirrored across both cards so the user reads them as one diff
+      // — the SC card lists them as the staged changes, and the PR card cites
+      // the same set in its "Reading from diff" status row.
+      const SHIP_FILES = [
+        { name: 'migrate.ts', path: 'src/server/migrate.ts', mark: 'M' },
+        { name: 'backfill-users.ts', path: 'src/server/backfill-users.ts', mark: 'M' },
+        { name: 'migrate.test.ts', path: 'tests/migrate.test.ts', mark: 'M' }
+      ]
+
       function buildShipPage() {
         const page = document.querySelector('[data-page="ship"]')
+        const fileRowsHtml = SHIP_FILES.map((f, i) => `
+          <div class="sc-file" data-sc-file="${i}">
+            <span class="ficon">${svgUse('icon-file', 12)}</span>
+            <span class="fname">${f.name}</span>
+            <span class="fmark">${f.mark}</span>
+          </div>
+        `).join('')
+
         page.innerHTML = `
           <div class="ship-stack">
             <div class="sc-card">
-              <div class="sc-meta">Source Control · Message</div>
-              <div class="sc-textarea" data-commit-textarea><button class="sc-sparkle" type="button" data-commit-sparkle aria-label="Generate commit message with AI">${svgUse('icon-sparkles', 14)}</button><span class="placeholder" data-commit-placeholder>Message</span><span class="typed" data-commit-typed></span><span class="caret"></span></div>
-              <div class="sc-split">
-                <span class="primary">${svgUse('icon-check-tiny', 12)} Commit</span>
-                <span class="chev">${svgUse('icon-chev-down', 12)}</span>
+              <div class="sc-header">
+                <span class="ahead">${svgUse('icon-arrow-up', 12)} 3 commits ahead</span>
               </div>
+              <div class="sc-commit-area">
+                <div class="sc-textarea" data-commit-textarea><button class="sc-sparkle" type="button" data-commit-sparkle aria-label="Generate commit message with AI">${svgUse('icon-sparkles', 14)}</button><span class="placeholder" data-commit-placeholder>Message</span><span class="typed" data-commit-typed></span><span class="caret"></span></div>
+                <div class="sc-split">
+                  <span class="primary">${svgUse('icon-check-tiny', 12)} Commit</span>
+                  <span class="chev">${svgUse('icon-chev-down', 12)}</span>
+                </div>
+              </div>
+              <div class="sc-changes-header">
+                <span>Changes <span style="color:var(--fg);font-weight:600;margin-left:2px">${SHIP_FILES.length}</span></span>
+                <span class="view-all">View all</span>
+              </div>
+              <div class="sc-files">${fileRowsHtml}</div>
             </div>
 
             <div class="pr-dialog">
               <div class="pr-head">
-                <div class="pr-title-text">Create Pull Request</div>
-                <button class="pr-gen-btn" type="button" data-pr-gen-btn>${svgUse('icon-sparkles', 12)} Generate with AI</button>
+                <div class="pr-meta">Create Pull Request</div>
+                <button class="pr-gen-btn" type="button" data-pr-gen-btn aria-label="Generate with AI" title="Generate with AI">${svgUse('icon-sparkles', 14)}</button>
               </div>
-              <div class="pr-desc">Confirm the target branch and PR details before creating the hosted review.</div>
-              <div>
-                <div class="pr-field-label">Base branch</div>
-                <span class="pr-base-row">${svgUse('icon-branch', 10)} main</span>
-              </div>
-              <div>
-                <div class="pr-field-label">Title</div>
-                <div class="pr-input empty" data-pr-title><span class="placeholder">Pull request title</span><span data-pr-title-typed></span></div>
-              </div>
-              <div>
-                <div class="pr-field-label">Description</div>
-                <div class="pr-input body empty" data-pr-body><span class="placeholder">Pull request description</span><span data-pr-body-typed></span></div>
-              </div>
-              <div class="pr-footer">
-                <button class="btn outline" type="button">Cancel</button>
-                <button class="btn solid" type="button" data-pr-create-btn>Create PR</button>
+              <div class="pr-body">
+                <div class="pr-field">
+                  <div class="pr-field-label">Base branch</div>
+                  <span class="pr-base-row">${svgUse('icon-branch', 11)} main</span>
+                </div>
+                <div class="pr-field">
+                  <div class="pr-field-label">Title</div>
+                  <div class="pr-input empty" data-pr-title><span class="placeholder">Pull request title</span><span data-pr-title-typed></span></div>
+                </div>
+                <div class="pr-field">
+                  <div class="pr-field-label">Description</div>
+                  <div class="pr-input body empty" data-pr-body><span class="placeholder">Pull request description</span><span data-pr-body-typed></span></div>
+                </div>
+                <div class="pr-footer">
+                  <button class="btn outline" type="button">Cancel</button>
+                  <button class="btn solid" type="button" data-pr-create-btn>Create PR</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2361,6 +2580,7 @@
         const ta = page.querySelector('[data-commit-textarea]')
         const placeholder = page.querySelector('[data-commit-placeholder]')
         const typed = page.querySelector('[data-commit-typed]')
+        const fileRows = Array.from(page.querySelectorAll('[data-sc-file]'))
         const prGen = page.querySelector('[data-pr-gen-btn]')
         const prTitleHost = page.querySelector('[data-pr-title]')
         const prTitleTyped = page.querySelector('[data-pr-title-typed]')
@@ -2369,30 +2589,49 @@
         const prBodyTyped = page.querySelector('[data-pr-body-typed]')
         const prBodyPh = prBodyHost.querySelector('.placeholder')
         const prCreate = page.querySelector('[data-pr-create-btn]')
+        const splitEl = page.querySelector('.sc-split')
 
         const COMMIT_MSG = 'Run schema + backfill steps in order during migration'
         const PR_TITLE = 'Run schema + backfill in order during migration'
-        const PR_BODY = '## Summary\n• Sequence schema + backfill with await so commit fires after both\n• Skip backfill rows with no tier so reruns don’t overwrite data\n\n## Test plan\n• Rerun the migration on a clean staging DB'
+        const PR_BODY = 'Awaits schema before backfill so commits stay in order. Skips rows with no tier on reruns.'
 
         function resetState() {
           ta.classList.remove('generating')
           placeholder.style.display = ''
           typed.textContent = ''
-          sparkle.classList.remove('spinning')
-          prGen.classList.remove('spinning')
+          sparkle.classList.remove('scanning')
+          prGen.classList.remove('scanning')
           prTitlePh.style.display = ''
           prBodyPh.style.display = ''
           prTitleTyped.textContent = ''
           prBodyTyped.textContent = ''
           prTitleHost.classList.add('empty')
           prBodyHost.classList.add('empty')
+          prCreate.classList.remove('ready')
           prCreate.style.background = ''
           prCreate.style.boxShadow = ''
+          if (splitEl) splitEl.classList.remove('ready')
+          fileRows.forEach((row) => row.classList.remove('reading'))
           cursor.classList.remove('visible', 'clicking')
           cursor.style.transition = 'none'
           cursor.style.transform = 'translate(-30px, 220px)'
           void cursor.offsetWidth
           cursor.style.transition = ''
+        }
+
+        // Sweeps the highlight through the file list once so the viewer sees
+        // the AI "reading" the staged changes before any text appears.
+        async function pulseFileRows({ holdLastMs = 0 } = {}) {
+          for (let i = 0; i < fileRows.length; i++) {
+            if (cancelled) return
+            fileRows[i].classList.add('reading')
+            await wait(220)
+            if (i < fileRows.length - 1) {
+              fileRows[i].classList.remove('reading')
+            }
+          }
+          if (holdLastMs > 0) await wait(holdLastMs)
+          fileRows.forEach((row) => row.classList.remove('reading'))
         }
 
         async function loop() {
@@ -2407,41 +2646,55 @@
             await wait(620)
             if (cancelled) return
 
-            // 2. Click — sparkle starts spinning.
+            // 2. Click → sparkle tints amber, file rows pulse to indicate the
+            //    AI is reading the staged changes before any text appears.
             cursor.classList.add('clicking')
             await wait(220)
             if (cancelled) return
             cursor.classList.remove('clicking')
-            sparkle.classList.add('spinning')
+            sparkle.classList.add('scanning')
             placeholder.style.display = 'none'
             ta.classList.add('generating')
             // Move cursor away so the typing reads as agent output.
-            moveCursor(cursor, ta, 240, 10)
+            moveCursor(cursor, ta, 200, 10)
+            const scanPromise = pulseFileRows({ holdLastMs: 120 })
             await wait(380)
             if (cancelled) return
 
-            // 3. Type the commit message into the textarea.
+            // 3. Type the commit message — overlaps with the file scan so the
+            //    "read → write" relationship is visible in one beat.
             for (const ch of COMMIT_MSG) {
               if (cancelled) return
               typed.textContent += ch
               await wait(ch === '\n' ? 80 : 16)
             }
-            sparkle.classList.remove('spinning')
+            await scanPromise
+            sparkle.classList.remove('scanning')
             ta.classList.remove('generating')
+            // Brief green flash on Commit to signal "ready to commit", then
+            // fade so the next beat (PR generation) starts on a clean slate.
+            if (splitEl) splitEl.classList.add('ready')
             await wait(540)
             if (cancelled) return
+            if (splitEl) splitEl.classList.remove('ready')
 
             // 4. Cursor moves to the PR Generate-with-AI button.
-            moveCursor(cursor, prGen, 28, 10)
+            moveCursor(cursor, prGen, 11, 11)
             await wait(540)
             if (cancelled) return
             cursor.classList.add('clicking')
             await wait(220)
             if (cancelled) return
             cursor.classList.remove('clicking')
-            prGen.classList.add('spinning')
+            prGen.classList.add('scanning')
 
-            // 5. Title types in.
+            // 5. SC file rows pulse again so it's obvious the PR title/body
+            //    are sourced from the same diff the commit message used.
+            const prScanPromise = pulseFileRows({ holdLastMs: 0 })
+            await wait(420)
+            if (cancelled) return
+
+            // 6. Title types in.
             prTitlePh.style.display = 'none'
             prTitleHost.classList.remove('empty')
             for (const ch of PR_TITLE) {
@@ -2449,7 +2702,7 @@
               prTitleTyped.textContent += ch
               await wait(20)
             }
-            // 6. Body types in.
+            // 7. Body types in.
             prBodyPh.style.display = 'none'
             prBodyHost.classList.remove('empty')
             for (const ch of PR_BODY) {
@@ -2457,15 +2710,14 @@
               prBodyTyped.textContent += ch
               await wait(ch === '\n' ? 60 : 10)
             }
-            prGen.classList.remove('spinning')
-            await wait(420)
+            await prScanPromise
+            prGen.classList.remove('scanning')
+            // Same flash-then-fade cue on Create PR after both fields fill —
+            // matches the Commit beat, no extra success ring afterwards.
+            prCreate.classList.add('ready')
+            await wait(540)
             if (cancelled) return
-
-            // 7. Highlight the Create PR button briefly.
-            prCreate.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.30)'
-            await wait(720)
-            if (cancelled) return
-            prCreate.style.boxShadow = ''
+            prCreate.classList.remove('ready')
 
             // Hold the final state.
             await wait(2200)

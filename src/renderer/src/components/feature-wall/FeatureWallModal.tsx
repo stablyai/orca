@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getFeatureWallOpenSource, usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import type { JSX, KeyboardEvent } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { CornerDownLeft } from 'lucide-react'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
   getFeatureWallMediaTile,
-  type FeatureWallInAppActionId,
-  type FeatureWallPrimaryCta,
   type FeatureWallWorkflow,
   type FeatureWallWorkflowId
 } from '../../../../shared/feature-wall-workflows'
-import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
 import { getAgentsSteps, type AgentsStepId } from '../../../../shared/agents-orchestration-steps'
+import { getWorkbenchSteps, type WorkbenchStepId } from '../../../../shared/workbench-steps'
+import { getReviewSteps, type ReviewStepId } from '../../../../shared/review-steps'
 import {
   Dialog,
   DialogContent,
@@ -20,92 +20,28 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 import {
   getFeatureWallRailNavigationTarget,
   type FeatureWallRailNavigationKey
 } from './feature-wall-rail-navigation'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 import { useFeatureWallTaskSourcePresentation } from './use-feature-wall-task-source-presentation'
+import { useFeatureWallCompletion } from './use-feature-wall-completion'
 import { FeatureWallBody } from './FeatureWallBody'
-import { AgentsStepper } from './AgentsStepper'
+import { KeepAwakeCard } from './KeepAwakeCard'
 import { FeatureWallRail } from './FeatureWallRail'
 
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 const NAVIGATION_KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'Home', 'End'])
-function getFeatureWallOpenSource(
-  modalData: Record<string, unknown>
-): FeatureWallOpenSourceTelemetry {
-  const source = modalData.source
-  return source === 'help_menu' || source === 'popup' ? source : 'unknown'
-}
-function usePrefersReducedMotion(): boolean {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return false
-    }
-    return window.matchMedia(REDUCED_MOTION_QUERY).matches
-  })
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return
-    }
-    const media = window.matchMedia(REDUCED_MOTION_QUERY)
-    setPrefersReducedMotion(media.matches)
-    const onChange = (event: MediaQueryListEvent): void => {
-      setPrefersReducedMotion(event.matches)
-    }
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [])
-
-  return prefersReducedMotion
-}
-type InAppActionDispatcher = (action: FeatureWallInAppActionId) => void
-function useInAppActionDispatcher(closeModal: () => void): InAppActionDispatcher {
-  const openTaskPage = useAppStore((s) => s.openTaskPage)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const setActiveView = useAppStore((s) => s.setActiveView)
-
-  return useCallback(
-    (action) => {
-      // Why: close the tour first so the user lands on the surface they
-      // asked for. Each action below is fire-and-forget — the corresponding
-      // route/state change is what carries the user there.
-      closeModal()
-      switch (action) {
-        case 'open-tasks':
-          openTaskPage()
-          return
-        case 'open-integrations-settings':
-          openSettingsTarget({ pane: 'integrations', repoId: null })
-          openSettingsPage()
-          return
-        case 'open-agent-settings':
-          openSettingsTarget({ pane: 'agents', repoId: null })
-          openSettingsPage()
-          return
-        case 'focus-terminal':
-          setActiveView('terminal')
-          return
-        case 'open-ssh-settings':
-          openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
-          openSettingsPage()
-      }
-    },
-    [closeModal, openSettingsPage, openSettingsTarget, openTaskPage, setActiveView]
-  )
-}
-
+const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 export default function FeatureWallModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const isOpen = activeModal === 'feature-wall'
   const assetBaseUrl = useFeatureWallAssetBaseUrl(isOpen)
   const prefersReducedMotion = usePrefersReducedMotion()
@@ -113,7 +49,6 @@ export default function FeatureWallModal(): JSX.Element | null {
     DEFAULT_FEATURE_WALL_WORKFLOW_ID
   )
   const railRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const dispatchInAppAction = useInAppActionDispatcher(closeModal)
   const source = getFeatureWallOpenSource(modalData)
   const telemetryRef = useRef<{ open: boolean; openedAtMs: number }>({
     open: false,
@@ -129,19 +64,24 @@ export default function FeatureWallModal(): JSX.Element | null {
     [selectedId]
   )
   const selected = FEATURE_WALL_WORKFLOWS[selectedIndex]
-  const selectedPresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
-  const settings = useAppStore((s) => s.settings)
-  // Why: hide the notifications step when the user already has agent-task
-  // notifications enabled — mirrors the toggle in the mock so users who
-  // already configured this don't see a redundant pitch.
-  const notificationsAlreadyEnabled =
-    settings?.notifications.enabled === true && settings?.notifications.agentTaskComplete === true
-  const agentsSteps = useMemo(
-    () => getAgentsSteps(notificationsAlreadyEnabled),
-    [notificationsAlreadyEnabled]
+  const taskSourcePresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
+  const selectedPresentation = taskSourcePresentation.workflow
+  const agentsSteps = useMemo(() => getAgentsSteps(), [])
+  const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
+  const reviewSteps = useMemo(() => getReviewSteps(), [])
+  const completion = useFeatureWallCompletion(
+    isOpen,
+    taskSourcePresentation.hasConnectedTaskSource,
+    taskSourcePresentation.isCheckingTaskSources
   )
   const [agentsStepId, setAgentsStepId] = useState<AgentsStepId>(
     () => agentsSteps[0]?.id ?? 'statuses'
+  )
+  const [workbenchStepId, setWorkbenchStepId] = useState<WorkbenchStepId>(
+    () => workbenchSteps[0]?.id ?? 'terminal'
+  )
+  const [reviewStepId, setReviewStepId] = useState<ReviewStepId>(
+    () => reviewSteps[0]?.id ?? 'notes'
   )
   // Reset to the first step whenever the visible step list changes so we never
   // land on an id that's been filtered out (e.g. user toggled notifications on
@@ -151,9 +91,27 @@ export default function FeatureWallModal(): JSX.Element | null {
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
     }
   }, [agentsSteps, agentsStepId])
+  useEffect(() => {
+    if (!workbenchSteps.some((s) => s.id === workbenchStepId)) {
+      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+    }
+  }, [workbenchSteps, workbenchStepId])
+  useEffect(() => {
+    if (!reviewSteps.some((s) => s.id === reviewStepId)) {
+      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+    }
+  }, [reviewSteps, reviewStepId])
   const agentsActiveStep =
     selected.id === 'agents-orchestration'
       ? (agentsSteps.find((s) => s.id === agentsStepId) ?? agentsSteps[0] ?? null)
+      : null
+  const workbenchActiveStep =
+    selected.id === 'workbench'
+      ? (workbenchSteps.find((s) => s.id === workbenchStepId) ?? workbenchSteps[0] ?? null)
+      : null
+  const reviewActiveStep =
+    selected.id === 'review'
+      ? (reviewSteps.find((s) => s.id === reviewStepId) ?? reviewSteps[0] ?? null)
       : null
   const primaryTile = getFeatureWallMediaTile(selected.primaryTileId)
   const posterUrl = primaryTile ? toFeatureWallAssetUrl(assetBaseUrl, primaryTile.posterPath) : null
@@ -204,8 +162,10 @@ export default function FeatureWallModal(): JSX.Element | null {
     if (!isOpen) {
       setSelectedId(DEFAULT_FEATURE_WALL_WORKFLOW_ID)
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
+      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
     }
-  }, [agentsSteps, isOpen])
+  }, [agentsSteps, isOpen, reviewSteps, workbenchSteps])
 
   // Reset to the first step whenever the agents-orchestration workflow gets
   // selected, so the user always lands on Statuses first.
@@ -214,6 +174,46 @@ export default function FeatureWallModal(): JSX.Element | null {
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
     }
   }, [agentsSteps, selected.id])
+  useEffect(() => {
+    if (selected.id === 'workbench') {
+      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+    }
+  }, [selected.id, workbenchSteps])
+  useEffect(() => {
+    if (selected.id === 'review') {
+      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+    }
+  }, [reviewSteps, selected.id])
+
+  // Why: viewing an informational workflow / sub-step is enough to count it as
+  // "done" — only setup-driven entries wait for an external signal (see
+  // use-feature-wall-completion.ts).
+  const {
+    markWorkflowVisited,
+    markAgentStepVisited,
+    markWorkbenchStepVisited,
+    markReviewStepVisited
+  } = completion
+  useEffect(() => {
+    if (isOpen) {
+      markWorkflowVisited(selectedId)
+    }
+  }, [isOpen, markWorkflowVisited, selectedId])
+  useEffect(() => {
+    if (isOpen && agentsActiveStep) {
+      markAgentStepVisited(agentsActiveStep.id)
+    }
+  }, [agentsActiveStep, isOpen, markAgentStepVisited])
+  useEffect(() => {
+    if (isOpen && workbenchActiveStep) {
+      markWorkbenchStepVisited(workbenchActiveStep.id)
+    }
+  }, [isOpen, markWorkbenchStepVisited, workbenchActiveStep])
+  useEffect(() => {
+    if (isOpen && reviewActiveStep) {
+      markReviewStepVisited(reviewActiveStep.id)
+    }
+  }, [isOpen, markReviewStepVisited, reviewActiveStep])
 
   const handleSelect = useCallback(
     (workflow: FeatureWallWorkflow): void => {
@@ -253,23 +253,34 @@ export default function FeatureWallModal(): JSX.Element | null {
     railRefs.current[nextIndex]?.focus()
   }
 
-  const handlePrimaryCta = (cta: FeatureWallPrimaryCta): void => {
-    track('feature_wall_primary_cta_clicked', {
-      group_id: selected.id,
-      action: cta.kind,
-      source
-    })
-    if (cta.kind === 'in-app') {
-      dispatchInAppAction(cta.action)
+  const isLastWorkflow = selectedIndex >= FEATURE_WALL_WORKFLOWS.length - 1
+  const continueLabel = isLastWorkflow ? 'Done' : 'Continue'
+  const handleContinue = useCallback((): void => {
+    if (isLastWorkflow) {
+      closeModal()
       return
     }
-    void window.api.shell.openUrl(cta.url)
-    if (primaryTile) {
-      // Mirrors the legacy tile_clicked event so docs-as-primary still emits
-      // it for downstream dashboards.
-      track('feature_wall_tile_clicked', { tile_id: primaryTile.id })
+    const nextWorkflow = FEATURE_WALL_WORKFLOWS[selectedIndex + 1]
+    if (nextWorkflow) {
+      handleSelect(nextWorkflow)
+      railRefs.current[selectedIndex + 1]?.focus()
     }
-  }
+  }, [closeModal, handleSelect, isLastWorkflow, selectedIndex])
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      const mod = IS_MAC_PLATFORM ? event.metaKey : event.ctrlKey
+      if (mod && event.key === 'Enter') {
+        event.preventDefault()
+        handleContinue()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [handleContinue, isOpen])
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
@@ -284,55 +295,75 @@ export default function FeatureWallModal(): JSX.Element | null {
   const showGif = !prefersReducedMotion && gifUrl !== null
   const previewTitleId = `feature-wall-preview-${selected.id}`
   const previewPanelId = 'feature-wall-preview-panel'
+  const showKeepAwakeCard =
+    selected.id === 'agents-orchestration' &&
+    agentsActiveStep?.id === 'statuses' &&
+    settings != null
+  const bodyShowsSectionIntro =
+    selected.id === 'workspaces' ||
+    selected.id === 'tasks' ||
+    agentsActiveStep !== null ||
+    workbenchActiveStep !== null ||
+    reviewActiveStep !== null
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={cn(
-          'grid h-[min(780px,calc(100vh-8rem))] w-[calc(100vw-8rem)] gap-0 p-0 sm:max-w-[1240px]',
-          agentsActiveStep
-            ? 'grid-rows-[auto_minmax(0,1fr)_auto_auto]'
-            : 'grid-rows-[auto_minmax(0,1fr)_auto]'
-        )}
+        className="grid h-[min(780px,calc(100vh-8rem))] w-[calc(100vw-8rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 p-0 sm:max-w-[1240px]"
         tabIndex={-1}
       >
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Explore Orca
-          </div>
           <DialogTitle className="text-lg">Get to know Orca</DialogTitle>
-          <DialogDescription className="text-base">
-            A short, workflow-by-workflow tour. Pick a path — each one ends with something you can
-            try in Orca right now.
+          {/* Why: Radix requires a description for the dialog to be a11y-compliant,
+              but we don't want it visible — the rail and step copy already orient users. */}
+          <DialogDescription className="sr-only">
+            A short, workflow-by-workflow tour of Orca.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <FeatureWallRail
-            selectedId={selectedId}
-            previewPanelId={previewPanelId}
-            railRefs={railRefs}
-            onSelect={handleSelect}
-            onRailKeyDown={handleRailKeyDown}
-          />
+          <div className="min-h-0 md:border-r md:border-border">
+            <FeatureWallRail
+              selectedId={selectedId}
+              previewPanelId={previewPanelId}
+              railRefs={railRefs}
+              onSelect={handleSelect}
+              onRailKeyDown={handleRailKeyDown}
+              workflowDone={completion.workflowDone}
+              agentsSteps={agentsSteps}
+              agentsActiveStepId={agentsActiveStep?.id ?? null}
+              agentStepDone={completion.agentStepDone}
+              onSelectAgentsStep={setAgentsStepId}
+              workbenchSteps={workbenchSteps}
+              workbenchActiveStepId={workbenchActiveStep?.id ?? null}
+              workbenchStepDone={completion.workbenchStepDone}
+              onSelectWorkbenchStep={setWorkbenchStepId}
+              reviewSteps={reviewSteps}
+              reviewActiveStepId={reviewActiveStep?.id ?? null}
+              reviewStepDone={completion.reviewStepDone}
+              onSelectReviewStep={setReviewStepId}
+            />
+          </div>
 
           <section
             id={previewPanelId}
             role="tabpanel"
-            className="scrollbar-sleek grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-y-auto"
+            className={cn(
+              'scrollbar-sleek grid min-h-0 overflow-y-auto',
+              showKeepAwakeCard
+                ? 'grid-rows-[auto_minmax(0,1fr)_auto]'
+                : 'grid-rows-[auto_minmax(0,1fr)]'
+            )}
             aria-labelledby={previewTitleId}
           >
             <div className="px-9 pb-3 pt-7">
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                Workflow {selectedIndex + 1} of {FEATURE_WALL_WORKFLOWS.length} · {selected.title}
-              </div>
               <h3
                 id={previewTitleId}
                 className="text-3xl font-semibold leading-tight tracking-tight"
               >
                 {selected.title}
               </h3>
-              {agentsActiveStep ? null : (
+              {bodyShowsSectionIntro ? null : (
                 <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
                   {selectedPresentation.lede}
                 </p>
@@ -348,33 +379,32 @@ export default function FeatureWallModal(): JSX.Element | null {
               prefersReducedMotion={prefersReducedMotion}
               source={source}
               agentsActiveStep={agentsActiveStep}
+              workbenchActiveStep={workbenchActiveStep}
+              reviewActiveStep={reviewActiveStep}
             />
+            {showKeepAwakeCard && settings ? (
+              <div className="px-9 pb-9">
+                <KeepAwakeCard settings={settings} updateSettings={updateSettings} />
+              </div>
+            ) : null}
           </section>
         </div>
 
-        {agentsActiveStep ? (
-          <AgentsStepper
-            steps={agentsSteps}
-            activeStepId={agentsActiveStep.id}
-            onSelect={setAgentsStepId}
-          />
-        ) : null}
-
-        <footer className="flex flex-col gap-3 border-t border-border bg-card/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+        <footer className="flex items-center justify-between border-t border-border bg-card/50 px-4 py-3 sm:px-7">
           <span className="text-xs text-muted-foreground">
             Reopen any time from Help &gt; Explore Orca.
           </span>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {selected.id === 'agents-orchestration' ? null : (
-              <Button
-                className="w-full sm:w-auto"
-                onClick={() => handlePrimaryCta(selectedPresentation.primaryCta)}
-              >
-                {selectedPresentation.primaryCta.label}
-                <ChevronRight className="size-3.5" />
-              </Button>
-            )}
-          </div>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            onClick={handleContinue}
+          >
+            {continueLabel}
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
+              <span>{IS_MAC_PLATFORM ? '⌘' : 'Ctrl'}</span>
+              <CornerDownLeft className="size-3" />
+            </span>
+          </button>
         </footer>
       </DialogContent>
     </Dialog>

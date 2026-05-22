@@ -27,6 +27,10 @@ const ORCA_POSTHOG_WRITE_KEY_LITERAL =
   typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
     ? JSON.stringify(orcaPostHogWriteKey)
     : 'null'
+// Why: temporary compile-time rollout gate. Product testing can flip this to
+// true locally, but shipped builds should keep it false until the follow-up PR
+// intentionally exposes Help > Explore Orca and the first-agent nudge.
+const ORCA_FEATURE_WALL_ENABLED_LITERAL = 'true'
 
 export default defineConfig({
   main: {
@@ -51,6 +55,7 @@ export default defineConfig({
     // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
+      ORCA_FEATURE_WALL_ENABLED: ORCA_FEATURE_WALL_ENABLED_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
@@ -73,6 +78,9 @@ export default defineConfig({
     }
   },
   renderer: {
+    define: {
+      ORCA_FEATURE_WALL_ENABLED: ORCA_FEATURE_WALL_ENABLED_LITERAL
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

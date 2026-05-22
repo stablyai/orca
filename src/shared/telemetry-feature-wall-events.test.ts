@@ -62,14 +62,14 @@ describe('feature wall schemas', () => {
   it('accepts the feature-selected telemetry payload', () => {
     expect(
       eventSchemas.feature_wall_feature_selected.safeParse({
-        group_id: 'build-surface',
+        group_id: 'workbench',
         tile_id: 'tile-02',
         source: 'help_menu'
       }).success
     ).toBe(true)
     expect(
       eventSchemas.feature_wall_feature_selected.safeParse({
-        group_id: 'build-surface',
+        group_id: 'workbench',
         tile_id: 'tile-02'
       }).success
     ).toBe(false)
@@ -95,8 +95,8 @@ describe('feature wall schemas', () => {
   it('accepts the docs-clicked telemetry payload', () => {
     expect(
       eventSchemas.feature_wall_docs_clicked.safeParse({
-        group_id: 'remote-development',
-        tile_id: 'tile-06',
+        group_id: 'review',
+        tile_id: 'tile-08',
         source: 'help_menu'
       }).success
     ).toBe(true)

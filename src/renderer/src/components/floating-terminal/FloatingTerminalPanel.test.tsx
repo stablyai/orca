@@ -123,7 +123,6 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 vi.mock('@/lib/orchestration-setup-state', () => ({
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY: 'floating-terminal-test-dismissed',
   ORCHESTRATION_SETUP_STATE_EVENT: 'floating-terminal-test-setup-state',
-  hasOrchestrationSetupMarker: vi.fn(() => true),
   isOrchestrationSetupDismissed: vi.fn(() => false),
   notifyOrchestrationSetupStateChanged: vi.fn()
 }))

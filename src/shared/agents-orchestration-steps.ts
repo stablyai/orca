@@ -1,7 +1,4 @@
 // Per-step copy for the agents-orchestration tile in the Explore Orca modal.
-// The notifications step is conditional and gets dropped at runtime when the
-// user already has notifications.agentTaskComplete enabled (mock parity:
-// docs/feature-wall-agents-orchestration-tile-mock.html).
 
 export type AgentsStepId = 'statuses' | 'usage' | 'orchestration' | 'notifications'
 
@@ -13,10 +10,6 @@ export type AgentsStepBullet =
   | {
       readonly leadIn: string
       readonly body: string
-      // When set, the bullet fades in this many ms after the step becomes
-      // active. Used on the orchestration step to mirror the mock's reveal
-      // sequence (top bullet stays put, bottom bullet appears after a beat).
-      readonly fadeInDelayMs?: number
     }
 
 export type AgentsStep = {
@@ -28,6 +21,9 @@ export type AgentsStep = {
   readonly subtitle: string
   // One-sentence summary rendered under the subtitle.
   readonly description: string
+  // Whether the step is optional — surfaced as an "Optional" pill next to the
+  // subtitle so users know they can skip the related setup.
+  readonly optional?: boolean
   // Optional prose lead-in rendered above the bullet list. Used on the
   // orchestration step so users read the bullets as the answer to a sentence
   // ("Orca CLI enables agents to: …").
@@ -43,8 +39,36 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
     description: 'Track every running agent in each workspace.',
     bullets: [
       'Run several agents in one workspace and see exactly which one needs you.',
-      'Realtime status — working, asking for permission, finished — for every running agent.',
+      'Realtime status (working, asking for permission, finished) for every running agent.',
       'Works with every major coding agent and CLI we ship support for.'
+    ]
+  },
+  {
+    id: 'orchestration',
+    name: 'Orchestration',
+    subtitle: 'Orchestration',
+    description: 'Give agents the power to work together.',
+    bulletsLeadIn:
+      'With the Orca CLI, agents can spin up focused workspaces, coordinate with each other, and keep complex jobs moving without you managing every handoff.',
+    bullets: [
+      {
+        leadIn: 'Create clean lanes for parallel work.',
+        body: 'Agents can open isolated workspaces for each task, keep changes separated, and move multiple efforts forward at once.'
+      },
+      {
+        leadIn: 'Coordinate like an agent team.',
+        body: 'Agents can dispatch tasks, share context, ask questions, wait on dependencies, and report results through Orca instead of relying on manual copy-paste.'
+      }
+    ]
+  },
+  {
+    id: 'notifications',
+    name: 'Notifications',
+    subtitle: 'Notifications',
+    description: 'Orca pings you on the desktop the moment an agent finishes.',
+    bullets: [
+      'Step away from Orca and come back when an agent needs your attention.',
+      'Set a custom notification sound in Settings → Notifications.'
     ]
   },
   {
@@ -53,47 +77,14 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
     subtitle: 'Usage',
     description:
       'Watch your usage and rate limits across every connected account, so you know when to switch.',
+    optional: true,
     bullets: [
-      'Live usage and rate-limit resets in the bottom bar — for every account you connect.',
-      'Hit your limit? Swap accounts inline without leaving the workspace.',
-      'Know before you hit a wall, not after a request fails.'
-    ]
-  },
-  {
-    id: 'orchestration',
-    name: 'Orchestration',
-    subtitle: 'Orchestration',
-    description:
-      'Let agents work as a team — spawn workspaces, message each other, and coordinate using the Orca CLI.',
-    bulletsLeadIn: 'Orca CLI enables agents to:',
-    bullets: [
-      {
-        leadIn: 'Create clean lanes for parallel work.',
-        body: 'Spin up isolated workspaces for each task, keep changes separated, and move multiple efforts forward at once.'
-      },
-      {
-        leadIn: 'Coordinate as an agent team.',
-        body: 'Dispatch tasks, hand off context, ask questions, and collect results through Orca instead of relying on manual copy-paste.',
-        fadeInDelayMs: 2200
-      }
-    ]
-  },
-  {
-    id: 'notifications',
-    name: 'Notifications',
-    subtitle: 'Notifications',
-    description: 'Get a desktop notification the moment an agent finishes or needs your input.',
-    bullets: [
-      'Native desktop notifications when an agent finishes or asks for permission.',
-      'Step away from Orca without losing time when an agent stalls.',
-      'Per-event toggles and a custom sound in Settings → Notifications.'
+      'Live usage and rate-limit resets in the bottom bar, for every account you connect.',
+      'Hit your limit? Swap accounts inline without leaving the workspace.'
     ]
   }
 ] as const
 
-export function getAgentsSteps(notificationsAlreadyEnabled: boolean): readonly AgentsStep[] {
-  if (notificationsAlreadyEnabled) {
-    return AGENTS_STEPS.filter((s) => s.id !== 'notifications')
-  }
+export function getAgentsSteps(): readonly AgentsStep[] {
   return AGENTS_STEPS
 }
