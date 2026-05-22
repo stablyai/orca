@@ -292,9 +292,13 @@ export class SshGitProvider implements IGitProvider {
     })) as GitCommitCompareResult
   }
 
-  async getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
+  async getUpstreamStatus(
+    worktreePath: string,
+    pushTarget?: GitPushTarget
+  ): Promise<GitUpstreamStatus> {
     return (await this.mux.request('git.upstreamStatus', {
-      worktreePath
+      worktreePath,
+      ...(pushTarget ? { pushTarget } : {})
     })) as GitUpstreamStatus
   }
 
@@ -312,12 +316,16 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
-  async pullBranch(worktreePath: string): Promise<void> {
-    await this.mux.request('git.pull', { worktreePath })
+  async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
-  async fetchRemote(worktreePath: string): Promise<void> {
-    await this.mux.request('git.fetch', { worktreePath })
+  async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
+    await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+  }
+
+  async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
   async fetchRemoteTrackingRef(

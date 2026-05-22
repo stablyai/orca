@@ -29,6 +29,7 @@ import {
 } from '../claude-accounts/live-pty-gate'
 import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
 import { classifyError } from '../telemetry/classify-error'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
@@ -484,6 +485,11 @@ export function clearProviderPtyState(id: string): void {
   // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
   // PTYs that were never registered (SSH-owned).
   unregisterPty(id)
+  // Why: cover lifecycle paths that bypass runtime.onPtyExit — SSH reattach
+  // failures, SSH connection shutdown (clearPtyOwnershipForConnection), and
+  // daemon spawn-failure cleanup all funnel through here. Without this the
+  // watcher's per-PTY buffer and worktree binding outlive the PTY.
+  advertisedUrlWatcher.unbindPty(id)
   clearMigrationUnsupportedPty(id)
   agentHookServer.clearPaneKeyAliasesForPty(id, {
     shouldClearStablePaneKey: (stablePaneKey) => {

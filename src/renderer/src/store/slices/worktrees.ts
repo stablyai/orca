@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import type {
   Worktree,
   WorkspaceVisibleTabType,
+  GitPushTarget,
   WorktreeLineage,
   WorktreeMeta
 } from '../../../../shared/types'
@@ -263,6 +264,33 @@ async function persistWorktreeMeta(
     { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
+}
+
+async function resolveLinkedPrPushTarget(
+  settings: AppState['settings'],
+  repoId: string,
+  prNumber: number
+): Promise<GitPushTarget | undefined> {
+  try {
+    const target = getActiveRuntimeTarget(settings)
+    const result =
+      target.kind === 'local'
+        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
+        : await callRuntimeRpc<
+            { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
+          >(target, 'worktree.resolvePrBase', { repo: repoId, prNumber }, { timeoutMs: 30_000 })
+    if ('error' in result) {
+      console.warn(`Failed to resolve push target for PR #${prNumber}: ${result.error}`)
+      return undefined
+    }
+    return result.pushTarget
+  } catch (error) {
+    console.warn(
+      `Failed to resolve push target for PR #${prNumber}:`,
+      error instanceof Error ? error.message : error
+    )
+    return undefined
+  }
 }
 
 function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
@@ -1017,6 +1045,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   updateWorktreeMeta: async (worktreeId, updates) => {
     const existingWorktree = findWorktreeById(get().worktreesByRepo, worktreeId)
+    // Why: manual PR linking only supplies the PR number. Resolve the PR head
+    // branch here so Push targets the review branch, not the checkout mirror.
+    const linkedPrForPushTarget =
+      typeof updates.linkedPR === 'number' && Number.isFinite(updates.linkedPR)
+        ? updates.linkedPR
+        : null
+    const resolvedPushTarget =
+      linkedPrForPushTarget !== null &&
+      updates.pushTarget === undefined &&
+      existingWorktree &&
+      !existingWorktree.pushTarget
+        ? await resolveLinkedPrPushTarget(
+            get().settings,
+            existingWorktree.repoId,
+            linkedPrForPushTarget
+          )
+        : undefined
     const shouldRefreshHostedReview =
       updates.linkedPR === null && existingWorktree?.linkedPR !== null
     const reviewRepo = shouldRefreshHostedReview
@@ -1029,7 +1074,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // since the previous sort, so a re-sort causes the worktree to drop in
     // ranking even though the user just touched it. Bumping the timestamp
     // keeps the recency signal fresh so the worktree holds its position.
-    const enriched = 'comment' in updates ? { ...updates, lastActivityAt: Date.now() } : updates
+    const targetEnriched = resolvedPushTarget
+      ? { ...updates, pushTarget: resolvedPushTarget }
+      : updates
+    const enriched =
+      'comment' in targetEnriched
+        ? { ...targetEnriched, lastActivityAt: Date.now() }
+        : targetEnriched
 
     set((s) => {
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)

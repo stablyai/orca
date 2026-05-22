@@ -140,4 +140,77 @@ describe('getUpstreamStatus', () => {
       behindCommitsArePatchEquivalent: false
     })
   })
+
+  it('uses an explicit publish target instead of the configured upstream', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '1\t2\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '+ def456 remote work\n', stderr: '' })
+
+    const result = await getUpstreamStatus('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(result).toEqual({
+      hasUpstream: true,
+      upstreamName: 'fork/feature/fix',
+      ahead: 1,
+      behind: 2,
+      behindCommitsArePatchEquivalent: false
+    })
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['rev-parse', '--verify', '--quiet', 'refs/remotes/fork/feature/fix'], { cwd: '/repo' }],
+      [
+        ['rev-list', '--left-right', '--count', 'HEAD...refs/remotes/fork/feature/fix'],
+        { cwd: '/repo' }
+      ],
+      [
+        [
+          'log',
+          '--oneline',
+          '--cherry-mark',
+          '--right-only',
+          'HEAD...refs/remotes/fork/feature/fix',
+          '--'
+        ],
+        { cwd: '/repo' }
+      ]
+    ])
+  })
+
+  it('reports no upstream when an explicit publish target has not been fetched yet', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(Object.assign(new Error('git exited with 1.'), { stderr: '' }))
+
+    await expect(
+      getUpstreamStatus('/repo', {
+        remoteName: 'fork',
+        branchName: 'feature/fix'
+      })
+    ).resolves.toEqual({
+      hasUpstream: false,
+      upstreamName: 'fork/feature/fix',
+      ahead: 0,
+      behind: 0
+    })
+  })
+
+  it('does not hide git failures while checking an explicit publish target', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' }).mockRejectedValueOnce(
+      Object.assign(new Error('fatal: not a git repository'), {
+        stderr: 'fatal: not a git repository'
+      })
+    )
+
+    await expect(
+      getUpstreamStatus('/repo', {
+        remoteName: 'fork',
+        branchName: 'feature/fix'
+      })
+    ).rejects.toThrow('fatal: not a git repository')
+  })
 })

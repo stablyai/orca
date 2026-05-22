@@ -1,5 +1,10 @@
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
-import type { GitStatusResult, GitUpstreamStatus, GlobalSettings } from '../../../../shared/types'
+import type {
+  GitPushTarget,
+  GitStatusResult,
+  GitUpstreamStatus,
+  GlobalSettings
+} from '../../../../shared/types'
 
 export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
@@ -11,7 +16,8 @@ export type GitStatusRefreshDeps = {
   fetchUpstreamStatus: (
     worktreeId: string,
     worktreePath: string,
-    connectionId?: string
+    connectionId?: string,
+    pushTarget?: GitPushTarget
   ) => Promise<void>
 }
 
@@ -20,12 +26,14 @@ export async function refreshGitStatusForWorktree({
   worktreeId,
   worktreePath,
   connectionId,
+  pushTarget,
   deps
 }: {
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
+  pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
 }): Promise<void> {
   const status = (await getRuntimeGitStatus({
@@ -42,18 +50,26 @@ export async function refreshGitStatusForWorktree({
     head: status.head,
     branch: status.branch
   })
+  if (pushTarget) {
+    // Why: porcelain status reports Git's configured upstream. Source Control
+    // actions for PR-created worktrees must instead reconcile with Orca's
+    // explicit publish target.
+    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    return
+  }
   if (status.upstreamStatus) {
-    deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
-    // Why: porcelain status has counts but cannot tell stale post-rebase
-    // upstream commits from real remote work. A diverged branch needs the
-    // richer explicit probe before the UI offers Pull/Sync.
     if (
       status.upstreamStatus.ahead > 0 &&
       status.upstreamStatus.behind > 0 &&
       status.upstreamStatus.behindCommitsArePatchEquivalent === undefined
     ) {
+      // Why: porcelain status has counts but cannot tell stale post-rebase
+      // upstream commits from real remote work. Writing it first makes the
+      // primary action flicker between Sync and Force Push on every poll.
       await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      return
     }
+    deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
     return
   }
   await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)

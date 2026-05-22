@@ -381,6 +381,12 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'openTasks') {
       renderer.send('ui:openTasks')
+    } else if (action?.type === 'openSettings') {
+      renderer.send('ui:openSettings')
+    } else if (action?.type === 'exportPdf') {
+      renderer.send('export:requestPdf')
+    } else if (action?.type === 'forceReload') {
+      renderer.reloadIgnoringCache()
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else if (action?.type === 'dictationKeyDown') {

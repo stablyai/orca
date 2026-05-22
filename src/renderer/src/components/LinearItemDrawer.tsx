@@ -24,8 +24,7 @@ import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   useTeamStates,
@@ -44,7 +43,6 @@ import {
   linearIssueComments,
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -950,8 +948,7 @@ export function LinearIssueCommentFooter({
   variant?: 'compact' | 'linear-page'
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const keybindings = useAppStore((s) => s.keybindings)
-  const submitShortcutLabel = useShortcutLabel('composer.submit')
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -993,12 +990,12 @@ export function LinearIssueCommentFooter({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (keybindingMatchesAction('composer.submit', e, getShortcutPlatform(), keybindings)) {
+      if (isScreenSubmitShortcut(e)) {
         e.preventDefault()
         handleSubmit()
       }
     },
-    [handleSubmit, keybindings]
+    [handleSubmit]
   )
 
   if (variant === 'linear-page') {

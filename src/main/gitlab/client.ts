@@ -180,6 +180,19 @@ export async function getMergeRequestForBranch(
   }
 }
 
+function mrListStateFlags(state: MRListState): string[] {
+  switch (state) {
+    case 'opened':
+      return []
+    case 'merged':
+      return ['--merged']
+    case 'closed':
+      return ['--closed']
+    case 'all':
+      return ['--all']
+  }
+}
+
 /**
  * List merge requests for a project. Uses glab CLI pagination because
  * it handles self-hosted auth and project selection consistently.
@@ -205,16 +218,68 @@ export async function listMergeRequests(
     connectionId
   )
   if (!projectRef) {
-    return {
-      items: [],
-      page,
-      perPage,
-      totalCount: 0,
-      totalPages: 0,
-      error: {
-        type: 'not_found',
-        message: 'No GitLab project found for this repository.'
+    if (connectionId) {
+      // Why: SSH-backed repos have no local cwd for glab to infer from.
+      // Running cwd-less could resolve an unrelated local project instead.
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: {
+          type: 'not_found',
+          message: 'No GitLab project found for this repository.'
+        }
       }
+    }
+    // Why: fallback — let glab infer project from cwd, same as listIssues.
+    // Used when the repo's remote host is not in getGlabKnownHosts()
+    // (e.g. a fresh self-hosted instance), but glab itself can still
+    // resolve it from the local git config.
+    const stateFlag = mrListStateFlags(state)
+    await acquire()
+    try {
+      const { stdout } = await glabExecFileAsync(
+        [
+          'mr',
+          'list',
+          '--output',
+          'json',
+          '--per-page',
+          String(perPage),
+          '--page',
+          String(page),
+          '--order',
+          'updated_at',
+          '--sort',
+          'desc',
+          ...stateFlag
+        ],
+        glabRepoExecOptions(repoPath, connectionId)
+      )
+      const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
+      return {
+        items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
+        page,
+        perPage,
+        // Why: the CLI doesn't return x-total headers, so totals are
+        // approximate. For the Tasks UI this is acceptable.
+        totalCount: data.length,
+        totalPages: data.length < perPage ? page : page + 1
+      }
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err)
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: classifyListIssuesError(stderr)
+      }
+    } finally {
+      release()
     }
   }
   // Why: 'all' is exposed as the picker filter but GitLab's API expects

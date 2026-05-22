@@ -282,14 +282,77 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
-    it('returns a not_found envelope when project ref is unresolved', async () => {
+    it('falls back to glab mr list when project ref is unresolved', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
       })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            id: 300,
+            iid: 3,
+            title: 'fallback mr',
+            state: 'opened',
+            web_url: 'https://gitlab.com/-/merge_requests/3',
+            updated_at: '2026-05-05',
+            source_project_id: 5,
+            target_project_id: 5
+          }
+        ])
+      })
       const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0].title).toBe('fallback mr')
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        [
+          'mr',
+          'list',
+          '--output',
+          'json',
+          '--per-page',
+          '20',
+          '--page',
+          '1',
+          '--order',
+          'updated_at',
+          '--sort',
+          'desc'
+        ],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('classifies fallback errors into the result envelope', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.error?.type).toBe('permission_denied')
       expect(result.items).toEqual([])
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    })
+
+    it('does not run the cwd fallback for unresolved SSH repos', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      const result = await listMergeRequests(
+        '/remote/repo',
+        'opened',
+        1,
+        20,
+        undefined,
+        undefined,
+        'conn-1'
+      )
       expect(result.error?.type).toBe('not_found')
+      expect(result.items).toEqual([])
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })
 

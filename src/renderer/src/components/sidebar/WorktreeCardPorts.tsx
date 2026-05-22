@@ -8,13 +8,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  addressForPort,
   canStopWorkspacePort,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
+import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 
@@ -52,6 +52,13 @@ function PortAction({
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    onClick(event)
+    if (event.detail > 0) {
+      event.currentTarget.blur()
+    }
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -62,7 +69,7 @@ function PortAction({
           disabled={disabled}
           className="size-5 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/35"
           aria-label={label}
-          onClick={onClick}
+          onClick={handleClick}
         >
           {children}
         </Button>
@@ -82,6 +89,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
 
   const handleOpen = useCallback(
@@ -104,8 +112,9 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const handleCopy = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-      void window.api.ui.writeClipboardText(addressForPort(port))
-      toast.success(`Copied ${port.port}`)
+      const address = addressForPort(port)
+      void window.api.ui.writeClipboardText(address)
+      toast.success(`Copied ${address}`)
     },
     [port]
   )
@@ -151,19 +160,27 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       <div className="relative flex h-5 min-w-0 items-center">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="block min-w-0 select-text truncate text-[11px] text-muted-foreground">
-              {processLabel}
+            <span className="flex min-w-0 select-text items-baseline gap-1.5 overflow-hidden pr-14 text-[11px] text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate">{processLabel}</span>
+              <span className="shrink-0 text-muted-foreground/45">-</span>
+              <span className="min-w-10 max-w-20 shrink-0 truncate text-right text-muted-foreground/70">
+                {address}
+              </span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {processLabel}
+            <span className="flex items-center gap-1.5">
+              <span>{processLabel}</span>
+              <span className="text-muted-foreground/60">-</span>
+              <span>{address}</span>
+            </span>
           </TooltipContent>
         </Tooltip>
         <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
           <PortAction label="Open in Orca Browser" onClick={handleOpen}>
             <ExternalLink className="size-3" />
           </PortAction>
-          <PortAction label={`Copy ${addressForPort(port)}`} onClick={handleCopy}>
+          <PortAction label={`Copy ${address}`} onClick={handleCopy}>
             <Copy className="size-3" />
           </PortAction>
           <PortAction label="Stop Process" disabled={!canStop} onClick={handleStop}>

@@ -1,4 +1,13 @@
-import { keybindingMatchesAction, type KeybindingOverrides } from './keybindings'
+import {
+  getKeybindingDefinition,
+  isKeybindingAllowedInTerminal,
+  isKeybindingPotentialTerminalConflict,
+  keybindingMatchesAction,
+  normalizeTerminalShortcutPolicy,
+  type KeybindingActionId,
+  type KeybindingMatchOptions,
+  type KeybindingOverrides
+} from './keybindings'
 
 export type WindowShortcutInput = {
   type?: string
@@ -16,6 +25,9 @@ export type WindowShortcutInput = {
 
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
+  | { type: 'openSettings' }
+  | { type: 'exportPdf' }
+  | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
   | { type: 'toggleFloatingTerminal' }
   | { type: 'toggleLeftSidebar' }
@@ -27,6 +39,8 @@ export type WindowShortcutAction =
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
+
+type WindowShortcutResolveOptions = KeybindingMatchOptions
 
 function platformPrimaryModifier(
   input: Pick<WindowShortcutInput, 'meta' | 'control'>,
@@ -45,7 +59,8 @@ export function isWindowShortcutModifierChord(
 export function matchesRecentTabSwitcherChord(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  options: WindowShortcutResolveOptions = {}
 ): boolean {
   const control = Boolean(input.control ?? input.ctrlKey)
   const meta = Boolean(input.meta ?? input.metaKey)
@@ -70,58 +85,89 @@ export function matchesRecentTabSwitcherChord(
       shiftKey: false
     },
     platform,
-    keybindings
+    keybindings,
+    options
   )
+}
+
+function actionMatches(
+  actionId: KeybindingActionId,
+  input: WindowShortcutInput,
+  platform: NodeJS.Platform,
+  keybindings: KeybindingOverrides | undefined,
+  options: WindowShortcutResolveOptions
+): boolean {
+  return keybindingMatchesAction(actionId, input, platform, keybindings, options)
+}
+
+function implicitWorktreeIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
+  if (options.context !== 'terminal') {
+    return true
+  }
+  return normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
 }
 
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  options: WindowShortcutResolveOptions = {}
 ): WindowShortcutAction | null {
-  if (keybindingMatchesAction('worktree.history.back', input, platform, keybindings)) {
+  if (actionMatches('worktree.history.back', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
       direction: 'back'
     }
   }
 
-  if (keybindingMatchesAction('worktree.history.forward', input, platform, keybindings)) {
+  if (actionMatches('worktree.history.forward', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
       direction: 'forward'
     }
   }
 
-  if (keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings)) {
+  if (actionMatches('floatingTerminal.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleFloatingTerminal' }
   }
 
-  if (keybindingMatchesAction('zoom.in', input, platform, keybindings)) {
+  if (actionMatches('zoom.in', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'in' }
   }
 
-  if (keybindingMatchesAction('zoom.out', input, platform, keybindings)) {
+  if (actionMatches('zoom.out', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'out' }
   }
 
-  if (keybindingMatchesAction('zoom.reset', input, platform, keybindings)) {
+  if (actionMatches('zoom.reset', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'reset' }
   }
 
-  if (keybindingMatchesAction('worktree.palette', input, platform, keybindings)) {
+  if (actionMatches('app.settings', input, platform, keybindings, options)) {
+    return { type: 'openSettings' }
+  }
+
+  if (actionMatches('file.exportPdf', input, platform, keybindings, options)) {
+    return { type: 'exportPdf' }
+  }
+
+  if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
+    return { type: 'forceReload' }
+  }
+
+  if (actionMatches('worktree.palette', input, platform, keybindings, options)) {
     return { type: 'toggleWorktreePalette' }
   }
 
-  if (keybindingMatchesAction('sidebar.left.toggle', input, platform, keybindings)) {
+  if (actionMatches('sidebar.left.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleLeftSidebar' }
   }
 
-  if (keybindingMatchesAction('sidebar.right.toggle', input, platform, keybindings)) {
+  if (actionMatches('sidebar.right.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleRightSidebar' }
   }
 
-  if (keybindingMatchesAction('worktree.quickOpen', input, platform, keybindings)) {
+  if (actionMatches('worktree.quickOpen', input, platform, keybindings, options)) {
     return { type: 'openQuickOpen' }
   }
 
@@ -131,23 +177,24 @@ export function resolveWindowShortcutAction(
   // webContents, both of which bypass the renderer's window-level keydown.
   // Shift is accepted for compatibility with the former Create-from shortcut;
   // the unified composer now exposes source switching inside the name field.
-  if (keybindingMatchesAction('workspace.create', input, platform, keybindings)) {
+  if (actionMatches('workspace.create', input, platform, keybindings, options)) {
     return { type: 'openNewWorkspace' }
   }
 
-  if (keybindingMatchesAction('voice.dictation', input, platform, keybindings)) {
+  if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
     return { type: 'dictationKeyDown' }
   }
 
-  if (keybindingMatchesAction('view.tasks', input, platform, keybindings)) {
+  if (actionMatches('view.tasks', input, platform, keybindings, options)) {
     return { type: 'openTasks' }
   }
 
-  if (keybindingMatchesAction('tab.previousRecent', input, platform, keybindings)) {
+  if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
 
   if (
+    implicitWorktreeIndexShortcutAllowed(options) &&
     platformPrimaryModifier(input, platform) &&
     !input.alt &&
     !input.shift &&
@@ -163,4 +210,58 @@ export function resolveWindowShortcutAction(
   // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
   // terminals own focus.
   return null
+}
+
+export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
+  switch (action.type) {
+    case 'zoom':
+      return action.direction === 'in'
+        ? 'zoom.in'
+        : action.direction === 'out'
+          ? 'zoom.out'
+          : 'zoom.reset'
+    case 'openSettings':
+      return 'app.settings'
+    case 'exportPdf':
+      return 'file.exportPdf'
+    case 'forceReload':
+      return 'app.forceReload'
+    case 'toggleWorktreePalette':
+      return 'worktree.palette'
+    case 'toggleFloatingTerminal':
+      return 'floatingTerminal.toggle'
+    case 'toggleLeftSidebar':
+      return 'sidebar.left.toggle'
+    case 'toggleRightSidebar':
+      return 'sidebar.right.toggle'
+    case 'openQuickOpen':
+      return 'worktree.quickOpen'
+    case 'openNewWorkspace':
+      return 'workspace.create'
+    case 'openTasks':
+      return 'view.tasks'
+    case 'switchRecentTab':
+      return 'tab.previousRecent'
+    case 'worktreeHistoryNavigate':
+      return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
+    case 'dictationKeyDown':
+      return 'voice.dictation'
+    case 'jumpToWorktreeIndex':
+      return null
+  }
+}
+
+export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
+  if (action.type === 'jumpToWorktreeIndex') {
+    return true
+  }
+  const actionId = getWindowShortcutActionId(action)
+  if (!actionId) {
+    return false
+  }
+  const definition = getKeybindingDefinition(actionId)
+  if (!definition || isKeybindingAllowedInTerminal(definition)) {
+    return false
+  }
+  return isKeybindingPotentialTerminalConflict(definition)
 }

@@ -122,10 +122,33 @@ export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
 })
 
+const GitPushTargetParam = z.object({
+  remoteName: z.string(),
+  branchName: z.string(),
+  remoteUrl: z.string().optional(),
+  remoteCreated: z.boolean().optional()
+})
+
 export const GitPush = WorktreeSelector.extend({
   publish: z.boolean().optional(),
   forceWithLease: z.boolean().optional(),
-  pushTarget: z.unknown().optional()
+  pushTarget: GitPushTargetParam.optional()
+})
+
+export const GitTargetedRemote = WorktreeSelector.extend({
+  pushTarget: GitPushTargetParam.optional()
+})
+
+export const GitRebaseFromBase = WorktreeSelector.extend({
+  baseRef: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Missing base ref')
+        .refine((value) => !value.startsWith('-'), 'Base ref must not start with -')
+    )
 })
 
 export const GitRemoteFileUrl = WorktreeSelector.extend({

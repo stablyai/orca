@@ -38,6 +38,7 @@ describe('resolveDropdownItems', () => {
       'push_create_pr',
       'pull',
       'sync',
+      'rebase_base',
       'fetch',
       'publish'
     ])
@@ -281,6 +282,40 @@ describe('resolveDropdownItems', () => {
     expect(byKind.fetch.disabled).toBe(false)
     expect(byKind.publish.title).toBe('Publish this branch to origin')
     expect(byKind.publish.disabled).toBe(false)
+  })
+
+  it('enables rebase from base only on a clean tree with a remote base ref', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        rebaseBaseRef: 'origin/main'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(byKind.rebase_base.label).toBe('Rebase from origin/main')
+    expect(byKind.rebase_base.title).toBe(
+      'Rebase current branch with latest commits from origin/main'
+    )
+    expect(byKind.rebase_base.disabled).toBe(false)
+  })
+
+  it('disables rebase from base while local changes are present', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        hasUnstagedChanges: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        rebaseBaseRef: 'origin/main'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(byKind.rebase_base.disabled).toBe(true)
+    expect(byKind.rebase_base.title).toBe('Commit or stash local changes before rebasing')
   })
 
   it('does not show Publish Branch when an unpublished branch has no commits ahead', () => {

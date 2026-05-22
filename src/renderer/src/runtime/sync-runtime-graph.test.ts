@@ -2,9 +2,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileSessionTabSnapshots,
+  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { AppState } from '../store/types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -24,6 +26,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0,
     ...overrides
   } as AppState
 }
@@ -31,12 +35,13 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 // Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
 // `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
 // `activeGroupIdByWorktree`, `unifiedTabsByWorktree`, `tabBarOrderByWorktree`,
-// and `activeFileIdByWorktree` by reference, and checks `activeTabId` by scalar
-// equality. `makeState`'s defaults allocate fresh `{}` for each map, so two
-// unrelated `makeState({...})` calls trivially diverge. Tests that want to
-// isolate a single field must share every other reference-checked map between
-// the two states; this factory produces one `Partial<AppState>` whose fields
-// can be spread into both `makeState` calls.
+// `activeFileIdByWorktree`, `openFiles`, and `editorDrafts` by reference, and
+// checks `activeTabId` by scalar equality. `makeState`'s defaults allocate
+// fresh `{}`/`[]` for each collection, so two unrelated `makeState({...})`
+// calls trivially diverge. Tests that want to isolate a single field must
+// share every other reference-checked collection between the two states; this
+// factory produces one `Partial<AppState>` whose fields can be spread into both
+// `makeState` calls.
 function makeSharedOverrides(): Partial<AppState> {
   return {
     tabsByWorktree: {},
@@ -49,7 +54,25 @@ function makeSharedOverrides(): Partial<AppState> {
     activeFileIdByWorktree: {},
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
-    browserPagesByWorkspace: {}
+    browserPagesByWorkspace: {},
+    openFiles: [],
+    editorDrafts: {},
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0
+  }
+}
+
+function makeAgentStatusEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+  return {
+    state: 'working',
+    prompt: 'fix parity',
+    updatedAt: 1_700_000_000_000,
+    stateStartedAt: 1_699_999_999_000,
+    agentType: 'codex',
+    paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
+    terminalTitle: 'codex [working]',
+    stateHistory: [],
+    ...overrides
   }
 }
 
@@ -240,33 +263,131 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
-  it('changes when explicit agent status changes', () => {
+  it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 0
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes for same-state agent detail updates with the same epoch', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const beforeAgentStatusByPaneKey = {
+      [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'fix parity' })
+    }
+    const afterAgentStatusByPaneKey = {
+      [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'continue parity' })
+    }
+
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: beforeAgentStatusByPaneKey,
+        agentStatusEpoch: 1
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: afterAgentStatusByPaneKey,
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('coalesces timestamp-only agent heartbeats inside the same freshness bucket', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_000_000 })
+        },
+        agentStatusEpoch: 1
       })
     )
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
         agentStatusByPaneKey: {
-          'term-1:11111111-1111-4111-8111-111111111111': {
-            state: 'working',
-            prompt: 'fix parity',
-            updatedAt: 1_700_000_000_000,
-            stateStartedAt: 1_699_999_999_000,
-            agentType: 'codex',
-            paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
-            terminalTitle: 'codex [working]',
-            stateHistory: []
-          }
-        }
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_001_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(true)
+  })
+
+  it('changes for timestamp-only agent heartbeats in a later freshness bucket', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_000_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_030_000 })
+        },
+        agentStatusEpoch: 1
       })
     )
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('does not skip the App subscriber gate for same-epoch agent detail updates', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = makeState({
+      ...sharedOverrides,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'fix parity' })
+      },
+      agentStatusEpoch: 1
+    })
+    const after = makeState({
+      ...sharedOverrides,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'continue parity' })
+      },
+      agentStatusEpoch: 1
+    })
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
+  })
+
+  it('skips the App subscriber gate when sync inputs keep the same references', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const before = makeState(sharedOverrides)
+    const after = makeState(sharedOverrides)
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(true)
   })
 })
 

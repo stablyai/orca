@@ -766,6 +766,21 @@ describe('Store', () => {
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
   })
 
+  it('normalizes malformed terminal shortcut policy on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalShortcutPolicy: 'terminal-maybe' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
+  })
+
   it('repairs drifted task provider defaults on load', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -1497,6 +1512,16 @@ describe('Store', () => {
 
     store.updateSettings({ sourceControlViewMode: 'tree' })
     expect(store.getSettings().sourceControlViewMode).toBe('tree')
+  })
+
+  it('updateSettings normalizes terminal shortcut policy', async () => {
+    const store = await createStore()
+
+    store.updateSettings({ terminalShortcutPolicy: 'terminal-first' })
+    expect(store.getSettings().terminalShortcutPolicy).toBe('terminal-first')
+
+    store.updateSettings({ terminalShortcutPolicy: 'terminal-maybe' as never })
+    expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
   it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {

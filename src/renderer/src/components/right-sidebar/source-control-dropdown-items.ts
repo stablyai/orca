@@ -6,6 +6,7 @@ import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upst
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   isPullRequestOperationActive?: boolean
+  rebaseBaseRef?: string | null
 }
 
 export type DropdownActionKind =
@@ -17,6 +18,7 @@ export type DropdownActionKind =
   | 'push'
   | 'pull'
   | 'sync'
+  | 'rebase_base'
   | 'fetch'
   | 'publish'
 
@@ -63,6 +65,10 @@ function formatForcePushTitle(branchCommitsAhead: number | undefined, upstreamNa
   return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
+function formatRebaseBaseRef(baseRef: string): string {
+  return baseRef.replace(/^refs\/remotes\//, '').replace(/^remotes\//, '')
+}
+
 /**
  * Resolve the chevron dropdown items. Every item is always rendered so the
  * menu shape stays stable across states; inapplicable rows are disabled
@@ -81,10 +87,12 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     isPRStateLoading,
     hostedReviewCreation,
     branchCommitsAhead,
+    rebaseBaseRef,
     isPullRequestOperationActive = false
   } = inputs
 
   const hasStaged = stagedCount > 0
+  const hasDirtyLocalChanges = hasStaged || inputs.hasUnstagedChanges
   // Why: mirror the primary-action guard. When upstreamStatus is undefined,
   // fetchUpstreamStatus hasn't resolved for this worktree yet. Collapsing that
   // to hasUpstream=false would re-enable Publish Branch on an already-tracked
@@ -223,7 +231,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
               : behind > 0 && ahead > 0
                 ? 'Sync first to pull remote changes before pushing'
                 : ahead === 0
-                  ? 'Nothing to push'
+                  ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
                   : describePushCount(ahead),
     disabled:
       globalBusy ||
@@ -275,6 +283,31 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       !hasUpstream ||
       shouldForcePushWithLease ||
       (ahead === 0 && behind === 0)
+  }
+
+  const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
+  const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
+  const rebaseItem: DropdownItem = {
+    kind: 'rebase_base',
+    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
+    title: (() => {
+      if (!rebaseBaseLabel || !hasRemoteBaseRef) {
+        return 'Choose a remote base branch to rebase from'
+      }
+      if (hasUnresolvedConflicts) {
+        return 'Resolve conflicts before rebasing'
+      }
+      if (hasDirtyLocalChanges) {
+        return 'Commit or stash local changes before rebasing'
+      }
+      return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
+    })(),
+    disabled:
+      globalBusy ||
+      !rebaseBaseRef ||
+      !hasRemoteBaseRef ||
+      hasUnresolvedConflicts ||
+      hasDirtyLocalChanges
   }
 
   const fetchItem: DropdownItem = {
@@ -377,6 +410,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     pushCreatePRItem,
     pullItem,
     syncItem,
+    rebaseItem,
     fetchItem,
     publishItem
   ]

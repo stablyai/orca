@@ -76,6 +76,7 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import {
+  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
@@ -113,8 +114,13 @@ import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-t
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
-import { keybindingMatchesAction, type KeybindingContext } from '../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingActionId,
+  type KeybindingContext
+} from '../../shared/keybindings'
 import { isGitRepoKind } from '../../shared/repo-kind'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -772,24 +778,7 @@ function App(): React.JSX.Element {
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (
-        state.tabsByWorktree === previousState.tabsByWorktree &&
-        state.groupsByWorktree === previousState.groupsByWorktree &&
-        state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
-        state.layoutByWorktree === previousState.layoutByWorktree &&
-        state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
-        state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
-        state.activeFileId === previousState.activeFileId &&
-        state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
-        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
-        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
-        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
-        state.openFiles === previousState.openFiles &&
-        state.editorDrafts === previousState.editorDrafts &&
-        state.activeTabId === previousState.activeTabId &&
-        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
-        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
-      ) {
+      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
         return
       }
       const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
@@ -1032,12 +1021,39 @@ function App(): React.JSX.Element {
       if (e.defaultPrevented) {
         return
       }
+      // Why: the Settings recorder intentionally captures existing app
+      // shortcuts, so global handlers must not fire while its button has focus.
+      if (
+        e.target instanceof Element &&
+        e.target.closest('[data-shortcut-recorder-active]') !== null
+      ) {
+        return
+      }
       const context = getKeybindingContext(e.target)
 
       // Note: some app-level shortcuts are also intercepted via
       // before-input-event in createMainWindow.ts so they still work when a
       // browser guest has focus. The renderer keeps matching handlers for
       // local-focus cases and to preserve the same guards in one place.
+
+      const matchShortcut = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(actionId, e, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy: settings?.terminalShortcutPolicy
+        })
+      const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
+        if (
+          context !== 'terminal' ||
+          (settings?.terminalShortcutPolicy ?? 'orca-first') !== 'orca-first'
+        ) {
+          return
+        }
+        showTerminalShortcutCaptureNotification({
+          actionId,
+          platform: shortcutPlatform,
+          keybindings
+        })
+      }
 
       const canRevealRightSidebar =
         activeView !== 'tasks' &&
@@ -1054,12 +1070,7 @@ function App(): React.JSX.Element {
         actions.setRightSidebarOpen(true)
       }
 
-      if (
-        keybindingMatchesAction('sidebar.search.toggle', e, shortcutPlatform, keybindings, {
-          context
-        }) &&
-        canRevealRightSidebar
-      ) {
+      if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
         // Why: when focus is inside the file explorer and a folder is selected,
         // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
         // with that folder instead of treating the chord as a text-search seed.
@@ -1069,6 +1080,7 @@ function App(): React.JSX.Element {
             : null
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           e.preventDefault()
+          notifyTerminalCapture('sidebar.search.toggle')
           actions.seedFileSearchIncludePattern(
             activeWorktreeId,
             folderRelativePathToIncludeGlob(selectedFolderRelativePath)
@@ -1081,6 +1093,7 @@ function App(): React.JSX.Element {
         const selectedText = getSelectedTextForFileSearch()
         if (selectedText) {
           e.preventDefault()
+          notifyTerminalCapture('sidebar.search.toggle')
           openSearchSidebar(selectedText)
           return
         }
@@ -1105,14 +1118,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. This stays before
       // right-sidebar shortcuts because it is navigation, not sidebar reveal.
-      if (
-        keybindingMatchesAction('worktree.history.back', e, shortcutPlatform, keybindings, {
-          context
-        }) ||
-        keybindingMatchesAction('worktree.history.forward', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('worktree.history.back') || matchShortcut('worktree.history.forward')) {
         // Why: Back/Forward traverse mixed worktree + page visits, so the
         // shortcut is active wherever the titlebar button cluster is (terminal
         // or stack-backed pages). Still suppressed in Settings.
@@ -1121,11 +1127,7 @@ function App(): React.JSX.Element {
         }
         e.preventDefault()
         const store = useAppStore.getState()
-        if (
-          keybindingMatchesAction('worktree.history.back', e, shortcutPlatform, keybindings, {
-            context
-          })
-        ) {
+        if (matchShortcut('worktree.history.back')) {
           store.goBackWorktree()
         } else {
           store.goForwardWorktree()
@@ -1147,7 +1149,7 @@ function App(): React.JSX.Element {
       // Why: after the last floating tab is closed, the empty overlay has no
       // pane-level handler; Cmd/Ctrl+W should minimize only that landing state.
       if (
-        keybindingMatchesAction('tab.close', e, shortcutPlatform, keybindings, { context }) &&
+        matchShortcut('tab.close') &&
         shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
           activeView,
           activeWorktreeId,
@@ -1161,12 +1163,9 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+B — toggle left sidebar
-      if (
-        keybindingMatchesAction('sidebar.left.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.left.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
         return
       }
@@ -1179,13 +1178,11 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (
-        keybindingMatchesAction('view.tasks', e, shortcutPlatform, keybindings, { context }) &&
-        activeView !== 'settings'
-      ) {
+      if (matchShortcut('view.tasks') && activeView !== 'settings') {
         const store = useAppStore.getState()
         if (store.repos.some((repo) => isGitRepoKind(repo))) {
           e.preventDefault()
+          notifyTerminalCapture('view.tasks')
           store.openTaskPage()
         }
         return
@@ -1196,35 +1193,26 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+L — toggle right sidebar
-      if (
-        keybindingMatchesAction('sidebar.right.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.right.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.right.toggle')
         actions.toggleRightSidebar()
         return
       }
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
-      if (
-        keybindingMatchesAction('sidebar.explorer.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.explorer.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.explorer.toggle')
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
         return
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (
-        keybindingMatchesAction('sidebar.search.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.search.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.search.toggle')
         openSearchSidebar(null)
         return
       }
@@ -1234,26 +1222,20 @@ function App(): React.JSX.Element {
       // in that context (handled by keyboard-handlers.ts). Both listeners share
       // the window capture phase and registration order can vary with React
       // effect re-runs, so a DOM check is the reliable coordination mechanism.
-      if (
-        keybindingMatchesAction('sidebar.sourceControl.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.sourceControl.toggle')) {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
         e.preventDefault()
+        notifyTerminalCapture('sidebar.sourceControl.toggle')
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
         return
       }
 
-      if (
-        keybindingMatchesAction('sidebar.checks.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.checks.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.checks.toggle')
         actions.setRightSidebarTab('checks')
         actions.setRightSidebarOpen(true)
         return
@@ -1262,12 +1244,9 @@ function App(): React.JSX.Element {
       // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
-      if (
-        keybindingMatchesAction('sidebar.ports.toggle', e, shortcutPlatform, keybindings, {
-          context
-        })
-      ) {
+      if (matchShortcut('sidebar.ports.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.ports.toggle')
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
       }
@@ -1282,6 +1261,7 @@ function App(): React.JSX.Element {
     floatingTerminalOpen,
     floatingUnifiedTabCount,
     keybindings,
+    settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus
   ])
 

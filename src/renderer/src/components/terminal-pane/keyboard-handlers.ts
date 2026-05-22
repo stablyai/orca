@@ -9,7 +9,8 @@ import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
   keybindingMatchesAction,
   type KeybindingOverrides,
-  type KeybindingPlatform
+  type KeybindingPlatform,
+  type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
@@ -77,13 +78,15 @@ export function matchSearchNavigate(
 export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
   platform: KeybindingPlatform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first'
 ): boolean {
   if (e.repeat) {
     return false
   }
   return keybindingMatchesAction('sidebar.search.toggle', e, platform, keybindings, {
-    context: 'terminal'
+    context: 'terminal',
+    terminalShortcutPolicy
   })
 }
 
@@ -108,6 +111,7 @@ type KeyboardHandlersDeps = {
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
   keybindings?: KeybindingOverrides
+  terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -129,7 +133,8 @@ export function useTerminalKeyboardShortcuts({
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
-  keybindings
+  keybindings,
+  terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -166,7 +171,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      if (matchFileSearchShortcut(e, shortcutPlatform, keybindings)) {
+      if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
         if (selectedText) {
@@ -402,6 +407,7 @@ export function useTerminalKeyboardShortcuts({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
-    keybindings
+    keybindings,
+    terminalShortcutPolicy
   ])
 }

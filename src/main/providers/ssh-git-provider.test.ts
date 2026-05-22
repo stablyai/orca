@@ -456,6 +456,20 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(upstreamResult)
   })
 
+  it('getUpstreamStatus forwards an explicit push target', async () => {
+    const upstreamResult = { hasUpstream: true, upstreamName: 'fork/feature', ahead: 0, behind: 1 }
+    mux.request.mockResolvedValue(upstreamResult)
+
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+    const result = await provider.getUpstreamStatus('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.upstreamStatus', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+    expect(result).toEqual(upstreamResult)
+  })
+
   it('pushBranch sends git.push request and forwards publish mode and target', async () => {
     await provider.pushBranch('/home/user/repo', true, {
       remoteName: 'pr-fork-orca',
@@ -489,10 +503,41 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('pullBranch forwards an explicit push target', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await provider.pullBranch('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.pull', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+  })
+
+  it('rebaseFromBase sends git.rebaseFromBase request', async () => {
+    await provider.rebaseFromBase('/home/user/repo', 'upstream/main')
+
+    expect(mux.request).toHaveBeenCalledWith('git.rebaseFromBase', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'upstream/main'
+    })
+  })
+
   it('fetchRemote sends git.fetch request', async () => {
     await provider.fetchRemote('/home/user/repo')
     expect(mux.request).toHaveBeenCalledWith('git.fetch', {
       worktreePath: '/home/user/repo'
+    })
+  })
+
+  it('fetchRemote forwards an explicit push target', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await provider.fetchRemote('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetch', {
+      worktreePath: '/home/user/repo',
+      pushTarget
     })
   })
 

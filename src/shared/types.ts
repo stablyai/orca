@@ -14,7 +14,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
-import type { KeybindingOverrides } from './keybindings'
+import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1627,6 +1627,9 @@ export type GlobalSettings = {
   /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
    *  profiles saved before this setting existed; readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
+  /** Why: Orca-first preserves fast workspace/app control from agent TUIs.
+   *  Terminal-first is opt-in for users who want shell/TUI bindings to win. */
+  terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Why: Floating Workspace is the default global surface so users can
    *  reach terminal, browser, and markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean

@@ -10,24 +10,9 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
+import { browserUrlForPort } from './workspace-port-urls'
 
-// Why: the scanner reports numeric addresses (127.0.0.1, 0.0.0.0, ::1, ::)
-// while UI actions should use an address a browser can reliably open.
-function hostForLocalAction(host: string): string {
-  if (!host) {
-    return 'localhost'
-  }
-  return host.includes(':') ? `[${host}]` : host
-}
-
-export function addressForPort(port: WorkspacePort): string {
-  return `${hostForLocalAction(port.connectHost)}:${port.port}`
-}
-
-export function browserUrlForPort(port: WorkspacePort): string {
-  const protocol = port.protocol === 'https' ? 'https' : 'http'
-  return `${protocol}://${addressForPort(port)}`
-}
+export { addressForPort } from './workspace-port-urls'
 
 export function canStopWorkspacePort(
   port: WorkspacePort

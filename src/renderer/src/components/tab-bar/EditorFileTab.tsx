@@ -28,6 +28,7 @@ import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
+import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -231,6 +232,7 @@ export default function EditorFileTab({
               e.preventDefault()
             }
           }}
+          onMouseUp={preventMiddleButtonDefault}
           onAuxClick={(e) => {
             if (e.button === 1) {
               e.preventDefault()

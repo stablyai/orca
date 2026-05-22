@@ -78,6 +78,17 @@ import {
   resetAgentHookCompletionNotificationCoordinators,
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+
+function getShortcutPlatform(): NodeJS.Platform {
+  if (navigator.userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (navigator.userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  return 'linux'
+}
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -659,6 +670,18 @@ export function useIpcEvents(): void {
         window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
       })
     )
+
+    if (window.api.ui.onTerminalShortcutCaptured) {
+      unsubs.push(
+        window.api.ui.onTerminalShortcutCaptured(({ actionId }) => {
+          showTerminalShortcutCaptureNotification({
+            actionId,
+            platform: getShortcutPlatform(),
+            keybindings: useAppStore.getState().keybindings
+          })
+        })
+      )
+    }
 
     unsubs.push(
       window.api.ui.onOpenQuickOpen(() => {

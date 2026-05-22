@@ -80,6 +80,7 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
@@ -1886,6 +1887,8 @@ export class OrcaRuntimeService {
   pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
     this.gitCommands
   )
+  rebaseRuntimeGitFromBase: RuntimeGitCommands['rebaseRuntimeGitFromBase'] =
+    this.gitCommands.rebaseRuntimeGitFromBase.bind(this.gitCommands)
   pushRuntimeGit: RuntimeGitCommands['pushRuntimeGit'] = this.gitCommands.pushRuntimeGit.bind(
     this.gitCommands
   )
@@ -1992,6 +1995,10 @@ export class OrcaRuntimeService {
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
     this.agentDetector?.onData(ptyId, data, at)
+    // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
+    // `Network: https://local.example.com:3001/`) so the workspace ports
+    // panel can surface them in place of the kernel bind address.
+    advertisedUrlWatcher.ingest(ptyId, data, at)
     // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
     // MUST run before trackHeadlessTerminalData so the eager-state pattern
     // (set headlessTerminals + writeChain head = seedPromise) is in place
@@ -3092,6 +3099,7 @@ export class OrcaRuntimeService {
   }
 
   onPtyExit(ptyId: string, exitCode: number): void {
+    advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.mobileDisplayModes.delete(ptyId)
@@ -9466,6 +9474,9 @@ export class OrcaRuntimeService {
         preview: state.preview ?? ''
       }
       this.ptysById.set(ptyId, pty)
+      // Why: restored/controller-discovered PTYs learn their worktree here
+      // without registerPty(), so URL enrichment must bind at this source.
+      advertisedUrlWatcher.bindPty(ptyId, worktreeId)
       return pty
     }
 
@@ -9485,6 +9496,9 @@ export class OrcaRuntimeService {
     if (state.preview !== undefined && state.preview.length > 0) {
       pty.preview = state.preview
     }
+    // Why: recordPtyWorktree is the common lifecycle point for every path that
+    // resolves a PTY's worktree, including renderer restore and controller list.
+    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
     return pty
   }
 

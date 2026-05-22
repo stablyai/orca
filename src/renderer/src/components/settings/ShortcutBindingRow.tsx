@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Ban, Keyboard, RotateCcw } from 'lucide-react'
+import { Ban, Keyboard, RotateCcw, Terminal } from 'lucide-react'
 import {
   formatKeybinding,
   type KeybindingActionId,
@@ -22,12 +22,18 @@ type ShortcutBindingRowProps = {
   error?: string
   warnings: readonly string[]
   recording: boolean
+  terminalStatus?: ShortcutTerminalStatus
   onStartRecording: (actionId: KeybindingActionId) => void
   onCancelRecording: () => void
   onCapture: (actionId: KeybindingActionId, input: KeybindingInput) => void
   onClearError: (actionId: KeybindingActionId) => void
   onDisable: (actionId: KeybindingActionId) => void
   onReset: (actionId: KeybindingActionId) => void
+}
+
+export type ShortcutTerminalStatus = {
+  label: string
+  description: string
 }
 
 function BindingPreview({
@@ -62,6 +68,7 @@ export function ShortcutBindingRow({
   error,
   warnings,
   recording,
+  terminalStatus,
   onStartRecording,
   onCancelRecording,
   onCapture,
@@ -75,6 +82,8 @@ export function ShortcutBindingRow({
     if (recording) {
       recordButtonRef.current?.focus()
     }
+    window.api.ui.setShortcutRecorderFocused(recording)
+    return () => window.api.ui.setShortcutRecorderFocused(false)
   }, [recording])
 
   const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
@@ -125,6 +134,22 @@ export function ShortcutBindingRow({
               Modified
             </Badge>
           ) : null}
+          {terminalStatus ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 gap-1 border-border/70 text-[11px] text-muted-foreground"
+                >
+                  <Terminal className="size-3" />
+                  {terminalStatus.label}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {terminalStatus.description}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
         </div>
         <div
           className={cn(
@@ -148,6 +173,8 @@ export function ShortcutBindingRow({
         size="sm"
         aria-invalid={Boolean(error)}
         aria-pressed={recording}
+        data-shortcut-recorder=""
+        data-shortcut-recorder-active={recording ? '' : undefined}
         onClick={() => {
           if (recording) {
             return

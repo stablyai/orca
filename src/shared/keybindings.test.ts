@@ -132,7 +132,7 @@ describe('keybindings', () => {
     })
   })
 
-  it('matches shortcuts from the same defaults regardless of caller context', () => {
+  it('keeps Orca-first terminal context backward compatible', () => {
     const ctrlP = {
       key: 'p',
       code: 'KeyP',
@@ -145,16 +145,53 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('worktree.quickOpen', ctrlP, 'linux')).toBe(true)
     expect(
       keybindingMatchesAction('worktree.quickOpen', ctrlP, 'linux', undefined, {
-        context: 'terminal'
+        context: 'terminal',
+        terminalShortcutPolicy: 'orca-first'
       })
     ).toBe(true)
+    expect(
+      keybindingMatchesAction('worktree.quickOpen', ctrlP, 'linux', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(false)
     expect(
       keybindingMatchesAction(
         'terminal.search',
         { key: 'f', code: 'KeyF', control: true, meta: false, alt: false, shift: false },
         'linux',
         undefined,
-        { context: 'terminal' }
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+  })
+
+  it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {
+    expect(
+      keybindingMatchesAction(
+        'floatingTerminal.toggle',
+        { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false },
+        'linux',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.previousRecent',
+        { key: 'Tab', code: 'Tab', control: true, meta: false, alt: false, shift: false },
+        'linux',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'worktree.palette',
+        { key: 'j', code: 'KeyJ', control: false, meta: true, alt: false, shift: false },
+        'darwin',
+        undefined,
+        { context: 'app', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
   })

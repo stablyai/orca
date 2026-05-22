@@ -15,8 +15,10 @@ import {
   GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
+  GitRebaseFromBase,
   GitRemoteFileUrl,
   GitStatusParams,
+  GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
 
@@ -74,18 +76,33 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.upstreamStatus',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.getRuntimeGitUpstreamStatus(params.worktree)
+    params: GitTargetedRemote,
+    handler: async (params, { runtime }) =>
+      params.pushTarget === undefined
+        ? runtime.getRuntimeGitUpstreamStatus(params.worktree)
+        : runtime.getRuntimeGitUpstreamStatus(params.worktree, params.pushTarget)
   }),
   defineMethod({
     name: 'git.fetch',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.fetchRuntimeGit(params.worktree)
+    params: GitTargetedRemote,
+    handler: async (params, { runtime }) =>
+      params.pushTarget === undefined
+        ? runtime.fetchRuntimeGit(params.worktree)
+        : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
   }),
   defineMethod({
     name: 'git.pull',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.pullRuntimeGit(params.worktree)
+    params: GitTargetedRemote,
+    handler: async (params, { runtime }) =>
+      params.pushTarget === undefined
+        ? runtime.pullRuntimeGit(params.worktree)
+        : runtime.pullRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.rebaseFromBase',
+    params: GitRebaseFromBase,
+    handler: async (params, { runtime }) =>
+      runtime.rebaseRuntimeGitFromBase(params.worktree, params.baseRef)
   }),
   defineMethod({
     name: 'git.push',
@@ -94,7 +111,7 @@ export const GIT_METHODS: RpcMethod[] = [
       runtime.pushRuntimeGit(
         params.worktree,
         params.publish,
-        params.pushTarget as never,
+        params.pushTarget,
         params.forceWithLease
       )
   }),

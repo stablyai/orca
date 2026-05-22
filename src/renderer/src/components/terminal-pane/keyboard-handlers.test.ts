@@ -125,6 +125,17 @@ describe('matchFileSearchShortcut', () => {
     ).toBe(false)
   })
 
+  it('lets terminal-first pass the file-search shortcut through to the terminal', () => {
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }),
+        'darwin',
+        undefined,
+        'terminal-first'
+      )
+    ).toBe(false)
+  })
+
   it('does not match when file search is disabled', () => {
     expect(
       matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin', {

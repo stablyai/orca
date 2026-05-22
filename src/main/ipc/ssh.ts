@@ -9,6 +9,7 @@ import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import {
   type DetectedPort,
+  type EnrichedDetectedPort,
   type SavedPortForward,
   type SshTarget,
   type SshConnectionStatus,
@@ -20,6 +21,13 @@ import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { registerSshBrowseHandler } from './ssh-browse'
+import {
+  getConnectionIdsForWorktree,
+  enrichSshDetectedPorts,
+  enrichSshForwardEntries,
+  getWorktreeIdsForConnection
+} from '../ports/ssh-advertised-url-enrichment'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
 import {
   clearProviderPtyState,
@@ -34,6 +42,8 @@ let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
 let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
+let persistedStore: Store | null = null
+let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
@@ -142,20 +152,50 @@ function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, target
   if (!win || win.isDestroyed()) {
     return
   }
-  const forwards = portForwardManager!.listForwards(targetId)
-  win.webContents.send('ssh:port-forwards-changed', { targetId, forwards })
+  win.webContents.send('ssh:port-forwards-changed', {
+    targetId,
+    forwards: listForwardsEnriched(targetId)
+  })
 }
 
 function broadcastDetectedPorts(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
-  ports: DetectedPort[]
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
   const win = getMainWindow()
   if (!win || win.isDestroyed()) {
     return
   }
-  win.webContents.send('ssh:detected-ports-changed', { targetId, ports })
+  win.webContents.send('ssh:detected-ports-changed', {
+    targetId,
+    ports: enrichDetected(targetId, ports, options)
+  })
+}
+
+function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
+  const raw = portForwardManager!.listForwards(targetId)
+  if (!persistedStore) {
+    return raw
+  }
+  return enrichSshForwardEntries(raw, getWorktreeIdsForConnection(persistedStore, targetId))
+}
+
+function enrichDetected(
+  targetId: string,
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
+): EnrichedDetectedPort[] {
+  if (!persistedStore) {
+    return ports
+  }
+  return enrichSshDetectedPorts(
+    ports,
+    getWorktreeIdsForConnection(persistedStore, targetId),
+    undefined,
+    options
+  )
 }
 
 // Why: after user-initiated add/remove/update the runtime manager is the
@@ -241,6 +281,33 @@ async function restorePortForwards(
   broadcastPortForwards(getMainWindow, targetId)
 }
 
+function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null): void {
+  advertisedUrlWatcherUnsubscribe?.()
+  // Why: SSH port scans only emit when raw host/port/PID data changes. A
+  // terminal can print the advertised URL after the raw port row is already
+  // visible, so the watcher must also trigger a renderer refresh.
+  advertisedUrlWatcherUnsubscribe = advertisedUrlWatcher.onDidChange(({ worktreeId }) => {
+    if (!persistedStore) {
+      return
+    }
+    for (const targetId of getConnectionIdsForWorktree(persistedStore, worktreeId)) {
+      const session = activeSessions.get(targetId)
+      if (!session) {
+        continue
+      }
+      const scanner = session.getPortScanner()
+      if (scanner) {
+        // Why: watcher changes can arrive before the next SSH scan refreshes
+        // listener PIDs; cached scanner rows must not pin a fresh URL stale.
+        broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId), {
+          validatePid: false
+        })
+      }
+      broadcastPortForwards(getMainWindow, targetId)
+    }
+  })
+}
+
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
@@ -272,6 +339,8 @@ export function registerSshHandlers(
   }
 
   sshStore = new SshConnectionStore(store)
+  persistedStore = store
+  registerAdvertisedUrlRefresh(getMainWindow)
 
   registerCredentialHandler(getMainWindow)
 
@@ -951,12 +1020,20 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
-    return portForwardManager!.listForwards(args?.targetId)
+    const all = portForwardManager!.listForwards(args?.targetId)
+    if (!persistedStore || !args?.targetId) {
+      // Why: the cross-target list is rare and we cannot map every entry to
+      // worktrees in a single call; serve the raw list. Per-target callers
+      // get full enrichment.
+      return all
+    }
+    return enrichSshForwardEntries(all, getWorktreeIdsForConnection(persistedStore, args.targetId))
   })
 
   ipcMain.handle('ssh:listDetectedPorts', (_event, args: { targetId: string }) => {
     const session = activeSessions.get(args.targetId)
-    return session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
+    const ports = session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
+    return enrichDetected(args.targetId, ports)
   })
 
   return { connectionManager, sshStore }

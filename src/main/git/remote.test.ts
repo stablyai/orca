@@ -8,7 +8,7 @@ vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { gitFetch, gitPull, gitPush } from './remote'
+import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 
 describe('git remote operations', () => {
   beforeEach(() => {
@@ -186,6 +186,51 @@ describe('git remote operations', () => {
     ])
   })
 
+  it('pulls from the explicit publish target when one is provided', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPull('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['pull', 'fork', 'feature/fix'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('rebases from the selected remote base ref', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'origin\nupstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'upstream/main')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['remote'], { cwd: '/repo' }],
+      [['check-ref-format', '--branch', 'main'], { cwd: '/repo' }],
+      [['pull', '--rebase', 'upstream', 'main'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('uses the longest configured remote name when rebasing from a base ref', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'fork\nfork/team\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'fork/team/feature/base')
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['pull', '--rebase', 'fork/team', 'feature/base'],
+      { cwd: '/repo' }
+    )
+  })
+
   it('normalizes pull authentication errors to a friendly message', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
@@ -241,6 +286,22 @@ describe('git remote operations', () => {
     await gitFetch('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', '--prune'], { cwd: '/repo' })
+  })
+
+  it('fetches the explicit publish target remote when provided', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFetch('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['fetch', '--prune', 'fork'], { cwd: '/repo' }]
+    ])
   })
 
   it('normalizes fetch authentication errors to a friendly message', async () => {

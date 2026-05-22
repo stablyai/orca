@@ -54,7 +54,7 @@ describe('refreshGitStatusForWorktree', () => {
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
   })
 
-  it('refreshes explicit upstream details for diverged porcelain-only status', async () => {
+  it('refreshes explicit upstream details without storing diverged porcelain-only status', async () => {
     const status: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
@@ -75,7 +75,7 @@ describe('refreshGitStatusForWorktree', () => {
       deps
     })
 
-    expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-1', status.upstreamStatus)
+    expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined)
   })
 

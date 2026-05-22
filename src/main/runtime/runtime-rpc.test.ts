@@ -760,6 +760,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const getRuntimeGitUpstreamStatus = vi
       .fn()
       .mockResolvedValue({ hasUpstream: true, ahead: 1, behind: 0 })
+    const rebaseRuntimeGitFromBase = vi.fn().mockResolvedValue({ ok: true })
     const bulkStageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const bulkUnstageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const getRuntimeGitDiff = vi.fn().mockResolvedValue({
@@ -840,6 +841,7 @@ describe('OrcaRuntimeRpcServer', () => {
       readTerminal,
       getRuntimeGitStatus,
       getRuntimeGitUpstreamStatus,
+      rebaseRuntimeGitFromBase,
       bulkStageRuntimeGitPaths,
       bulkUnstageRuntimeGitPaths,
       getRuntimeGitDiff,
@@ -1380,6 +1382,16 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_git_rebase_from_base',
+        method: 'git.rebaseFromBase',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', baseRef: 'origin/main' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_git_bulk_stage',
         method: 'git.bulkStage',
         deviceToken: mobile.token,
@@ -1596,6 +1608,9 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_status', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_push', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_upstream', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_git_rebase_from_base', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_bulk_stage', ok: true }))
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })

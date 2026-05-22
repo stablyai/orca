@@ -675,7 +675,8 @@ function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
     publish: kind === 'publish',
     isPush: kind === 'push',
     isSync: kind === 'sync',
-    isFetch: kind === 'fetch'
+    isFetch: kind === 'fetch',
+    isRebase: kind === 'rebase'
   })
 }
 
@@ -812,6 +813,7 @@ function SourceControlInner(): React.JSX.Element {
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
   const syncBranch = useAppStore((s) => s.syncBranch)
+  const rebaseFromBase = useAppStore((s) => s.rebaseFromBase)
   const fetchBranch = useAppStore((s) => s.fetchBranch)
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
@@ -1072,6 +1074,7 @@ function SourceControlInner(): React.JSX.Element {
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId,
+      pushTarget: activeWorktree?.pushTarget,
       deps: {
         setGitStatus,
         updateWorktreeGitIdentity,
@@ -1081,6 +1084,7 @@ function SourceControlInner(): React.JSX.Element {
     })
   }, [
     activeWorktreeId,
+    activeWorktree?.pushTarget,
     fetchUpstreamStatus,
     isFolder,
     setGitStatus,
@@ -1108,6 +1112,7 @@ function SourceControlInner(): React.JSX.Element {
           worktreeId: context.worktreeId,
           worktreePath: context.worktreePath,
           connectionId: context.connectionId,
+          pushTarget: worktreeMap[context.worktreeId]?.pushTarget,
           deps: {
             setGitStatus,
             updateWorktreeGitIdentity,
@@ -1119,7 +1124,14 @@ function SourceControlInner(): React.JSX.Element {
         console.warn('[SourceControl] post-generation git status refresh failed', error)
       }
     },
-    [fetchUpstreamStatus, isFolder, setGitStatus, setUpstreamStatus, updateWorktreeGitIdentity]
+    [
+      fetchUpstreamStatus,
+      isFolder,
+      setGitStatus,
+      setUpstreamStatus,
+      updateWorktreeGitIdentity,
+      worktreeMap
+    ]
   )
 
   useEffect(() => {
@@ -1708,7 +1720,7 @@ function SourceControlInner(): React.JSX.Element {
   // place — store slices already surface actionable toasts, so additional
   // try/catch here would duplicate the notification.
   const runRemoteAction = useCallback(
-    async (kind: 'push' | 'pull' | 'sync' | 'fetch' | 'publish'): Promise<void> => {
+    async (kind: 'push' | 'pull' | 'sync' | 'fetch' | 'publish' | 'rebase'): Promise<void> => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
@@ -1738,11 +1750,29 @@ function SourceControlInner(): React.JSX.Element {
           return
         }
         if (kind === 'pull') {
-          await pullBranch(activeWorktreeId, worktreePath, connectionId)
+          await pullBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
           return
         }
         if (kind === 'fetch') {
-          await fetchBranch(activeWorktreeId, worktreePath, connectionId)
+          await fetchBranch(
+            activeWorktreeId,
+            worktreePath,
+            connectionId,
+            activeWorktree?.pushTarget
+          )
+          return
+        }
+        if (kind === 'rebase') {
+          if (!effectiveBaseRef) {
+            return
+          }
+          await rebaseFromBase(
+            activeWorktreeId,
+            worktreePath,
+            effectiveBaseRef,
+            connectionId,
+            activeWorktree?.pushTarget
+          )
           return
         }
         await syncBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
@@ -1771,8 +1801,10 @@ function SourceControlInner(): React.JSX.Element {
       activeWorktree?.pushTarget,
       activeWorktreeId,
       fetchBranch,
+      effectiveBaseRef,
       pullBranch,
       pushBranch,
+      rebaseFromBase,
       refreshActiveGitStatusAfterMutation,
       remoteStatus,
       syncBranch,
@@ -2377,7 +2409,8 @@ function SourceControlInner(): React.JSX.Element {
         hostedReviewCreation,
         isPullRequestOperationActive: prGenerating || isCreatingPr,
         branchCommitsAhead:
-          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+        rebaseBaseRef: effectiveBaseRef
       }),
     [
       commitMessage,
@@ -2394,6 +2427,7 @@ function SourceControlInner(): React.JSX.Element {
       prGenerating,
       branchSummary?.commitsAhead,
       branchSummary?.status,
+      effectiveBaseRef,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -2429,7 +2463,8 @@ function SourceControlInner(): React.JSX.Element {
         case 'sync':
         case 'fetch':
         case 'publish':
-          void runRemoteAction(kind)
+        case 'rebase_base':
+          void runRemoteAction(kind === 'rebase_base' ? 'rebase' : kind)
           return
         default: {
           // Why: exhaustiveness check — if a new DropdownActionKind is added
@@ -3025,8 +3060,20 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    void fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
-  }, [activeWorktreeId, fetchUpstreamStatus, isBranchVisible, isFolder, worktreePath])
+    void fetchUpstreamStatus(
+      activeWorktreeId,
+      worktreePath,
+      connectionId,
+      activeWorktree?.pushTarget
+    )
+  }, [
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    isBranchVisible,
+    isFolder,
+    worktreePath
+  ])
 
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
@@ -5006,7 +5053,7 @@ export function CompareSummary({
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       {summary.commitsAhead !== undefined && (
         <span title={`Comparing against ${summary.baseRef}`}>
-          {summary.commitsAhead} commits ahead
+          {summary.commitsAhead} commits ahead of {summary.baseRef}
         </span>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-2">
