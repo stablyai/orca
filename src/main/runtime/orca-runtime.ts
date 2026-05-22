@@ -60,6 +60,7 @@ import {
 } from '../agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from '../codex/config-toml-trust'
 import {
+  isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
@@ -7129,6 +7130,9 @@ export class OrcaRuntimeService {
     this.invalidateResolvedWorktreeCache()
     this.notifier?.worktreesChanged(repo.id)
 
+    let warning = result.warning
+    let didSpawnStartup = false
+    let didSpawnSetup = false
     if (args.startup && this.ptyController?.spawn) {
       try {
         const startupTrustAgent = args.startupDraftPaste?.agent ?? args.createdWithAgent
@@ -7146,16 +7150,58 @@ export class OrcaRuntimeService {
         if (args.startupDraftPaste) {
           this.pasteStartupDraftWhenReady(terminal.handle, args.startupDraftPaste)
         }
+        didSpawnStartup = true
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        return {
-          ...result,
-          warning: `Failed to create the startup terminal for ${result.worktree.path}: ${message}`
-        }
+        warning = warning
+          ? `${warning} Also failed to create the startup terminal for ${result.worktree.path}: ${message}`
+          : `Failed to create the startup terminal for ${result.worktree.path}: ${message}`
       }
     }
 
-    return result
+    if (didSpawnStartup && result.setup && this.ptyController?.spawn) {
+      try {
+        // Why: remote/mobile task creates spawn the agent terminal in runtime,
+        // so renderer activation never receives the setup payload to split.
+        await this.createTerminal(`path:${result.worktree.path}`, {
+          title: 'Setup',
+          command: buildSetupRunnerCommand(
+            result.setup.runnerScriptPath,
+            isWindowsAbsolutePathLike(result.setup.runnerScriptPath) ? 'windows' : 'posix'
+          ),
+          env: result.setup.envVars
+        })
+        didSpawnSetup = true
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the setup terminal for ${result.worktree.path}: ${message}`
+          : `Failed to create the setup terminal for ${result.worktree.path}: ${message}`
+      }
+    }
+
+    if (!args.startup && this.ptyController?.spawn) {
+      try {
+        await this.createTerminal(`path:${result.worktree.path}`)
+        if (result.setup && !didSpawnSetup) {
+          await this.createTerminal(`path:${result.worktree.path}`, {
+            title: 'Setup',
+            command: buildSetupRunnerCommand(
+              result.setup.runnerScriptPath,
+              isWindowsAbsolutePathLike(result.setup.runnerScriptPath) ? 'windows' : 'posix'
+            ),
+            env: result.setup.envVars
+          })
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the initial terminal for ${result.worktree.path}: ${message}`
+          : `Failed to create the initial terminal for ${result.worktree.path}: ${message}`
+      }
+    }
+
+    return warning ? { ...result, warning } : result
   }
 
   /**

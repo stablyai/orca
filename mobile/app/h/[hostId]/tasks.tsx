@@ -20,6 +20,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronUp,
   Copy,
   ArrowRight,
   ExternalLink,
@@ -29,6 +30,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
@@ -44,6 +46,7 @@ import { ActionSheetModal } from '../../../src/components/ActionSheetModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { MobileMarkdown } from '../../../src/components/MobileMarkdown'
+import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
 import {
@@ -96,6 +99,7 @@ import {
 } from '../../../src/tasks/mobile-github-project-group-sort'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
+  isGitHubWorkItemsSshRemoteRequiredError,
   PER_REPO_FETCH_LIMIT
 } from '../../../src/tasks/mobile-work-items'
 import {
@@ -408,7 +412,6 @@ type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
 type LinearOrderBy = 'priority' | 'updated' | 'identifier'
 type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
 type TaskSort = 'updated' | 'repository'
-type CommentAudienceFilter = 'all' | 'human' | 'bot'
 type DetailCommentGroup =
   | { kind: 'standalone'; comment: DetailComment }
   | { kind: 'thread'; threadId: string; root: DetailComment; replies: DetailComment[] }
@@ -612,19 +615,22 @@ type TaskItem =
 
 type ActionableTaskItem = Exclude<TaskItem, { provider: 'gitlabTodo' }>
 type HostedReviewMergeMethod = 'merge' | 'squash' | 'rebase'
-type PendingGitHubMerge = {
-  item: Extract<TaskItem, { provider: 'github' }>
+type HostedReviewItem =
+  | Extract<TaskItem, { provider: 'github' }>
+  | Extract<TaskItem, { provider: 'gitlab' }>
+type PendingHostedMerge = {
+  item: HostedReviewItem
   method: HostedReviewMergeMethod
 }
 type PendingProjectGitHubMerge = {
   row: GitHubProjectRow
   method: HostedReviewMergeMethod
 }
-type PendingGitHubPrStateChange =
+type PendingHostedStateChange =
   | {
       source: 'task'
-      item: Extract<TaskItem, { provider: 'github' }>
-      nextState: 'open' | 'closed'
+      item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
+      nextState: 'open' | 'opened' | 'closed'
     }
   | {
       source: 'project'
@@ -680,6 +686,10 @@ type WorkspaceSparseDraft = {
 
 function sortSparsePresetsByName(presets: SparsePreset[]): SparsePreset[] {
   return [...presets].sort((left, right) => left.name.localeCompare(right.name))
+}
+
+function workspaceAgentIconId(agent: WorkspaceAgentChoice): string {
+  return agent === 'blank' ? '__blank__' : agent
 }
 
 type ProjectRepoNotInOrcaPrompt = {
@@ -748,12 +758,6 @@ const LINEAR_FILTER_OPTIONS: PickerOption<LinearFilter>[] = [
 const LINEAR_VIEW_OPTIONS: PickerOption<LinearViewMode>[] = [
   { value: 'list', label: 'List', subtitle: 'Compact issue rows' },
   { value: 'board', label: 'Board', subtitle: 'Grouped columns' }
-]
-
-const COMMENT_AUDIENCE_FILTERS: Array<{ value: CommentAudienceFilter; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'human', label: 'Humans' },
-  { value: 'bot', label: 'Bots' }
 ]
 
 function taskWorkspaceFallback(item: ActionableTaskItem): string {
@@ -854,6 +858,9 @@ const GITHUB_REPO_CONCURRENCY = 3
 const MAX_RENDERED_PR_DIFF_LINES = 400
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+// Why: task detail drawers can launch child sheets; children must layer above
+// the still-mounted parent while its dismissal animation/state remains alive.
+const TASK_SECONDARY_DRAWER_Z_INDEX = 1100
 // Why: the mobile detail drawer should support quick triage and core actions.
 // Desktop keeps the broad metadata editing surface for dense issue/PR work.
 const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
@@ -1147,30 +1154,6 @@ function getLinearPriorityLabel(priority: number): string {
   return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
 }
 
-function buildLinearIssueBranchName(issue: LinearIssue): string {
-  const titleSlug = getLinkedWorkItemSuggestedName(issue)
-  const key = issue.identifier.toLowerCase()
-  return titleSlug ? `${key}-${titleSlug}` : key
-}
-
-function buildLinearIssuePrompt(issue: LinearIssue): string {
-  const lines = [
-    `Linear issue: ${issue.identifier} ${issue.title}`,
-    `URL: ${issue.url}`,
-    `State: ${issue.state.name}`,
-    `Assignee: ${issue.assignee?.displayName ?? 'Unassigned'}`,
-    `Team: ${issue.team.name}`
-  ]
-  if (issue.workspaceName) {
-    lines.push(`Workspace: ${issue.workspaceName}`)
-  }
-  const description = issue.description?.trim()
-  if (description) {
-    lines.push('', 'Description:', description)
-  }
-  return lines.join('\n')
-}
-
 function getLinearPriorityRank(priority: number): number {
   return priority === 0 ? 5 : priority
 }
@@ -1312,12 +1295,17 @@ function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): strin
   return 'Create merge commit'
 }
 
-function getGitHubMergeConfirmMessage(pending: PendingGitHubMerge): string {
+function hostedReviewMergeTargetLabel(item: HostedReviewItem): string {
+  return item.provider === 'gitlab' ? 'merge request' : 'PR'
+}
+
+function getHostedMergeConfirmMessage(pending: PendingHostedMerge): string {
+  const target = hostedReviewMergeTargetLabel(pending.item)
   if (pending.method === 'squash') {
-    return `Squash and merge PR #${pending.item.source.number}?`
+    return `Squash and merge ${target} #${pending.item.source.number}?`
   }
   const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
-  return `${action} PR #${pending.item.source.number}?`
+  return `${action} ${target} #${pending.item.source.number}?`
 }
 
 function getProjectGitHubMergeConfirmMessage(pending: PendingProjectGitHubMerge): string {
@@ -1329,10 +1317,50 @@ function getProjectGitHubMergeConfirmMessage(pending: PendingProjectGitHubMerge)
   return `${action} PR #${number}?`
 }
 
-function getGitHubPrStateConfirmMessage(pending: PendingGitHubPrStateChange): string {
-  const number = pending.source === 'task' ? pending.item.source.number : pending.row.content.number
-  const label = pending.nextState === 'closed' ? 'Close' : 'Reopen'
-  return `${label} PR #${number}?`
+function hostedStateChangeAction(nextState: PendingHostedStateChange['nextState']): string {
+  return nextState === 'closed' ? 'Close' : 'Reopen'
+}
+
+function hostedStateChangeTarget(pending: PendingHostedStateChange): {
+  titleTarget: string
+  labelTarget: string
+  number: number | null
+} {
+  if (pending.source === 'project') {
+    const type = projectRowType(pending.row)
+    return {
+      titleTarget: type === 'pr' ? 'Pull Request' : 'Issue',
+      labelTarget: type === 'pr' ? 'PR' : 'Issue',
+      number: pending.row.content.number
+    }
+  }
+  if (pending.item.provider === 'gitlab') {
+    return {
+      titleTarget: pending.item.source.type === 'mr' ? 'Merge Request' : 'Issue',
+      labelTarget: pending.item.source.type === 'mr' ? 'MR' : 'Issue',
+      number: pending.item.source.number
+    }
+  }
+  return {
+    titleTarget: pending.item.source.type === 'pr' ? 'Pull Request' : 'Issue',
+    labelTarget: pending.item.source.type === 'pr' ? 'PR' : 'Issue',
+    number: pending.item.source.number
+  }
+}
+
+function getHostedStateConfirmTitle(pending: PendingHostedStateChange): string {
+  const target = hostedStateChangeTarget(pending)
+  return `${hostedStateChangeAction(pending.nextState)} ${target.titleTarget}`
+}
+
+function getHostedStateConfirmMessage(pending: PendingHostedStateChange): string {
+  const target = hostedStateChangeTarget(pending)
+  return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget} #${target.number}?`
+}
+
+function getHostedStateConfirmLabel(pending: PendingHostedStateChange): string {
+  const target = hostedStateChangeTarget(pending)
+  return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget}`
 }
 
 function getGitHubPRSignalTone(
@@ -1745,45 +1773,6 @@ function commentSourceLabel(comment: DetailComment): string {
   return 'Top-level comment'
 }
 
-function isBotDetailComment(comment: DetailComment): boolean {
-  if (comment.isBot === true) return true
-  const author = commentAuthor(comment).toLowerCase()
-  if (author.endsWith('[bot]')) return true
-  return (
-    /(^|[-\s])bot($|[-\s])/i.test(author) ||
-    author.includes('automation') ||
-    author.includes('actions') ||
-    author.includes('renovate') ||
-    author.includes('dependabot') ||
-    author.includes('coderabbit') ||
-    author.includes('qodo') ||
-    author.includes('codecov') ||
-    author.includes('sonar') ||
-    author.includes('snyk') ||
-    author.includes('codex-connector')
-  )
-}
-
-function detailCommentAudienceCounts(
-  comments: DetailComment[]
-): Record<CommentAudienceFilter, number> {
-  const bot = comments.filter(isBotDetailComment).length
-  return {
-    all: comments.length,
-    human: comments.length - bot,
-    bot
-  }
-}
-
-function filterDetailCommentsByAudience(
-  comments: DetailComment[],
-  filter: CommentAudienceFilter
-): DetailComment[] {
-  if (filter === 'bot') return comments.filter(isBotDetailComment)
-  if (filter === 'human') return comments.filter((comment) => !isBotDetailComment(comment))
-  return comments
-}
-
 function groupDetailComments(comments: DetailComment[]): DetailCommentGroup[] {
   const threads = new Map<string, { root: DetailComment; replies: DetailComment[] }>()
   const groups: DetailCommentGroup[] = []
@@ -2123,11 +2112,11 @@ export default function MobileTasksScreen() {
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
   const [mergeMethodProjectRow, setMergeMethodProjectRow] = useState<GitHubProjectRow | null>(null)
-  const [pendingGitHubMerge, setPendingGitHubMerge] = useState<PendingGitHubMerge | null>(null)
+  const [pendingHostedMerge, setPendingHostedMerge] = useState<PendingHostedMerge | null>(null)
   const [pendingProjectGitHubMerge, setPendingProjectGitHubMerge] =
     useState<PendingProjectGitHubMerge | null>(null)
-  const [pendingGitHubPrStateChange, setPendingGitHubPrStateChange] =
-    useState<PendingGitHubPrStateChange | null>(null)
+  const [pendingHostedStateChange, setPendingHostedStateChange] =
+    useState<PendingHostedStateChange | null>(null)
   const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
@@ -2152,27 +2141,12 @@ export default function MobileTasksScreen() {
   const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
-  const [commentAudienceFilter, setCommentAudienceFilter] = useState<CommentAudienceFilter>('all')
   const [expandedResolvedCommentGroups, setExpandedResolvedCommentGroups] = useState<Set<string>>(
     () => new Set()
   )
-  const visibleDetailComments = useMemo(() => {
-    if (
-      actionItem?.provider === 'github' &&
-      actionItem.source.type === 'pr' &&
-      detailPayload?.provider === 'github'
-    ) {
-      return filterDetailCommentsByAudience(detailPayload.comments, commentAudienceFilter)
-    }
-    return detailPayload?.comments ?? []
-  }, [actionItem, commentAudienceFilter, detailPayload])
-  const detailCommentCounts = useMemo(
-    () => detailCommentAudienceCounts(detailPayload?.comments ?? []),
+  const detailCommentGroups = useMemo(
+    () => groupDetailComments(detailPayload?.comments ?? []),
     [detailPayload?.comments]
-  )
-  const visibleDetailCommentGroups = useMemo(
-    () => groupDetailComments(visibleDetailComments),
-    [visibleDetailComments]
   )
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
@@ -2187,7 +2161,6 @@ export default function MobileTasksScreen() {
   const [workspaceBranchNameOverride, setWorkspaceBranchNameOverride] = useState<
     string | undefined
   >(undefined)
-  const [workspaceNoteDraft, setWorkspaceNoteDraft] = useState('')
   const [workspaceBaseBranch, setWorkspaceBaseBranch] = useState<BaseRefSearchResult | null>(null)
   const [workspaceBaseBranchQuery, setWorkspaceBaseBranchQuery] = useState('')
   const [workspaceBaseBranchResults, setWorkspaceBaseBranchResults] = useState<
@@ -2213,6 +2186,8 @@ export default function MobileTasksScreen() {
   const [workspaceSshState, setWorkspaceSshState] = useState<SshConnectionState | null>(null)
   const [workspaceSshConnecting, setWorkspaceSshConnecting] = useState(false)
   const [showWorkspaceAgentPicker, setShowWorkspaceAgentPicker] = useState(false)
+  const [showWorkspaceCreateRepoPicker, setShowWorkspaceCreateRepoPicker] = useState(false)
+  const [showWorkspaceAdvanced, setShowWorkspaceAdvanced] = useState(false)
   const [showWorkspaceBaseBranchPicker, setShowWorkspaceBaseBranchPicker] = useState(false)
   const [showWorkspaceSparsePicker, setShowWorkspaceSparsePicker] = useState(false)
   const [linearStatusPickerItem, setLinearStatusPickerItem] = useState<Extract<
@@ -2621,28 +2596,6 @@ export default function MobileTasksScreen() {
     [client]
   )
 
-  const persistDefaultWorkspaceAgent = useCallback(
-    (agent: WorkspaceAgentChoice) => {
-      setRuntimeTaskSettings((current) => ({ ...current, defaultTuiAgent: agent }))
-      if (!client) return
-      void client
-        .sendRequest('settings.update', { defaultTuiAgent: agent })
-        .then((response) => {
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          const settings = (response.result as { settings?: RuntimeTaskSettings }).settings
-          if (settings) {
-            setRuntimeTaskSettings(settings)
-          }
-        })
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : 'Failed to update default agent.')
-        })
-    },
-    [client]
-  )
-
   const persistSetupHookTrust = useCallback(
     async (repoId: string, contentHash: string, alwaysTrust: boolean): Promise<void> => {
       if (!client) return
@@ -2893,7 +2846,13 @@ export default function MobileTasksScreen() {
               repoId: repo.id
             }
           } catch (err) {
-            console.warn('[mobile tasks] failed to fetch github work items', repo.id, err)
+            const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
+            const logWorkItemFetchFailure = isExpectedSshSkip ? console.log : console.warn
+            logWorkItemFetchFailure(
+              '[mobile tasks] failed to fetch github work items',
+              repo.id,
+              isExpectedSshSkip && err instanceof Error ? err.message : err
+            )
             return {
               items: [] as Array<Extract<TaskItem, { provider: 'github' }>>,
               repoId: repo.id,
@@ -2952,7 +2911,13 @@ export default function MobileTasksScreen() {
             }
             return typeof response.result === 'number' ? response.result : 0
           } catch (err) {
-            console.warn('[mobile tasks] failed to count github work items', repo.id, err)
+            const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
+            const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn
+            logWorkItemCountFailure(
+              '[mobile tasks] failed to count github work items',
+              repo.id,
+              isExpectedSshSkip && err instanceof Error ? err.message : err
+            )
             return 0
           }
         }
@@ -3787,7 +3752,6 @@ export default function MobileTasksScreen() {
       setPrFileContents({})
       setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
-      setCommentAudienceFilter('all')
       setExpandedResolvedCommentGroups(new Set())
       return
     }
@@ -3804,7 +3768,6 @@ export default function MobileTasksScreen() {
     setPrFileContents({})
     setPrFileLoadingPath(null)
     setPrFileCommentDrafts({})
-    setCommentAudienceFilter('all')
     setExpandedResolvedCommentGroups(new Set())
   }, [actionItem])
 
@@ -4379,6 +4342,8 @@ export default function MobileTasksScreen() {
   const workspaceCreateRequiresSshConnection = workspaceCreateSshGate.requiresConnection
   const workspaceCreateSshConnectInProgress = workspaceCreateSshGate.connectInProgress
   const workspaceCreateSshError = workspaceCreateSshGate.error
+  const workspaceCreateCanPickRepo =
+    workspaceCreateDraft?.item.provider === 'linear' && workspaceRepos.length > 1
   const workspaceSparseCheckoutAvailable =
     workspaceCreateTargetRepo != null && !workspaceCreateTargetRepo.connectionId
   const selectedWorkspaceSparsePreset = useMemo(
@@ -4441,24 +4406,25 @@ export default function MobileTasksScreen() {
       ...agents.map((agent) => ({
         value: agent,
         label: workspaceAgentLabel(agent),
-        subtitle: agent
+        subtitle: agent,
+        renderIcon: () => <MobileAgentIcon agentId={workspaceAgentIconId(agent)} size={18} />
       })),
-      { value: 'blank' as const, label: workspaceAgentLabel('blank'), subtitle: 'Open a shell' }
+      {
+        value: 'blank' as const,
+        label: workspaceAgentLabel('blank'),
+        subtitle: 'Open a shell',
+        renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
+      }
     ]
   }, [workspaceAgent, workspaceDetectedAgentIds])
 
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
-    // Why: the workspace sheet is a separate flow; close any item details sheet
-    // first so the create controls are not hidden behind it on mobile.
-    setActionItem(null)
-    setProjectRowItem(null)
     setWorkspaceCreateDraft({ item, ...(repoIdOverride ? { repoIdOverride } : {}) })
     setWorkspaceNameDraft(suggestedName)
     setWorkspaceLastAutoName(suggestedName)
     setWorkspaceBranchAutoName('')
     setWorkspaceBranchNameOverride(undefined)
-    setWorkspaceNoteDraft('')
     setWorkspaceBaseBranch(null)
     setWorkspaceBaseBranchQuery('')
     setWorkspaceBaseBranchResults([])
@@ -4475,6 +4441,8 @@ export default function MobileTasksScreen() {
     setWorkspaceAgent(null)
     setOrcaYamlTrustPrompt(null)
     setShowWorkspaceAgentPicker(false)
+    setShowWorkspaceCreateRepoPicker(false)
+    setShowWorkspaceAdvanced(false)
     setShowWorkspaceBaseBranchPicker(false)
     setShowWorkspaceSparsePicker(false)
     setError('')
@@ -4988,7 +4956,6 @@ export default function MobileTasksScreen() {
         if (setupResolution.kind === 'prompt') {
           // Why: desktop does not silently create when a repo policy says setup
           // requires a per-workspace decision. Mobile must ask before create too.
-          setActionItem(null)
           setSetupPrompt({
             item,
             ...(repoIdOverride ? { repoIdOverride } : {}),
@@ -5002,7 +4969,6 @@ export default function MobileTasksScreen() {
             command: setupResolution.command,
             source: setupResolution.source
           })
-          setWorkspaceCreateDraft(null)
           return
         }
         const setupDecision = setupResolution.decision
@@ -5019,7 +4985,6 @@ export default function MobileTasksScreen() {
           // Why: desktop prompts before running repo-owned orca.yaml hooks. Mobile
           // stores the same trust hash in persisted UI state so either surface can
           // approve the script version for future workspace creates.
-          setActionItem(null)
           setSetupPrompt(null)
           setOrcaYamlTrustPrompt({
             item,
@@ -5037,7 +5002,6 @@ export default function MobileTasksScreen() {
             contentHash: setupResolution.setupTrust.contentHash,
             previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, targetRepo.id)
           })
-          setWorkspaceCreateDraft(null)
           return
         }
         const selectedAgent = agentOverride
@@ -5219,7 +5183,6 @@ export default function MobileTasksScreen() {
         repoId: repo.id,
         repoName: repo.displayName
       }
-      setProjectRowItem(null)
       openWorkspaceCreate({
         key: `github-project:${row.id}`,
         provider: 'github',
@@ -7693,6 +7656,45 @@ export default function MobileTasksScreen() {
     [client, loadTasks]
   )
 
+  const renderCommentComposer = (args: {
+    value: string
+    onChangeText: (next: string) => void
+    onSubmit: () => void
+    disabled?: boolean
+  }): ReactNode => {
+    const hasText = args.value.trim().length > 0
+    return (
+      <View style={styles.commentComposer}>
+        <TextInput
+          style={[styles.input, styles.commentInput, styles.commentComposerInput]}
+          value={args.value}
+          onChangeText={args.onChangeText}
+          placeholder="Add a comment"
+          placeholderTextColor={colors.textMuted}
+          editable={!args.disabled}
+          multiline
+          numberOfLines={1}
+          textAlignVertical="top"
+        />
+        {hasText ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send comment"
+            style={({ pressed }) => [
+              styles.commentComposerSend,
+              pressed && !args.disabled && styles.commentComposerSendPressed,
+              args.disabled && styles.commentComposerSendDisabled
+            ]}
+            disabled={args.disabled}
+            onPress={args.onSubmit}
+          >
+            <Send size={16} color={args.disabled ? colors.textMuted : colors.textPrimary} />
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
+
   const renderDetailComment = (
     comment: DetailComment,
     options: { nested?: boolean } = {}
@@ -7714,21 +7716,10 @@ export default function MobileTasksScreen() {
       </Text>
       <MobileMarkdown content={comment.body} />
       {renderCommentReactions(comment)}
-      {comment.url ||
-      (SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
-        actionItem?.provider === 'github' &&
-        detailPayload?.provider === 'github') ? (
+      {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
+      actionItem?.provider === 'github' &&
+      detailPayload?.provider === 'github' ? (
         <View style={styles.commentControls}>
-          {comment.url ? (
-            <Pressable
-              style={styles.inlineSaveButtonCompact}
-              onPress={() => {
-                if (comment.url) void Linking.openURL(comment.url)
-              }}
-            >
-              <Text style={styles.inlineSaveText}>Open comment</Text>
-            </Pressable>
-          ) : null}
           {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
           actionItem?.provider === 'github' &&
           detailPayload?.provider === 'github' ? (
@@ -9885,6 +9876,7 @@ export default function MobileTasksScreen() {
       <BottomDrawer
         visible={linearStatusPickerItem !== null}
         onClose={() => setLinearStatusPickerItem(null)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>Change Status</Text>
@@ -10018,23 +10010,13 @@ export default function MobileTasksScreen() {
         onClose={() => setShowSortPicker(false)}
       />
 
-      <PickerModal
-        visible={showCreateTargetPicker}
-        title={provider === 'linear' ? 'Linear Team' : 'Repository'}
-        options={createTargetOptions}
-        selected={
-          provider === 'github' || provider === 'gitlab'
-            ? ((selectedCreateTarget as RepoSummary | null)?.id ?? '')
-            : ((selectedCreateTarget as LinearTeam | null)?.id ?? '')
-        }
-        onSelect={(value) => {
-          if (provider === 'github' || provider === 'gitlab') setCreateRepoId(value)
-          else setCreateTeamId(value)
+      <BottomDrawer
+        visible={showCreateTask}
+        onClose={() => {
+          setShowCreateTargetPicker(false)
+          setShowCreateTask(false)
         }}
-        onClose={() => setShowCreateTargetPicker(false)}
-      />
-
-      <BottomDrawer visible={showCreateTask} onClose={() => setShowCreateTask(false)}>
+      >
         <View style={styles.sheetHeader}>
           <View style={styles.sheetTitleRow}>
             <TaskProviderLogo provider={provider} size={16} color={colors.textPrimary} />
@@ -10052,9 +10034,25 @@ export default function MobileTasksScreen() {
             {provider === 'github' || provider === 'gitlab' ? 'Repository' : 'Team'}
           </Text>
           <Pressable style={styles.targetButton} onPress={() => setShowCreateTargetPicker(true)}>
+            {provider === 'github' || provider === 'gitlab' ? (
+              <View
+                style={[
+                  styles.pickerRepoDot,
+                  selectedCreateTarget
+                    ? {
+                        backgroundColor: getRepoBadgeColor(
+                          selectedCreateTarget as RepoSummary,
+                          (selectedCreateTarget as RepoSummary).displayName
+                        )
+                      }
+                    : undefined
+                ]}
+              />
+            ) : null}
             <Text style={styles.targetButtonText} numberOfLines={1}>
               {selectedCreateTargetLabel}
             </Text>
+            <ChevronDown size={14} color={colors.textMuted} />
           </Pressable>
 
           {provider === 'github' &&
@@ -10144,6 +10142,22 @@ export default function MobileTasksScreen() {
         </View>
       </BottomDrawer>
 
+      <PickerModal
+        visible={showCreateTask && showCreateTargetPicker}
+        title={provider === 'linear' ? 'Linear Team' : 'Repository'}
+        options={createTargetOptions}
+        selected={
+          provider === 'github' || provider === 'gitlab'
+            ? ((selectedCreateTarget as RepoSummary | null)?.id ?? '')
+            : ((selectedCreateTarget as LinearTeam | null)?.id ?? '')
+        }
+        onSelect={(value) => {
+          if (provider === 'github' || provider === 'gitlab') setCreateRepoId(value)
+          else setCreateTeamId(value)
+        }}
+        onClose={() => setShowCreateTargetPicker(false)}
+      />
+
       <BottomDrawer
         visible={showLinearConnect}
         onClose={() => {
@@ -10225,11 +10239,13 @@ export default function MobileTasksScreen() {
           setWorkspaceRepoPickerItem(null)
         }}
         onClose={() => setWorkspaceRepoPickerItem(null)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       />
 
       <BottomDrawer
         visible={workspaceCreateDraft != null}
         onClose={() => setWorkspaceCreateDraft(null)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       >
         {workspaceCreateDraft ? (
           <View>
@@ -10240,25 +10256,45 @@ export default function MobileTasksScreen() {
               </Text>
             </View>
 
-            <View style={styles.detailGroup}>
-              <View style={styles.detailMetaGrid}>
-                <View style={styles.detailMetaItem}>
-                  <Text style={styles.detailMetaLabel}>Source</Text>
-                  <Text style={styles.detailMetaValue}>
-                    {taskKindLabel(workspaceCreateDraft.item)}
+            <View style={styles.workspaceCreateForm}>
+              <View style={styles.workspaceCreateField}>
+                <Text style={styles.workspaceCreateLabel}>Repository</Text>
+                <Pressable
+                  style={styles.fieldButton}
+                  disabled={!workspaceCreateCanPickRepo}
+                  onPress={() => setShowWorkspaceCreateRepoPicker(true)}
+                >
+                  {workspaceCreateTargetRepo ? (
+                    <View
+                      style={[
+                        styles.pickerRepoDot,
+                        {
+                          backgroundColor: getRepoBadgeColor(
+                            workspaceCreateTargetRepo,
+                            workspaceCreateTargetRepo.displayName
+                          )
+                        }
+                      ]}
+                    />
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.fieldButtonText,
+                      !workspaceCreateTargetRepo ? styles.fieldButtonPlaceholder : undefined
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {workspaceCreateTargetRepo?.displayName ?? 'Select a repository'}
                   </Text>
-                </View>
-                <View style={styles.detailMetaItem}>
-                  <Text style={styles.detailMetaLabel}>Repository</Text>
-                  <Text style={styles.detailMetaValue} numberOfLines={1}>
-                    {workspaceCreateTargetRepo?.displayName ?? 'No repository'}
-                  </Text>
-                </View>
+                  {workspaceCreateCanPickRepo ? (
+                    <ChevronDown size={14} color={colors.textMuted} />
+                  ) : null}
+                </Pressable>
               </View>
 
               {workspaceCreateTargetConnectionId ? (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>SSH Connection</Text>
+                <View style={styles.workspaceCreateField}>
+                  <Text style={styles.workspaceCreateLabel}>SSH Connection</Text>
                   <View style={styles.sshConnectCard}>
                     <View style={styles.sshStatusRow}>
                       <View
@@ -10303,8 +10339,10 @@ export default function MobileTasksScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Workspace Name</Text>
+              <View style={styles.workspaceCreateField}>
+                <Text style={styles.workspaceCreateLabel}>
+                  Workspace Name <Text style={styles.workspaceCreateLabelHint}>[Optional]</Text>
+                </Text>
                 <TextInput
                   style={styles.input}
                   value={workspaceNameDraft}
@@ -10316,113 +10354,8 @@ export default function MobileTasksScreen() {
                 />
               </View>
 
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Start from</Text>
-                <Pressable
-                  style={styles.fieldButton}
-                  onPress={() => {
-                    setWorkspaceBaseBranchQuery(workspaceBaseBranch?.refName ?? '')
-                    setShowWorkspaceBaseBranchPicker(true)
-                  }}
-                >
-                  <GitBranch size={14} color={colors.textMuted} />
-                  <Text style={styles.fieldButtonText} numberOfLines={1}>
-                    {workspaceBaseBranch?.refName ?? 'Default branch'}
-                  </Text>
-                  <ChevronDown size={14} color={colors.textMuted} />
-                </Pressable>
-                {workspaceBaseBranch ? (
-                  <Text style={styles.detailMuted} numberOfLines={1}>
-                    Create from {workspaceBaseBranch.refName}
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Note</Text>
-                <TextInput
-                  style={[styles.input, styles.bodyInput]}
-                  value={workspaceNoteDraft}
-                  onChangeText={setWorkspaceNoteDraft}
-                  placeholder="Write a note"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  textAlignVertical="top"
-                />
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Sparse checkout</Text>
-                <Pressable
-                  style={[
-                    styles.fieldButton,
-                    !workspaceSparseCheckoutAvailable || workspaceSparsePresetsLoading
-                      ? styles.fieldButtonDisabled
-                      : undefined
-                  ]}
-                  disabled={!workspaceSparseCheckoutAvailable || workspaceSparsePresetsLoading}
-                  onPress={() => setShowWorkspaceSparsePicker(true)}
-                >
-                  <Text style={styles.fieldButtonText} numberOfLines={1}>
-                    {!workspaceSparseCheckoutAvailable
-                      ? 'Only available for local repositories'
-                      : workspaceSparsePresetsLoading
-                        ? 'Loading presets...'
-                        : (selectedWorkspaceSparsePreset?.name ?? 'Full checkout')}
-                  </Text>
-                  <ChevronDown size={14} color={colors.textMuted} />
-                </Pressable>
-                {workspaceSparsePresetsError ? (
-                  <View style={styles.inlineButtonRow}>
-                    <Text style={styles.detailError}>{workspaceSparsePresetsError}</Text>
-                    <Pressable
-                      style={styles.inlineSaveButtonCompact}
-                      onPress={() => setWorkspaceSparseReloadKey((current) => current + 1)}
-                    >
-                      <Text style={styles.inlineSaveText}>Retry</Text>
-                    </Pressable>
-                  </View>
-                ) : selectedWorkspaceSparsePreset ? (
-                  <Text style={styles.detailMuted} numberOfLines={2}>
-                    {selectedWorkspaceSparsePreset.directories.join(', ')}
-                  </Text>
-                ) : null}
-                {workspaceSparseCheckoutAvailable ? (
-                  <View style={styles.inlineButtonRow}>
-                    <Pressable
-                      style={[
-                        styles.inlineSaveButtonCompact,
-                        !workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading
-                          ? styles.fieldButtonDisabled
-                          : undefined
-                      ]}
-                      disabled={!workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading}
-                      onPress={startNewWorkspaceSparsePreset}
-                    >
-                      <Text style={styles.inlineSaveText}>New preset</Text>
-                    </Pressable>
-                    {selectedWorkspaceSparsePreset ? (
-                      <Pressable
-                        style={[
-                          styles.inlineSaveButtonCompact,
-                          !workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading
-                            ? styles.fieldButtonDisabled
-                            : undefined
-                        ]}
-                        disabled={!workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading}
-                        onPress={() =>
-                          startEditWorkspaceSparsePreset(selectedWorkspaceSparsePreset)
-                        }
-                      >
-                        <Text style={styles.inlineSaveText}>Edit preset</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Agent</Text>
+              <View style={styles.workspaceCreateField}>
+                <Text style={styles.workspaceCreateLabel}>Agent</Text>
                 <Pressable
                   style={[
                     styles.fieldButton,
@@ -10431,6 +10364,10 @@ export default function MobileTasksScreen() {
                   disabled={workspaceCreateRequiresSshConnection}
                   onPress={() => setShowWorkspaceAgentPicker(true)}
                 >
+                  <MobileAgentIcon
+                    agentId={workspaceAgentIconId(resolvedWorkspaceAgent)}
+                    size={16}
+                  />
                   <Text style={styles.fieldButtonText} numberOfLines={1}>
                     {workspaceCreateRequiresSshConnection
                       ? 'Connect repository first'
@@ -10440,22 +10377,43 @@ export default function MobileTasksScreen() {
                   </Text>
                   <ChevronDown size={14} color={colors.textMuted} />
                 </Pressable>
-                <Pressable
-                  style={styles.inlineSaveButton}
-                  disabled={
-                    workspaceCreateRequiresSshConnection ||
-                    workspaceAgentDetectionPending ||
-                    runtimeTaskSettings.defaultTuiAgent === resolvedWorkspaceAgent
-                  }
-                  onPress={() => persistDefaultWorkspaceAgent(resolvedWorkspaceAgent)}
-                >
-                  <Text style={styles.inlineSaveText}>
-                    {runtimeTaskSettings.defaultTuiAgent === resolvedWorkspaceAgent
-                      ? 'Default agent'
-                      : 'Set as default agent'}
-                  </Text>
-                </Pressable>
               </View>
+
+              <Pressable
+                style={styles.workspaceAdvancedToggle}
+                onPress={() => setShowWorkspaceAdvanced((current) => !current)}
+              >
+                <Text style={styles.workspaceAdvancedText}>Advanced</Text>
+                {showWorkspaceAdvanced ? (
+                  <ChevronUp size={14} color={colors.textSecondary} />
+                ) : (
+                  <ChevronDown size={14} color={colors.textSecondary} />
+                )}
+              </Pressable>
+
+              {showWorkspaceAdvanced ? (
+                <View style={styles.workspaceCreateField}>
+                  <Text style={styles.workspaceCreateLabel}>Start from</Text>
+                  <Pressable
+                    style={styles.fieldButton}
+                    onPress={() => {
+                      setWorkspaceBaseBranchQuery(workspaceBaseBranch?.refName ?? '')
+                      setShowWorkspaceBaseBranchPicker(true)
+                    }}
+                  >
+                    <GitBranch size={14} color={colors.textMuted} />
+                    <Text style={styles.fieldButtonText} numberOfLines={1}>
+                      {workspaceBaseBranch?.refName ?? 'Default branch'}
+                    </Text>
+                    <ChevronDown size={14} color={colors.textMuted} />
+                  </Pressable>
+                  {workspaceBaseBranch ? (
+                    <Text style={styles.detailMuted} numberOfLines={1}>
+                      Create from {workspaceBaseBranch.refName}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
 
             {workspaceCreateTargetRepo ? null : (
@@ -10466,52 +10424,73 @@ export default function MobileTasksScreen() {
               </Text>
             )}
 
-            <View style={styles.actionGroup}>
+            <View style={styles.workspaceCreateActions}>
               <Pressable
-                style={styles.actionRow}
+                style={[
+                  styles.createButton,
+                  styles.workspaceCreateButton,
+                  (!workspaceCreateTargetRepo ||
+                    workspaceCreateRequiresSshConnection ||
+                    workspaceAgentDetectionPending ||
+                    creatingKey === workspaceCreateDraft.item.key) &&
+                    styles.createButtonDisabled
+                ]}
                 disabled={
                   !workspaceCreateTargetRepo ||
                   workspaceCreateRequiresSshConnection ||
                   workspaceAgentDetectionPending ||
                   creatingKey === workspaceCreateDraft.item.key
                 }
-                onPress={() =>
+                onPress={() => {
+                  // Why: this compact issue-to-workspace flow should match the
+                  // basic create workspace path; sparse checkout can return later.
                   void createWorkspace(
                     workspaceCreateDraft.item,
                     workspaceCreateDraft.repoIdOverride,
                     undefined,
                     resolvedWorkspaceAgent,
                     workspaceNameDraft.trim(),
-                    workspaceNoteDraft,
+                    undefined,
                     workspaceBaseBranch?.refName,
                     workspaceBranchNameOverride &&
                       workspaceNameDraft.trim() === workspaceBranchAutoName
                       ? workspaceBranchNameOverride
                       : undefined,
-                    selectedWorkspaceSparsePreset
-                      ? {
-                          directories: selectedWorkspaceSparsePreset.directories,
-                          presetId: selectedWorkspaceSparsePreset.id
-                        }
-                      : undefined
+                    undefined
                   )
-                }
+                }}
               >
-                <Plus size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>
-                  {workspaceAgentDetectionPending
-                    ? 'Detecting agents...'
-                    : workspaceCreateRequiresSshConnection
-                      ? 'Connect Repository'
-                      : creatingKey === workspaceCreateDraft.item.key
-                        ? 'Creating...'
+                {creatingKey === workspaceCreateDraft.item.key ? (
+                  <ActivityIndicator size="small" color={colors.bgBase} />
+                ) : (
+                  <Text style={styles.createButtonText}>
+                    {workspaceAgentDetectionPending
+                      ? 'Detecting agents...'
+                      : workspaceCreateRequiresSshConnection
+                        ? 'Connect Repository'
                         : 'Create Workspace'}
-                </Text>
+                  </Text>
+                )}
               </Pressable>
             </View>
           </View>
         ) : null}
       </BottomDrawer>
+
+      <PickerModal
+        visible={workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
+        title="Repository"
+        options={workspaceRepoOptions}
+        selected={workspaceCreateTargetRepo?.id ?? ''}
+        onSelect={(repoId) => {
+          setWorkspaceCreateDraft((current) =>
+            current ? { ...current, repoIdOverride: repoId } : current
+          )
+          setShowWorkspaceCreateRepoPicker(false)
+        }}
+        onClose={() => setShowWorkspaceCreateRepoPicker(false)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
+      />
 
       <PickerModal
         visible={workspaceCreateDraft != null && showWorkspaceAgentPicker}
@@ -10524,11 +10503,13 @@ export default function MobileTasksScreen() {
           setShowWorkspaceAgentPicker(false)
         }}
         onClose={() => setShowWorkspaceAgentPicker(false)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       />
 
       <BottomDrawer
         visible={workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
         onClose={() => setShowWorkspaceBaseBranchPicker(false)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
         <View>
           <View style={styles.sheetHeader}>
@@ -10604,6 +10585,7 @@ export default function MobileTasksScreen() {
       <BottomDrawer
         visible={workspaceCreateDraft != null && showWorkspaceSparsePicker}
         onClose={() => setShowWorkspaceSparsePicker(false)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
         <View>
           <View style={styles.sheetHeader}>
@@ -10684,6 +10666,7 @@ export default function MobileTasksScreen() {
         onClose={() => {
           if (!workspaceSparseSaving) setWorkspaceSparseDraft(null)
         }}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 2}
       >
         {workspaceSparseDraft ? (
           <View>
@@ -10757,7 +10740,11 @@ export default function MobileTasksScreen() {
         ) : null}
       </BottomDrawer>
 
-      <BottomDrawer visible={setupPrompt != null} onClose={() => setSetupPrompt(null)}>
+      <BottomDrawer
+        visible={setupPrompt != null}
+        onClose={() => setSetupPrompt(null)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
+      >
         {setupPrompt ? (
           <View>
             <View style={styles.sheetHeader}>
@@ -10828,6 +10815,7 @@ export default function MobileTasksScreen() {
       <BottomDrawer
         visible={orcaYamlTrustPrompt != null}
         onClose={() => setOrcaYamlTrustPrompt(null)}
+        zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       >
         {orcaYamlTrustPrompt ? (
           <View>
@@ -11812,89 +11800,77 @@ export default function MobileTasksScreen() {
                                   <>
                                     <MobileMarkdown content={comment.body} />
                                     {renderCommentReactions(comment)}
-                                    <View style={styles.inlineActionRow}>
-                                      {comment.url ? (
-                                        <Pressable
-                                          style={styles.inlineSaveButtonCompact}
-                                          onPress={() => {
-                                            if (comment.url) void Linking.openURL(comment.url)
-                                          }}
-                                        >
-                                          <Text style={styles.inlineSaveText}>Open comment</Text>
-                                        </Pressable>
-                                      ) : null}
-                                      {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
-                                        <>
-                                          {projectRowType(projectRowItem) === 'pr' &&
-                                          comment.threadId ? (
-                                            <Pressable
-                                              style={styles.inlineSaveButtonCompact}
-                                              disabled={projectMutating}
-                                              onPress={() =>
-                                                void toggleProjectGitHubReviewThread(
-                                                  projectRowItem,
-                                                  comment
-                                                )
-                                              }
-                                            >
-                                              <Text style={styles.inlineSaveText}>
-                                                {comment.isResolved
-                                                  ? 'Reopen thread'
-                                                  : 'Resolve thread'}
-                                              </Text>
-                                            </Pressable>
-                                          ) : null}
-                                          <TextInput
-                                            style={[styles.input, styles.replyInput]}
-                                            value={itemReplyDrafts[commentId] ?? ''}
-                                            onChangeText={(next) =>
-                                              setItemReplyDrafts((current) => ({
-                                                ...current,
-                                                [commentId]: next
-                                              }))
-                                            }
-                                            placeholder="Reply"
-                                            placeholderTextColor={colors.textMuted}
-                                            multiline
-                                            textAlignVertical="top"
-                                          />
+                                    {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
+                                      <View style={styles.inlineActionRow}>
+                                        {projectRowType(projectRowItem) === 'pr' &&
+                                        comment.threadId ? (
                                           <Pressable
                                             style={styles.inlineSaveButtonCompact}
-                                            disabled={
-                                              projectMutating ||
-                                              !(itemReplyDrafts[commentId] ?? '').trim()
-                                            }
+                                            disabled={projectMutating}
                                             onPress={() =>
-                                              void replyToProjectGitHubComment(
+                                              void toggleProjectGitHubReviewThread(
                                                 projectRowItem,
                                                 comment
                                               )
                                             }
                                           >
-                                            <Text style={styles.inlineSaveText}>Reply</Text>
+                                            <Text style={styles.inlineSaveText}>
+                                              {comment.isResolved
+                                                ? 'Reopen thread'
+                                                : 'Resolve thread'}
+                                            </Text>
                                           </Pressable>
-                                          <Pressable
-                                            style={styles.inlineSaveButtonCompact}
-                                            disabled={projectMutating}
-                                            onPress={() => {
-                                              setProjectEditingCommentId(commentId)
-                                              setProjectEditingCommentDraft(comment.body)
-                                            }}
-                                          >
-                                            <Text style={styles.inlineSaveText}>Edit</Text>
-                                          </Pressable>
-                                          <Pressable
-                                            style={styles.inlineSaveButtonCompact}
-                                            disabled={projectMutating}
-                                            onPress={() =>
-                                              void deleteProjectRowComment(projectRowItem, comment)
-                                            }
-                                          >
-                                            <Text style={styles.inlineDeleteText}>Delete</Text>
-                                          </Pressable>
-                                        </>
-                                      ) : null}
-                                    </View>
+                                        ) : null}
+                                        <TextInput
+                                          style={[styles.input, styles.replyInput]}
+                                          value={itemReplyDrafts[commentId] ?? ''}
+                                          onChangeText={(next) =>
+                                            setItemReplyDrafts((current) => ({
+                                              ...current,
+                                              [commentId]: next
+                                            }))
+                                          }
+                                          placeholder="Reply"
+                                          placeholderTextColor={colors.textMuted}
+                                          multiline
+                                          textAlignVertical="top"
+                                        />
+                                        <Pressable
+                                          style={styles.inlineSaveButtonCompact}
+                                          disabled={
+                                            projectMutating ||
+                                            !(itemReplyDrafts[commentId] ?? '').trim()
+                                          }
+                                          onPress={() =>
+                                            void replyToProjectGitHubComment(
+                                              projectRowItem,
+                                              comment
+                                            )
+                                          }
+                                        >
+                                          <Text style={styles.inlineSaveText}>Reply</Text>
+                                        </Pressable>
+                                        <Pressable
+                                          style={styles.inlineSaveButtonCompact}
+                                          disabled={projectMutating}
+                                          onPress={() => {
+                                            setProjectEditingCommentId(commentId)
+                                            setProjectEditingCommentDraft(comment.body)
+                                          }}
+                                        >
+                                          <Text style={styles.inlineSaveText}>Edit</Text>
+                                        </Pressable>
+                                        <Pressable
+                                          style={styles.inlineSaveButtonCompact}
+                                          disabled={projectMutating}
+                                          onPress={() =>
+                                            void deleteProjectRowComment(projectRowItem, comment)
+                                          }
+                                        >
+                                          <Text style={styles.inlineDeleteText}>Delete</Text>
+                                        </Pressable>
+                                      </View>
+                                    ) : null}
                                   </>
                                 )}
                               </View>
@@ -11915,22 +11891,12 @@ export default function MobileTasksScreen() {
                           )
                         })
                       )}
-                      <TextInput
-                        style={[styles.input, styles.commentInput]}
-                        value={projectCommentDraft}
-                        onChangeText={setProjectCommentDraft}
-                        placeholder="Add a comment"
-                        placeholderTextColor={colors.textMuted}
-                        multiline
-                        textAlignVertical="top"
-                      />
-                      <Pressable
-                        style={styles.inlineSaveButton}
-                        disabled={projectMutating || projectCommentDraft.trim().length === 0}
-                        onPress={() => void addProjectRowComment(projectRowItem)}
-                      >
-                        <Text style={styles.inlineSaveText}>Add comment</Text>
-                      </Pressable>
+                      {renderCommentComposer({
+                        value: projectCommentDraft,
+                        onChangeText: setProjectCommentDraft,
+                        disabled: projectMutating,
+                        onSubmit: () => void addProjectRowComment(projectRowItem)
+                      })}
                     </View>
                   ) : null}
                 </>
@@ -12002,14 +11968,18 @@ export default function MobileTasksScreen() {
                       const nextState =
                         projectRowItem.content.state === 'CLOSED' ? 'open' : 'closed'
                       if (projectRowItem.itemType === 'PULL_REQUEST') {
-                        setPendingGitHubPrStateChange({
+                        setPendingHostedStateChange({
                           source: 'project',
                           row: projectRowItem,
                           nextState
                         })
                         return
                       }
-                      void mutateProjectRowIssueOrPr(projectRowItem, { state: nextState })
+                      setPendingHostedStateChange({
+                        source: 'project',
+                        row: projectRowItem,
+                        nextState
+                      })
                     }}
                   >
                     {projectRowItem.content.state === 'CLOSED' ? (
@@ -12771,86 +12741,28 @@ export default function MobileTasksScreen() {
                         {discussionSummary(detailPayload.comments.length)}
                       </Text>
                     </View>
-                    {actionItem.provider === 'github' &&
-                    actionItem.source.type === 'pr' &&
-                    detailPayload.provider === 'github' &&
-                    detailPayload.comments.length > 0 ? (
-                      <View style={styles.commentFilterRow}>
-                        {COMMENT_AUDIENCE_FILTERS.map((filter) => {
-                          const selected = commentAudienceFilter === filter.value
-                          return (
-                            <Pressable
-                              key={filter.value}
-                              style={[
-                                styles.commentFilterButton,
-                                selected && styles.commentFilterButtonActive
-                              ]}
-                              accessibilityState={{ selected }}
-                              onPress={() => setCommentAudienceFilter(filter.value)}
-                            >
-                              <Text
-                                style={[
-                                  styles.commentFilterText,
-                                  selected && styles.commentFilterTextActive
-                                ]}
-                              >
-                                {filter.label} {detailCommentCounts[filter.value]}
-                              </Text>
-                            </Pressable>
-                          )
-                        })}
-                      </View>
-                    ) : null}
                     {detailPayload.comments.length === 0 ? (
                       <Text style={styles.detailMuted}>No comments.</Text>
-                    ) : visibleDetailComments.length === 0 ? (
-                      <Text style={styles.detailMuted}>
-                        No {commentAudienceFilter === 'bot' ? 'bot' : 'human'} comments.
-                      </Text>
                     ) : (
-                      visibleDetailCommentGroups.map(renderDetailCommentGroup)
+                      detailCommentGroups.map(renderDetailCommentGroup)
                     )}
                     {(detailPayload.provider === 'github' && actionItem.provider === 'github') ||
-                    (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab') ? (
-                      <>
-                        <TextInput
-                          style={[styles.input, styles.commentInput]}
-                          value={itemCommentDraft}
-                          onChangeText={setItemCommentDraft}
-                          placeholder="Add a comment"
-                          placeholderTextColor={colors.textMuted}
-                          multiline
-                          textAlignVertical="top"
-                        />
-                        <Pressable
-                          style={styles.inlineSaveButton}
-                          disabled={mutatingStatus || itemCommentDraft.trim().length === 0}
-                          onPress={() => void addHostedItemComment(actionItem)}
-                        >
-                          <Text style={styles.inlineSaveText}>Add comment</Text>
-                        </Pressable>
-                      </>
-                    ) : null}
-                    {detailPayload.provider === 'linear' && actionItem.provider === 'linear' ? (
-                      <>
-                        <TextInput
-                          style={[styles.input, styles.commentInput]}
-                          value={linearCommentDraft}
-                          onChangeText={setLinearCommentDraft}
-                          placeholder="Add a comment"
-                          placeholderTextColor={colors.textMuted}
-                          multiline
-                          textAlignVertical="top"
-                        />
-                        <Pressable
-                          style={styles.inlineSaveButton}
-                          disabled={mutatingStatus || linearCommentDraft.trim().length === 0}
-                          onPress={() => void addLinearComment(actionItem)}
-                        >
-                          <Text style={styles.inlineSaveText}>Add comment</Text>
-                        </Pressable>
-                      </>
-                    ) : null}
+                    (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab')
+                      ? renderCommentComposer({
+                          value: itemCommentDraft,
+                          onChangeText: setItemCommentDraft,
+                          disabled: mutatingStatus,
+                          onSubmit: () => void addHostedItemComment(actionItem)
+                        })
+                      : null}
+                    {detailPayload.provider === 'linear' && actionItem.provider === 'linear'
+                      ? renderCommentComposer({
+                          value: linearCommentDraft,
+                          onChangeText: setLinearCommentDraft,
+                          disabled: mutatingStatus,
+                          onSubmit: () => void addLinearComment(actionItem)
+                        })
+                      : null}
                   </View>
                 </>
               ) : null}
@@ -12897,58 +12809,9 @@ export default function MobileTasksScreen() {
                   >
                     <Copy size={16} color={colors.textPrimary} />
                     <Text style={styles.actionText}>
-                      {copiedLinkKey === `linear-url:${actionItem.key}` ? 'Copied' : 'Copy URL'}
-                    </Text>
-                  </Pressable>
-                  <View style={styles.actionSeparator} />
-                  <Pressable
-                    style={styles.actionRow}
-                    onPress={() =>
-                      void copyTextToClipboard(
-                        `linear-id:${actionItem.key}`,
-                        actionItem.source.identifier
-                      )
-                    }
-                  >
-                    <Copy size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>
-                      {copiedLinkKey === `linear-id:${actionItem.key}`
+                      {copiedLinkKey === `linear-url:${actionItem.key}`
                         ? 'Copied'
-                        : 'Copy identifier'}
-                    </Text>
-                  </Pressable>
-                  <View style={styles.actionSeparator} />
-                  <Pressable
-                    style={styles.actionRow}
-                    onPress={() =>
-                      void copyTextToClipboard(
-                        `linear-branch:${actionItem.key}`,
-                        buildLinearIssueBranchName(actionItem.source)
-                      )
-                    }
-                  >
-                    <GitBranch size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>
-                      {copiedLinkKey === `linear-branch:${actionItem.key}`
-                        ? 'Copied'
-                        : 'Copy suggested branch name'}
-                    </Text>
-                  </Pressable>
-                  <View style={styles.actionSeparator} />
-                  <Pressable
-                    style={styles.actionRow}
-                    onPress={() =>
-                      void copyTextToClipboard(
-                        `linear-prompt:${actionItem.key}`,
-                        buildLinearIssuePrompt(actionItem.source)
-                      )
-                    }
-                  >
-                    <Copy size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>
-                      {copiedLinkKey === `linear-prompt:${actionItem.key}`
-                        ? 'Copied'
-                        : 'Copy prompt'}
+                        : 'Copy Linear link'}
                     </Text>
                   </Pressable>
                 </>
@@ -12979,15 +12842,11 @@ export default function MobileTasksScreen() {
                     disabled={mutatingStatus}
                     onPress={() => {
                       const githubItem = actionItem as Extract<TaskItem, { provider: 'github' }>
-                      if (githubItem.source.type === 'pr') {
-                        setPendingGitHubPrStateChange({
-                          source: 'task',
-                          item: githubItem,
-                          nextState: githubItem.source.state === 'closed' ? 'open' : 'closed'
-                        })
-                        return
-                      }
-                      void toggleGitHubStatus(githubItem)
+                      setPendingHostedStateChange({
+                        source: 'task',
+                        item: githubItem,
+                        nextState: githubItem.source.state === 'closed' ? 'open' : 'closed'
+                      })
                     }}
                   >
                     {actionItem.source.state === 'closed' ? (
@@ -13031,11 +12890,14 @@ export default function MobileTasksScreen() {
                   <Pressable
                     style={styles.actionRow}
                     disabled={mutatingStatus}
-                    onPress={() =>
-                      void toggleGitLabStatus(
-                        actionItem as Extract<TaskItem, { provider: 'gitlab' }>
-                      )
-                    }
+                    onPress={() => {
+                      const gitlabItem = actionItem as Extract<TaskItem, { provider: 'gitlab' }>
+                      setPendingHostedStateChange({
+                        source: 'task',
+                        item: gitlabItem,
+                        nextState: gitlabItem.source.state === 'closed' ? 'opened' : 'closed'
+                      })
+                    }}
                   >
                     {actionItem.source.state === 'closed' ? (
                       <RefreshCw size={16} color={colors.textPrimary} />
@@ -13070,228 +12932,18 @@ export default function MobileTasksScreen() {
               {actionItem.provider === 'linear' ? (
                 <>
                   <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Status</Text>
-                    {linearStatesLoading ? (
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    ) : linearStates.length === 0 ? (
-                      <Text style={styles.emptyInlineText}>No states available</Text>
-                    ) : (
-                      linearStates.map((state, index) => (
-                        <View key={state.id}>
-                          {index > 0 && <View style={styles.actionSeparator} />}
-                          <Pressable
-                            style={styles.actionRow}
-                            disabled={mutatingStatus}
-                            onPress={() =>
-                              void setLinearStatus(
-                                actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                                state
-                              )
-                            }
-                          >
-                            <GitBranch size={16} color={colors.textPrimary} />
-                            <Text style={styles.actionText}>{state.name}</Text>
-                            {state.name === actionItem.status && (
-                              <Check size={14} color={colors.textSecondary} />
-                            )}
-                          </Pressable>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                  <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Project</Text>
-                    <Pressable
-                      style={styles.actionRow}
-                      disabled={mutatingStatus || !actionItem.source.project?.url}
-                      onPress={() => {
-                        if (actionItem.source.project?.url) {
-                          void Linking.openURL(actionItem.source.project.url)
-                        }
-                      }}
-                    >
-                      <Text style={styles.actionText}>
-                        {actionItem.source.project?.name ?? 'No project'}
-                      </Text>
-                      {actionItem.source.project?.url ? (
-                        <ExternalLink size={14} color={colors.textSecondary} />
-                      ) : null}
-                    </Pressable>
-                    <TextInput
-                      style={[styles.input, styles.stackedInput]}
-                      value={linearProjectSearch}
-                      onChangeText={setLinearProjectSearch}
-                      placeholder="Search projects"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                    {linearProjectsLoading ? (
-                      <View style={styles.detailLoadingInline}>
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                        <Text style={styles.detailMuted}>Loading projects...</Text>
-                      </View>
-                    ) : linearProjectsError ? (
-                      <Text style={styles.emptyInlineText}>{linearProjectsError}</Text>
-                    ) : linearProjectSearch.trim().length > 0 && linearProjects.length === 0 ? (
-                      <Text style={styles.emptyInlineText}>No projects found.</Text>
-                    ) : (
-                      linearProjects.map((project) => (
-                        <Pressable
-                          key={project.id}
-                          style={styles.actionRow}
-                          disabled={mutatingStatus}
-                          onPress={() =>
-                            void updateLinearIssueMetadata(
-                              actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                              { projectId: project.id }
-                            )
-                          }
-                        >
-                          <Text style={styles.actionText}>{project.name}</Text>
-                          {actionItem.source.project?.id === project.id ? (
-                            <Check size={14} color={colors.textSecondary} />
-                          ) : null}
-                        </Pressable>
-                      ))
-                    )}
-                  </View>
-                  <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Priority</Text>
-                    {[1, 2, 3, 4, 0].map((priority) => (
-                      <Pressable
-                        key={priority}
-                        style={styles.actionRow}
-                        disabled={mutatingStatus}
-                        onPress={() =>
-                          void updateLinearIssueMetadata(
-                            actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                            { priority }
-                          )
-                        }
-                      >
-                        <Text style={styles.actionText}>{getLinearPriorityLabel(priority)}</Text>
-                        {priority === actionItem.source.priority ? (
-                          <Check size={14} color={colors.textSecondary} />
-                        ) : null}
-                      </Pressable>
-                    ))}
-                  </View>
-                  <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Estimate</Text>
-                    {[null, 1, 2, 3, 5, 8].map((estimate) => (
-                      <Pressable
-                        key={estimate === null ? 'none' : estimate}
-                        style={styles.actionRow}
-                        disabled={mutatingStatus}
-                        onPress={() =>
-                          void updateLinearIssueMetadata(
-                            actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                            { estimate }
-                          )
-                        }
-                      >
-                        <Text style={styles.actionText}>
-                          {estimate === null ? 'No estimate' : `Estimate ${estimate}`}
-                        </Text>
-                        {(actionItem.source.estimate ?? null) === estimate ? (
-                          <Check size={14} color={colors.textSecondary} />
-                        ) : null}
-                      </Pressable>
-                    ))}
-                    <TextInput
-                      style={[styles.input, styles.stackedInput]}
-                      value={linearEstimateDraft}
-                      onChangeText={setLinearEstimateDraft}
-                      placeholder="Custom estimate"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="number-pad"
-                    />
-                    <Pressable
-                      style={styles.inlineSaveButton}
-                      disabled={mutatingStatus}
-                      onPress={() =>
-                        void updateLinearEstimateDraft(
-                          actionItem as Extract<TaskItem, { provider: 'linear' }>
-                        )
-                      }
-                    >
-                      <Text style={styles.inlineSaveText}>Save estimate</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Assignee</Text>
-                    <Pressable
-                      style={styles.actionRow}
-                      disabled={mutatingStatus}
-                      onPress={() =>
-                        void updateLinearIssueMetadata(
-                          actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                          { assigneeId: null }
-                        )
-                      }
-                    >
-                      <Text style={styles.actionText}>Unassigned</Text>
-                      {!actionItem.source.assignee ? (
-                        <Check size={14} color={colors.textSecondary} />
-                      ) : null}
-                    </Pressable>
-                    {linearMembers.map((member) => {
-                      const label = member.displayName ?? member.name ?? member.email ?? member.id
-                      return (
-                        <Pressable
-                          key={member.id}
-                          style={styles.actionRow}
-                          disabled={mutatingStatus}
-                          onPress={() =>
-                            void updateLinearIssueMetadata(
-                              actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                              { assigneeId: member.id }
-                            )
-                          }
-                        >
-                          <Text style={styles.actionText}>{label}</Text>
-                          {actionItem.source.assignee?.id === member.id ? (
-                            <Check size={14} color={colors.textSecondary} />
-                          ) : null}
-                        </Pressable>
+                  <Pressable
+                    style={styles.actionRow}
+                    disabled={mutatingStatus}
+                    onPress={() => {
+                      setLinearStatusPickerItem(
+                        actionItem as Extract<TaskItem, { provider: 'linear' }>
                       )
-                    })}
-                  </View>
-                  <View style={styles.actionSeparator} />
-                  <View style={styles.linearStatesBlock}>
-                    <Text style={styles.linearStatesTitle}>Labels</Text>
-                    {linearLabels.length === 0 ? (
-                      <Text style={styles.emptyInlineText}>No labels available</Text>
-                    ) : (
-                      linearLabels.map((label) => {
-                        const current = new Set(actionItem.source.labelIds ?? [])
-                        const selected = current.has(label.id)
-                        return (
-                          <Pressable
-                            key={label.id}
-                            style={styles.actionRow}
-                            disabled={mutatingStatus}
-                            onPress={() => {
-                              const next = new Set(current)
-                              if (selected) next.delete(label.id)
-                              else next.add(label.id)
-                              void updateLinearIssueMetadata(
-                                actionItem as Extract<TaskItem, { provider: 'linear' }>,
-                                { labelIds: [...next] }
-                              )
-                            }}
-                          >
-                            <Text style={styles.actionText}>{label.name}</Text>
-                            {selected ? <Check size={14} color={colors.textSecondary} /> : null}
-                          </Pressable>
-                        )
-                      })
-                    )}
-                  </View>
+                    }}
+                  >
+                    <GitBranch size={16} color={colors.textPrimary} />
+                    <Text style={styles.actionText}>Change status</Text>
+                  </Pressable>
                 </>
               ) : null}
             </View>
@@ -13337,11 +12989,7 @@ export default function MobileTasksScreen() {
                 icon: GitBranch,
                 onPress: () => {
                   const item = mergeMethodTaskItem
-                  if (item.provider === 'github') {
-                    setPendingGitHubMerge({ item, method })
-                    return
-                  }
-                  void mergeHostedReview(item, method)
+                  setPendingHostedMerge({ item, method })
                 }
               }))
             : []
@@ -13349,17 +12997,19 @@ export default function MobileTasksScreen() {
         onClose={() => setMergeMethodTaskItem(null)}
       />
       <ConfirmModal
-        visible={pendingGitHubMerge != null}
-        title="Merge Pull Request"
-        message={pendingGitHubMerge ? getGitHubMergeConfirmMessage(pendingGitHubMerge) : undefined}
+        visible={pendingHostedMerge != null}
+        title={
+          pendingHostedMerge?.item.provider === 'gitlab' ? 'Merge Request' : 'Merge Pull Request'
+        }
+        message={pendingHostedMerge ? getHostedMergeConfirmMessage(pendingHostedMerge) : undefined}
         confirmLabel={
-          pendingGitHubMerge ? getHostedReviewMergeMethodLabel(pendingGitHubMerge.method) : 'Merge'
+          pendingHostedMerge ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method) : 'Merge'
         }
         onConfirm={() => {
-          if (!pendingGitHubMerge) return
-          void mergeHostedReview(pendingGitHubMerge.item, pendingGitHubMerge.method)
+          if (!pendingHostedMerge) return
+          void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
         }}
-        onCancel={() => setPendingGitHubMerge(null)}
+        onCancel={() => setPendingHostedMerge(null)}
       />
       <ConfirmModal
         visible={pendingProjectGitHubMerge != null}
@@ -13384,30 +13034,38 @@ export default function MobileTasksScreen() {
         onCancel={() => setPendingProjectGitHubMerge(null)}
       />
       <ConfirmModal
-        visible={pendingGitHubPrStateChange != null}
+        visible={pendingHostedStateChange != null}
         title={
-          pendingGitHubPrStateChange?.nextState === 'closed'
-            ? 'Close Pull Request'
-            : 'Reopen Pull Request'
+          pendingHostedStateChange
+            ? getHostedStateConfirmTitle(pendingHostedStateChange)
+            : 'Update Item'
         }
         message={
-          pendingGitHubPrStateChange
-            ? getGitHubPrStateConfirmMessage(pendingGitHubPrStateChange)
+          pendingHostedStateChange
+            ? getHostedStateConfirmMessage(pendingHostedStateChange)
             : undefined
         }
-        confirmLabel={pendingGitHubPrStateChange?.nextState === 'closed' ? 'Close PR' : 'Reopen PR'}
-        destructive={pendingGitHubPrStateChange?.nextState === 'closed'}
+        confirmLabel={
+          pendingHostedStateChange
+            ? getHostedStateConfirmLabel(pendingHostedStateChange)
+            : 'Confirm'
+        }
+        destructive={pendingHostedStateChange?.nextState === 'closed'}
         onConfirm={() => {
-          if (!pendingGitHubPrStateChange) return
-          if (pendingGitHubPrStateChange.source === 'task') {
-            void toggleGitHubStatus(pendingGitHubPrStateChange.item)
+          if (!pendingHostedStateChange) return
+          if (pendingHostedStateChange.source === 'task') {
+            if (pendingHostedStateChange.item.provider === 'gitlab') {
+              void toggleGitLabStatus(pendingHostedStateChange.item)
+              return
+            }
+            void toggleGitHubStatus(pendingHostedStateChange.item)
             return
           }
-          void mutateProjectRowIssueOrPr(pendingGitHubPrStateChange.row, {
-            state: pendingGitHubPrStateChange.nextState
+          void mutateProjectRowIssueOrPr(pendingHostedStateChange.row, {
+            state: pendingHostedStateChange.nextState
           })
         }}
-        onCancel={() => setPendingGitHubPrStateChange(null)}
+        onCancel={() => setPendingHostedStateChange(null)}
       />
     </SafeAreaView>
   )
@@ -14224,10 +13882,50 @@ const styles = StyleSheet.create({
   fieldButtonDisabled: {
     opacity: 0.55
   },
+  fieldButtonPlaceholder: {
+    color: colors.textMuted
+  },
   fieldButtonText: {
     flex: 1,
     fontSize: typography.bodySize,
     color: colors.textPrimary
+  },
+  workspaceCreateForm: {
+    gap: 0
+  },
+  workspaceCreateField: {
+    marginBottom: spacing.md
+  },
+  workspaceCreateLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs
+  },
+  workspaceCreateLabelHint: {
+    fontWeight: '400',
+    color: colors.textMuted
+  },
+  workspaceAdvancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs
+  },
+  workspaceAdvancedText: {
+    fontSize: typography.bodySize,
+    fontWeight: '500',
+    color: colors.textSecondary
+  },
+  workspaceCreateActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm
+  },
+  workspaceCreateButton: {
+    minWidth: 160,
+    paddingHorizontal: spacing.lg
   },
   sshConnectCard: {
     backgroundColor: colors.bgRaised,
@@ -14502,32 +14200,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary
   },
-  commentFilterRow: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgBase,
-    padding: 2,
-    gap: 2
-  },
-  commentFilterButton: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: radii.input - 2,
-    paddingVertical: spacing.xs
-  },
-  commentFilterButtonActive: {
-    backgroundColor: colors.bgRaised
-  },
-  commentFilterText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted
-  },
-  commentFilterTextActive: {
-    color: colors.textPrimary
-  },
   inlineActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -14616,6 +14288,9 @@ const styles = StyleSheet.create({
     lineHeight: 16
   },
   targetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -14624,6 +14299,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2
   },
   targetButtonText: {
+    flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize
   },
@@ -14693,6 +14369,33 @@ const styles = StyleSheet.create({
   commentInput: {
     minHeight: 72,
     marginTop: spacing.sm
+  },
+  commentComposer: {
+    position: 'relative',
+    marginTop: spacing.sm
+  },
+  commentComposerInput: {
+    minHeight: 40,
+    maxHeight: 120,
+    marginTop: 0,
+    paddingRight: 44
+  },
+  commentComposerSend: {
+    position: 'absolute',
+    right: spacing.xs,
+    bottom: spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: radii.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised
+  },
+  commentComposerSendPressed: {
+    opacity: 0.75
+  },
+  commentComposerSendDisabled: {
+    opacity: 0.5
   },
   replyInput: {
     minHeight: 48,

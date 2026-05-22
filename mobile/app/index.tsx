@@ -14,8 +14,7 @@ import {
   Plus,
   RefreshCw,
   PowerOff,
-  Edit3,
-  List
+  Edit3
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
@@ -580,6 +579,50 @@ export default function HomeScreen() {
     },
     [primaryConnectedHost, router]
   )
+  const renderTaskHomeCard = (inline = false) => (
+    <Pressable
+      disabled={!primaryConnectedHost}
+      style={({ pressed }) => [
+        styles.taskHomeCard,
+        inline && styles.taskHomeCardInline,
+        !primaryConnectedHost && styles.quickActionDisabled,
+        pressed && styles.hostCardPressed
+      ]}
+      onPress={() => {
+        openTasks()
+      }}
+    >
+      <View style={styles.taskHomeMain}>
+        <View
+          style={styles.taskHomeProviderRow}
+          accessibilityLabel={primaryTaskProviders
+            .map((provider) => TASK_PROVIDER_LABELS[provider])
+            .join(', ')}
+        >
+          {primaryTaskProviders.map((provider) => (
+            <Pressable
+              key={provider}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${TASK_PROVIDER_LABELS[provider]} tasks`}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.taskHomeProviderButton,
+                inline && styles.taskHomeProviderButtonInline,
+                pressed && styles.taskHomeProviderButtonPressed
+              ]}
+              onPress={(event) => {
+                event.stopPropagation()
+                openTasks(provider)
+              }}
+            >
+              <TaskProviderLogo provider={provider} size={22} color={colors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      <ChevronRight size={16} color={colors.textMuted} />
+    </Pressable>
+  )
 
   async function handleRename(newName: string) {
     if (!renameTarget) return
@@ -758,91 +801,61 @@ export default function HomeScreen() {
               {/* ─── Resume card ─── */}
               {resumeWorktree ? (
                 <>
-                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Resume</Text>
-                  <Pressable
-                    style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
-                    onPress={() =>
-                      router.push(
-                        `/h/${resumeWorktree.hostId}/session/${encodeURIComponent(resumeWorktree.worktree.worktreeId)}`
-                      )
-                    }
-                  >
-                    <View style={styles.resumeIcon}>
-                      <Terminal size={18} color={colors.textSecondary} />
+                  <View style={styles.resumeTaskRow}>
+                    <View style={styles.resumeTaskColumnResume}>
+                      <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Resume</Text>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.resumeCard,
+                          pressed && styles.hostCardPressed
+                        ]}
+                        onPress={() =>
+                          router.push(
+                            `/h/${resumeWorktree.hostId}/session/${encodeURIComponent(resumeWorktree.worktree.worktreeId)}`
+                          )
+                        }
+                      >
+                        <View style={styles.resumeIcon}>
+                          <Terminal size={18} color={colors.textSecondary} />
+                        </View>
+                        <View style={styles.resumeMain}>
+                          <Text style={styles.resumeTitle} numberOfLines={1}>
+                            {resumeWorktree.worktree.displayName}
+                          </Text>
+                          <View style={styles.resumeSub}>
+                            <View
+                              style={[
+                                styles.repoDot,
+                                { backgroundColor: repoColor(resumeWorktree.worktree.repo) }
+                              ]}
+                            />
+                            <Text style={styles.resumeSubText} numberOfLines={1}>
+                              {resumeWorktree.worktree.repo}
+                              {'  ·  '}
+                              {resumeWorktree.worktree.branch}
+                            </Text>
+                          </View>
+                        </View>
+                        <ChevronRight size={16} color={colors.textMuted} />
+                      </Pressable>
                     </View>
-                    <View style={styles.resumeMain}>
-                      <Text style={styles.resumeTitle} numberOfLines={1}>
-                        {resumeWorktree.worktree.displayName}
-                      </Text>
-                      <View style={styles.resumeSub}>
-                        <View
-                          style={[
-                            styles.repoDot,
-                            { backgroundColor: repoColor(resumeWorktree.worktree.repo) }
-                          ]}
-                        />
-                        <Text style={styles.resumeSubText} numberOfLines={1}>
-                          {resumeWorktree.worktree.repo}
-                          {'  ·  '}
-                          {resumeWorktree.worktree.branch}
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight size={16} color={colors.textMuted} />
-                  </Pressable>
-                </>
-              ) : null}
-
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Tasks</Text>
-              <Pressable
-                disabled={!primaryConnectedHost}
-                style={({ pressed }) => [
-                  styles.taskHomeCard,
-                  !primaryConnectedHost && styles.quickActionDisabled,
-                  pressed && styles.hostCardPressed
-                ]}
-                onPress={() => {
-                  openTasks()
-                }}
-              >
-                <View style={styles.taskHomeIcon}>
-                  <List size={18} color={colors.textSecondary} />
-                </View>
-                <View style={styles.taskHomeMain}>
-                  <View style={styles.taskHomeTitleRow}>
-                    <Text style={styles.taskHomeTitle}>Tasks</Text>
                     <View
-                      style={styles.taskHomeProviderRow}
-                      accessibilityLabel={primaryTaskProviders
-                        .map((provider) => TASK_PROVIDER_LABELS[provider])
-                        .join(', ')}
+                      style={[
+                        styles.resumeTaskColumnTasks,
+                        primaryTaskProviders.length >= 3 && styles.resumeTaskColumnTasksWide
+                      ]}
                     >
-                      {primaryTaskProviders.map((provider) => (
-                        <Pressable
-                          key={provider}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${TASK_PROVIDER_LABELS[provider]} tasks`}
-                          hitSlop={8}
-                          style={({ pressed }) => [
-                            styles.taskHomeProviderButton,
-                            pressed && styles.taskHomeProviderButtonPressed
-                          ]}
-                          onPress={(event) => {
-                            event.stopPropagation()
-                            openTasks(provider)
-                          }}
-                        >
-                          <TaskProviderLogo
-                            provider={provider}
-                            size={22}
-                            color={colors.textSecondary}
-                          />
-                        </Pressable>
-                      ))}
+                      <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Tasks</Text>
+                      {renderTaskHomeCard(true)}
                     </View>
                   </View>
-                </View>
-              </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Tasks</Text>
+                  {renderTaskHomeCard()}
+                </>
+              )}
 
               {/* ─── Account usage ─── */}
               {accountsHosts.length > 0 ? (
@@ -1229,6 +1242,22 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Resume card ─── */
+  resumeTaskRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm
+  },
+  resumeTaskColumnResume: {
+    flex: 7,
+    minWidth: 0
+  },
+  resumeTaskColumnTasks: {
+    flex: 3,
+    minWidth: 0
+  },
+  resumeTaskColumnTasksWide: {
+    flex: 4
+  },
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1283,38 +1312,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.card,
+    minHeight: 76,
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
     paddingVertical: 14
   },
-  taskHomeIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14
+  taskHomeCardInline: {
+    paddingHorizontal: spacing.sm
   },
   taskHomeMain: {
     flex: 1,
-    minWidth: 0,
-    marginRight: 0
-  },
-  taskHomeTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm
-  },
-  taskHomeTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
+    minWidth: 0
   },
   taskHomeProviderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 2
   },
   taskHomeProviderButton: {
@@ -1323,6 +1336,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.button
+  },
+  taskHomeProviderButtonInline: {
+    width: 30
   },
   taskHomeProviderButtonPressed: {
     backgroundColor: colors.bgRaised

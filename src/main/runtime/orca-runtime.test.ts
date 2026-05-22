@@ -13,6 +13,7 @@ import * as gitRunner from '../git/runner'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
+  getEffectiveHooksFromConfig,
   hasHooksFile,
   loadHooks,
   parseOrcaYaml,
@@ -148,9 +149,15 @@ vi.mock('../ipc/preflight', () => ({
 }))
 
 vi.mock('../hooks', () => ({
+  buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
+  buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`,
   createSetupRunnerScript: vi.fn(),
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
+  getSetupRunnerEnvVars: (_repo: never, worktreePath: string) => ({
+    ORCA_ROOT_PATH: '/remote/repo',
+    ORCA_WORKTREE_PATH: worktreePath
+  }),
   loadHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
   shouldRunSetupForCreate: vi
@@ -271,6 +278,7 @@ afterEach(() => {
   getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
   vi.mocked(createSetupRunnerScript).mockReset()
   vi.mocked(getEffectiveHooks).mockReset()
+  vi.mocked(getEffectiveHooksFromConfig).mockReset()
   vi.mocked(loadHooks).mockReset()
   vi.mocked(hasHooksFile).mockReset()
   vi.mocked(parseOrcaYaml).mockReset()
@@ -278,6 +286,7 @@ afterEach(() => {
   vi.mocked(shouldRunSetupForCreate).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
+  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
   vi.mocked(loadHooks).mockReturnValue(null)
   vi.mocked(hasHooksFile).mockReturnValue(false)
   vi.mocked(parseOrcaYaml).mockReturnValue(null)
@@ -1145,6 +1154,142 @@ describe('OrcaRuntimeService', () => {
     })
     expect(addWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('launches SSH setup terminals for runtime task-created worktrees', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(addWorktree).mockClear()
+    const created = {
+      path: '/remote/mobile-setup',
+      head: 'def',
+      branch: 'refs/heads/mobile-setup',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const provider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: 'Remote User\n', stderr: '' }
+        }
+        if (args[0] === 'branch') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          return {
+            stdout: '/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh\n',
+            stderr: ''
+          }
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([created])
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
+      createDir: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    }
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
+      scripts: { setup: 'pnpm worktree:setup' }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-remote-agent' })
+      .mockResolvedValueOnce({ id: 'pty-remote-setup' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote' })
+    registerSshGitProvider('ssh-1', provider as never)
+    registerSshFilesystemProvider('ssh-1', fsProvider as never)
+    getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'mobile-setup',
+        setupDecision: 'run',
+        startup: { command: 'claude' }
+      })
+
+      expect(result.setup).toMatchObject({
+        runnerScriptPath: '/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh'
+      })
+      expect(spawn).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          cwd: '/remote/mobile-setup',
+          command: 'claude',
+          worktreeId: result.worktree.id
+        })
+      )
+      expect(spawn).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          cwd: '/remote/mobile-setup',
+          command: 'bash /remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh',
+          worktreeId: result.worktree.id
+        })
+      )
+      expect(revealTerminalSession).toHaveBeenLastCalledWith(
+        result.worktree.id,
+        expect.objectContaining({
+          ptyId: 'pty-remote-setup',
+          title: 'Setup',
+          activate: false
+        })
+      )
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+      unregisterSshFilesystemProvider('ssh-1')
+    }
   })
 
   it('removes SSH-backed runtime worktrees through the SSH git provider', async () => {
