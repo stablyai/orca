@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
+import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -46,14 +47,16 @@ function makeAgent(
 
 function renderRow(agent: DashboardAgentRowData): string {
   return renderToStaticMarkup(
-    <DashboardAgentRow
-      agent={agent}
-      onDismiss={vi.fn()}
-      onActivate={vi.fn()}
-      now={NOW}
-      hideIdentityIcon
-      hideExpand
-    />
+    <TooltipProvider>
+      <DashboardAgentRow
+        agent={agent}
+        onDismiss={vi.fn()}
+        onActivate={vi.fn()}
+        now={NOW}
+        hideIdentityIcon
+        hideExpand
+      />
+    </TooltipProvider>
   )
 }
 
@@ -114,24 +117,26 @@ describe('DashboardAgentRow', () => {
 
   it('keeps each row hover boundary inside an anonymous ancestor group', () => {
     const markup = renderToStaticMarkup(
-      <div className="group">
-        <DashboardAgentRow
-          agent={makeAgent({ paneKey: 'tab-1:leaf-1' })}
-          onDismiss={vi.fn()}
-          onActivate={vi.fn()}
-          now={NOW}
-          hideIdentityIcon
-          hideExpand
-        />
-        <DashboardAgentRow
-          agent={makeAgent({ paneKey: 'tab-1:leaf-2' })}
-          onDismiss={vi.fn()}
-          onActivate={vi.fn()}
-          now={NOW}
-          hideIdentityIcon
-          hideExpand
-        />
-      </div>
+      <TooltipProvider>
+        <div className="group">
+          <DashboardAgentRow
+            agent={makeAgent({ paneKey: 'tab-1:leaf-1' })}
+            onDismiss={vi.fn()}
+            onActivate={vi.fn()}
+            now={NOW}
+            hideIdentityIcon
+            hideExpand
+          />
+          <DashboardAgentRow
+            agent={makeAgent({ paneKey: 'tab-1:leaf-2' })}
+            onDismiss={vi.fn()}
+            onActivate={vi.fn()}
+            now={NOW}
+            hideIdentityIcon
+            hideExpand
+          />
+        </div>
+      </TooltipProvider>
     )
     const classes = hoverSwapClasses(markup)
 
@@ -159,7 +164,8 @@ describe('DashboardAgentRow', () => {
 
     // Why: interrupted now lives in the leading state column. The old
     // right-side text badge should not come back.
-    expect(markup).toContain('title="Interrupted"')
+    expect(markup).toContain('data-slot="tooltip-trigger"')
+    expect(markup).toContain('aria-label="Interrupted by user"')
     expect(markup).toContain('bg-red-500')
     expect(markup).not.toContain('lucide-circle-check')
     expect(markup).not.toContain('>interrupted<')

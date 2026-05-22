@@ -5,6 +5,7 @@ import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -57,6 +58,13 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
     }
   }
   return null
+}
+
+function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {
+  if (agent.entry.interrupted === true) {
+    return 'Interrupted by user'
+  }
+  return agentStateLabel(dotState)
 }
 
 type Props = {
@@ -180,6 +188,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // leading state column; rendering it as right-side text competes with the
   // timestamp and makes the row read like the old design.
   const dotState: AgentDotState = agent.entry.interrupted ? 'interrupted' : asDotState(agent.state)
+  const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
 
   // Why: always show the chevron to keep the row's right edge stable — a
   // conditional control would appear/disappear as agent content grows and
@@ -227,12 +236,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             bar + right-side dot combo, which double-encoded state. Size md
             gives the glyph enough presence for the leading slot without
             overpowering the prompt text. */}
-        <span
-          className="inline-flex shrink-0 items-center justify-center"
-          title={agentStateLabel(dotState)}
-        >
-          <AgentStateDot state={dotState} size={stateDotSize} />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex shrink-0 items-center justify-center"
+              aria-label={dotTooltipLabel}
+            >
+              <AgentStateDot state={dotState} size={stateDotSize} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {dotTooltipLabel}
+          </TooltipContent>
+        </Tooltip>
         {/* Why: identity (Claude/Codex/Gemini/…) sits inline with the prompt
             so the reader gets "state → who → what they said" left-to-right
             on the top row. The sub-rows (tool step, assistant response) are
