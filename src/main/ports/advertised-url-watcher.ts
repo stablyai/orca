@@ -263,6 +263,7 @@ export class AdvertisedUrlWatcher {
   private readonly cache = new Map<CacheKey, AdvertisedUrl>()
   private readonly scanSnapshots = new Map<string, Map<number, number | undefined>>()
   private readonly validationBaselines = new Map<CacheKey, ListenerScanState>()
+  private readonly startupAbsentAllowances = new Set<CacheKey>()
   private readonly listeners = new Set<(event: AdvertisedUrlChangeEvent) => void>()
   private readonly now: () => number
   private readonly maxCacheEntries: number
@@ -301,6 +302,7 @@ export class AdvertisedUrlWatcher {
       // so PTY teardown is the only reliable expiry signal for that cache row.
       this.cache.delete(key)
       this.validationBaselines.delete(key)
+      this.startupAbsentAllowances.delete(key)
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
       removedEvents.push({ worktreeId, port: entry.port })
     }
@@ -387,8 +389,19 @@ export class AdvertisedUrlWatcher {
       const baseline = this.currentScanStateFor(worktreeId, port)
       if (baseline) {
         this.validationBaselines.set(key, baseline)
+        if (baseline.kind === 'absent') {
+          // Why: the advertised URL can arrive between the process printing its
+          // banner and the scanner seeing the listener; allow one settling scan.
+          this.startupAbsentAllowances.add(key)
+        } else {
+          this.startupAbsentAllowances.delete(key)
+        }
       } else {
         this.validationBaselines.delete(key)
+        // Why: PTY output can arrive before the scanner has produced any
+        // snapshot for the worktree; give that startup race the same one-scan
+        // absent allowance as a known-absent baseline.
+        this.startupAbsentAllowances.add(key)
       }
       const changedEvents = this.enforceCacheLimit()
       if (!existing || existing.origin !== candidate.origin) {
@@ -427,6 +440,7 @@ export class AdvertisedUrlWatcher {
       const [key, entry] = entries[i]
       this.cache.delete(key)
       this.validationBaselines.delete(key)
+      this.startupAbsentAllowances.delete(key)
       removedEvents.push({ worktreeId: worktreeIdFromCacheKey(key, entry.port), port: entry.port })
     }
     return removedEvents
@@ -447,6 +461,7 @@ export class AdvertisedUrlWatcher {
         // new listener may be unrelated to the captured banner.
         this.cache.delete(key)
         this.validationBaselines.delete(key)
+        this.startupAbsentAllowances.delete(key)
         this.emitChange({ worktreeId, port })
         return undefined
       }
@@ -458,6 +473,7 @@ export class AdvertisedUrlWatcher {
   invalidate(worktreeId: string, port: number): void {
     const key = cacheKey(worktreeId, port)
     this.validationBaselines.delete(key)
+    this.startupAbsentAllowances.delete(key)
     if (this.cache.delete(key)) {
       this.emitChange({ worktreeId, port })
     }
@@ -486,6 +502,7 @@ export class AdvertisedUrlWatcher {
       if (this.shouldEvictAfterScan(key, entry, current)) {
         this.cache.delete(key)
         this.validationBaselines.delete(key)
+        this.startupAbsentAllowances.delete(key)
         removedEvents.push({ worktreeId, port: entry.port })
       } else if (entry.validatedListenerPid === undefined) {
         this.validationBaselines.set(key, current)
@@ -505,7 +522,15 @@ export class AdvertisedUrlWatcher {
     entry: AdvertisedUrl,
     current: ListenerScanState
   ): boolean {
+    const baseline = this.validationBaselines.get(key)
     if (current.kind === 'absent') {
+      if (
+        entry.validatedListenerPid === undefined &&
+        baseline?.kind !== 'present' &&
+        this.startupAbsentAllowances.delete(key)
+      ) {
+        return false
+      }
       return true
     }
     if (
@@ -515,8 +540,8 @@ export class AdvertisedUrlWatcher {
     ) {
       return true
     }
-    const baseline = this.validationBaselines.get(key)
     if (baseline?.kind === 'absent' && current.kind === 'present') {
+      this.startupAbsentAllowances.delete(key)
       // Why: dev servers can print their URL before the OS listener scan sees
       // the port. Let that first present scan validate the startup banner.
       return false
@@ -558,6 +583,7 @@ export class AdvertisedUrlWatcher {
         ) {
           this.cache.delete(key)
           this.validationBaselines.delete(key)
+          this.startupAbsentAllowances.delete(key)
           this.emitChange({ worktreeId, port })
           continue
         }
@@ -569,6 +595,7 @@ export class AdvertisedUrlWatcher {
     if (best && currentListenerPid !== undefined && best.entry.validatedListenerPid === undefined) {
       best.entry.validatedListenerPid = currentListenerPid
       this.validationBaselines.delete(cacheKey(best.worktreeId, port))
+      this.startupAbsentAllowances.delete(cacheKey(best.worktreeId, port))
     }
     return best?.entry
   }
@@ -580,6 +607,7 @@ export class AdvertisedUrlWatcher {
     this.cache.clear()
     this.scanSnapshots.clear()
     this.validationBaselines.clear()
+    this.startupAbsentAllowances.clear()
   }
 
   private currentScanStateFor(worktreeId: string, port: number): ListenerScanState | undefined {

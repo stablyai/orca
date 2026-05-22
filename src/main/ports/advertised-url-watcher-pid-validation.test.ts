@@ -125,16 +125,50 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
   })
 
-  it('keeps a startup URL when the previous scan had not seen the listener yet', () => {
+  it('keeps a startup URL through one absent settling scan before the listener appears', () => {
     const watcher = bindFresh()
 
     watcher.reconcileScan([WORKTREE], [])
     watcher.ingest(PTY, 'Nautilus: http://localhost:3002/\n')
+    watcher.reconcileScan([WORKTREE], [])
     watcher.reconcileScan([WORKTREE], [{ port: 3002, pid: 4242 }])
 
     const advertised = watcher.lookup(WORKTREE, 3002, 4242)
     expect(advertised?.origin).toBe('http://localhost:3002')
     expect(advertised?.validatedListenerPid).toBe(4242)
+  })
+
+  it('keeps a startup URL with unknown baseline through one absent settling scan', () => {
+    const watcher = bindFresh()
+
+    watcher.ingest(PTY, 'Nautilus: http://localhost:3002/\n')
+    watcher.reconcileScan([WORKTREE], [])
+    watcher.reconcileScan([WORKTREE], [{ port: 3002, pid: 4242 }])
+
+    const advertised = watcher.lookup(WORKTREE, 3002, 4242)
+    expect(advertised?.origin).toBe('http://localhost:3002')
+    expect(advertised?.validatedListenerPid).toBe(4242)
+  })
+
+  it('evicts a startup URL after the listener remains absent past the settling scan', () => {
+    const watcher = bindFresh()
+
+    watcher.reconcileScan([WORKTREE], [])
+    watcher.ingest(PTY, 'Nautilus: http://localhost:3002/\n')
+    watcher.reconcileScan([WORKTREE], [])
+    watcher.reconcileScan([WORKTREE], [])
+
+    expect(watcher.lookup(WORKTREE, 3002)).toBeUndefined()
+  })
+
+  it('evicts a startup URL with unknown baseline after a second absent scan', () => {
+    const watcher = bindFresh()
+
+    watcher.ingest(PTY, 'Nautilus: http://localhost:3002/\n')
+    watcher.reconcileScan([WORKTREE], [])
+    watcher.reconcileScan([WORKTREE], [])
+
+    expect(watcher.lookup(WORKTREE, 3002)).toBeUndefined()
   })
 
   it('evicts an unvalidated URL when scanner observes a different PID first', () => {

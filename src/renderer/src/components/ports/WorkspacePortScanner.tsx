@@ -116,7 +116,12 @@ export function WorkspacePortScanner(): null {
         }
         // Why: some dev servers print their URL just before the listener is
         // visible to lsof/netstat. One quiet settle scan catches that startup race.
-        retryTimer = setTimeout(() => void refresh(), WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS)
+        retryTimer = setTimeout(() => {
+          if (disposed || sequence !== eventSequence || !isWindowVisible()) {
+            return
+          }
+          void refresh()
+        }, WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS)
       })
     })
 
