@@ -108,7 +108,6 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import { useActiveTerminalTabs } from './store/selectors'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
@@ -308,7 +307,7 @@ function App(): React.JSX.Element {
   // that remount so the left workspace list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
-  const tabs = useActiveTerminalTabs()
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const floatingUnifiedTabCount = useAppStore(
     (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0
   )
@@ -964,6 +963,7 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
+  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const hasTabBar = tabs.length >= 2
   const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
   const activeTabCanExpand = effectiveActiveTabId

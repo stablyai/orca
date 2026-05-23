@@ -64,7 +64,6 @@ import {
   getMaximizedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
-import { getFloatingTerminalOpenFiles } from './floating-terminal-open-files'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
@@ -90,19 +89,11 @@ export function FloatingTerminalPanel({
   open,
   onOpenChange
 }: FloatingTerminalPanelProps): React.JSX.Element | null {
-  const tabs = useAppStore(
-    (s) => s.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
-  )
-  const browserTabs = useAppStore(
-    (s) => s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
-  )
-  const groups = useAppStore(
-    (s) => s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_GROUPS
-  )
-  const unifiedTabs = useAppStore(
-    (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
-  )
-  const floatingFiles = useAppStore((s) => getFloatingTerminalOpenFiles(s.openFiles))
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
+  const openFiles = useAppStore((s) => s.openFiles)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const createTab = useAppStore((s) => s.createTab)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -141,6 +132,14 @@ export function FloatingTerminalPanel({
     top: number
   } | null>(null)
 
+  const tabs = tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
+  const browserTabs = browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
+  const groups = groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_GROUPS
+  const unifiedTabs = unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
+  const floatingFiles = useMemo(
+    () => openFiles.filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID),
+    [openFiles]
+  )
   const activeGroup = useMemo(
     () =>
       groups.find((group) => group.activeTabId != null) ??
@@ -243,7 +242,7 @@ export function FloatingTerminalPanel({
     handleSaveDialogSave,
     handleSaveDialogDiscard,
     handleSaveDialogCancel
-  } = useTerminalSaveDialog({ openFiles: floatingFiles, closeFile, markFileDirty })
+  } = useTerminalSaveDialog({ openFiles, closeFile, markFileDirty })
 
   const getNextQueuedEditorClose = useCallback((): string | null => {
     while (pendingEditorCloseQueueRef.current.length > 0) {
