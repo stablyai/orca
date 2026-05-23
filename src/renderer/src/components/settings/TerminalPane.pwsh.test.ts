@@ -80,10 +80,34 @@ vi.mock('../ui/toggle-group', () => ({
 }))
 
 vi.mock('./SettingsFormControls', () => ({
+  SettingsRow: function SettingsRow({
+    description,
+    control,
+    children
+  }: {
+    description?: unknown
+    control?: unknown
+    children?: unknown
+  }) {
+    return [description, control, children]
+  },
   NumberField: function NumberField() {
     return null
   },
   FontAutocomplete: function FontAutocomplete() {
+    return null
+  },
+  SettingsSegmentedControl: function SettingsSegmentedControl({
+    options
+  }: {
+    options?: readonly { label: string }[]
+  }) {
+    return options?.map((option) => option.label) ?? null
+  },
+  SettingsSubsectionHeader: function SettingsSubsectionHeader() {
+    return null
+  },
+  SettingsSwitchRow: function SettingsSwitchRow() {
     return null
   }
 }))
@@ -140,6 +164,15 @@ type ReactElementLike = {
   props: Record<string, unknown>
 }
 
+function getPropNodes(el: ReactElementLike): unknown[] {
+  const nodes = [el.props?.children, el.props?.description, el.props?.control]
+  const options = el.props?.options
+  if (Array.isArray(options)) {
+    nodes.push(options.map((option) => (option as { label?: unknown }).label))
+  }
+  return nodes
+}
+
 function collectText(node: unknown): string {
   if (node == null) {
     return ''
@@ -154,7 +187,7 @@ function collectText(node: unknown): string {
     return node.map(collectText).join('')
   }
   const el = node as ReactElementLike
-  return collectText(el.props?.children)
+  return getPropNodes(el).map(collectText).join('')
 }
 
 function findAnchorByText(node: unknown, text: string): ReactElementLike | null {
@@ -178,7 +211,13 @@ function findAnchorByText(node: unknown, text: string): ReactElementLike | null 
   if (typeName === 'a' && collectText(el.props.children).includes(text)) {
     return el
   }
-  return findAnchorByText(el.props?.children, text)
+  for (const child of getPropNodes(el)) {
+    const found = findAnchorByText(child, text)
+    if (found) {
+      return found
+    }
+  }
+  return null
 }
 
 describe('TerminalPane PowerShell version setting', () => {
