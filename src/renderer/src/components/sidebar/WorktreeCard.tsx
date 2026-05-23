@@ -11,7 +11,6 @@ import {
   ChevronDown,
   GitMerge,
   LoaderCircle,
-  Moon,
   Server,
   ServerOff,
   Trash2,
@@ -47,14 +46,12 @@ import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { runWorktreeDelete } from './delete-worktree-flow'
-import { runSleepWorktree } from './sleep-worktree-flow'
-import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
-import { useMacOptionKeyPressed } from './mac-option-key-state'
 
 type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isCurrentWorktree?: boolean
   isActiveSurface?: boolean
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
@@ -90,6 +87,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
+  isCurrentWorktree = isActive,
   isActiveSurface = isActive,
   isMultiSelected = false,
   selectedWorktrees,
@@ -162,7 +160,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const isMacOptionPressed = useMacOptionKeyPressed()
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -414,30 +411,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree.id, worktree.isUnread, updateWorktreeMeta]
   )
-  const quickActionKind = getWorkspaceQuickActionKind({
-    hasActiveActivity,
-    isDeletable: !worktree.isMainWorktree,
-    isInactive: !hasActiveActivity,
-    isMacOptionPressed
-  })
+  // Why: deleting the active/current workspace or one with live activity is a
+  // disruptive hover action; keep the quick action delete-only and passive.
+  const showDeleteQuickAction =
+    !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
-      if (quickActionKind === 'sleep') {
-        void runSleepWorktree(worktree.id)
-      } else if (quickActionKind === 'delete') {
+      if (showDeleteQuickAction) {
         runWorktreeDelete(worktree.id)
       }
     },
-    [quickActionKind, worktree.id]
+    [showDeleteQuickAction, worktree.id]
   )
-  const quickActionLabel =
-    quickActionKind === 'sleep'
-      ? 'Sleep workspace'
-      : quickActionKind === 'delete'
-        ? 'Delete workspace'
-        : ''
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
   const childWorkspaceLabel = `${lineageChildCount} child ${
@@ -696,7 +683,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {quickActionKind && !isDeleting && (
+          {showDeleteQuickAction && !isDeleting && (
             <div className="ml-auto flex shrink-0 items-center justify-center pr-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -708,21 +695,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     className={cn(
                       'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
                       'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                      quickActionKind === 'delete'
-                        ? 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
-                        : 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
+                      'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
                     )}
-                    aria-label={quickActionLabel}
+                    aria-label="Delete workspace"
                   >
-                    {quickActionKind === 'delete' ? (
-                      <Trash2 className="size-3.5" />
-                    ) : (
-                      <Moon className="size-3.5" />
-                    )}
+                    <Trash2 className="size-3.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {quickActionKind === 'delete' ? 'Delete workspace' : 'Sleep workspace'}
+                  Delete workspace
                 </TooltipContent>
               </Tooltip>
             </div>

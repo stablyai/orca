@@ -215,6 +215,7 @@ const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
   activeWorktreeId: string | null
+  currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
   repoGroupOrdering: RepoGroupOrdering
   toggleGroup: (key: string) => void
@@ -507,6 +508,7 @@ function getVirtualRowKey(element: Element): string | null {
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
+  currentWorktreeId,
   groupBy,
   repoGroupOrdering,
   toggleGroup,
@@ -2108,6 +2110,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     worktree={itemRow.worktree}
                     repo={itemRow.repo}
                     isActive={activeWorktreeId === itemRow.worktree.id}
+                    isCurrentWorktree={currentWorktreeId === itemRow.worktree.id}
                     // Why: a child-active parent should look active without
                     // running active-card side effects such as SSH reconnect UI.
                     isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
@@ -3022,6 +3025,7 @@ const WorktreeList = React.memo(function WorktreeList({
       key={viewportResetKey}
       rows={rows}
       activeWorktreeId={selectedSidebarWorktreeId}
+      currentWorktreeId={activeWorktreeId}
       groupBy={groupBy}
       repoGroupOrdering={repoGroupOrdering}
       toggleGroup={toggleGroup}

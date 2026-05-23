@@ -149,7 +149,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('aria-label="Delete workspace"')
   })
 
-  it('shows sleep as the top-right quick action for a workspace with live activity', () => {
+  it('does not replace sleep with delete for a workspace with live activity', () => {
     const worktree = makeWorktree()
     tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
     ptyIdsByTabId = { 'tab-1': ['pty-1'] }
@@ -158,6 +158,30 @@ describe('WorktreeCard quick actions', () => {
       <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show sleep as the top-right quick action for an active workspace', () => {
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show delete when the workspace is current but not selected in the sidebar', () => {
+    const worktree = makeWorktree()
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} isCurrentWorktree />
+    )
+
+    expect(markup).not.toContain('aria-label="Delete workspace"')
   })
 })
