@@ -52,7 +52,7 @@ import {
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import {
   clearHiddenTerminalOutput,
-  isHiddenTerminalHydrating,
+  isHiddenTerminalHydratingForPty,
   queueHiddenTerminalOutput
 } from './hidden-terminal-output-state'
 
@@ -1228,6 +1228,13 @@ export function connectPanePty(
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
+    const shouldQueueOutputForPty = (ptyId: string): boolean => {
+      // Why: hidden hydration belongs to a specific PTY lease. If a visible
+      // pane rebinds while an old snapshot is in flight, new PTY bytes must
+      // paint immediately; no later visibility effect will drain that queue.
+      return !deps.isVisibleRef.current || isHiddenTerminalHydratingForPty(pane.terminal, ptyId)
+    }
+
     // The replay path uses the guard so xterm auto-replies to embedded query
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
@@ -1239,19 +1246,17 @@ export function connectPanePty(
       if (!data) {
         return
       }
-      if (!deps.isVisibleRef.current || isHiddenTerminalHydrating(pane.terminal)) {
-        const ptyId = transport.getPtyId()
-        if (ptyId) {
-          if (options.replaceHiddenQueue) {
-            clearHiddenTerminalOutput(pane.terminal)
-          }
-          if (terminalOutputPrefersDomRenderer(data)) {
-            manager.markPaneHasComplexScriptOutput(pane.id)
-          }
-          recordTerminalOutput(pane.terminal)
-          queueHiddenTerminalOutput(pane.terminal, ptyId, data)
-          return
+      const ptyId = transport.getPtyId()
+      if (ptyId && shouldQueueOutputForPty(ptyId)) {
+        if (options.replaceHiddenQueue) {
+          clearHiddenTerminalOutput(pane.terminal)
         }
+        if (terminalOutputPrefersDomRenderer(data)) {
+          manager.markPaneHasComplexScriptOutput(pane.id)
+        }
+        recordTerminalOutput(pane.terminal)
+        queueHiddenTerminalOutput(pane.terminal, ptyId, data)
+        return
       }
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
@@ -1273,16 +1278,14 @@ export function connectPanePty(
 
     const dataCallback = (data: string): void => {
       commandLifecycle.handlePtyData(data)
-      if (!deps.isVisibleRef.current || isHiddenTerminalHydrating(pane.terminal)) {
-        const ptyId = transport.getPtyId()
-        if (ptyId) {
-          if (terminalOutputPrefersDomRenderer(data)) {
-            manager.markPaneHasComplexScriptOutput(pane.id)
-          }
-          recordTerminalOutput(pane.terminal)
-          queueHiddenTerminalOutput(pane.terminal, ptyId, data)
-          return
+      const ptyId = transport.getPtyId()
+      if (ptyId && shouldQueueOutputForPty(ptyId)) {
+        if (terminalOutputPrefersDomRenderer(data)) {
+          manager.markPaneHasComplexScriptOutput(pane.id)
         }
+        recordTerminalOutput(pane.terminal)
+        queueHiddenTerminalOutput(pane.terminal, ptyId, data)
+        return
       }
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only

@@ -204,8 +204,12 @@ export function cancelHiddenTerminalHydration(
   state.needsHydration = state.chunks.length > 0
 }
 
-export function isHiddenTerminalHydrating(terminal: TerminalOutputTarget): boolean {
-  return hiddenStateByTerminal.get(terminal)?.hydrating === true
+export function isHiddenTerminalHydratingForPty(
+  terminal: TerminalOutputTarget,
+  ptyId: string
+): boolean {
+  const state = hiddenStateByTerminal.get(terminal)
+  return state?.ptyId === ptyId && state.hydrating === true
 }
 
 export function clearHiddenTerminalOutput(terminal: TerminalOutputTarget): void {

@@ -2318,6 +2318,71 @@ describe('connectPanePty', () => {
     expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(1)
   })
 
+  it('writes visible PTY bytes after a rebind while stale hydration is in flight', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { getTerminalOutputEpoch } = await import('@/lib/pane-manager/pane-scroll')
+    const { consumeHiddenTerminalHydration, queueHiddenTerminalOutput } =
+      await import('./hidden-terminal-output-state')
+    let currentPtyId = 'pty-old'
+    const transport = createMockTransport(currentPtyId)
+    transport.getPtyId.mockImplementation(() => currentPtyId)
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return currentPtyId
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    queueHiddenTerminalOutput(pane.terminal, 'pty-old', 'hidden-before-reveal')
+    consumeHiddenTerminalHydration(pane.terminal)
+    const deps = createDeps({
+      isVisibleRef: { current: true }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    currentPtyId = 'pty-new'
+    capturedDataCallback.current?.('new-pty-output\r\n')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('new-pty-output\r\n', expect.any(Function))
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(1)
+  })
+
+  it('writes visible replay bytes after a rebind while stale hydration is in flight', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { consumeHiddenTerminalHydration, queueHiddenTerminalOutput } =
+      await import('./hidden-terminal-output-state')
+    let currentPtyId = 'pty-old'
+    const transport = createMockTransport(currentPtyId)
+    transport.getPtyId.mockImplementation(() => currentPtyId)
+    const capturedReplayCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return currentPtyId
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    queueHiddenTerminalOutput(pane.terminal, 'pty-old', 'hidden-before-reveal')
+    consumeHiddenTerminalHydration(pane.terminal)
+    const deps = createDeps({
+      isVisibleRef: { current: true }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedReplayCallback.current).not.toBeNull()
+    currentPtyId = 'pty-new'
+    capturedReplayCallback.current?.('new-replay-output')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith('new-replay-output', expect.any(Function))
+  })
+
   it('writes visible split-pane PTY bytes immediately even when the tab is not active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
