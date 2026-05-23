@@ -1232,7 +1232,27 @@ export function connectPanePty(
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
-    const writeReplayData = (data: string): void => {
+    const writeReplayData = (
+      data: string,
+      options: { replaceHiddenQueue?: boolean } = {}
+    ): void => {
+      if (!data) {
+        return
+      }
+      if (!deps.isVisibleRef.current || isHiddenTerminalHydrating(pane.terminal)) {
+        const ptyId = transport.getPtyId()
+        if (ptyId) {
+          if (options.replaceHiddenQueue) {
+            clearHiddenTerminalOutput(pane.terminal)
+          }
+          if (terminalOutputPrefersDomRenderer(data)) {
+            manager.markPaneHasComplexScriptOutput(pane.id)
+          }
+          recordTerminalOutput(pane.terminal)
+          queueHiddenTerminalOutput(pane.terminal, ptyId, data)
+          return
+        }
+      }
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
@@ -1247,7 +1267,7 @@ export function connectPanePty(
       // Relay replay buffer holds the last 100 KB of output, which may
       // overlap with content already rendered in xterm before the
       // disconnect. Clear first to prevent duplication on SSH reconnect.
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      writeReplayData('\x1b[2J\x1b[3J\x1b[H', { replaceHiddenQueue: true })
       writeReplayData(data)
     }
 
@@ -1259,6 +1279,7 @@ export function connectPanePty(
           if (terminalOutputPrefersDomRenderer(data)) {
             manager.markPaneHasComplexScriptOutput(pane.id)
           }
+          recordTerminalOutput(pane.terminal)
           queueHiddenTerminalOutput(pane.terminal, ptyId, data)
           return
         }
@@ -1357,7 +1378,7 @@ export function connectPanePty(
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
-        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H', { replaceHiddenQueue: true })
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop stale cursor/focus state that should not leak
@@ -1375,7 +1396,7 @@ export function connectPanePty(
         // already hold pre-disconnect content; clear first to avoid
         // duplication. The reattach reset prevents stale cursor/focus mode
         // bits in the replayed data from leaking into the restored terminal.
-        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H', { replaceHiddenQueue: true })
         writeReplayData(connectResult.replay)
         writeReplayData(POST_REPLAY_REATTACH_RESET)
         if (connectResult.coldRestore) {
@@ -1391,7 +1412,7 @@ export function connectPanePty(
         // may contain query sequences the previous agent CLI emitted;
         // writing them through xterm.write would trigger auto-replies that
         // land in the new shell's stdin. See replay-guard.ts.
-        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H', { replaceHiddenQueue: true })
         writeReplayData(connectResult.coldRestore.scrollback)
         writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
         // Cold-restore means the daemon lost the session and spawned a

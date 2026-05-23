@@ -71,6 +71,7 @@ type StoreState = {
 
 type ConnectCallbacks = {
   onData?: (data: string) => void
+  onReplayData?: (data: string) => void
   onError?: (msg: string) => void
 }
 
@@ -2144,6 +2145,46 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
   })
 
+  it('does not paint hidden reattach snapshots into xterm', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { consumeHiddenTerminalHydration } = await import('./hidden-terminal-output-state')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: 'snapshot-payload',
+          replay: 'replay-payload'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('snapshot-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
+    expect(consumeHiddenTerminalHydration(pane.terminal)?.fallbackData).toBe(
+      `\x1b[2J\x1b[3J\x1b[Hsnapshot-payload${POST_REPLAY_REATTACH_RESET}`
+    )
+  })
+
   it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -2188,6 +2229,7 @@ describe('connectPanePty', () => {
   // state is restored from the runtime headless model when the pane is shown.
   it('does not write non-visible PTY bytes into xterm', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const { getTerminalOutputEpoch } = await import('@/lib/pane-manager/pane-scroll')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -2206,13 +2248,48 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(0)
     capturedDataCallback.current?.('hello\r\n')
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(1)
+  })
+
+  it('does not write non-visible replay bytes into xterm', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { getTerminalOutputEpoch } = await import('@/lib/pane-manager/pane-scroll')
+    const { consumeHiddenTerminalHydration } = await import('./hidden-terminal-output-state')
+    const transport = createMockTransport('pty-id')
+    const capturedReplayCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedReplayCallback.current).not.toBeNull()
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(0)
+    capturedReplayCallback.current?.('restored-output')
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('restored-output', expect.any(Function))
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(2)
+    expect(consumeHiddenTerminalHydration(pane.terminal)?.fallbackData).toBe(
+      '\x1b[2J\x1b[3J\x1b[Hrestored-output'
+    )
   })
 
   it('keeps visible PTY bytes off xterm while hidden hydration is in flight', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const { getTerminalOutputEpoch } = await import('@/lib/pane-manager/pane-scroll')
     const { consumeHiddenTerminalHydration, queueHiddenTerminalOutput } =
       await import('./hidden-terminal-output-state')
     const transport = createMockTransport('pty-id')
@@ -2234,9 +2311,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(0)
     capturedDataCallback.current?.('arrived-during-hydration\r\n')
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith('arrived-during-hydration\r\n')
+    expect(getTerminalOutputEpoch(pane.terminal as never)).toBe(1)
   })
 
   it('writes visible split-pane PTY bytes immediately even when the tab is not active', async () => {
