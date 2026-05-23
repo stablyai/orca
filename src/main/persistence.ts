@@ -2023,6 +2023,7 @@ export class Store {
         Repo,
         | 'displayName'
         | 'badgeColor'
+        | 'repoIcon'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'kind'

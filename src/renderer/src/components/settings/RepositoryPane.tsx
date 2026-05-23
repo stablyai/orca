@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -15,7 +14,8 @@ import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
-import { getRepositoryBadgeColorSectionId } from './repository-settings-targets'
+import { getRepositoryIconSectionId } from './repository-settings-targets'
+import { RepositoryIconPicker } from './RepositoryIconPicker'
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -36,9 +36,9 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
       keywords: [repo.displayName, repo.path, 'repository name']
     },
     {
-      title: 'Badge Color',
-      description: 'Repo color used in the sidebar and tabs.',
-      keywords: [repo.displayName, 'color', 'badge']
+      title: 'Repo Icon',
+      description: 'Repo icon and color used in the sidebar and tabs.',
+      keywords: [repo.displayName, 'icon', 'color', 'badge', 'emoji', 'favicon']
     },
     ...(isFolder
       ? []
@@ -215,7 +215,7 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
+    ['Display Name', 'Repo Icon', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -289,37 +289,37 @@ export function RepositoryPane({
         <SearchableSetting
           title="Display Name"
           description="Repo-specific display details for the sidebar and tabs."
-          keywords={[repo.displayName, repo.path, 'repository name', 'color', 'badge']}
+          keywords={[repo.displayName, repo.path, 'repository name']}
           className="space-y-2"
-          id={getRepositoryBadgeColorSectionId(repo.id)}
         >
           <Label className="text-sm font-semibold">Display Name</Label>
-          <div className="flex items-center gap-3">
-            <Input
-              value={repo.displayName}
-              onChange={(e) =>
-                updateRepo(repo.id, {
-                  displayName: e.target.value
-                })
-              }
-              className="h-9 flex-1 text-sm"
-            />
-            <div className="flex flex-wrap gap-2">
-              {REPO_COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => updateRepo(repo.id, { badgeColor: color })}
-                  className={`size-7 rounded-full transition-all ${
-                    repo.badgeColor === color
-                      ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                      : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
-                  }`}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
+          <Input
+            value={repo.displayName}
+            onChange={(e) =>
+              updateRepo(repo.id, {
+                displayName: e.target.value
+              })
+            }
+            className="h-9 text-sm"
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Repo Icon"
+          description="Repo icon and color used in the sidebar and tabs."
+          keywords={[
+            repo.displayName,
+            repo.path,
+            'repository icon',
+            'color',
+            'badge',
+            'emoji',
+            'favicon'
+          ]}
+          className="space-y-2"
+          id={getRepositoryIconSectionId(repo.id)}
+        >
+          <RepositoryIconPicker repo={repo} updateRepo={updateRepo} />
         </SearchableSetting>
 
         {!isFolder ? (
