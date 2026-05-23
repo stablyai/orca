@@ -1,5 +1,6 @@
 import { useEffect, type JSX } from 'react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -30,8 +31,8 @@ export function OrchestrationSetupCard(props: {
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
       title="Orchestration skill"
-      detectedDescription="Detected on this machine. Agents can use inter-agent orchestration."
-      missingDescription="Agents need this skill before they can use inter-agent orchestration. If you already installed it, click Re-check instead of running the installer again."
+      detectedDescription="Agents can hand off context, ask questions, and coordinate work through Orca."
+      missingDescription="Install this so agents can hand off context, ask questions, and coordinate work through Orca. If you already installed it, click Re-check instead of running the installer again."
       command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
       terminalTitle="Orchestration setup"
       terminalAriaLabel="Orchestration skill install terminal"
@@ -41,6 +42,9 @@ export function OrchestrationSetupCard(props: {
       loading={skillLoading}
       error={skillError}
       terminalHeightPx={terminalHeightPx}
+      onBeforeOpenTerminal={async () => {
+        await ensureOrcaCliAvailableForAgentSkillTerminal()
+      }}
       showRecheckWhenInstalled={false}
       onRecheck={refreshSkillInstalled}
     />

@@ -445,7 +445,6 @@ export type UISlice = {
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   featureTourNudgeVisible: boolean
   showFeatureTourNudge: () => void
-  dismissFeatureTourNudge: () => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
@@ -891,7 +890,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       set({ featureTourNudgeVisible: true })
     }
   },
-  dismissFeatureTourNudge: () => set({ featureTourNudgeVisible: false }),
 
   trustedOrcaHooks: {},
   markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>

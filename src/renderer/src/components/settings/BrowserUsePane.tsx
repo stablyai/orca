@@ -6,6 +6,10 @@ import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
+import {
+  ensureOrcaCliAvailableForAgentSkillTerminal,
+  isOrcaCliAvailableOnPath
+} from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -94,7 +98,8 @@ export function BrowserUseSetup({
   // when the default profile — the one agents use — is still empty.
   const cookiesImported = !!defaultProfile?.source
 
-  const cliEnabled = cliStatus?.state === 'installed'
+  const cliEnabled = isOrcaCliAvailableOnPath(cliStatus)
+  const cliPathNeedsAttention = cliStatus?.state === 'installed' && !cliStatus.pathConfigured
   const cliSupported = cliStatus?.supported ?? false
 
   const {
@@ -110,11 +115,12 @@ export function BrowserUseSetup({
   const handleEnableCli = async (): Promise<void> => {
     setCliBusy(true)
     try {
-      const next = await window.api.cli.install()
-      setCliStatus(next)
-      toast.success('Registered `orca` in PATH.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in PATH.')
+      const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
+        onStatusChange: setCliStatus
+      })
+      if (isOrcaCliAvailableOnPath(next)) {
+        toast.success('Registered `orca` in PATH.')
+      }
     } finally {
       setCliBusy(false)
     }
@@ -264,6 +270,9 @@ export function BrowserUseSetup({
                   <code className="rounded bg-muted px-1 py-0.5">{cliStatus.commandPath}</code>
                 </p>
               ) : null}
+              {cliPathNeedsAttention && cliStatus?.detail ? (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">{cliStatus.detail}</p>
+              ) : null}
             </div>
             <TooltipProvider delayDuration={250}>
               <Tooltip>
@@ -275,7 +284,13 @@ export function BrowserUseSetup({
                       disabled={cliLoading || cliBusy || !cliSupported || cliEnabled}
                       onClick={() => void handleEnableCli()}
                     >
-                      {cliBusy ? 'Registering…' : cliEnabled ? 'Enabled' : 'Enable'}
+                      {cliBusy
+                        ? 'Registering...'
+                        : cliEnabled
+                          ? 'Enabled'
+                          : cliPathNeedsAttention
+                            ? 'Fix PATH'
+                            : 'Enable'}
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -293,7 +308,7 @@ export function BrowserUseSetup({
       {showStep2 ? (
         <SearchableSetting
           title="Install Browser Use Skill"
-          description="Install the orca-cli agent skill so agents know how to use the browser."
+          description="Install the Browser Use skill so agents can operate Orca's browser."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[1].keywords}
           className={`rounded-xl border border-border/60 bg-card/50 p-4 ${
             cliEnabled ? '' : 'opacity-60'
@@ -305,6 +320,9 @@ export function BrowserUseSetup({
             skillLoading={skillLoading}
             skillError={skillError}
             disabled={!cliEnabled}
+            onBeforeOpenTerminal={async () => {
+              await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setCliStatus })
+            }}
             onRecheck={refreshSkill}
           />
         </SearchableSetting>

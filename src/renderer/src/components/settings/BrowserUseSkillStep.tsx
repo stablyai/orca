@@ -7,6 +7,7 @@ type Props = {
   skillLoading: boolean
   skillError: string | null
   disabled?: boolean
+  onBeforeOpenTerminal?: () => void | Promise<void>
   onRecheck: () => void | Promise<void>
 }
 
@@ -16,14 +17,15 @@ export function BrowserUseSkillStep({
   skillLoading,
   skillError,
   disabled = false,
+  onBeforeOpenTerminal,
   onRecheck
 }: Props): React.JSX.Element {
   return (
     <AgentSkillSetupPanel
       variant="inline"
       title="Browser Use skill"
-      detectedDescription="Detected on this machine. Agents can drive Orca's browser."
-      missingDescription="Agents need this skill before they can drive Orca's browser. If you already installed it, click Re-check instead of running the installer again."
+      detectedDescription="Agents can navigate, click, inspect, and gather evidence in Orca's browser."
+      missingDescription="Install this so agents can navigate, click, inspect, and gather evidence in Orca's browser. If you already installed it, click Re-check instead of running the installer again."
       command={command}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
@@ -34,6 +36,7 @@ export function BrowserUseSkillStep({
       error={skillError}
       installDisabled={disabled}
       leading={<StepBadge index={2} state={skillDetected ? 'done' : 'pending'} />}
+      onBeforeOpenTerminal={onBeforeOpenTerminal}
       onRecheck={onRecheck}
     />
   )

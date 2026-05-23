@@ -18,7 +18,7 @@ import { AgentsOrchestrationVisual } from './AgentsOrchestrationVisual'
 import { ReviewAnimatedVisual } from './ReviewAnimatedVisual'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
 import { OrchestrationSetupCard } from '../settings/OrchestrationSetupCard'
-import { OrcaCliSkillSetupCard } from './OrcaCliSkillSetupCard'
+import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 
@@ -200,6 +200,7 @@ export function FeatureWallBody(props: {
   workbenchActiveStep: WorkbenchStep | null
   reviewActiveStep: ReviewStep | null
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
+  onUsageAccountStateChange: () => void | Promise<void>
 }): JSX.Element {
   const {
     selected,
@@ -212,7 +213,8 @@ export function FeatureWallBody(props: {
     agentsActiveStep,
     workbenchActiveStep,
     reviewActiveStep,
-    onOrchestrationSkillInstalledChange
+    onOrchestrationSkillInstalledChange,
+    onUsageAccountStateChange
   } = props
   const isWorkspaces = selected.id === 'workspaces'
   const isTasks = selected.id === 'tasks'
@@ -302,7 +304,9 @@ export function FeatureWallBody(props: {
                 ) : null}
               </ul>
             )}
-            {isAgentsUsage ? <UsageAccountsCard /> : null}
+            {isAgentsUsage ? (
+              <UsageAccountsCard onAccountStateChange={onUsageAccountStateChange} />
+            ) : null}
             {isReviewPrView ? <GitHubRow compact /> : null}
             {isReviewShip ? <AiCommitPrSettingsCard /> : null}
           </aside>
@@ -363,7 +367,7 @@ export function FeatureWallBody(props: {
                 ) : isWorkbenchBrowser ? (
                   <>
                     <BrowserAnimatedVisual reducedMotion={prefersReducedMotion} />
-                    <OrcaCliSkillSetupCard compact terminalHeightPx={140} />
+                    <BrowserUseSkillSetupCard compact terminalHeightPx={140} />
                   </>
                 ) : (
                   <WorkbenchAnimatedVisual reducedMotion={prefersReducedMotion} />

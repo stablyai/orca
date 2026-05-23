@@ -58,6 +58,22 @@ test.describe('Feature tour modal', () => {
       'aria-selected',
       'true'
     )
+
+    await rail.getByRole('tab', { name: /Workbench/i }).click()
+    await rail.getByRole('button', { name: /Browser/i }).click()
+    await expect(
+      orcaPage.getByText(
+        'With the Browser Use skill, agents can navigate, click, inspect, and gather UI evidence inside Orca.'
+      )
+    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: 'Browser Use skill' })).toBeVisible()
+    await expect(
+      orcaPage.getByText(
+        "Agents can navigate, click, inspect, and gather evidence in Orca's browser."
+      )
+    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: 'CLI skill' })).toHaveCount(0)
+    await expect(orcaPage.getByText('With the Orca CLI skill', { exact: false })).toHaveCount(0)
   })
 
   test('shows disconnected task users setup-oriented copy without leaving the walkthrough', async ({
@@ -187,8 +203,10 @@ test.describe('Feature tour modal', () => {
       nudge.getByText('A quick walkthrough of the workflows built into Orca.')
     ).toBeVisible()
     await expect(nudge.getByText('Reopen any time from Help > Explore Orca.')).toBeVisible()
-    await expect(nudge.locator('[data-feature-tour-nudge-visual]')).toBeVisible()
-    await expect(nudge.getByText('Parallel work')).toBeVisible()
+    await expect(nudge.locator('[data-feature-tour-nudge-visual]')).toHaveCount(0)
+    await expect(nudge.getByRole('button', { name: 'Dismiss Explore Orca' })).toHaveCount(0)
+    await orcaPage.keyboard.press('Escape')
+    await expect(nudge).toBeVisible()
     await expect
       .poll(
         () =>
@@ -201,6 +219,7 @@ test.describe('Feature tour modal', () => {
       )
       .toBe(true)
     await expect(nudge.locator('img')).toHaveCount(0)
+    await expect(nudge.locator('svg')).toHaveCount(0)
 
     const takeTourButton = nudge.getByRole('button', { name: /^Take the tour$/ })
     await expect(takeTourButton).toBeVisible()

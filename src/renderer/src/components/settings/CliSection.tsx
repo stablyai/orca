@@ -6,6 +6,7 @@ import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
+import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -217,7 +218,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
             <div className="space-y-0.5">
               <Label>Agent skills</Label>
               <p className="text-xs text-muted-foreground">
-                Install skills so agents know how to use Orca and report status.
+                Give agents Orca-aware workspace, terminal, and progress workflows.
               </p>
             </div>
 
@@ -225,8 +226,8 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               className="mt-3"
               variant="inline"
               title="CLI skill"
-              detectedDescription="Detected on this machine. Agents know how to use Orca and report status."
-              missingDescription="Agents need this skill before they can use Orca and report status. If you already installed it, click Re-check instead of running the installer again."
+              detectedDescription="Agents can inspect Orca workspaces, open terminals, and report progress from the command line."
+              missingDescription="Install this so agents can inspect Orca workspaces, open terminals, and report progress from the command line. If you already installed it, click Re-check instead of running the installer again."
               command={ORCA_CLI_SKILL_INSTALL_COMMAND}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
@@ -235,6 +236,9 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               detected={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
+              onBeforeOpenTerminal={async () => {
+                await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setStatus })
+              }}
               onRecheck={refreshCliSkill}
             />
           </div>

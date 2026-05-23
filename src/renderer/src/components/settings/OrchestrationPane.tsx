@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Workflow } from 'lucide-react'
 import { Label } from '../ui/label'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -95,8 +96,8 @@ export function OrchestrationPane(): React.JSX.Element {
       {orchestrationEnabled ? (
         <AgentSkillSetupPanel
           title="Orchestration skill"
-          detectedDescription="Detected on this machine. Agents can use inter-agent orchestration."
-          missingDescription="Agents need this skill before they can use inter-agent orchestration. If you already installed it, click Re-check instead of running the installer again."
+          detectedDescription="Agents can hand off context, ask questions, and coordinate work through Orca."
+          missingDescription="Install this so agents can hand off context, ask questions, and coordinate work through Orca. If you already installed it, click Re-check instead of running the installer again."
           command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
           terminalTitle="Orchestration setup"
           terminalAriaLabel="Orchestration skill install terminal"
@@ -106,6 +107,9 @@ export function OrchestrationPane(): React.JSX.Element {
           loading={orchestrationSkillLoading}
           error={orchestrationSkillError}
           icon={<Workflow className="size-5" />}
+          onBeforeOpenTerminal={async () => {
+            await ensureOrcaCliAvailableForAgentSkillTerminal()
+          }}
           onRecheck={handleRecheckOrchestrationSkill}
         />
       ) : null}

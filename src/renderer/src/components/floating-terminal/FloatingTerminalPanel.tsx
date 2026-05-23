@@ -24,6 +24,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import {
   isFloatingWorkspacePanelShortcut,
   isFloatingWorkspaceTerminalInputTarget
@@ -32,14 +33,10 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
+  hasOrchestrationSetupMarker,
   isOrchestrationSetupDismissed,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  hasInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
@@ -129,7 +126,7 @@ export function FloatingTerminalPanel({
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
-    () => !isOrchestrationSetupDismissed()
+    () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
@@ -360,17 +357,13 @@ export function FloatingTerminalPanel({
       setShowOrchestrationSetup(false)
       return
     }
+    if (!hasOrchestrationSetupMarker()) {
+      setShowOrchestrationSetup(true)
+      return
+    }
     try {
-      const [status, skillDiscovery] = await Promise.all([
-        window.api.cli.getInstallStatus(),
-        window.api.skills.discover()
-      ])
-      const skillInstalled = hasInstalledAgentSkill(
-        skillDiscovery.skills,
-        ORCHESTRATION_SKILL_NAME,
-        { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
-      )
-      setShowOrchestrationSetup(status.state !== 'installed' || !skillInstalled)
+      const status = await window.api.cli.getInstallStatus()
+      setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
     } catch {
       setShowOrchestrationSetup(true)
     }
@@ -381,18 +374,6 @@ export function FloatingTerminalPanel({
       void refreshOrchestrationSetupVisibility()
     }
   }, [open, refreshOrchestrationSetupVisibility])
-
-  useEffect(() => {
-    if (!open || !showOrchestrationSetup) {
-      return
-    }
-    // Why: the skill install command runs in a terminal outside React state.
-    // Poll while the prompt is visible so it disappears after the user runs it.
-    const timer = window.setInterval(() => {
-      void refreshOrchestrationSetupVisibility()
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [open, refreshOrchestrationSetupVisibility, showOrchestrationSetup])
 
   useEffect(() => {
     const handleSetupStateChange = (): void => {

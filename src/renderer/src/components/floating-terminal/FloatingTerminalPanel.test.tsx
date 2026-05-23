@@ -258,6 +258,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 vi.mock('@/lib/orchestration-setup-state', () => ({
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY: 'floating-terminal-test-dismissed',
   ORCHESTRATION_SETUP_STATE_EVENT: 'floating-terminal-test-setup-state',
+  hasOrchestrationSetupMarker: vi.fn(() => true),
   isOrchestrationSetupDismissed: vi.fn(() => false),
   notifyOrchestrationSetupStateChanged: vi.fn()
 }))
@@ -490,7 +491,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
     mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
-    mocks.getInstallStatus.mockResolvedValue({ state: 'installed' })
+    mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
     vi.stubGlobal('window', {

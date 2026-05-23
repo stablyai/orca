@@ -384,6 +384,7 @@ export default function FeatureWallModal(): JSX.Element | null {
               workbenchActiveStep={workbenchActiveStep}
               reviewActiveStep={reviewActiveStep}
               onOrchestrationSkillInstalledChange={handleOrchestrationSkillInstalledChange}
+              onUsageAccountStateChange={completion.refreshUsageAccountState}
             />
             {showKeepAwakeCard && settings ? (
               <div className="px-9 pb-9">

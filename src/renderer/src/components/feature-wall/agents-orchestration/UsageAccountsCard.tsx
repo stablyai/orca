@@ -78,7 +78,10 @@ function ProviderRow(props: {
   )
 }
 
-export function UsageAccountsCard(): JSX.Element {
+export function UsageAccountsCard(props: {
+  onAccountStateChange?: () => void | Promise<void>
+}): JSX.Element {
+  const { onAccountStateChange } = props
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const rateLimits = useAppStore((s) => s.rateLimits)
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
@@ -143,6 +146,7 @@ export function UsageAccountsCard(): JSX.Element {
       const next = await window.api.claudeAccounts.add()
       setClaudeAccounts(next)
       await fetchSettings()
+      await onAccountStateChange?.()
       toast.success('Claude account added.')
     } catch (error) {
       toast.error('Claude sign-in failed.', {
@@ -162,6 +166,7 @@ export function UsageAccountsCard(): JSX.Element {
       const next = await window.api.codexAccounts.add()
       setCodexAccounts(next)
       await fetchSettings()
+      await onAccountStateChange?.()
       toast.success('Codex account added.')
     } catch (error) {
       toast.error('Codex sign-in failed.', {

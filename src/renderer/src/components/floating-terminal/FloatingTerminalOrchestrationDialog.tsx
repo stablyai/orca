@@ -10,17 +10,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  ensureOrcaCliAvailableForAgentSkillTerminal,
+  isOrcaCliAvailableOnPath
+} from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import {
+  ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import { IntegrationStatusPill } from '../integration-status-pill'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -40,10 +39,6 @@ export function FloatingTerminalOrchestrationDialog({
   const [cliLoading, setCliLoading] = useState(false)
   const [cliBusy, setCliBusy] = useState(false)
   const [skillBusy, setSkillBusy] = useState(false)
-  const { installed: skillInstalled, refresh: refreshSkillInstalled } = useInstalledAgentSkill(
-    ORCHESTRATION_SKILL_NAME,
-    { enabled: open, sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
-  )
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
@@ -62,20 +57,10 @@ export function FloatingTerminalOrchestrationDialog({
     }
   }, [open, refreshCliStatus])
 
-  useEffect(() => {
-    if (!open || skillInstalled) {
-      return
-    }
-    const timer = window.setInterval(() => {
-      void refreshSkillInstalled()
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [open, refreshSkillInstalled, skillInstalled])
-
-  const cliInstalled = cliStatus?.state === 'installed'
+  const cliInstalled = isOrcaCliAvailableOnPath(cliStatus)
   const cliSupported = cliStatus?.supported ?? false
   const cliLabel = cliInstalled
-    ? 'orca is already on PATH'
+    ? 'orca is on PATH'
     : cliLoading
       ? 'Checking CLI status...'
       : (cliStatus?.detail ?? 'Register orca so agents can call Orca from a terminal.')
@@ -83,24 +68,28 @@ export function FloatingTerminalOrchestrationDialog({
   const handleInstallCli = async (): Promise<void> => {
     setCliBusy(true)
     try {
-      const next = await window.api.cli.install()
-      setCliStatus(next)
-      notifyOrchestrationSetupStateChanged()
-      onSetupStateChange()
-      toast.success('Registered `orca` in PATH.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in PATH.')
+      const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
+        onStatusChange: setCliStatus
+      })
+      if (next) {
+        notifyOrchestrationSetupStateChanged()
+        onSetupStateChange()
+      }
+      if (isOrcaCliAvailableOnPath(next)) {
+        toast.success('Registered `orca` in PATH.')
+      }
     } finally {
       setCliBusy(false)
     }
   }
 
   const handlePasteSkillCommand = async (): Promise<void> => {
-    if (skillInstalled) {
-      return
-    }
     setSkillBusy(true)
     try {
+      const nextCliStatus = await ensureOrcaCliAvailableForAgentSkillTerminal({
+        onStatusChange: setCliStatus
+      })
+      localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
       localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
       notifyOrchestrationSetupStateChanged()
       await window.api.ui.writeClipboardText(ORCHESTRATION_SKILL_INSTALL_COMMAND)
@@ -118,7 +107,7 @@ export function FloatingTerminalOrchestrationDialog({
         toast.success('Copied the skill install command.')
       }
       onSetupStateChange()
-      if (cliInstalled) {
+      if (isOrcaCliAvailableOnPath(nextCliStatus ?? cliStatus)) {
         onOpenChange(false)
       }
     } catch (error) {
@@ -195,48 +184,38 @@ export function FloatingTerminalOrchestrationDialog({
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm font-medium">Orchestration skill</p>
                   <p className="text-xs text-muted-foreground">
-                    {skillInstalled
-                      ? 'Detected on this machine. Agents can use inter-agent orchestration.'
-                      : 'Paste this command into the terminal so agents learn orchestration.'}
+                    Paste this command into the terminal so agents can coordinate through Orca.
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {skillInstalled ? (
-                    <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => void handlePasteSkillCommand()}
+                  disabled={skillBusy}
+                  className="shrink-0 gap-1.5"
+                >
+                  {skillBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => void handlePasteSkillCommand()}
-                      disabled={skillBusy}
-                      className="shrink-0 gap-1.5"
-                    >
-                      {skillBusy ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Clipboard className="size-3.5" />
-                      )}
-                      {activeTabId ? 'Paste' : 'Copy'}
-                    </Button>
+                    <Clipboard className="size-3.5" />
                   )}
-                </div>
+                  {activeTabId ? 'Paste' : 'Copy'}
+                </Button>
               </div>
-              {!skillInstalled ? (
-                <div className="flex min-w-0 items-center gap-2 rounded bg-background px-2 py-1.5">
-                  <code className="min-w-0 flex-1 text-[11px] leading-relaxed break-all whitespace-normal text-muted-foreground">
-                    {ORCHESTRATION_SKILL_INSTALL_COMMAND}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0"
-                    onClick={() => void handleCopySkillCommand()}
-                    aria-label="Copy orchestration skill install command"
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </div>
-              ) : null}
+              <div className="flex min-w-0 items-center gap-2 rounded bg-background px-2 py-1.5">
+                <code className="min-w-0 flex-1 text-[11px] leading-relaxed break-all whitespace-normal text-muted-foreground">
+                  {ORCHESTRATION_SKILL_INSTALL_COMMAND}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
+                  onClick={() => void handleCopySkillCommand()}
+                  aria-label="Copy orchestration skill install command"
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-workflows'
 import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
@@ -30,6 +30,7 @@ export type FeatureWallCompletionState = {
   markAgentStepVisited: (id: AgentsStepId) => void
   markWorkbenchStepVisited: (id: WorkbenchStepId) => void
   markReviewStepVisited: (id: ReviewStepId) => void
+  refreshUsageAccountState: () => Promise<void>
 }
 
 export type FeatureWallCompletionProgress = Pick<
@@ -161,6 +162,23 @@ export function useFeatureWallCompletion(
     }
   }, [isOpen])
 
+  const readUsageAccountState = useCallback(async (): Promise<boolean> => {
+    const [claude, codex] = await Promise.all([
+      window.api.claudeAccounts.list().catch(() => null),
+      window.api.codexAccounts.list().catch(() => null)
+    ])
+    return hasFeatureWallUsageTracking({
+      claudeManagedAccountCount: claude?.accounts.length ?? 0,
+      codexManagedAccountCount: codex?.accounts.length ?? 0,
+      claudeRateLimits: rateLimits.claude,
+      codexRateLimits: rateLimits.codex
+    })
+  }, [rateLimits.claude, rateLimits.codex])
+
+  const refreshUsageAccountState = useCallback(async (): Promise<void> => {
+    setHasUsageAccount(await readUsageAccountState())
+  }, [readUsageAccountState])
+
   // Pull current account state once when the modal opens, then refresh on
   // window focus — keeps the checkmark current after a sign-in flow that
   // happens outside the modal.
@@ -176,23 +194,11 @@ export function useFeatureWallCompletion(
     }
     let stale = false
     const refresh = async (): Promise<void> => {
-      const [claude, codex] = await Promise.all([
-        window.api.claudeAccounts.list().catch(() => null),
-        window.api.codexAccounts.list().catch(() => null)
-      ])
+      const nextHasUsageAccount = await readUsageAccountState()
       if (stale) {
         return
       }
-      const claudeCount = claude?.accounts.length ?? 0
-      const codexCount = codex?.accounts.length ?? 0
-      setHasUsageAccount(
-        hasFeatureWallUsageTracking({
-          claudeManagedAccountCount: claudeCount,
-          codexManagedAccountCount: codexCount,
-          claudeRateLimits: rateLimits.claude,
-          codexRateLimits: rateLimits.codex
-        })
-      )
+      setHasUsageAccount(nextHasUsageAccount)
     }
     void refresh()
     const onFocus = (): void => void refresh()
@@ -201,7 +207,7 @@ export function useFeatureWallCompletion(
       stale = true
       window.removeEventListener('focus', onFocus)
     }
-  }, [isOpen, rateLimits.claude, rateLimits.codex])
+  }, [isOpen, readUsageAccountState])
 
   const markWorkflowVisited = (id: FeatureWallWorkflowId): void => {
     persistVisitedWorkflow(id)
@@ -271,6 +277,7 @@ export function useFeatureWallCompletion(
     markWorkflowVisited,
     markAgentStepVisited,
     markWorkbenchStepVisited,
-    markReviewStepVisited
+    markReviewStepVisited,
+    refreshUsageAccountState
   }
 }

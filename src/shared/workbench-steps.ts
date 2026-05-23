@@ -73,7 +73,7 @@ export const WORKBENCH_STEPS: readonly WorkbenchStep[] = [
       },
       {
         leadIn: 'Let agents drive the browser.',
-        body: 'With the Orca CLI skill, enable your agents to navigate, click, inspect, and gather UI evidence for you.'
+        body: 'With the Browser Use skill, agents can navigate, click, inspect, and gather UI evidence inside Orca.'
       },
       {
         leadIn: 'Zero setup.',
