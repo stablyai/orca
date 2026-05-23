@@ -4,7 +4,10 @@ import {
   resolvePendingSidebarReveal,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
-import { estimateRenderRowSize } from './worktree-list-virtual-rows'
+import {
+  estimateRenderRowSize,
+  getActiveStickyHeaderIndexForScroll
+} from './worktree-list-virtual-rows'
 
 const makeHeaderRow = (key: string) =>
   ({
@@ -104,5 +107,35 @@ describe('estimateRenderRowSize', () => {
 
     expect(inactiveSize).toBe(36)
     expect(activeSize).toBe(36)
+  })
+
+  it('keeps the previous header active while a secondary header spacer crosses the top', () => {
+    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
+
+    expect(
+      getActiveStickyHeaderIndexForScroll({
+        firstHeaderIndex: 0,
+        rangeStartIndex: 1,
+        rows,
+        scrollOffset: 100,
+        stickyHeaderIndexes: [0, 1],
+        virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
+      })
+    ).toBe(0)
+  })
+
+  it('activates a secondary header once its painted header reaches the top', () => {
+    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
+
+    expect(
+      getActiveStickyHeaderIndexForScroll({
+        firstHeaderIndex: 0,
+        rangeStartIndex: 1,
+        rows,
+        scrollOffset: 108,
+        stickyHeaderIndexes: [0, 1],
+        virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
+      })
+    ).toBe(1)
   })
 })

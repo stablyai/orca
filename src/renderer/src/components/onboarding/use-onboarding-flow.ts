@@ -210,6 +210,21 @@ export function useOnboardingFlow(
   useEffect(() => {
     persistedThemeRef.current = settings?.theme ?? 'dark'
   }, [settings?.theme])
+  const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
+  const themeStepEntryCapturedRef = useRef(false)
+  useEffect(() => {
+    if (currentStep.id !== 'theme') {
+      themeStepEntryCapturedRef.current = false
+      return
+    }
+    if (!settings || themeStepEntryCapturedRef.current) {
+      return
+    }
+    // Why: theme tile clicks persist immediately for normal progression, but
+    // "Skip to project setup" should keep the preference the user arrived with.
+    themeStepEntryCapturedRef.current = true
+    themeStepEntryThemeRef.current = settings.theme
+  }, [currentStep.id, settings])
 
   // Apply preview when local theme changes.
   useEffect(() => {
@@ -570,6 +585,16 @@ export function useOnboardingFlow(
       return
     }
     const durationMs = consumeStepDurationMs()
+    // Why: theme tiles save immediately for a stable preview, but skip still
+    // means "do not keep this step's choice."
+    if (currentStep.id === 'theme') {
+      const themeBeforePreview = themeStepEntryThemeRef.current ?? settings?.theme
+      if (themeBeforePreview) {
+        setTheme(themeBeforePreview)
+        applyDocumentTheme(themeBeforePreview)
+        await updateSettings({ theme: themeBeforePreview })
+      }
+    }
     // Why: the repo step seeds folder terminals from saved settings. Preserve
     // the visible agent choice when optional preferences are skipped.
     if (currentStep.id === 'agent' && selectedAgent) {
@@ -602,6 +627,7 @@ export function useOnboardingFlow(
     currentStep.stepNumber,
     onOnboardingChange,
     selectedAgent,
+    settings,
     trackTaskSourcesSnapshot,
     updateSettings
   ])

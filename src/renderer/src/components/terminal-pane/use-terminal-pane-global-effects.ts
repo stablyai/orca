@@ -23,7 +23,7 @@ import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import {
   cancelHiddenTerminalHydration,
-  clearHiddenTerminalOutput,
+  clearHiddenTerminalOutputForPty,
   consumeHiddenTerminalHydration,
   markHiddenTerminalFallbackReplayed,
   markHiddenTerminalHydrated
@@ -88,9 +88,17 @@ export function useTerminalPaneGlobalEffects({
       if (!hydration) {
         return
       }
-      const transport = paneTransportsRef.current.get(pane.id)
-      if (transport?.getPtyId() !== hydration.ptyId) {
-        clearHiddenTerminalOutput(pane.terminal)
+      const getCurrentPtyId = (): string | null => {
+        const currentPane = managerRef.current
+          ?.getPanes()
+          .find((candidate) => candidate.id === pane.id)
+        if (currentPane?.terminal !== pane.terminal) {
+          return null
+        }
+        return paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      }
+      if (getCurrentPtyId() !== hydration.ptyId) {
+        clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
         return
       }
       const scrollbackRows =
@@ -104,8 +112,8 @@ export function useTerminalPaneGlobalEffects({
             cancelHiddenTerminalHydration(pane.terminal, hydration)
             return
           }
-          if (transport.getPtyId() !== hydration.ptyId) {
-            clearHiddenTerminalOutput(pane.terminal)
+          if (getCurrentPtyId() !== hydration.ptyId) {
+            clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
             return
           }
           if (snapshot?.data) {
@@ -138,8 +146,8 @@ export function useTerminalPaneGlobalEffects({
             cancelHiddenTerminalHydration(pane.terminal, hydration)
             return
           }
-          if (transport.getPtyId() !== hydration.ptyId) {
-            clearHiddenTerminalOutput(pane.terminal)
+          if (getCurrentPtyId() !== hydration.ptyId) {
+            clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
             return
           }
           if (hydration.fallbackData) {
@@ -156,7 +164,7 @@ export function useTerminalPaneGlobalEffects({
           markHiddenTerminalFallbackReplayed(pane.terminal, hydration)
         })
     },
-    [isVisibleRef, paneTransportsRef, replayingPanesRef]
+    [isVisibleRef, managerRef, paneTransportsRef, replayingPanesRef]
   )
 
   useEffect(() => {

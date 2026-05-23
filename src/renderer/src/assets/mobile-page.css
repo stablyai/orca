@@ -48,7 +48,9 @@
   grid-template-columns: minmax(360px, 560px) minmax(300px, 420px);
   justify-content: center;
   align-items: center;
-  gap: 56px;
+  /* Why: wide canvases need more separation between the intro copy and
+     phone preview, while narrower desktop widths keep their tighter fit. */
+  gap: clamp(56px, 7vw, 112px);
   padding: 56px;
   width: 100%;
   height: 100%;
@@ -256,13 +258,12 @@
 .mobile-page-root .mp-cta-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 14px;
   margin-top: auto;
   padding-top: 16px;
-  /* Why: the intro CTA should land exactly where the step-flow primary
-     button appears, so users can click through without moving the pointer. */
-  padding-right: var(--mp-flow-card-inset);
+  /* Why: the intro CTA should scan with the hero copy, while step-flow
+     actions keep their own placement inside the card. */
   padding-bottom: var(--mp-flow-card-inset);
 }
 

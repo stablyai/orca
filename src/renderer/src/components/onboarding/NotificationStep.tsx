@@ -1,34 +1,14 @@
 /* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, upload, and volume controls. */
 import { useEffect, useRef, useState } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import {
-  Activity,
-  AudioWaveform,
-  Bell,
-  BellRing,
-  Check,
-  ChevronDown,
-  CircleDot,
-  FileAudio,
-  Keyboard,
-  MousePointer2,
-  Radio,
-  Radar,
-  Settings,
-  Upload,
-  Volume1,
-  Volume2,
-  X,
-  Zap
-} from 'lucide-react'
+import { BellRing, Check, ChevronDown, FileAudio, Settings, Upload, Volume2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
-import { basename } from '@/lib/path'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Slider } from '@/components/ui/slider'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
+import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import logo from '../../../../../resources/logo.svg'
 
 export type NotificationDraft = {
@@ -41,65 +21,6 @@ type NotificationStepProps = {
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 }
-
-type NotificationSoundOption = {
-  id: GlobalSettings['notifications']['customSoundId']
-  title: string
-  icon: LucideIcon
-}
-
-const SOUND_OPTIONS: readonly NotificationSoundOption[] = [
-  {
-    id: 'system',
-    title: 'System Default',
-    icon: Bell
-  },
-  {
-    id: 'two-tone',
-    title: 'Two Tone',
-    icon: AudioWaveform
-  },
-  {
-    id: 'bong',
-    title: 'Bong',
-    icon: CircleDot
-  },
-  {
-    id: 'thump',
-    title: 'Thump',
-    icon: Volume1
-  },
-  {
-    id: 'blip',
-    title: 'Blip',
-    icon: Zap
-  },
-  {
-    id: 'sonar',
-    title: 'Sonar',
-    icon: Radar
-  },
-  {
-    id: 'blop',
-    title: 'Blop',
-    icon: Activity
-  },
-  {
-    id: 'ding',
-    title: 'Ding',
-    icon: Radio
-  },
-  {
-    id: 'clack',
-    title: 'Clack',
-    icon: Keyboard
-  },
-  {
-    id: 'beep',
-    title: 'Beep',
-    icon: MousePointer2
-  }
-]
 
 export function NotificationStep({
   settings,
@@ -215,16 +136,7 @@ export function NotificationStep({
 
   const customPath = notificationSettings.customSoundPath
   const selectedSoundId = notificationSettings.customSoundId
-  const soundOptions = customPath
-    ? [
-        ...SOUND_OPTIONS,
-        {
-          id: 'custom' as const,
-          title: basename(customPath),
-          icon: FileAudio
-        }
-      ]
-    : SOUND_OPTIONS
+  const soundOptions = getNotificationSoundOptions(customPath)
   const canAdjustVolume = selectedSoundId !== 'system'
   const isMac = permissionStatus?.platform === 'darwin'
 
