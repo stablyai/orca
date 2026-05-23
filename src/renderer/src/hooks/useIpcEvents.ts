@@ -1977,7 +1977,10 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
-      store.setAgentStatus(data.paneKey, payload, title, {
+      const statusPayload = data.orchestration
+        ? { ...payload, orchestration: data.orchestration }
+        : payload
+      store.setAgentStatus(data.paneKey, statusPayload, title, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
       })

@@ -122,6 +122,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   // never mount this component (see WorktreeCardAgents), so idle worktrees
   // don't pay any timer cost.
   const now = useNow(30_000)
+  const hasLineage = agents.some((agent) => agent.lineage && agent.lineage.depth > 0)
 
   const stopBubble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -134,7 +135,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       className={cn('flex flex-col mt-1 mb-1 divide-y divide-border/30', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
-      role="group"
+      role={hasLineage ? 'tree' : 'group'}
       aria-label="Agents"
     >
       {agents.map((agent) => (

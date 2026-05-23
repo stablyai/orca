@@ -453,6 +453,7 @@ function openMainWindow(): BrowserWindow {
       if (mainWindow?.isDestroyed()) {
         return
       }
+      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
@@ -460,7 +461,8 @@ function openMainWindow(): BrowserWindow {
         worktreeId,
         connectionId,
         receivedAt,
-        stateStartedAt
+        stateStartedAt,
+        ...(orchestration ? { orchestration } : {})
       })
       recordCrashBreadcrumb('agent_state_changed', {
         agentType: payload.agentType ?? 'unknown',

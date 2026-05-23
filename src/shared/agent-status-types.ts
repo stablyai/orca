@@ -52,6 +52,15 @@ export type AgentStateHistoryEntry = {
 /** Maximum number of history entries kept per agent to bound memory. */
 export const AGENT_STATE_HISTORY_MAX = 20
 
+export type AgentStatusOrchestrationContext = {
+  taskId: string
+  dispatchId: string
+  parentTerminalHandle?: string
+  parentPaneKey?: string
+  coordinatorHandle?: string
+  orchestrationRunId?: string
+}
+
 export type AgentStatusEntry = {
   state: AgentStatusState
   /** The user's most recent prompt, when the hook payload carried one.
@@ -86,6 +95,10 @@ export type AgentStatusEntry = {
    *  cancelled it. Undefined while the agent is working or when no interrupt
    *  signal was available. */
   interrupted?: boolean
+  /** Orchestration dispatch context for agent panes spawned by another agent.
+   *  Why: parent/child agent hierarchy is pane-level state, not worktree
+   *  lineage; workers often run in the same worktree as their coordinator. */
+  orchestration?: AgentStatusOrchestrationContext
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -143,6 +156,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   receivedAt: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  orchestration?: AgentStatusOrchestrationContext
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */
