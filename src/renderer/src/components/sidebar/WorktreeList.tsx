@@ -69,6 +69,8 @@ import {
 import {
   estimateRenderRowSize,
   getActiveStickyHeaderIndex,
+  getActiveStickyHeaderIndexForScroll,
+  getPreviousStickyHeaderIndex,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   shouldUseHeaderTopSpacing,
@@ -671,6 +673,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const stickyHeaderIndexesRef = useRef(stickyHeaderIndexes)
   stickyHeaderIndexesRef.current = stickyHeaderIndexes
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
+  const stickyRangeStartIndexRef = useRef(0)
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
@@ -799,20 +802,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       ),
     measureElement: measureCurrentVirtualRowElement,
     rangeExtractor: useCallback((range: Range) => {
+      stickyRangeStartIndexRef.current = range.startIndex
       const activeStickyHeaderIndex = getActiveStickyHeaderIndex(
         stickyHeaderIndexesRef.current,
         range.startIndex
       )
-      activeStickyHeaderIndexRef.current = activeStickyHeaderIndex
       if (activeStickyHeaderIndex === null) {
         return defaultRangeExtractor(range)
       }
 
       // Why: this mirrors TanStack Virtual's sticky example — the active
       // section header remains a real virtual row even after it scrolls out.
-      return Array.from(new Set([activeStickyHeaderIndex, ...defaultRangeExtractor(range)])).sort(
-        (a, b) => a - b
+      const previousStickyHeaderIndex = getPreviousStickyHeaderIndex(
+        stickyHeaderIndexesRef.current,
+        activeStickyHeaderIndex
       )
+      return Array.from(
+        new Set([
+          activeStickyHeaderIndex,
+          ...(previousStickyHeaderIndex === null ? [] : [previousStickyHeaderIndex]),
+          ...defaultRangeExtractor(range)
+        ])
+      ).sort((a, b) => a - b)
     }, []),
     overscan: 10,
     gap: 6,
@@ -944,6 +955,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+  const activeStickyHeaderIndex = getActiveStickyHeaderIndexForScroll({
+    firstHeaderIndex,
+    rangeStartIndex: stickyRangeStartIndexRef.current,
+    rows: renderRows,
+    scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
+    stickyHeaderIndexes,
+    virtualItems
+  })
+  activeStickyHeaderIndexRef.current = activeStickyHeaderIndex
 
   const measureMountedRows = useCallback(() => {
     virtualizer.elementsCache.forEach((element) => {
@@ -1812,8 +1832,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   className={cn(
                     'left-0 right-0',
                     // Why: keep the secondary-header spacer on the measured
-                    // virtual row so sticky swaps do not change row height.
-                    hasHeaderTopSpacing && 'pt-2',
+                    // virtual row only while it scrolls in normally. The
+                    // active sticky row is measured from estimates, and moving
+                    // the painted header with a transform makes the repo label
+                    // visibly hop during sticky handoff.
+                    hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-2',
                     isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
                   )}
                   style={
@@ -1840,11 +1863,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       isPinnedHeader &&
                         pinDragOver &&
                         'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
-                      // First header sits directly under SidebarHeader, which
-                      // already supplies its own spacing. Secondary sticky
-                      // headers keep their spacer measured while the painted
-                      // header stays flush to the scrollport top.
-                      isActiveStickyHeader && hasHeaderTopSpacing && '-translate-y-2',
                       row.repo && 'overflow-hidden'
                     )}
                     onDragOver={
