@@ -141,6 +141,32 @@ describe('createIpcPtyTransport', () => {
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
   })
 
+  it('resets replay parser state after deferred side effects drain', async () => {
+    // Why: replay side effects run after xterm receives data. Attach cleanup
+    // still has to wait for them, or a replayed partial OSC can make the first
+    // live BEL look like an OSC terminator instead of an attention bell.
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+    const onBell = vi.fn()
+
+    registerEagerPtyBuffer('pty-restored', vi.fn())
+    onData?.({
+      id: 'pty-restored',
+      data: '\x1b]0;partial-title'
+    })
+
+    const transport = createIpcPtyTransport({ onBell })
+    transport.attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+
+    await flushPtySideEffects()
+    onData?.({ id: 'pty-restored', data: '\x07' })
+    await flushPtySideEffects()
+
+    expect(onBell).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps exit sidecars after eager-buffered PTYs attach to a terminal', async () => {
     const { createIpcPtyTransport, registerEagerPtyBuffer, subscribeToPtyExit } =
       await import('./pty-transport')

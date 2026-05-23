@@ -76,6 +76,7 @@ export function createPtyOutputProcessor({
   ) => void
   clearAccumulatedState: () => void
   clearStaleTitleTimer: () => void
+  flushPendingSideEffects: () => void
   resetBellDetector: () => void
 } {
   const bellDetector = createBellDetector()
@@ -143,6 +144,13 @@ export function createPtyOutputProcessor({
     sideEffectDrainTimer = setTimeout(drainPtySideEffects, 0)
   }
 
+  function clearSideEffectDrainTimer(): void {
+    if (sideEffectDrainTimer) {
+      clearTimeout(sideEffectDrainTimer)
+      sideEffectDrainTimer = null
+    }
+  }
+
   function drainPtySideEffects(): void {
     sideEffectDrainTimer = null
     while (pendingSideEffects.length > 0) {
@@ -160,6 +168,11 @@ export function createPtyOutputProcessor({
         onBell()
       }
     }
+  }
+
+  function flushPendingSideEffects(): void {
+    clearSideEffectDrainTimer()
+    drainPtySideEffects()
   }
 
   function processObservedTitles(data: string, suppressAgentTracker: boolean): void {
@@ -218,10 +231,7 @@ export function createPtyOutputProcessor({
   }
 
   function clearAccumulatedState(): void {
-    if (sideEffectDrainTimer) {
-      clearTimeout(sideEffectDrainTimer)
-      sideEffectDrainTimer = null
-    }
+    clearSideEffectDrainTimer()
     pendingSideEffects.length = 0
     clearStaleTitleTimer()
     agentTracker?.reset()
@@ -232,6 +242,7 @@ export function createPtyOutputProcessor({
     processData,
     clearAccumulatedState,
     clearStaleTitleTimer,
+    flushPendingSideEffects,
     resetBellDetector: () => bellDetector.reset()
   }
 }
@@ -492,6 +503,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           try {
             ptyDataHandlers.get(id)?.(buffered)
           } finally {
+            // Why: replay side effects are intentionally deferred for live
+            // output, but replay cleanup must observe them before resetting
+            // parser state or a partial OSC can swallow the next live BEL.
+            outputProcessor.flushPendingSideEffects()
             replayingBufferedData = false
             suppressAttentionEvents = false
             // Why: replaying eager-buffered bytes may have observed a "working" title

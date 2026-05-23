@@ -1,4 +1,5 @@
 import type { ITerminalOptions } from '@xterm/xterm'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
@@ -12,7 +13,7 @@ function isWindowsUserAgent(userAgent: string | undefined): boolean {
 }
 
 function isWslCwd(cwd: string | null | undefined): boolean {
-  return /^(?:\\\\wsl(?:\.localhost)?\\|\/\/wsl(?:\.localhost)?\/)/i.test(cwd ?? '')
+  return isWslUncPath(cwd ?? '')
 }
 
 function isWslShellOverride(shellOverride: string | null | undefined): boolean {
@@ -22,13 +23,7 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext
 ): Partial<ITerminalOptions> {
-  if (!isWindowsUserAgent(context.userAgent)) {
-    return {}
-  }
-  if (context.connectionId !== null) {
-    return {}
-  }
-  if (isWslCwd(context.cwd) || isWslShellOverride(context.shellOverride)) {
+  if (!isLocalNativeWindowsPty(context)) {
     return {}
   }
   return {
@@ -36,4 +31,17 @@ export function buildWindowsPtyCompatibilityOptions(
     // compatibility heuristics prevent wrap/cursor assumptions from drifting.
     windowsPty: { backend: 'conpty' }
   }
+}
+
+export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext): boolean {
+  if (!isWindowsUserAgent(context.userAgent)) {
+    return false
+  }
+  if (context.connectionId !== null) {
+    return false
+  }
+  if (isWslCwd(context.cwd) || isWslShellOverride(context.shellOverride)) {
+    return false
+  }
+  return true
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildWindowsPtyCompatibilityOptions } from './windows-pty-compatibility'
+import {
+  buildWindowsPtyCompatibilityOptions,
+  isLocalNativeWindowsPty
+} from './windows-pty-compatibility'
 
 describe('buildWindowsPtyCompatibilityOptions', () => {
   it('returns ConPTY compatibility options for local Windows terminals', () => {
@@ -27,14 +30,21 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
   })
 
   it('skips compatibility options for WSL cwd terminals', () => {
-    expect(
-      buildWindowsPtyCompatibilityOptions({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        connectionId: null,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
-        shellOverride: null
-      })
-    ).toEqual({})
+    for (const cwd of [
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+      '\\\\wsl$\\Debian\\home\\me\\repo',
+      '//wsl.localhost/Ubuntu/home/me/repo',
+      '//wsl$/Debian/home/me/repo'
+    ]) {
+      expect(
+        buildWindowsPtyCompatibilityOptions({
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          connectionId: null,
+          cwd,
+          shellOverride: null
+        })
+      ).toEqual({})
+    }
   })
 
   it('skips compatibility options when the shell override launches WSL', () => {
@@ -57,5 +67,24 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         shellOverride: null
       })
     ).toEqual({})
+  })
+
+  it('exposes the same local native Windows predicate for related renderer workarounds', () => {
+    expect(
+      isLocalNativeWindowsPty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe'
+      })
+    ).toBe(true)
+    expect(
+      isLocalNativeWindowsPty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: 'ssh-1',
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe'
+      })
+    ).toBe(false)
   })
 })
