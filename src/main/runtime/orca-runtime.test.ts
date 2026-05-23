@@ -2194,6 +2194,40 @@ describe('OrcaRuntimeService', () => {
     expect(writes).toEqual(['continue', '\r'])
   })
 
+  it('includes headless writes appended while a renderer snapshot is awaiting prior writes', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const firstWrite = deferred<void>()
+    let appendedWriteParsed = false
+    const state = {
+      emulator: {
+        isAlternateScreen: false,
+        getSnapshot: vi.fn(() => ({
+          rehydrateSequences: '',
+          snapshotAnsi: appendedWriteParsed ? 'before-after' : 'before',
+          cols: 80,
+          rows: 24
+        }))
+      },
+      writeChain: firstWrite.promise
+    }
+    const runtimeInternals = runtime as unknown as {
+      headlessTerminals: Map<string, typeof state>
+    }
+    runtimeInternals.headlessTerminals.set('pty-1', state)
+
+    const snapshotPromise = runtime.serializeHeadlessTerminalBufferForRenderer('pty-1')
+    state.writeChain = state.writeChain.then(() => {
+      appendedWriteParsed = true
+    })
+    firstWrite.resolve()
+
+    await expect(snapshotPromise).resolves.toEqual({
+      data: 'before-after',
+      cols: 80,
+      rows: 24
+    })
+  })
+
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const createTerminal = vi.fn()

@@ -578,6 +578,7 @@ const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
+const HEADLESS_RENDERER_SNAPSHOT_STABLE_WRITE_ATTEMPTS = 8
 const RECENT_PTY_OUTPUT_LIMIT = 4096
 
 type RuntimeNotifier = {
@@ -2319,7 +2320,10 @@ export class OrcaRuntimeService {
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
-    return this.serializeHeadlessTerminalBuffer(ptyId, opts)
+    return this.serializeHeadlessTerminalBuffer(ptyId, {
+      ...opts,
+      requireStableWrites: true
+    })
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
@@ -2543,13 +2547,15 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; requireStableWrites?: boolean } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null
     }
-    await state.writeChain
+    if (!(await this.waitForHeadlessWritesBeforeSnapshot(state, opts.requireStableWrites))) {
+      return null
+    }
     // Why: when an alternate-screen TUI (Claude Code, vim, etc.) is currently
     // active, the visible content is the alt-screen snapshot — replaying any
     // normal-buffer scrollback before it can duplicate shell prompts and
@@ -2562,6 +2568,30 @@ export class OrcaRuntimeService {
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 ? { data, cols: snapshot.cols, rows: snapshot.rows } : null
+  }
+
+  private async waitForHeadlessWritesBeforeSnapshot(
+    state: RuntimeHeadlessTerminal,
+    requireStableWrites = false
+  ): Promise<boolean> {
+    let observed = state.writeChain
+    await observed
+    if (!requireStableWrites || state.writeChain === observed) {
+      return true
+    }
+
+    for (let attempt = 0; attempt < HEADLESS_RENDERER_SNAPSHOT_STABLE_WRITE_ATTEMPTS; attempt++) {
+      observed = state.writeChain
+      await observed
+      if (state.writeChain === observed) {
+        return true
+      }
+    }
+
+    // Why: renderer reveal drops its fallback queue on a successful snapshot.
+    // If output keeps appending while we wait, prefer the renderer fallback
+    // replay over returning a stale "authoritative" headless snapshot.
+    return false
   }
 
   private disposeHeadlessTerminal(ptyId: string): void {
