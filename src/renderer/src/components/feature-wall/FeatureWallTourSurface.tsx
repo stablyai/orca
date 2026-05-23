@@ -11,6 +11,7 @@ import { getAgentsSteps, type AgentsStepId } from '../../../../shared/agents-orc
 import { getWorkbenchSteps, type WorkbenchStepId } from '../../../../shared/workbench-steps'
 import { getReviewSteps, type ReviewStepId } from '../../../../shared/review-steps'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
+import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
@@ -32,7 +33,7 @@ const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && navigator.userAgent.
 type FeatureWallTourSurfaceProps = {
   isOpen: boolean
   source: FeatureWallOpenSourceTelemetry
-  onDone: () => void | Promise<void>
+  onDone: (markSuccessfulExit?: () => void) => boolean | void | Promise<boolean | void>
   className?: string
   panelClassName?: string
   doneLabel?: string
@@ -40,6 +41,7 @@ type FeatureWallTourSurfaceProps = {
   enableKeyboardShortcut?: boolean
   compactRail?: boolean
   detachedFooter?: boolean
+  onTourDepthSummaryChange?: (summary: FeatureWallTourDepthSummary) => void
 }
 
 export function FeatureWallTourSurface({
@@ -52,7 +54,8 @@ export function FeatureWallTourSurface({
   footerText = 'Reopen any time from Help > Explore Orca.',
   enableKeyboardShortcut = true,
   compactRail = false,
-  detachedFooter = false
+  detachedFooter = false,
+  onTourDepthSummaryChange
 }: FeatureWallTourSurfaceProps): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -64,7 +67,6 @@ export function FeatureWallTourSurface({
     DEFAULT_FEATURE_WALL_WORKFLOW_ID
   )
   const railRefs = useRef<(HTMLButtonElement | null)[]>([])
-  useFeatureWallTourTelemetry(isOpen, source)
 
   const selectedIndex = useMemo(
     () =>
@@ -96,8 +98,14 @@ export function FeatureWallTourSurface({
     taskSourcePresentation.hasConnectedTaskSource,
     taskSourcePresentation.isCheckingTaskSources,
     orchestrationSkillInstalled,
-    browserUseSkillInstalled
+    browserUseSkillInstalled,
+    { onTourDepthSummaryChange }
   )
+  const { markExitAction } = useFeatureWallTourTelemetry({
+    isOpen,
+    source,
+    getDepthSummary: completion.getTourDepthSummary
+  })
 
   useEffect(() => {
     if (!agentsSteps.some((s) => s.id === agentsStepId)) {
@@ -295,7 +303,21 @@ export function FeatureWallTourSurface({
       }
     }
     if (isLastWorkflow) {
-      void onDone()
+      const exitAction = source === 'onboarding' ? 'onboarding_continue' : 'done'
+      let markedSuccessfulExit = false
+      const markSuccessfulExit = (): void => {
+        if (markedSuccessfulExit) {
+          return
+        }
+        markedSuccessfulExit = true
+        markExitAction(exitAction)
+      }
+      const doneResult = onDone(markSuccessfulExit)
+      if (doneResult instanceof Promise) {
+        void doneResult.then((result) => result !== false && markSuccessfulExit())
+      } else if (doneResult !== false) {
+        markSuccessfulExit()
+      }
       return
     }
     const nextWorkflow = FEATURE_WALL_WORKFLOWS[selectedIndex + 1]
@@ -310,6 +332,7 @@ export function FeatureWallTourSurface({
     completion,
     handleSelect,
     isLastWorkflow,
+    markExitAction,
     markWorkflowVisited,
     onDone,
     reviewStepId,
@@ -317,6 +340,7 @@ export function FeatureWallTourSurface({
     reviewSteps,
     selected.id,
     selectedIndex,
+    source,
     workbenchStepId,
     workbenchStepIndex,
     workbenchSteps

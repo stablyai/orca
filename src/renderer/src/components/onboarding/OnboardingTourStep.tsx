@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { FeatureTourPreview } from '../feature-wall/FeatureTourPreview'
 import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
@@ -10,7 +11,8 @@ type OnboardingTourStepProps = {
   tourStarted: boolean
   busyLabel: string | null
   onStartTour: () => void
-  onCompleteTour: () => void | Promise<void>
+  onCompleteTour: (markSuccessfulExit?: () => void) => boolean | void | Promise<boolean | void>
+  onTourDepthSummaryChange: (summary: FeatureWallTourDepthSummary) => void
 }
 
 type ViewTransition = {
@@ -25,7 +27,8 @@ export function OnboardingTourStep({
   tourStarted,
   busyLabel,
   onStartTour,
-  onCompleteTour
+  onCompleteTour,
+  onTourDepthSummaryChange
 }: OnboardingTourStepProps): JSX.Element {
   const prefersReducedMotion = usePrefersReducedMotion()
 
@@ -70,6 +73,7 @@ export function OnboardingTourStep({
         footerText={null}
         compactRail
         detachedFooter
+        onTourDepthSummaryChange={onTourDepthSummaryChange}
         className="h-full max-h-[790px] min-h-0"
         panelClassName="rounded-xl border border-border bg-card"
       />

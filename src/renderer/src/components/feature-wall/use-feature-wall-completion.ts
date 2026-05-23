@@ -3,6 +3,7 @@ import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-work
 import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { ReviewStepId } from '../../../../shared/review-steps'
+import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import {
   getCommitMessageAgentCapability,
   isCustomAgentId,
@@ -17,6 +18,7 @@ import {
 } from './feature-wall-completion-progress'
 import { hasFeatureWallUsageTracking } from './feature-wall-usage-tracking'
 import { usePersistedFeatureWallCompletion } from './use-persisted-feature-wall-completion'
+import { useFeatureWallSessionDepth } from './use-feature-wall-session-depth'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -28,6 +30,7 @@ export type FeatureWallCompletionState = {
   markWorkbenchStepVisited: (id: WorkbenchStepId) => void
   markReviewStepVisited: (id: ReviewStepId) => void
   refreshUsageAccountState: () => Promise<void>
+  getTourDepthSummary: () => FeatureWallTourDepthSummary
 }
 
 export function useFeatureWallCompletion(
@@ -35,8 +38,10 @@ export function useFeatureWallCompletion(
   hasConnectedTaskSource: boolean,
   isCheckingTaskSources: boolean,
   orchestrationSkillInstalled: boolean,
-  browserUseSkillInstalled: boolean
+  browserUseSkillInstalled: boolean,
+  options: { onTourDepthSummaryChange?: (summary: FeatureWallTourDepthSummary) => void } = {}
 ): FeatureWallCompletionState {
+  const { onTourDepthSummaryChange } = options
   const settings = useAppStore((s) => s.settings)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const rateLimits = useAppStore((s) => s.rateLimits)
@@ -94,9 +99,20 @@ export function useFeatureWallCompletion(
     setHasUsageAccount(await readUsageAccountState())
   }, [readUsageAccountState])
 
-  // Pull current account state once when the modal opens, then refresh on
-  // window focus — keeps the checkmark current after a sign-in flow that
-  // happens outside the modal.
+  const sessionDepth = useFeatureWallSessionDepth({
+    isOpen,
+    hasConnectedTaskSource,
+    isCheckingTaskSources,
+    hasUsageAccount,
+    orchestrationSkillInstalled,
+    browserUseSkillInstalled,
+    githubConfigured,
+    aiCommitPrConfigured,
+    onTourDepthSummaryChange
+  })
+
+  // Pull current account state once when the modal opens, then refresh on focus
+  // after a sign-in flow that happens outside the modal.
   useEffect(() => {
     if (isOpen) {
       void fetchRateLimits()
@@ -231,15 +247,53 @@ export function useFeatureWallCompletion(
     ]
   )
 
+  const {
+    markWorkflowVisitedForSession: markSessionWorkflowVisited,
+    markAgentStepVisitedForSession: markSessionAgentStepVisited,
+    markWorkbenchStepVisitedForSession: markSessionWorkbenchStepVisited,
+    markReviewStepVisitedForSession: markSessionReviewStepVisited,
+    getTourDepthSummary
+  } = sessionDepth
+
+  const markWorkflowVisitedForSession = useCallback(
+    (id: FeatureWallWorkflowId): void => {
+      markWorkflowVisited(id)
+      markSessionWorkflowVisited(id)
+    },
+    [markSessionWorkflowVisited, markWorkflowVisited]
+  )
+  const markAgentStepVisitedForSession = useCallback(
+    (id: AgentsStepId): void => {
+      markAgentStepVisited(id)
+      markSessionAgentStepVisited(id)
+    },
+    [markAgentStepVisited, markSessionAgentStepVisited]
+  )
+  const markWorkbenchStepVisitedForSession = useCallback(
+    (id: WorkbenchStepId): void => {
+      markWorkbenchStepVisited(id)
+      markSessionWorkbenchStepVisited(id)
+    },
+    [markSessionWorkbenchStepVisited, markWorkbenchStepVisited]
+  )
+  const markReviewStepVisitedForSession = useCallback(
+    (id: ReviewStepId): void => {
+      markReviewStepVisited(id)
+      markSessionReviewStepVisited(id)
+    },
+    [markReviewStepVisited, markSessionReviewStepVisited]
+  )
+
   return {
     workflowDone,
     agentStepDone,
     workbenchStepDone,
     reviewStepDone,
-    markWorkflowVisited,
-    markAgentStepVisited,
-    markWorkbenchStepVisited,
-    markReviewStepVisited,
-    refreshUsageAccountState
+    markWorkflowVisited: markWorkflowVisitedForSession,
+    markAgentStepVisited: markAgentStepVisitedForSession,
+    markWorkbenchStepVisited: markWorkbenchStepVisitedForSession,
+    markReviewStepVisited: markReviewStepVisitedForSession,
+    refreshUsageAccountState,
+    getTourDepthSummary
   }
 }

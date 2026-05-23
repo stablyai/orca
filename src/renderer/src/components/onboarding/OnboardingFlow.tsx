@@ -263,6 +263,7 @@ export default function OnboardingFlow({
               busyLabel={busyLabel}
               onStartTour={flow.startTour}
               onCompleteTour={flow.completeTour}
+              onTourDepthSummaryChange={flow.recordTourDepthSummary}
             />
           )}
           {currentStep.id === 'repo' && (

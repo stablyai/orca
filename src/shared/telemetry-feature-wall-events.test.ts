@@ -9,6 +9,22 @@ describe('feature wall schemas', () => {
     expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: 1200 }).success).toBe(true)
   })
 
+  it('accepts the close depth summary payload', () => {
+    expect(
+      eventSchemas.feature_wall_closed.safeParse({
+        dwell_ms: 1200,
+        source: 'onboarding',
+        exit_action: 'onboarding_continue',
+        furthest_step: 'review_ship',
+        last_group_id: 'review',
+        visited_workflow_count: 5,
+        visited_substep_count: 9,
+        completed_workflow_count: 4,
+        completed_substep_count: 7
+      }).success
+    ).toBe(true)
+  })
+
   it('rejects stale or invalid source variants', () => {
     expect(eventSchemas.feature_wall_opened.safeParse({}).success).toBe(false)
     expect(eventSchemas.feature_wall_opened.safeParse({ surface: 'help_tour' }).success).toBe(false)
@@ -17,6 +33,29 @@ describe('feature wall schemas', () => {
 
   it('rejects out-of-range dwell time', () => {
     expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: -1 }).success).toBe(false)
+  })
+
+  it('rejects invalid close depth fields', () => {
+    expect(
+      eventSchemas.feature_wall_closed.safeParse({
+        dwell_ms: 1200,
+        source: 'help_menu',
+        exit_action: 'left',
+        furthest_step: 'review_raw_url'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_wall_closed.safeParse({
+        dwell_ms: 1200,
+        visited_workflow_count: 6
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_wall_closed.safeParse({
+        dwell_ms: 1200,
+        repo_path: '/Users/alice/project'
+      }).success
+    ).toBe(false)
   })
 
   it('accepts only known tile ids for tile focus telemetry', () => {
