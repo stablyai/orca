@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
 
@@ -75,6 +76,26 @@ Host myserver
 `
     const hosts = parseSshConfig(config)
     expect(hosts[0].identityFile).toBe('/home/testuser/.ssh/id_ed25519')
+  })
+
+  it('parses IdentityAgent with ~ expansion', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentityAgent ~/.1password/agent.sock
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identityAgent).toBe('/home/testuser/.1password/agent.sock')
+  })
+
+  it('parses IdentitiesOnly', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentitiesOnly yes
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identitiesOnly).toBe(true)
   })
 
   it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
@@ -197,12 +218,14 @@ describe('sshConfigHostsToTargets', () => {
     expect(targets[0].username).toBe('')
   })
 
-  it('carries through identityFile, proxyCommand, and jumpHost', () => {
+  it('carries through identityFile, identityAgent, identitiesOnly, proxyCommand, and jumpHost', () => {
     const hosts = [
       {
         host: 'internal',
         hostname: '10.0.0.5',
         identityFile: '/home/user/.ssh/id_rsa',
+        identityAgent: '/home/user/.1password/agent.sock',
+        identitiesOnly: true,
         proxyCommand: 'ssh -W %h:%p bastion',
         proxyUseFdpass: true,
         proxyJump: 'bastion.example.com'
@@ -210,6 +233,8 @@ describe('sshConfigHostsToTargets', () => {
     ]
     const targets = sshConfigHostsToTargets(hosts, new Set())
     expect(targets[0].identityFile).toBe('/home/user/.ssh/id_rsa')
+    expect(targets[0].identityAgent).toBe('/home/user/.1password/agent.sock')
+    expect(targets[0].identitiesOnly).toBe(true)
     expect(targets[0].proxyCommand).toBe('ssh -W %h:%p bastion')
     expect(targets[0].jumpHost).toBe('bastion.example.com')
   })
@@ -337,5 +362,23 @@ describe('parseSshGOutput', () => {
     const output = 'hostname example.com\nidentityfile ~/custom_key\nport 22'
     const result = parseSshGOutput(output)
     expect(result.identityFile).toEqual(['/home/testuser/custom_key'])
+  })
+
+  it('parses identityagent with ~ expansion', () => {
+    const output = 'hostname example.com\nidentityagent ~/.1password/agent.sock\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identityAgent).toBe('/home/testuser/.1password/agent.sock')
+  })
+
+  it('preserves identityagent none so auth can disable agent fallback', () => {
+    const output = 'hostname example.com\nidentityagent none\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identityAgent).toBe('none')
+  })
+
+  it('parses identitiesonly yes', () => {
+    const output = 'hostname example.com\nidentitiesonly yes\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identitiesOnly).toBe(true)
   })
 })

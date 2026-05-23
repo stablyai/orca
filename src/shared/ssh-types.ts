@@ -14,6 +14,10 @@ export type SshTarget = {
   username: string
   /** Path to private key file, if using key-based auth. */
   identityFile?: string
+  /** SSH agent socket path from IdentityAgent, if configured. */
+  identityAgent?: string
+  /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
+  identitiesOnly?: boolean
   /** ProxyCommand from SSH config, if any. */
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */

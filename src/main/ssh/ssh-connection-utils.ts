@@ -1,12 +1,17 @@
-import { readFileSync, existsSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
-import { homedir } from 'os'
-import { join } from 'path'
 import { Duplex } from 'stream'
 import type { Socket as NetSocket } from 'net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+import {
+  resolveAgentConfigValue,
+  resolveAgentSocket,
+  resolvePrivateKey,
+  resolveUnencryptedExplicitPrivateKey
+} from './ssh-auth-resolution'
+
+export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
 export type SshCredentialKind = 'passphrase' | 'password'
 
@@ -43,8 +48,13 @@ export function isAuthError(err: Error): boolean {
   return (
     msg.includes('all configured authentication methods failed') ||
     msg.includes('authentication failed') ||
+    msg.includes('too many authentication failures') ||
     (err as { level?: string }).level === 'client-authentication'
   )
+}
+
+export function isAgentFallbackError(err: Error): boolean {
+  return isAuthError(err) || (err as { level?: string }).level === 'agent'
 }
 
 export function isTransientError(err: Error): boolean {
@@ -82,39 +92,18 @@ function cmdEscape(s: string): string {
   return `"${s.replace(/"/g, '""')}"`
 }
 
-// Why: ssh2 only tries keys that are explicitly provided. Users with keys in
-// standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
-const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
-
-const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
-
-// Why: parseSshGOutput expands ~ to homedir(), so resolved identityFile
-// paths won't match the ~/... form in DEFAULT_KEY_PATHS. Pre-expand for
-// the comparison in buildConnectConfig.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => join(homedir(), '.ssh', name))
-
-export function findDefaultKeyFile(): { path: string; contents: Buffer } | undefined {
-  for (const keyPath of DEFAULT_KEY_PATHS) {
-    const resolved = keyPath.replace(/^~/, homedir())
-    try {
-      if (!existsSync(resolved)) {
-        continue
-      }
-      const contents = readFileSync(resolved)
-      return { path: keyPath, contents }
-    } catch {
-      continue
-    }
-  }
-  return undefined
+type BuildConnectConfigOptions = {
+  includeAgent?: boolean
+  includePrivateKey?: boolean
 }
 
-// Why: matches VS Code's _connectSSH auth method selection (lines 606-611, 727-758).
-// ssh2 handles the auth negotiation natively — no custom authHandler needed.
+// Why: ssh2 tries privateKey before agent, but parses encrypted privateKey
+// values before any agent auth can run. Keep unencrypted explicit keys first
+// while deferring encrypted keys until the post-agent passphrase path.
 export function buildConnectConfig(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: SshResolvedConfig | null,
+  options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
   const effectiveHost = target.host || resolved?.hostname || target.label
   const effectivePort = target.port || resolved?.port || 22
@@ -128,32 +117,20 @@ export function buildConnectConfig(
     keepaliveInterval: 15_000
   }
 
-  // Why: always provide agent when available. Unlike VS Code (which has a
-  // passphrase prompt UI), we can't decrypt passphrase-protected keys at
-  // runtime. The agent holds decrypted keys, so it must always be a
-  // fallback even when an explicit key file is also provided.
-  if (process.env.SSH_AUTH_SOCK) {
-    config.agent = process.env.SSH_AUTH_SOCK
+  const shouldIncludeAgent = options.includeAgent ?? true
+  const agentSocket = shouldIncludeAgent ? resolveAgentSocket(target, resolved) : undefined
+  const agent = agentSocket ? resolveAgentConfigValue(agentSocket, target, resolved) : undefined
+
+  if (agent) {
+    config.agent = agent
   }
 
-  const resolvedIdentity = resolved?.identityFile?.[0]
-  const explicitKey =
-    target.identityFile ||
-    (resolvedIdentity && !EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedIdentity)
-      ? resolvedIdentity
-      : undefined)
-
-  if (explicitKey) {
-    try {
-      config.privateKey = readFileSync(explicitKey.replace(/^~/, homedir()))
-    } catch {
-      // Key unreadable — agent will handle auth if available
-    }
-  } else {
-    const fallback = findDefaultKeyFile()
-    if (fallback) {
-      config.privateKey = fallback.contents
-    }
+  const key =
+    (options.includePrivateKey ?? !agent)
+      ? resolvePrivateKey(target, resolved)
+      : resolveUnencryptedExplicitPrivateKey(target, resolved)
+  if (key) {
+    config.privateKey = key.contents
   }
 
   return config as ConnectConfig
