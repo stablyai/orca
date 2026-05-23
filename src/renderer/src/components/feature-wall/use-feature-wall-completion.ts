@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-workflows'
 import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
@@ -10,16 +10,13 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import { useAppStore } from '@/store'
 import {
-  persistVisitedWorkflow,
-  persistVisitedAgentStep,
-  persistVisitedReviewStep,
-  persistVisitedWorkbenchStep,
-  readPersistedVisitedWorkflows,
-  readPersistedVisitedAgentSteps,
-  readPersistedVisitedReviewSteps,
-  readPersistedVisitedWorkbenchSteps
-} from './feature-wall-completion-persistence'
+  FEATURE_WALL_AGENT_STEP_IDS,
+  FEATURE_WALL_REVIEW_STEP_IDS,
+  FEATURE_WALL_WORKBENCH_STEP_IDS,
+  getFeatureWallCompletionProgress
+} from './feature-wall-completion-progress'
 import { hasFeatureWallUsageTracking } from './feature-wall-usage-tracking'
+import { usePersistedFeatureWallCompletion } from './use-persisted-feature-wall-completion'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -31,80 +28,6 @@ export type FeatureWallCompletionState = {
   markWorkbenchStepVisited: (id: WorkbenchStepId) => void
   markReviewStepVisited: (id: ReviewStepId) => void
   refreshUsageAccountState: () => Promise<void>
-}
-
-export type FeatureWallCompletionProgress = Pick<
-  FeatureWallCompletionState,
-  'workflowDone' | 'agentStepDone' | 'workbenchStepDone' | 'reviewStepDone'
->
-
-export function getFeatureWallCompletionProgress(input: {
-  visitedWorkflows: ReadonlySet<FeatureWallWorkflowId>
-  visitedAgentSteps: ReadonlySet<AgentsStepId>
-  visitedWorkbenchSteps: ReadonlySet<WorkbenchStepId>
-  visitedReviewSteps: ReadonlySet<ReviewStepId>
-  hasConnectedTaskSource: boolean
-  isCheckingTaskSources: boolean
-  hasUsageAccount: boolean
-  orchestrationSkillInstalled: boolean
-  browserUseSkillInstalled: boolean
-  githubConfigured: boolean
-  aiCommitPrConfigured: boolean
-}): FeatureWallCompletionProgress {
-  const workspacesVisited = input.visitedWorkflows.has('workspaces')
-  const tasksVisited = input.visitedWorkflows.has('tasks')
-  const agentsVisited = input.visitedWorkflows.has('agents-orchestration')
-  const workbenchVisited = input.visitedWorkflows.has('workbench')
-  const reviewVisited = input.visitedWorkflows.has('review')
-
-  const tasksDone = tasksVisited && !input.isCheckingTaskSources && input.hasConnectedTaskSource
-  const usageDone = input.visitedAgentSteps.has('usage') && input.hasUsageAccount
-  const orchestrationDone =
-    input.visitedAgentSteps.has('orchestration') && input.orchestrationSkillInstalled
-  // Why: the keep-awake setting surfaced on Visibility is optional; viewing
-  // the step should complete the tour item even when the setting stays off.
-  const statusesDone = input.visitedAgentSteps.has('statuses')
-
-  const agentsWorkflowDone = agentsVisited && usageDone && orchestrationDone && statusesDone
-  // Workbench is "done" once the user has viewed every sub-step — same shape
-  // as agents, with Browser gated by the Browser Use skill.
-  const workbenchTerminalDone = input.visitedWorkbenchSteps.has('terminal')
-  const workbenchEditorDone = input.visitedWorkbenchSteps.has('editor')
-  const workbenchBrowserDone =
-    input.visitedWorkbenchSteps.has('browser') && input.browserUseSkillInstalled
-  const workbenchAllStepsDone =
-    workbenchVisited && workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
-  // Review mixes informational and setup-backed steps, but every checked state
-  // still requires an explicit visit so existing config does not pre-check it.
-  const reviewNotesDone = input.visitedReviewSteps.has('notes')
-  const reviewPrViewDone = input.visitedReviewSteps.has('pr-view') && input.githubConfigured
-  const reviewShipDone = input.visitedReviewSteps.has('ship') && input.aiCommitPrConfigured
-  const reviewAllStepsDone = reviewVisited && reviewNotesDone && reviewPrViewDone && reviewShipDone
-
-  return {
-    workflowDone: {
-      workspaces: workspacesVisited,
-      tasks: tasksDone,
-      'agents-orchestration': agentsWorkflowDone,
-      workbench: workbenchAllStepsDone,
-      review: reviewAllStepsDone
-    },
-    agentStepDone: {
-      statuses: statusesDone,
-      usage: usageDone,
-      orchestration: orchestrationDone
-    },
-    workbenchStepDone: {
-      terminal: workbenchTerminalDone,
-      editor: workbenchEditorDone,
-      browser: workbenchBrowserDone
-    },
-    reviewStepDone: {
-      notes: reviewNotesDone,
-      'pr-view': reviewPrViewDone,
-      ship: reviewShipDone
-    }
-  }
 }
 
 export function useFeatureWallCompletion(
@@ -134,29 +57,25 @@ export function useFeatureWallCompletion(
         : false)
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
-  const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(() =>
-    readPersistedVisitedWorkflows()
-  )
-  const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(() =>
-    readPersistedVisitedAgentSteps()
-  )
-  const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(() =>
-    readPersistedVisitedWorkbenchSteps()
-  )
-  const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(() =>
-    readPersistedVisitedReviewSteps()
-  )
-
-  // Reset from persisted state on close so another window or tab's tour visit
-  // is reflected the next time this modal opens.
-  useEffect(() => {
-    if (!isOpen) {
-      setVisitedWorkflows(readPersistedVisitedWorkflows())
-      setVisitedAgentSteps(readPersistedVisitedAgentSteps())
-      setVisitedWorkbenchSteps(readPersistedVisitedWorkbenchSteps())
-      setVisitedReviewSteps(readPersistedVisitedReviewSteps())
-    }
-  }, [isOpen])
+  const persistedCompletion = usePersistedFeatureWallCompletion(isOpen)
+  const {
+    visitedWorkflows,
+    visitedAgentSteps,
+    visitedWorkbenchSteps,
+    visitedReviewSteps,
+    completedWorkflows,
+    completedAgentSteps,
+    completedWorkbenchSteps,
+    completedReviewSteps,
+    markWorkflowVisited,
+    markAgentStepVisited,
+    markWorkbenchStepVisited,
+    markReviewStepVisited,
+    markWorkflowCompleted,
+    markAgentStepCompleted,
+    markWorkbenchStepCompleted,
+    markReviewStepCompleted
+  } = persistedCompletion
 
   const readUsageAccountState = useCallback(async (): Promise<boolean> => {
     const [claude, codex] = await Promise.all([
@@ -205,65 +124,112 @@ export function useFeatureWallCompletion(
     }
   }, [isOpen, readUsageAccountState])
 
-  const markWorkflowVisited = useCallback((id: FeatureWallWorkflowId): void => {
-    persistVisitedWorkflow(id)
-    setVisitedWorkflows((prev) => {
-      if (prev.has(id)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
-  }, [])
-  const markAgentStepVisited = useCallback((id: AgentsStepId): void => {
-    persistVisitedAgentStep(id)
-    setVisitedAgentSteps((prev) => {
-      if (prev.has(id)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
-  }, [])
-  const markWorkbenchStepVisited = useCallback((id: WorkbenchStepId): void => {
-    persistVisitedWorkbenchStep(id)
-    setVisitedWorkbenchSteps((prev) => {
-      if (prev.has(id)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
-  }, [])
-  const markReviewStepVisited = useCallback((id: ReviewStepId): void => {
-    persistVisitedReviewStep(id)
-    setVisitedReviewSteps((prev) => {
-      if (prev.has(id)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
-  }, [])
-
-  const { workflowDone, agentStepDone, workbenchStepDone, reviewStepDone } =
-    getFeatureWallCompletionProgress({
-      visitedWorkflows,
-      visitedAgentSteps,
-      visitedWorkbenchSteps,
-      visitedReviewSteps,
-      hasConnectedTaskSource,
-      isCheckingTaskSources,
-      hasUsageAccount,
-      orchestrationSkillInstalled,
+  const currentProgress = useMemo(
+    () =>
+      getFeatureWallCompletionProgress({
+        visitedWorkflows,
+        visitedAgentSteps,
+        visitedWorkbenchSteps,
+        visitedReviewSteps,
+        hasConnectedTaskSource,
+        isCheckingTaskSources,
+        hasUsageAccount,
+        orchestrationSkillInstalled,
+        browserUseSkillInstalled,
+        githubConfigured,
+        aiCommitPrConfigured
+      }),
+    [
+      aiCommitPrConfigured,
       browserUseSkillInstalled,
       githubConfigured,
-      aiCommitPrConfigured
-    })
+      hasConnectedTaskSource,
+      hasUsageAccount,
+      isCheckingTaskSources,
+      orchestrationSkillInstalled,
+      visitedAgentSteps,
+      visitedReviewSteps,
+      visitedWorkbenchSteps,
+      visitedWorkflows
+    ]
+  )
+
+  // Why: tour checkmarks are progress acknowledgements; once a user sees one
+  // turn green, later setup polling should not make it disappear.
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+    for (const id of Object.keys(currentProgress.workflowDone) as FeatureWallWorkflowId[]) {
+      if (currentProgress.workflowDone[id] && !completedWorkflows.has(id)) {
+        markWorkflowCompleted(id)
+      }
+    }
+    for (const id of FEATURE_WALL_AGENT_STEP_IDS) {
+      if (currentProgress.agentStepDone[id] && !completedAgentSteps.has(id)) {
+        markAgentStepCompleted(id)
+      }
+    }
+    for (const id of FEATURE_WALL_WORKBENCH_STEP_IDS) {
+      if (currentProgress.workbenchStepDone[id] && !completedWorkbenchSteps.has(id)) {
+        markWorkbenchStepCompleted(id)
+      }
+    }
+    for (const id of FEATURE_WALL_REVIEW_STEP_IDS) {
+      if (currentProgress.reviewStepDone[id] && !completedReviewSteps.has(id)) {
+        markReviewStepCompleted(id)
+      }
+    }
+  }, [
+    completedAgentSteps,
+    completedReviewSteps,
+    completedWorkbenchSteps,
+    completedWorkflows,
+    currentProgress,
+    isOpen,
+    markAgentStepCompleted,
+    markReviewStepCompleted,
+    markWorkbenchStepCompleted,
+    markWorkflowCompleted
+  ])
+
+  const { workflowDone, agentStepDone, workbenchStepDone, reviewStepDone } = useMemo(
+    () =>
+      getFeatureWallCompletionProgress({
+        visitedWorkflows,
+        visitedAgentSteps,
+        visitedWorkbenchSteps,
+        visitedReviewSteps,
+        completedWorkflows,
+        completedAgentSteps,
+        completedWorkbenchSteps,
+        completedReviewSteps,
+        hasConnectedTaskSource,
+        isCheckingTaskSources,
+        hasUsageAccount,
+        orchestrationSkillInstalled,
+        browserUseSkillInstalled,
+        githubConfigured,
+        aiCommitPrConfigured
+      }),
+    [
+      aiCommitPrConfigured,
+      browserUseSkillInstalled,
+      completedAgentSteps,
+      completedReviewSteps,
+      completedWorkbenchSteps,
+      completedWorkflows,
+      githubConfigured,
+      hasConnectedTaskSource,
+      hasUsageAccount,
+      isCheckingTaskSources,
+      orchestrationSkillInstalled,
+      visitedAgentSteps,
+      visitedReviewSteps,
+      visitedWorkbenchSteps,
+      visitedWorkflows
+    ]
+  )
 
   return {
     workflowDone,

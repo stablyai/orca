@@ -168,7 +168,7 @@ export const featureWallTileIdSchema = z.enum([
 ])
 export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
 
-export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'unknown'])
+export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'onboarding', 'unknown'])
 export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
 
 export const featureWallWorkflowIdSchema = z.enum([
@@ -471,6 +471,7 @@ const onboardingValueKindSchema = z.enum([
   'theme',
   'notifications',
   'integrations',
+  'tour',
   'repo'
 ])
 const onboardingTaskSourcesGithubStatusSchema = z.enum([

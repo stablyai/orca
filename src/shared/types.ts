@@ -1957,7 +1957,7 @@ export type OnboardingChecklistState = {
 export type OnboardingState = {
   closedAt: number | null
   outcome: OnboardingOutcome | null
-  // Sentinel `-1` = not started; `1..4` = highest wizard step the user
+  // Sentinel `-1` = not started; `1..5` = highest wizard step the user
   // finished. Kept as `number` (not a literal union) because callers clamp
   // via `Math.max`/`Math.min` against arbitrary numerics.
   lastCompletedStep: number

@@ -12,17 +12,31 @@ import { ReviewShipAnimatedVisual } from './ReviewShipAnimatedVisual'
 export function ReviewAnimatedVisual(props: {
   reducedMotion: boolean
   activeStepId: ReviewStepId
+  widthPx?: number
 }): JSX.Element {
-  const { reducedMotion, activeStepId } = props
+  const { reducedMotion, activeStepId, widthPx } = props
+  const scale = widthPx ? widthPx / PANEL_WIDTH : 1
   return (
-    <div className="relative overflow-visible" style={{ width: PANEL_WIDTH, height: PANEL_HEIGHT }}>
-      {activeStepId === 'notes' ? (
-        <ReviewNotesAnimatedVisual key="notes" reducedMotion={reducedMotion} />
-      ) : activeStepId === 'pr-view' ? (
-        <ReviewPRViewAnimatedVisual key="pr-view" reducedMotion={reducedMotion} />
-      ) : (
-        <ReviewShipAnimatedVisual key="ship" reducedMotion={reducedMotion} />
-      )}
+    <div
+      className="relative overflow-visible"
+      style={{ width: widthPx ?? PANEL_WIDTH, height: PANEL_HEIGHT * scale }}
+    >
+      <div
+        className="absolute left-1/2 top-0 origin-top"
+        style={{
+          width: PANEL_WIDTH,
+          height: PANEL_HEIGHT,
+          transform: `translateX(-50%) scale(${scale})`
+        }}
+      >
+        {activeStepId === 'notes' ? (
+          <ReviewNotesAnimatedVisual key="notes" reducedMotion={reducedMotion} />
+        ) : activeStepId === 'pr-view' ? (
+          <ReviewPRViewAnimatedVisual key="pr-view" reducedMotion={reducedMotion} />
+        ) : (
+          <ReviewShipAnimatedVisual key="ship" reducedMotion={reducedMotion} />
+        )}
+      </div>
     </div>
   )
 }

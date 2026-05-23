@@ -432,9 +432,8 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         </div>
       </div>
 
-      {/* Standalone keyboard hint below the visual — same chip pattern as
-          WorkspaceShortcutsCopy in FeatureWallBody. Kept inside the visual
-          card so the bullets-side stays clean. */}
+      {/* Standalone keyboard hint stays inside the visual so the tour copy can
+          remain a single subheader line. */}
       <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
         Same pane: <kbd className={KBD_CLASS}>⌘D</kbd> splits right ·{' '}
         <kbd className={KBD_CLASS}>⌘⇧D</kbd> splits down

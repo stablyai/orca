@@ -8,12 +8,16 @@ import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 
 const PERSISTED_WORKFLOW_IDS = new Set<FeatureWallWorkflowId>(FEATURE_WALL_WORKFLOW_IDS)
 const VISITED_WORKFLOWS_STORAGE_KEY = 'orca.featureWall.visitedWorkflows.v1'
+const COMPLETED_WORKFLOWS_STORAGE_KEY = 'orca.featureWall.completedWorkflows.v1'
 const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['statuses', 'usage', 'orchestration'])
 const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
+const COMPLETED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.completedAgentSteps.v1'
 const PERSISTED_WORKBENCH_STEP_IDS = new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
 const VISITED_WORKBENCH_STEPS_STORAGE_KEY = 'orca.featureWall.visitedWorkbenchSteps.v1'
+const COMPLETED_WORKBENCH_STEPS_STORAGE_KEY = 'orca.featureWall.completedWorkbenchSteps.v1'
 const PERSISTED_REVIEW_STEP_IDS = new Set<ReviewStepId>(['notes', 'pr-view', 'ship'])
 const VISITED_REVIEW_STEPS_STORAGE_KEY = 'orca.featureWall.visitedReviewSteps.v1'
+const COMPLETED_REVIEW_STEPS_STORAGE_KEY = 'orca.featureWall.completedReviewSteps.v1'
 
 export function normalizeFeatureWallVisitedWorkflows(value: unknown): FeatureWallWorkflowId[] {
   if (!Array.isArray(value)) {
@@ -82,6 +86,21 @@ export function readPersistedVisitedWorkflows(): Set<FeatureWallWorkflowId> {
   }
 }
 
+export function readPersistedCompletedWorkflows(): Set<FeatureWallWorkflowId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedWorkflows(
+        JSON.parse(localStorage.getItem(COMPLETED_WORKFLOWS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 export function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
   if (typeof localStorage === 'undefined') {
     return new Set()
@@ -90,6 +109,21 @@ export function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
     return new Set(
       normalizeFeatureWallVisitedAgentSteps(
         JSON.parse(localStorage.getItem(VISITED_AGENT_STEPS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function readPersistedCompletedAgentSteps(): Set<AgentsStepId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedAgentSteps(
+        JSON.parse(localStorage.getItem(COMPLETED_AGENT_STEPS_STORAGE_KEY) ?? '[]')
       )
     )
   } catch {
@@ -112,6 +146,21 @@ export function readPersistedVisitedWorkbenchSteps(): Set<WorkbenchStepId> {
   }
 }
 
+export function readPersistedCompletedWorkbenchSteps(): Set<WorkbenchStepId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedWorkbenchSteps(
+        JSON.parse(localStorage.getItem(COMPLETED_WORKBENCH_STEPS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 export function readPersistedVisitedReviewSteps(): Set<ReviewStepId> {
   if (typeof localStorage === 'undefined') {
     return new Set()
@@ -120,6 +169,21 @@ export function readPersistedVisitedReviewSteps(): Set<ReviewStepId> {
     return new Set(
       normalizeFeatureWallVisitedReviewSteps(
         JSON.parse(localStorage.getItem(VISITED_REVIEW_STEPS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function readPersistedCompletedReviewSteps(): Set<ReviewStepId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedReviewSteps(
+        JSON.parse(localStorage.getItem(COMPLETED_REVIEW_STEPS_STORAGE_KEY) ?? '[]')
       )
     )
   } catch {
@@ -141,6 +205,20 @@ export function persistVisitedWorkflow(id: FeatureWallWorkflowId): void {
   }
 }
 
+export function persistCompletedWorkflow(id: FeatureWallWorkflowId): void {
+  if (!PERSISTED_WORKFLOW_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedCompletedWorkflows()
+    next.add(id)
+    localStorage.setItem(COMPLETED_WORKFLOWS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
+
 export function persistVisitedAgentStep(id: AgentsStepId): void {
   if (!PERSISTED_AGENT_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
     return
@@ -149,6 +227,20 @@ export function persistVisitedAgentStep(id: AgentsStepId): void {
     const next = readPersistedVisitedAgentSteps()
     next.add(id)
     localStorage.setItem(VISITED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
+
+export function persistCompletedAgentStep(id: AgentsStepId): void {
+  if (!PERSISTED_AGENT_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedCompletedAgentSteps()
+    next.add(id)
+    localStorage.setItem(COMPLETED_AGENT_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
     // localStorage can be unavailable in hardened browser contexts; completion
     // still works for the current open modal from React state.
@@ -169,6 +261,20 @@ export function persistVisitedWorkbenchStep(id: WorkbenchStepId): void {
   }
 }
 
+export function persistCompletedWorkbenchStep(id: WorkbenchStepId): void {
+  if (!PERSISTED_WORKBENCH_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedCompletedWorkbenchSteps()
+    next.add(id)
+    localStorage.setItem(COMPLETED_WORKBENCH_STEPS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
+
 export function persistVisitedReviewStep(id: ReviewStepId): void {
   if (!PERSISTED_REVIEW_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
     return
@@ -177,6 +283,20 @@ export function persistVisitedReviewStep(id: ReviewStepId): void {
     const next = readPersistedVisitedReviewSteps()
     next.add(id)
     localStorage.setItem(VISITED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
+  }
+}
+
+export function persistCompletedReviewStep(id: ReviewStepId): void {
+  if (!PERSISTED_REVIEW_STEP_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedCompletedReviewSteps()
+    next.add(id)
+    localStorage.setItem(COMPLETED_REVIEW_STEPS_STORAGE_KEY, JSON.stringify([...next]))
   } catch {
     // localStorage can be unavailable in hardened browser contexts; completion
     // still works for the current open modal from React state.

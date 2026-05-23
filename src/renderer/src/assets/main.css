@@ -1522,6 +1522,58 @@
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
 }
 
+/* Onboarding step 5: the compact "Take the tour" intro expands into the
+   full tour shell, so animate the browser snapshots to avoid a hard jump. */
+html.onboarding-tour-start-transition::view-transition-old(root),
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-duration: 760ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+html.onboarding-tour-start-transition::view-transition-old(root) {
+  animation-name: onboarding-tour-start-old;
+}
+
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-name: onboarding-tour-start-new;
+}
+
+@keyframes onboarding-tour-start-old {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  28% {
+    opacity: 0.9;
+    transform: translateY(-2px) scale(0.998);
+  }
+  42% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+}
+
+@keyframes onboarding-tour-start-new {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  34% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ── Feature tour nudge: cycling preview ─────────────────────────── */
 
 /* Why: the bottom-right nudge cycles through 4 silhouette frames
@@ -1645,6 +1697,8 @@
    dashed paths fanning down from the coordinator. */
 .feature-tour-orch-bubble {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 12px;
   height: 12px;
   border-radius: 3px;
@@ -1923,43 +1977,10 @@
   }
 }
 
-/* Frame 4 — Terminal: caret blinks while a command types out, then output
-   bars stream in beneath it. */
+/* Frame 4 — Terminal: command stays anchored while the split panes stream
+   Playwright and Claude activity. */
 .feature-tour-terminal-line {
-  width: 0;
-  animation: feature-tour-terminal-type var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
-    infinite;
-  animation-delay: 12s;
-}
-@keyframes feature-tour-terminal-type {
-  0%,
-  3% {
-    width: 0;
-  }
-  9% {
-    width: 70%;
-  }
-  23.5% {
-    width: 70%;
-  }
-  25%,
-  100% {
-    width: 70%;
-  }
-}
-
-.feature-tour-terminal-caret {
-  animation: feature-tour-terminal-caret-blink 0.9s steps(1) infinite;
-}
-@keyframes feature-tour-terminal-caret-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
+  width: 23ch;
 }
 
 .feature-tour-terminal-output {
@@ -2011,8 +2032,6 @@
   .feature-tour-tasks-pill-label,
   .feature-tour-tasks-click-ring,
   .feature-tour-tasks-workspace,
-  .feature-tour-terminal-line,
-  .feature-tour-terminal-caret,
   .feature-tour-terminal-output {
     animation: none !important;
   }

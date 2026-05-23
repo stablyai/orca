@@ -5,6 +5,7 @@ describe('feature wall schemas', () => {
   it('accepts the unconditional open and close payloads', () => {
     expect(eventSchemas.feature_wall_opened.safeParse({ source: 'help_menu' }).success).toBe(true)
     expect(eventSchemas.feature_wall_opened.safeParse({ source: 'popup' }).success).toBe(true)
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'onboarding' }).success).toBe(true)
     expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: 1200 }).success).toBe(true)
   })
 

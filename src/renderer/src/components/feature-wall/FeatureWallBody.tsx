@@ -1,12 +1,10 @@
-import type { JSX, ReactNode } from 'react'
-import type {
-  FeatureWallWorkflow,
-  FeatureWallWorkflowBullet
-} from '../../../../shared/feature-wall-workflows'
+import type { JSX } from 'react'
+import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
-import type { AgentsStep, AgentsStepBullet } from '../../../../shared/agents-orchestration-steps'
+import type { AgentsStep } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { ReviewStep } from '../../../../shared/review-steps'
+import type { GlobalSettings } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
@@ -21,176 +19,10 @@ import { OrchestrationSetupCard } from '../settings/OrchestrationSetupCard'
 import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
-
-// Mac users see ⌘/⇧ glyphs, everyone else gets Ctrl+/Shift+ — matches the
-// existing convention used elsewhere in the renderer.
-const isMacPlatform = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-const MOD_KEY_LABEL = isMacPlatform ? '⌘' : 'Ctrl+'
-const SHIFT_KEY_LABEL = isMacPlatform ? '⇧' : 'Shift+'
-
-const KBD_CLASS =
-  'rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[11.5px] text-foreground'
-
-function Bullet(props: { children: ReactNode; className?: string }): JSX.Element {
-  return (
-    <li className={cn('flex items-start gap-2.5 text-[17px] leading-snug', props.className)}>
-      <span className="mt-[7px] inline-block size-1.5 shrink-0 rounded-full bg-foreground/40" />
-      <span>{props.children}</span>
-    </li>
-  )
-}
-
-function workflowBulletKey(bullet: FeatureWallWorkflowBullet): string {
-  return typeof bullet === 'string' ? bullet : bullet.leadIn
-}
-
-// Replace ⌘D / ⌘⇧D / ⌘⇧↑ etc. glyph runs with platform-aware kbd chips so the
-// non-Mac copy reads "Ctrl+D / Ctrl+Shift+D" while the Mac copy keeps the
-// compact symbol pattern.
-function renderShortcutChips(text: string): ReactNode {
-  const parts = text.split(/(⌘⇧?[A-Za-z↑↓←→])/g)
-  return parts.map((part, i) => {
-    if (!part.startsWith('⌘')) {
-      return <span key={i}>{part}</span>
-    }
-    const hasShift = part.includes('⇧')
-    const final = part.replace('⌘', '').replace('⇧', '')
-    return (
-      <kbd key={i} className={KBD_CLASS}>
-        {MOD_KEY_LABEL}
-        {hasShift ? SHIFT_KEY_LABEL : null}
-        {final}
-      </kbd>
-    )
-  })
-}
-
-function WorkflowBulletContent(props: { bullet: FeatureWallWorkflowBullet }): JSX.Element {
-  const { bullet } = props
-  if (typeof bullet === 'string') {
-    return <>{renderShortcutChips(bullet)}</>
-  }
-  return (
-    <>
-      <strong className="font-semibold">{bullet.leadIn}</strong> {renderShortcutChips(bullet.body)}
-    </>
-  )
-}
-
-function BulletList(props: { bullets: readonly FeatureWallWorkflowBullet[] }): JSX.Element {
-  return (
-    <ul className="flex flex-col gap-3" role="list">
-      {props.bullets.map((bullet) => (
-        <Bullet key={workflowBulletKey(bullet)}>
-          <WorkflowBulletContent bullet={bullet} />
-        </Bullet>
-      ))}
-    </ul>
-  )
-}
-
-// Why: agents-orchestration step 3 mentions the `orca` CLI inline. Render the
-// markdown-style backticks as monospace chips so the bullet matches the mock,
-// without pulling a full markdown renderer in.
-function renderInlineCode(text: string): ReactNode {
-  const parts = text.split(/(`[^`]+`)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code
-          key={i}
-          className="rounded-[4px] bg-foreground/[0.08] px-1.5 py-px font-mono text-[14px]"
-        >
-          {part.slice(1, -1)}
-        </code>
-      )
-    }
-    return <span key={i}>{part}</span>
-  })
-}
-
-function bulletKey(bullet: AgentsStepBullet): string {
-  return typeof bullet === 'string' ? bullet : bullet.leadIn
-}
-
-function StepBulletList(props: {
-  leadIn?: string
-  bullets: readonly AgentsStepBullet[]
-}): JSX.Element {
-  const { leadIn, bullets } = props
-  return (
-    <div className="flex flex-col gap-3">
-      {leadIn ? <p className="text-[17px] leading-snug">{leadIn}</p> : null}
-      <ul className="flex flex-col gap-3" role="list">
-        {bullets.map((bullet) => (
-          <Bullet key={bulletKey(bullet)}>
-            {typeof bullet === 'string' ? (
-              renderInlineCode(bullet)
-            ) : (
-              <>
-                <strong className="font-semibold">{bullet.leadIn}</strong>{' '}
-                {renderInlineCode(bullet.body)}
-              </>
-            )}
-          </Bullet>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function SectionIntro(props: {
-  title?: string
-  description: string
-  optional?: boolean
-}): JSX.Element {
-  return (
-    <div>
-      {props.title ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-xl font-semibold leading-snug tracking-tight text-foreground">
-            {props.title}
-          </div>
-          {props.optional ? (
-            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              Optional
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      <p
-        className={cn(
-          props.title ? 'mt-1.5' : null,
-          'text-[15px] leading-snug text-muted-foreground'
-        )}
-      >
-        {props.description}
-      </p>
-    </div>
-  )
-}
-
-function WorkspaceShortcutsCopy(): JSX.Element {
-  return (
-    <>
-      <kbd className={KBD_CLASS}>{MOD_KEY_LABEL}J</kbd> jumps to any workspace;{' '}
-      <kbd className={KBD_CLASS}>
-        {MOD_KEY_LABEL}
-        {SHIFT_KEY_LABEL}↑
-      </kbd>{' '}
-      /{' '}
-      <kbd className={KBD_CLASS}>
-        {MOD_KEY_LABEL}
-        {SHIFT_KEY_LABEL}↓
-      </kbd>{' '}
-      moves between them.
-    </>
-  )
-}
+import { KeepAwakeCard } from './KeepAwakeCard'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
-  selectedPresentation: FeatureWallWorkflow
   posterUrl: string | null
   gifUrl: string | null
   showGif: boolean
@@ -202,10 +34,11 @@ export function FeatureWallBody(props: {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
   onUsageAccountStateChange: () => void | Promise<void>
+  settings: GlobalSettings | null
+  updateSettings: (updates: Partial<GlobalSettings>) => void
 }): JSX.Element {
   const {
     selected,
-    selectedPresentation,
     posterUrl,
     gifUrl,
     showGif,
@@ -215,6 +48,7 @@ export function FeatureWallBody(props: {
     workbenchActiveStep,
     reviewActiveStep,
     onOrchestrationSkillInstalledChange,
+    onBrowserUseSkillInstalledChange,
     onUsageAccountStateChange
   } = props
   const isWorkspaces = selected.id === 'workspaces'
@@ -230,87 +64,164 @@ export function FeatureWallBody(props: {
   const isReviewPrView = isReview && reviewActiveStep?.id === 'pr-view'
   const isReviewShip = isReview && reviewActiveStep?.id === 'ship'
   const hasAnimatedVisual = isWorkspaces || isTasks || isAgents || isWorkbench || isReview
-  const centerSetupBelowAnimation = isAgentsOrchestration || isWorkbenchBrowser
-
-  const visibleAgentsBullets = agentsActiveStep?.bullets ?? null
-  const agentsLeadIn = agentsActiveStep?.bulletsLeadIn
-  const visibleWorkbenchBullets = workbenchActiveStep?.bullets ?? null
-  const visibleReviewBullets = reviewActiveStep?.bullets ?? null
-
-  return (
+  const isOnboardingUsage = isAgentsUsage && source === 'onboarding'
+  const isOnboardingWorkbenchBrowser = isWorkbenchBrowser && source === 'onboarding'
+  const isReviewSettingBesideVisual = isReviewPrView || isReviewShip
+  const isOnboardingOrchestrationBesideVisual = isAgentsOrchestration && source === 'onboarding'
+  const orchestrationVisualWidthPx = isOnboardingOrchestrationBesideVisual ? 440 : 520
+  const orchestrationVisualHeightPx = 392
+  const isCompactBesideVisual =
+    source === 'onboarding' &&
+    (isAgentsUsage || isReviewSettingBesideVisual || isAgentsOrchestration)
+  const animatedVisualWidth = isWorkspaces
+    ? 'w-[440px]'
+    : isWorkbenchEditor
+      ? 'w-[600px]'
+      : isWorkbenchBrowser
+        ? isOnboardingWorkbenchBrowser
+          ? 'w-[460px]'
+          : 'w-[480px]'
+        : isWorkbench
+          ? 'w-[560px]'
+          : isReview
+            ? 'w-[480px]'
+            : isAgentsUsage
+              ? isOnboardingUsage
+                ? 'w-[340px]'
+                : 'w-[400px]'
+              : isAgentsStatuses
+                ? 'w-[420px]'
+                : isAgentsOrchestration
+                  ? isOnboardingOrchestrationBesideVisual
+                    ? 'w-[440px]'
+                    : 'w-[520px]'
+                  : 'w-[520px]'
+  const settingWidth = isTasks
+    ? 'max-w-[760px]'
+    : isAgentsUsage
+      ? isOnboardingUsage
+        ? 'max-w-[400px]'
+        : 'max-w-[440px]'
+      : isAgentsStatuses
+        ? 'max-w-[520px]'
+        : isAgentsOrchestration
+          ? isOnboardingOrchestrationBesideVisual
+            ? 'max-w-[360px]'
+            : 'max-w-[400px]'
+          : isReviewSettingBesideVisual
+            ? isCompactBesideVisual
+              ? 'max-w-[320px]'
+              : 'max-w-[420px]'
+            : isWorkbenchBrowser
+              ? isOnboardingWorkbenchBrowser
+                ? 'max-w-[340px]'
+                : 'max-w-[400px]'
+              : 'max-w-[480px]'
+  const settingContent = isTasks ? (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <LinearRow compact />
+      <GitHubRow compact />
+    </div>
+  ) : isAgentsStatuses && props.settings ? (
+    <KeepAwakeCard settings={props.settings} updateSettings={props.updateSettings} />
+  ) : isAgentsUsage ? (
+    <UsageAccountsCard onAccountStateChange={onUsageAccountStateChange} />
+  ) : isAgentsOrchestration ? (
+    <OrchestrationSetupCard
+      compact
+      terminalHeightPx={140}
+      onInstalledChange={onOrchestrationSkillInstalledChange}
+    />
+  ) : isWorkbenchBrowser ? (
+    <BrowserUseSkillSetupCard
+      compact
+      terminalHeightPx={140}
+      onInstalledChange={onBrowserUseSkillInstalledChange}
+    />
+  ) : isReviewPrView ? (
+    <GitHubRow compact />
+  ) : isReviewShip ? (
+    <AiCommitPrSettingsCard />
+  ) : null
+  const settingBesideVisual =
+    isAgentsUsage || isAgentsOrchestration || isWorkbenchBrowser || isReviewSettingBesideVisual
+  // Why: several visuals expand/collapse internally; setup controls should sit
+  // after a stable stage so they do not jump with the animation loop.
+  const visualStageHeight = isTasks
+    ? 'h-[288px]'
+    : isWorkbenchEditor
+      ? 'h-[390px]'
+      : isWorkbenchBrowser
+        ? 'h-[270px]'
+        : isWorkbench
+          ? 'h-[340px]'
+          : isReview
+            ? 'h-[416px]'
+            : isAgentsOrchestration
+              ? 'h-[392px]'
+              : isAgentsStatuses
+                ? 'h-[250px]'
+                : isAgentsUsage
+                  ? 'h-[392px]'
+                  : 'h-[330px]'
+  const animatedVisual = isWorkspaces ? (
+    <WorkspacesAnimatedVisual reducedMotion={prefersReducedMotion} />
+  ) : isTasks ? (
+    <TasksAnimatedVisual reducedMotion={prefersReducedMotion} />
+  ) : isReview && reviewActiveStep ? (
+    <ReviewAnimatedVisual reducedMotion={prefersReducedMotion} activeStepId={reviewActiveStep.id} />
+  ) : isWorkbench ? (
+    workbenchActiveStep?.id === 'editor' ? (
+      <EditorAnimatedVisual reducedMotion={prefersReducedMotion} />
+    ) : isWorkbenchBrowser ? (
+      <BrowserAnimatedVisual reducedMotion={prefersReducedMotion} />
+    ) : (
+      <WorkbenchAnimatedVisual reducedMotion={prefersReducedMotion} />
+    )
+  ) : isAgentsOrchestration && agentsActiveStep ? (
+    <AgentsOrchestrationVisual
+      reducedMotion={prefersReducedMotion}
+      activeStepId={agentsActiveStep.id}
+      widthPx={orchestrationVisualWidthPx}
+      heightPx={orchestrationVisualHeightPx}
+    />
+  ) : agentsActiveStep ? (
+    <AgentsOrchestrationVisual
+      reducedMotion={prefersReducedMotion}
+      activeStepId={agentsActiveStep.id}
+      widthPx={isAgentsUsage ? (isOnboardingUsage ? 340 : 400) : isAgentsStatuses ? 420 : undefined}
+      heightPx={isAgentsStatuses ? 250 : undefined}
+    />
+  ) : null
+  const animatedVisualNode = (
     <div
       className={cn(
-        'flex flex-col gap-6 px-9 pt-3',
-        isTasks || centerSetupBelowAnimation ? 'h-full min-h-0' : null,
-        isTasks ? 'pb-3' : 'pb-9'
+        'flex w-full items-start justify-center',
+        visualStageHeight,
+        settingBesideVisual ? 'self-center' : null
       )}
     >
       <div
         className={cn(
-          'grid grid-cols-1 items-start gap-7',
-          centerSetupBelowAnimation && 'min-h-0 flex-1',
-          hasAnimatedVisual
-            ? 'lg:grid-cols-[minmax(0,1fr)_auto]'
-            : 'lg:grid-cols-[minmax(0,1fr)_320px]'
+          'max-w-full',
+          animatedVisualWidth,
+          isAgentsOrchestration ? 'translate-x-6' : null
         )}
       >
-        {hasAnimatedVisual ? (
-          <aside className="order-2 flex min-w-0 flex-col gap-5 lg:order-1">
-            {isAgents && agentsActiveStep ? (
-              <SectionIntro
-                title={agentsActiveStep.subtitle}
-                description={agentsActiveStep.description}
-                optional={agentsActiveStep.optional}
-              />
-            ) : null}
-            {isWorkbench && workbenchActiveStep ? (
-              <SectionIntro
-                title={workbenchActiveStep.subtitle}
-                description={workbenchActiveStep.description}
-              />
-            ) : null}
-            {isReview && reviewActiveStep ? (
-              <SectionIntro
-                title={reviewActiveStep.subtitle}
-                description={reviewActiveStep.description}
-              />
-            ) : null}
-            {(isWorkspaces || isTasks) && !agentsActiveStep && !workbenchActiveStep ? (
-              <SectionIntro description={selectedPresentation.lede} />
-            ) : null}
-            {isAgents && visibleAgentsBullets && agentsActiveStep ? (
-              <StepBulletList leadIn={agentsLeadIn} bullets={visibleAgentsBullets} />
-            ) : isWorkbench && visibleWorkbenchBullets ? (
-              <StepBulletList
-                leadIn={workbenchActiveStep?.bulletsLeadIn}
-                bullets={visibleWorkbenchBullets}
-              />
-            ) : isReview && visibleReviewBullets ? (
-              <StepBulletList
-                leadIn={reviewActiveStep?.bulletsLeadIn}
-                bullets={visibleReviewBullets}
-              />
-            ) : (
-              <ul className="flex flex-col gap-3" role="list">
-                {selectedPresentation.bullets.map((bullet) => (
-                  <Bullet key={workflowBulletKey(bullet)}>
-                    <WorkflowBulletContent bullet={bullet} />
-                  </Bullet>
-                ))}
-                {isWorkspaces ? (
-                  <Bullet>
-                    <WorkspaceShortcutsCopy />
-                  </Bullet>
-                ) : null}
-              </ul>
-            )}
-            {isAgentsUsage ? (
-              <UsageAccountsCard onAccountStateChange={onUsageAccountStateChange} />
-            ) : null}
-            {isReviewPrView ? <GitHubRow compact /> : null}
-            {isReviewShip ? <AiCommitPrSettingsCard /> : null}
-          </aside>
-        ) : (
+        {animatedVisual}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className={cn('flex flex-col gap-5 px-9 pt-1', isTasks ? 'pb-3' : 'pb-9')}>
+      <div
+        className={cn(
+          'grid grid-cols-1 items-start gap-7',
+          hasAnimatedVisual ? 'justify-items-center' : 'lg:grid-cols-[minmax(0,1fr)_320px]'
+        )}
+      >
+        {!hasAnimatedVisual ? (
           <PreviewMedia
             key={selected.id}
             posterUrl={posterUrl}
@@ -318,100 +229,83 @@ export function FeatureWallBody(props: {
             showGif={showGif}
             workflowTitle={selected.title}
           />
-        )}
+        ) : null}
 
         {hasAnimatedVisual ? (
-          <div
-            className={cn(
-              'order-1 flex justify-end lg:order-2',
-              centerSetupBelowAnimation ? 'self-stretch' : null
-            )}
-          >
-            <div
-              className={cn(
-                'max-w-full',
-                centerSetupBelowAnimation ? 'flex h-full flex-col' : null,
-                isWorkbenchBrowser ? '-mt-6 gap-2' : null,
-                isWorkspaces
-                  ? 'w-[440px]'
-                  : isWorkbenchEditor
-                    ? 'w-[600px]'
+          settingContent && settingBesideVisual ? (
+            <div className="@container w-full">
+              <div
+                className={cn(
+                  'grid w-full items-start',
+                  isOnboardingOrchestrationBesideVisual ||
+                    isOnboardingWorkbenchBrowser ||
+                    (isCompactBesideVisual && isReviewSettingBesideVisual)
+                    ? 'gap-4'
+                    : 'gap-5',
+                  settingBesideVisual ? 'justify-between' : 'justify-center',
+                  isAgentsUsage
+                    ? isOnboardingUsage
+                      ? '@[780px]:grid-cols-[minmax(360px,400px)_minmax(320px,340px)] @[780px]:items-center'
+                      : '@[860px]:grid-cols-[minmax(400px,440px)_minmax(360px,400px)] @[860px]:items-center'
                     : isWorkbenchBrowser
-                      ? 'w-[480px]'
-                      : isWorkbench
-                        ? 'w-[560px]'
-                        : isReview
-                          ? 'w-[480px]'
-                          : isAgentsUsage
-                            ? 'w-[400px]'
-                            : isAgentsStatuses
-                              ? 'w-[420px]'
-                              : isAgentsOrchestration
-                                ? 'w-[480px]'
-                                : 'w-[520px]'
-              )}
-            >
-              {isWorkspaces ? (
-                <WorkspacesAnimatedVisual reducedMotion={prefersReducedMotion} />
-              ) : isTasks ? (
-                <TasksAnimatedVisual reducedMotion={prefersReducedMotion} />
-              ) : isReview && reviewActiveStep ? (
-                <ReviewAnimatedVisual
-                  reducedMotion={prefersReducedMotion}
-                  activeStepId={reviewActiveStep.id}
-                />
-              ) : isWorkbench ? (
-                workbenchActiveStep?.id === 'editor' ? (
-                  <EditorAnimatedVisual reducedMotion={prefersReducedMotion} />
-                ) : isWorkbenchBrowser ? (
-                  <>
-                    <BrowserAnimatedVisual reducedMotion={prefersReducedMotion} />
-                    <BrowserUseSkillSetupCard
-                      compact
-                      terminalHeightPx={140}
-                      onInstalledChange={props.onBrowserUseSkillInstalledChange}
-                    />
-                  </>
-                ) : (
-                  <WorkbenchAnimatedVisual reducedMotion={prefersReducedMotion} />
-                )
-              ) : isAgentsOrchestration && agentsActiveStep ? (
-                <>
-                  <AgentsOrchestrationVisual
-                    reducedMotion={prefersReducedMotion}
-                    activeStepId={agentsActiveStep.id}
-                    widthPx={480}
-                    heightPx={235}
-                  />
-                  <OrchestrationSetupCard
-                    compact
-                    terminalHeightPx={140}
-                    onInstalledChange={onOrchestrationSkillInstalledChange}
-                  />
-                </>
-              ) : agentsActiveStep ? (
-                <AgentsOrchestrationVisual
-                  reducedMotion={prefersReducedMotion}
-                  activeStepId={agentsActiveStep.id}
-                  widthPx={isAgentsUsage ? 400 : isAgentsStatuses ? 420 : undefined}
-                />
-              ) : null}
+                      ? isOnboardingWorkbenchBrowser
+                        ? '@[800px]:grid-cols-[minmax(320px,340px)_minmax(440px,460px)] @[800px]:items-center'
+                        : '@[880px]:grid-cols-[minmax(360px,400px)_minmax(440px,480px)] @[880px]:items-center'
+                      : isOnboardingOrchestrationBesideVisual
+                        ? '@[800px]:grid-cols-[minmax(340px,360px)_minmax(420px,440px)] @[800px]:items-center'
+                        : isReviewSettingBesideVisual
+                          ? isCompactBesideVisual
+                            ? '@[800px]:grid-cols-[minmax(300px,320px)_minmax(460px,480px)] @[800px]:items-center'
+                            : '@[900px]:grid-cols-[minmax(380px,420px)_minmax(440px,480px)] @[900px]:items-center'
+                          : isCompactBesideVisual
+                            ? '@[700px]:grid-cols-[minmax(300px,340px)_minmax(320px,340px)] @[700px]:items-center'
+                            : isAgentsOrchestration
+                              ? '@[860px]:grid-cols-[minmax(340px,380px)_auto] @[860px]:items-center'
+                              : '@[760px]:grid-cols-[auto_minmax(320px,420px)] @[760px]:items-center'
+                )}
+              >
+                <div
+                  className={cn(
+                    'w-full self-center',
+                    isAgentsUsage
+                      ? isOnboardingUsage
+                        ? 'max-w-[400px]'
+                        : 'max-w-[440px]'
+                      : isWorkbenchBrowser
+                        ? isOnboardingWorkbenchBrowser
+                          ? 'max-w-[340px]'
+                          : 'max-w-[400px]'
+                        : isOnboardingOrchestrationBesideVisual
+                          ? 'max-w-[360px]'
+                          : isCompactBesideVisual
+                            ? isReviewSettingBesideVisual
+                              ? 'max-w-[320px]'
+                              : 'max-w-[340px]'
+                            : isAgentsOrchestration
+                              ? 'max-w-[400px]'
+                              : isReviewSettingBesideVisual
+                                ? 'max-w-[420px]'
+                                : 'max-w-[420px]'
+                  )}
+                >
+                  {settingContent}
+                </div>
+                {animatedVisualNode}
+              </div>
             </div>
-          </div>
+          ) : (
+            animatedVisualNode
+          )
         ) : (
           <aside className="flex flex-col gap-5">
-            <BulletList bullets={selectedPresentation.bullets} />
             {selected.relatedTileIds.length > 0 ? (
               <RelatedFeatures workflow={selected} source={source} />
             ) : null}
           </aside>
         )}
       </div>
-      {isTasks ? (
-        <div className="mt-auto grid grid-cols-1 gap-3 md:grid-cols-2">
-          <LinearRow compact />
-          <GitHubRow compact />
-        </div>
+      {settingContent && !settingBesideVisual ? (
+        <div className={cn('mx-auto w-full', settingWidth)}>{settingContent}</div>
       ) : null}
     </div>
   )

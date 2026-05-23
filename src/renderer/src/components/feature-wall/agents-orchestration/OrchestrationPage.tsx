@@ -232,9 +232,9 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
         gridTemplateColumns: 'minmax(0, 1fr)',
         gridAutoRows: 'min-content',
         rowGap: 28,
-        paddingRight: 120,
+        paddingRight: 56,
         alignItems: 'start',
-        alignContent: 'start',
+        alignContent: 'center',
         height: '100%'
       }}
     >

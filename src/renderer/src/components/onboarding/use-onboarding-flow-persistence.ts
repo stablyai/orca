@@ -219,6 +219,10 @@ export function usePersistCurrentStep({
         onOnboardingChange(await persistStep(4))
         return { ok: true }
       }
+      if (currentStepId === 'tour') {
+        onOnboardingChange(await persistStep(5))
+        return { ok: true }
+      }
       return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

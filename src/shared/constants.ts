@@ -31,7 +31,7 @@ export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 5
+export const ONBOARDING_FINAL_STEP = 6
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not

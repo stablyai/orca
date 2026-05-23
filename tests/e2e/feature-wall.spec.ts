@@ -63,7 +63,7 @@ test.describe('Feature tour modal', () => {
     await rail.getByRole('button', { name: /Browser/i }).click()
     await expect(
       orcaPage.getByText(
-        'With the Browser Use skill, agents can navigate, click, inspect, and gather UI evidence inside Orca.'
+        "Run your app in Orca's browser, send selected UI elements to agents, and let agents navigate, click, and verify pages."
       )
     ).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'Browser Use skill' })).toBeVisible()
@@ -74,9 +74,7 @@ test.describe('Feature tour modal', () => {
     await expect(orcaPage.getByText('With the Orca CLI skill', { exact: false })).toHaveCount(0)
   })
 
-  test('shows disconnected task users setup-oriented copy without leaving the walkthrough', async ({
-    orcaPage
-  }) => {
+  test('shows unified task copy without leaving the walkthrough', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
       if (!store) {
@@ -118,11 +116,70 @@ test.describe('Feature tour modal', () => {
       .getByRole('navigation', { name: 'Workflows' })
       .getByRole('tab', { name: /Tasks/i })
       .click()
-    await expect(orcaPage.getByText('Connect GitHub or Linear once')).toBeVisible()
+    await expect(
+      orcaPage.getByText(
+        "See your GitHub and Linear tasks in one place, and start a workspace for each when you're ready to build."
+      )
+    ).toBeVisible()
+    await expect(orcaPage.getByText('Connect GitHub or Linear once')).toHaveCount(0)
     await expect(orcaPage.getByRole('dialog', { name: 'Get to know Orca' })).toBeVisible()
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'))
       .not.toBe('settings')
+  })
+
+  test('continue advances through workflow substeps before the next workflow', async ({
+    orcaPage
+  }) => {
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().openModal('feature-wall', { source: 'help_menu' })
+    })
+
+    const rail = orcaPage.getByRole('navigation', { name: 'Workflows' })
+    const continueButton = orcaPage.getByRole('button', { name: /^Continue/ })
+
+    await continueButton.click()
+    await expect(rail.getByRole('tab', { name: /Tasks/i })).toHaveAttribute('aria-selected', 'true')
+
+    await continueButton.click()
+    await expect(rail.getByRole('tab', { name: /Agents/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(rail.getByRole('button', { name: /Visibility/i })).toHaveAttribute(
+      'aria-current',
+      'step'
+    )
+
+    await continueButton.click()
+    await expect(rail.getByRole('button', { name: /Orchestration/i })).toHaveAttribute(
+      'aria-current',
+      'step'
+    )
+    await expect(rail.getByRole('tab', { name: /Workbench/i })).toHaveAttribute(
+      'aria-selected',
+      'false'
+    )
+
+    await continueButton.click()
+    await expect(rail.getByRole('button', { name: /Usage/i })).toHaveAttribute(
+      'aria-current',
+      'step'
+    )
+
+    await continueButton.click()
+    await expect(rail.getByRole('tab', { name: /Workbench/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(rail.getByRole('button', { name: /Terminal/i })).toHaveAttribute(
+      'aria-current',
+      'step'
+    )
   })
 
   test('does not pre-check configured workflows until the user visits them', async ({
@@ -133,7 +190,11 @@ test.describe('Feature tour modal', () => {
         'orca.featureWall.visitedWorkflows.v1',
         'orca.featureWall.visitedAgentSteps.v1',
         'orca.featureWall.visitedWorkbenchSteps.v1',
-        'orca.featureWall.visitedReviewSteps.v1'
+        'orca.featureWall.visitedReviewSteps.v1',
+        'orca.featureWall.completedWorkflows.v1',
+        'orca.featureWall.completedAgentSteps.v1',
+        'orca.featureWall.completedWorkbenchSteps.v1',
+        'orca.featureWall.completedReviewSteps.v1'
       ]) {
         localStorage.removeItem(key)
       }
@@ -180,7 +241,39 @@ test.describe('Feature tour modal', () => {
     await expect(workspacesTab.locator('[aria-label="Completed"]')).toHaveCount(1)
   })
 
-  test('shows the bottom-right nudge and opens the full tour', async ({ orcaPage }) => {
+  test('keeps persisted completed setup-backed substeps checked when reopened', async ({
+    orcaPage
+  }) => {
+    await orcaPage.evaluate(() => {
+      localStorage.setItem(
+        'orca.featureWall.completedAgentSteps.v1',
+        JSON.stringify(['orchestration'])
+      )
+      localStorage.setItem(
+        'orca.featureWall.completedWorkbenchSteps.v1',
+        JSON.stringify(['browser'])
+      )
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().openModal('feature-wall', { source: 'help_menu' })
+    })
+
+    const rail = orcaPage.getByRole('navigation', { name: 'Workflows' })
+
+    await rail.getByRole('tab', { name: /Agents/i }).click()
+    await expect(
+      rail.getByRole('button', { name: /Orchestration/i }).locator('[aria-label="Completed"]')
+    ).toHaveCount(1)
+
+    await rail.getByRole('tab', { name: /Workbench/i }).click()
+    await expect(
+      rail.getByRole('button', { name: /Browser/i }).locator('[aria-label="Completed"]')
+    ).toHaveCount(1)
+  })
+
+  test('shows the tour toast and opens the full tour', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
       if (!store) {
@@ -190,29 +283,14 @@ test.describe('Feature tour modal', () => {
       store.getState().showFeatureTourNudge()
     })
 
-    const nudge = orcaPage.getByRole('complementary', {
-      name: 'Explore Orca'
-    })
-    await expect(nudge).toBeVisible()
-    await expect(nudge.getByText('Reopen any time from Help > Explore Orca.')).toBeVisible()
-    await expect(nudge.locator('[data-feature-tour-nudge-visual]')).toHaveCount(1)
-    await expect(nudge.getByRole('button', { name: 'Dismiss Explore Orca' })).toHaveCount(0)
-    await orcaPage.keyboard.press('Escape')
-    await expect(nudge).toBeVisible()
+    await expect(orcaPage.getByText('Explore Orca anytime')).toBeVisible()
+    await expect(orcaPage.getByText('Take the tour from Help > Explore Orca.')).toBeVisible()
+    await expect(orcaPage.getByRole('complementary', { name: 'Explore Orca' })).toHaveCount(0)
     await expect
-      .poll(
-        () =>
-          nudge
-            .locator('[data-feature-tour-nudge-caption]')
-            .evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
-        {
-          message: 'feature tour nudge caption should not be clipped'
-        }
-      )
-      .toBe(true)
-    await expect(nudge.locator('img')).toHaveCount(0)
+      .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))
+      .toBe(false)
 
-    const takeTourButton = nudge.getByRole('button', { name: /^Take the tour$/ })
+    const takeTourButton = orcaPage.getByRole('button', { name: /^Take the tour$/ })
     await expect(takeTourButton).toBeVisible()
     await takeTourButton.click()
     await expect(orcaPage.getByRole('dialog', { name: 'Get to know Orca' })).toBeVisible()

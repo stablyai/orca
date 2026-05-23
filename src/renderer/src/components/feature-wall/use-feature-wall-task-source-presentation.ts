@@ -2,15 +2,6 @@ import { useEffect } from 'react'
 import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
 import { useAppStore } from '@/store'
 
-const DISCONNECTED_TASKS_WORKFLOW_COPY: Pick<FeatureWallWorkflow, 'lede' | 'bullets'> = {
-  lede: 'Connect GitHub or Linear once, then Tasks becomes the place to start from real work.',
-  bullets: [
-    'Set up GitHub with the gh CLI or add a Linear workspace from Integrations.',
-    'Use Tasks to browse issues, PRs, and Linear tickets in-app.',
-    'Start a workspace from the task when you are ready to build.'
-  ]
-}
-
 export type FeatureWallTaskSourcePresentation = {
   workflow: FeatureWallWorkflow
   hasConnectedTaskSource: boolean
@@ -58,10 +49,5 @@ export function useFeatureWallTaskSourcePresentation(
   const isCheckingTaskSources =
     preflightStatusLoading || !preflightStatusChecked || !linearStatusChecked
 
-  const workflow =
-    selected.id !== 'tasks' || hasConnectedTaskSource || isCheckingTaskSources
-      ? selected
-      : { ...selected, ...DISCONNECTED_TASKS_WORKFLOW_COPY }
-
-  return { workflow, hasConnectedTaskSource, isCheckingTaskSources }
+  return { workflow: selected, hasConnectedTaskSource, isCheckingTaskSources }
 }

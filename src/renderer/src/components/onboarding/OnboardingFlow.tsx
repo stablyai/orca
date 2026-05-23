@@ -10,6 +10,7 @@ import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
 import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
+import { OnboardingTourStep } from './OnboardingTourStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import logo from '../../../../../resources/logo.svg'
 
@@ -32,6 +33,10 @@ const stepCopy = {
     title: 'Connect your task sources',
     subtitle: 'Connect GitHub or Linear to:'
   },
+  tour: {
+    title: 'Explore Orca',
+    subtitle: ''
+  },
   repo: {
     title: 'Point Orca at some code',
     subtitle: 'Open a folder or clone a repo to finish setup.'
@@ -43,6 +48,7 @@ const stepTooltipLabels = {
   theme: 'Appearance',
   notifications: 'Agent tools',
   integrations: 'Integrations',
+  tour: 'Explore Orca',
   repo: 'Create project'
 } as const
 
@@ -66,10 +72,16 @@ export default function OnboardingFlow({
     flow.hasSelectedFeatureSetup &&
     !flow.featureSetupTerminalCommand
   const primaryActionLabel = busyLabel ?? (shouldShowSetupAction ? 'Set up' : 'Continue')
+  const isTourStep = currentStep.id === 'tour'
+  const tourStarted = flow.tourStarted
+  const isInlineTourRunning = isTourStep && tourStarted
+  const shouldShowFooter = !isInlineTourRunning
+  const shouldShowSkipToProjectSetup = currentStep.id !== 'repo' && currentStep.id !== 'tour'
+  const shouldShowStepHeading = !isTourStep
+  const footerPrimaryLabel = isTourStep ? 'Skip the tour' : primaryActionLabel
+  const { next: flowNext, openFolder: flowOpenFolder, skipTourToRepo: flowSkipTourToRepo } = flow
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
-  const { next: flowNext, openFolder: flowOpenFolder } = flow
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
@@ -82,7 +94,16 @@ export default function OnboardingFlow({
       if (!isScreenSubmitShortcut(event)) {
         return
       }
+      if (currentStep.id === 'tour' && tourStarted) {
+        return
+      }
       event.preventDefault()
+      if (currentStep.id === 'tour') {
+        if (!tourStarted) {
+          void flowSkipTourToRepo()
+        }
+        return
+      }
       if (currentStep.id === 'repo') {
         void flowOpenFolder()
       } else {
@@ -91,10 +112,13 @@ export default function OnboardingFlow({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flowNext, flowOpenFolder])
+  }, [currentStep.id, flowNext, flowOpenFolder, flowSkipTourToRepo, tourStarted])
 
   return (
-    <div className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
+    <div
+      className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground"
+      data-onboarding-overlay
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-70 dark:opacity-70"
@@ -108,7 +132,12 @@ export default function OnboardingFlow({
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[820px] flex-col px-8 pb-10 pt-16">
+      <div
+        className={cn(
+          'relative mx-auto flex min-h-screen w-full flex-col px-8 pb-10 pt-16 transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+          isInlineTourRunning ? 'max-w-[1180px]' : 'max-w-[820px]'
+        )}
+      >
         <div className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
           <div
             className="flex size-7 items-center justify-center rounded-md"
@@ -119,7 +148,12 @@ export default function OnboardingFlow({
           <span>Orca</span>
         </div>
 
-        <div className="mt-12 flex items-center gap-2">
+        <div
+          className={cn(
+            'flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+            isInlineTourRunning ? 'mt-7' : 'mt-12'
+          )}
+        >
           <TooltipProvider delayDuration={0} skipDelayDuration={0}>
             {STEPS.map((step, idx) => {
               const isActive = idx === stepIndex
@@ -154,23 +188,37 @@ export default function OnboardingFlow({
           <span className="ml-3 text-xs font-medium text-muted-foreground">
             {stepIndex + 1} of {STEPS.length}
           </span>
+          {isInlineTourRunning ? (
+            <h1 className="ml-5 text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+              {copy.title}
+            </h1>
+          ) : null}
         </div>
 
-        <div className="mt-8">
-          {stepIndex === 0 && (
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Welcome to Orca
-            </div>
+        {shouldShowStepHeading ? (
+          <div className="mt-8">
+            {stepIndex === 0 && (
+              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Welcome to Orca
+              </div>
+            )}
+            <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+              {copy.title}
+            </h1>
+            {copy.subtitle ? (
+              <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
+                {copy.subtitle}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div
+          className={cn(
+            'flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+            isInlineTourRunning ? 'mt-7' : 'mt-10'
           )}
-          <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-            {copy.title}
-          </h1>
-          <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
-            {copy.subtitle}
-          </p>
-        </div>
-
-        <div className="mt-10 flex-1">
+        >
           {currentStep.id === 'agent' && (
             <AgentStep
               selectedAgent={flow.selectedAgent}
@@ -198,6 +246,14 @@ export default function OnboardingFlow({
             />
           )}
           {currentStep.id === 'integrations' && <IntegrationsStep />}
+          {currentStep.id === 'tour' && (
+            <OnboardingTourStep
+              tourStarted={flow.tourStarted}
+              busyLabel={busyLabel}
+              onStartTour={flow.startTour}
+              onCompleteTour={flow.completeTour}
+            />
+          )}
           {currentStep.id === 'repo' && (
             <RepoStep
               cloneUrl={flow.cloneUrl}
@@ -218,55 +274,63 @@ export default function OnboardingFlow({
           )}
         </div>
 
-        <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          {currentStep.id !== 'repo' ? (
-            <button
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-              disabled={Boolean(busyLabel)}
-              onClick={() => void flow.skipToRepo()}
-            >
-              Skip to project setup
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-2">
-            {stepIndex > 0 && (
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                disabled={Boolean(busyLabel)}
-                onClick={flow.back}
-              >
-                <ChevronLeft className="size-4" />
-                Back
-              </button>
-            )}
-            {shouldShowSetupAction && (
+        {shouldShowFooter && (
+          <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
+            {shouldShowSkipToProjectSetup ? (
               <button
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
                 disabled={Boolean(busyLabel)}
-                onClick={() => void flow.skipAgentSetup()}
+                onClick={() => void flow.skipToRepo()}
               >
-                Skip
+                Skip to project setup
               </button>
+            ) : (
+              <span />
             )}
-            {currentStep.id !== 'repo' && (
-              <button
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-busy={Boolean(busyLabel)}
-                disabled={Boolean(busyLabel)}
-                onClick={() => void flow.next()}
-              >
-                {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
-                {primaryActionLabel}
-                <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-                  <span>{continueShortcutModifierLabel}</span>
-                  <CornerDownLeft className="size-3" />
-                </span>
-              </button>
-            )}
-          </div>
-        </footer>
+            <div className="flex items-center gap-2">
+              {stepIndex > 0 && (
+                <button
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
+                  disabled={Boolean(busyLabel)}
+                  onClick={flow.back}
+                >
+                  <ChevronLeft className="size-4" />
+                  Back
+                </button>
+              )}
+              {shouldShowSetupAction && (
+                <button
+                  className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+                  disabled={Boolean(busyLabel)}
+                  onClick={() => void flow.skipAgentSetup()}
+                >
+                  Skip
+                </button>
+              )}
+              {currentStep.id !== 'repo' && (
+                <button
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-busy={Boolean(busyLabel)}
+                  disabled={Boolean(busyLabel)}
+                  onClick={() => {
+                    if (isTourStep) {
+                      void flow.skipTourToRepo()
+                      return
+                    }
+                    void flow.next()
+                  }}
+                >
+                  {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {footerPrimaryLabel}
+                  <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
+                    <span>{continueShortcutModifierLabel}</span>
+                    <CornerDownLeft className="size-3" />
+                  </span>
+                </button>
+              )}
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   )

@@ -93,15 +93,15 @@ function SettingsSwitch(props: {
 export function AiCommitPrSettingsCard(): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  // Why: Radix Select's Portal renders to document.body by default, which puts
-  // its dropdown into a sibling stacking context of the dialog — depending on
-  // DOM order it can render *behind* the feature-wall dialog. Portal into the
-  // DialogContent element instead so the dropdown shares the dialog's stacking
-  // context and remains clickable.
-  const [dialogContent, setDialogContent] = useState<HTMLElement | null>(null)
+  // Why: Radix Select's Portal renders to document.body by default. In
+  // onboarding that puts menus behind the z-[100] fullscreen tour layer, so
+  // portal into the active tour/dialog surface instead.
+  const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   useEffect(() => {
-    const el = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')
-    setDialogContent(el)
+    const el = document.querySelector<HTMLElement>(
+      '[data-onboarding-overlay], [data-slot="dialog-content"]'
+    )
+    setSelectPortalRoot(el)
   }, [])
   if (!settings) {
     return null
@@ -250,20 +250,14 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
       <div className="space-y-2.5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-[15px] font-semibold leading-tight text-foreground">
-              Ship with AI settings
-            </div>
+            <div className="text-[15px] font-semibold leading-tight text-foreground">AI author</div>
           </div>
-          <SettingsSwitch
-            checked={config.enabled}
-            label="Enable AI commit messages"
-            onToggle={toggleAi}
-          />
+          <SettingsSwitch checked={config.enabled} label="Enable AI author" onToggle={toggleAi} />
         </div>
 
         {config.enabled ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-            <div className="space-y-1.5">
+          <div className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3">
               <Label className="text-xs">Agent</Label>
               <Select value={agentSelectValue} onValueChange={onAgentChange}>
                 <SelectTrigger size="sm" className="h-8 w-full text-xs">
@@ -294,7 +288,7 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
                     )}
                   </span>
                 </SelectTrigger>
-                <SelectContent portalContainer={dialogContent} position="popper" align="start">
+                <SelectContent portalContainer={selectPortalRoot} position="popper" align="start">
                   {listCommitMessageAgentCapabilities().map((capability) => (
                     <SelectItem
                       key={capability.id}
@@ -316,20 +310,20 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
                 </SelectContent>
               </Select>
               {unsupportedAgentLabel ? (
-                <p className="text-[11px] leading-snug text-muted-foreground">
+                <p className="col-start-2 text-[11px] leading-snug text-muted-foreground">
                   {unsupportedAgentLabel} unsupported. Choose Claude, Codex, or Custom.
                 </p>
               ) : null}
             </div>
 
             {activeCapability && activeModel ? (
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3">
                 <Label className="text-xs">Model</Label>
                 <Select value={activeModel.id} onValueChange={onModelChange}>
                   <SelectTrigger size="sm" className="h-8 w-full text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent portalContainer={dialogContent} position="popper" align="start">
+                  <SelectContent portalContainer={selectPortalRoot} position="popper" align="start">
                     {activeCapability.models.map((model) => (
                       <SelectItem key={model.id} value={model.id} className="cursor-pointer">
                         {model.label}
@@ -341,13 +335,13 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
             ) : null}
 
             {activeModel?.thinkingLevels && activeThinking ? (
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3">
                 <Label className="text-xs">Thinking effort</Label>
                 <Select value={activeThinking} onValueChange={onThinkingChange}>
                   <SelectTrigger size="sm" className="h-8 w-full text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent portalContainer={dialogContent} position="popper" align="start">
+                  <SelectContent portalContainer={selectPortalRoot} position="popper" align="start">
                     {activeModel.thinkingLevels.map((level) => (
                       <SelectItem key={level.id} value={level.id} className="cursor-pointer">
                         {level.label}
@@ -359,7 +353,7 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
             ) : null}
 
             {isCustom ? (
-              <div className="space-y-1.5 sm:col-span-3">
+              <div className="space-y-1.5">
                 <Label htmlFor="feature-wall-ai-commit-custom-command" className="text-xs">
                   Custom command
                 </Label>

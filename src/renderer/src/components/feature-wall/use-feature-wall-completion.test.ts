@@ -9,7 +9,7 @@ import {
   normalizeFeatureWallVisitedReviewSteps,
   normalizeFeatureWallVisitedWorkbenchSteps
 } from './feature-wall-completion-persistence'
-import { getFeatureWallCompletionProgress } from './use-feature-wall-completion'
+import { getFeatureWallCompletionProgress } from './feature-wall-completion-progress'
 
 type CompletionInput = Parameters<typeof getFeatureWallCompletionProgress>[0]
 
@@ -97,6 +97,29 @@ describe('getFeatureWallCompletionProgress', () => {
         })
       ).agentStepDone.orchestration
     ).toBe(true)
+  })
+
+  it('keeps setup-backed substeps complete after detection later reports unavailable', () => {
+    const progress = getFeatureWallCompletionProgress(
+      completionInput({
+        completedAgentSteps: new Set<AgentsStepId>(['orchestration']),
+        completedWorkbenchSteps: new Set<WorkbenchStepId>(['browser'])
+      })
+    )
+
+    expect(progress.agentStepDone.orchestration).toBe(true)
+    expect(progress.workbenchStepDone.browser).toBe(true)
+  })
+
+  it('keeps completed workflows complete after setup-backed detection later reports unavailable', () => {
+    const progress = getFeatureWallCompletionProgress(
+      completionInput({
+        completedWorkflows: new Set<FeatureWallWorkflowId>(['agents-orchestration', 'workbench'])
+      })
+    )
+
+    expect(progress.workflowDone['agents-orchestration']).toBe(true)
+    expect(progress.workflowDone.workbench).toBe(true)
   })
 
   it('keeps the agents workflow incomplete until the orchestration skill is detected', () => {

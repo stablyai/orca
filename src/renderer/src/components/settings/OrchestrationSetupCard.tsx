@@ -53,7 +53,7 @@ export function OrchestrationSetupCard(props: {
   )
 
   if (compact) {
-    return <div className="flex min-h-24 flex-1 items-start justify-center pt-8">{setupPanel}</div>
+    return <div className="flex min-h-24 flex-1 items-center justify-center">{setupPanel}</div>
   }
   return <div className="flex">{setupPanel}</div>
 }
