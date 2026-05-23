@@ -35,9 +35,17 @@ import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
+import {
+  getDiffCommentPopoverLeft,
+  getDiffCommentPopoverTop
+} from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { installEditorSaveShortcut } from './editor-shortcuts'
+import { Plus } from 'lucide-react'
+import {
+  getMonacoMarkdownSelectionAnnotationTarget,
+  type MonacoMarkdownSelectionAnnotationTarget
+} from './monaco-markdown-selection-annotation'
 
 type MonacoEditorProps = {
   fileId: string
@@ -57,6 +65,10 @@ type MonacoEditorProps = {
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
   autoHeight?: boolean
+}
+
+type MarkdownCommentPopoverState = Omit<MonacoMarkdownSelectionAnnotationTarget, 'selectedText'> & {
+  selectedText?: string
 }
 
 export default function MonacoEditor({
@@ -156,12 +168,9 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
-  const [commentPopover, setCommentPopover] = useState<{
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-  } | null>(null)
+  const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
+  const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
+    useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -199,7 +208,8 @@ export default function MonacoEditor({
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
-    onAddCommentClick: ({ lineNumber, startLine, top }) =>
+    onAddCommentClick: ({ lineNumber, startLine, top }) => {
+      setSelectionAnnotationTarget(null)
       setCommentPopover({
         lineNumber,
         startLine,
@@ -207,7 +217,8 @@ export default function MonacoEditor({
         left: mountedEditor
           ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
           : undefined
-      }),
+      })
+    },
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -471,11 +482,10 @@ export default function MonacoEditor({
       return
     }
     const update = (): void => {
-      const top =
-        mountedEditor.getTopForLineNumber(commentPopover.lineNumber) - mountedEditor.getScrollTop()
+      const top = getDiffCommentPopoverTop(mountedEditor, commentPopover.lineNumber, undefined)
       const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
       setCommentPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left } : prev
+        prev ? { ...prev, top: top ?? prev.top, left: left == null ? prev.left : left } : prev
       )
     }
     const scrollSub = mountedEditor.onDidScrollChange(update)
@@ -489,6 +499,32 @@ export default function MonacoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
   }, [mountedEditor, commentPopover?.lineNumber])
 
+  useEffect(() => {
+    if (!mountedEditor || !shouldShowMarkdownAnnotations || commentPopover) {
+      setSelectionAnnotationTarget(null)
+      return
+    }
+    const update = (): void => {
+      const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
+      setSelectionAnnotationTarget(
+        getMonacoMarkdownSelectionAnnotationTarget(
+          mountedEditor,
+          mountedEditor.getSelection(),
+          left ?? undefined
+        )
+      )
+    }
+    update()
+    const selectionSub = mountedEditor.onDidChangeCursorSelection(update)
+    const scrollSub = mountedEditor.onDidScrollChange(update)
+    const layoutSub = mountedEditor.onDidLayoutChange(update)
+    return () => {
+      selectionSub.dispose()
+      scrollSub.dispose()
+      layoutSub.dispose()
+    }
+  }, [commentPopover, mountedEditor, shouldShowMarkdownAnnotations])
+
   const handleSubmitMarkdownComment = async (body: string): Promise<void> => {
     if (!commentPopover || !worktreeId) {
       return
@@ -499,6 +535,7 @@ export default function MonacoEditor({
       source: 'markdown',
       startLine: commentPopover.startLine,
       lineNumber: commentPopover.lineNumber,
+      selectedText: commentPopover.selectedText,
       body,
       side: 'modified'
     })
@@ -666,6 +703,31 @@ export default function MonacoEditor({
           onSubmit={handleSubmitMarkdownComment}
         />
       )}
+      {selectionAnnotationTarget && shouldShowMarkdownAnnotations && !commentPopover ? (
+        <button
+          type="button"
+          className="orca-diff-comment-add-btn"
+          style={{
+            display: 'flex',
+            top: Math.max(4, selectionAnnotationTarget.top - 22),
+            left: selectionAnnotationTarget.left ?? 4
+          }}
+          title="Add note on selected text"
+          aria-label="Add note on selected text"
+          onMouseDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setCommentPopover(selectionAnnotationTarget)
+            setSelectionAnnotationTarget(null)
+          }}
+        >
+          <Plus className="size-3" />
+        </button>
+      ) : null}
       <Editor
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}

@@ -625,38 +625,6 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             />
           </button>
         </SearchableSetting>
-
-        <SearchableSetting
-          title="Markdown Review Notes"
-          description="Show local markdown review note controls in rich editor mode."
-          keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Markdown Review Notes</Label>
-            <p className="text-xs text-muted-foreground">
-              Show local markdown note controls in rich editor mode and agent handoff actions.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.markdownReviewToolsEnabled}
-            onClick={() =>
-              updateSettings({
-                markdownReviewToolsEnabled: !settings.markdownReviewToolsEnabled
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.markdownReviewToolsEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.markdownReviewToolsEnabled ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (
