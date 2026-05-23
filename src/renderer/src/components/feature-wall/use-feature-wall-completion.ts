@@ -10,19 +10,16 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import { useAppStore } from '@/store'
 import {
+  persistVisitedWorkflow,
   persistVisitedAgentStep,
   persistVisitedReviewStep,
   persistVisitedWorkbenchStep,
+  readPersistedVisitedWorkflows,
   readPersistedVisitedAgentSteps,
   readPersistedVisitedReviewSteps,
   readPersistedVisitedWorkbenchSteps
 } from './feature-wall-completion-persistence'
 import { hasFeatureWallUsageTracking } from './feature-wall-usage-tracking'
-
-// Workflows the user can mark complete just by viewing them. The rest (tasks,
-// agents-orchestration, workbench, review) wait on a real signal — connection,
-// setup completion, or visiting every sub-step.
-const VIEW_TO_COMPLETE_WORKFLOWS = new Set<FeatureWallWorkflowId>(['workspaces'])
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -53,32 +50,41 @@ export function getFeatureWallCompletionProgress(input: {
   githubConfigured: boolean
   aiCommitPrConfigured: boolean
 }): FeatureWallCompletionProgress {
-  const tasksDone = !input.isCheckingTaskSources && input.hasConnectedTaskSource
-  const usageDone = input.hasUsageAccount
+  const workspacesVisited = input.visitedWorkflows.has('workspaces')
+  const tasksVisited = input.visitedWorkflows.has('tasks')
+  const agentsVisited = input.visitedWorkflows.has('agents-orchestration')
+  const workbenchVisited = input.visitedWorkflows.has('workbench')
+  const reviewVisited = input.visitedWorkflows.has('review')
+
+  const tasksDone = tasksVisited && !input.isCheckingTaskSources && input.hasConnectedTaskSource
+  const usageDone = input.visitedAgentSteps.has('usage') && input.hasUsageAccount
   const orchestrationDone =
     input.visitedAgentSteps.has('orchestration') && input.orchestrationSkillInstalled
-  const notificationsDone = input.notificationsConfigured
+  const notificationsDone =
+    input.visitedAgentSteps.has('notifications') && input.notificationsConfigured
   // Why: the keep-awake setting surfaced on Visibility is optional; viewing
   // the step should complete the tour item even when the setting stays off.
   const statusesDone = input.visitedAgentSteps.has('statuses')
 
-  const agentsWorkflowDone = usageDone && orchestrationDone && notificationsDone && statusesDone
+  const agentsWorkflowDone =
+    agentsVisited && usageDone && orchestrationDone && notificationsDone && statusesDone
   // Workbench is "done" once the user has viewed every sub-step — same shape
   // as agents but each step is purely informational (no setup gate).
   const workbenchTerminalDone = input.visitedWorkbenchSteps.has('terminal')
   const workbenchEditorDone = input.visitedWorkbenchSteps.has('editor')
   const workbenchBrowserDone = input.visitedWorkbenchSteps.has('browser')
-  const workbenchAllStepsDone = workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
-  // Review mixes informational and setup-backed steps: notes complete on
-  // view, while PR checks and AI commit/PR reflect their live configuration.
+  const workbenchAllStepsDone =
+    workbenchVisited && workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
+  // Review mixes informational and setup-backed steps, but every checked state
+  // still requires an explicit visit so existing config does not pre-check it.
   const reviewNotesDone = input.visitedReviewSteps.has('notes')
-  const reviewPrViewDone = input.githubConfigured
-  const reviewShipDone = input.aiCommitPrConfigured
-  const reviewAllStepsDone = reviewNotesDone && reviewPrViewDone && reviewShipDone
+  const reviewPrViewDone = input.visitedReviewSteps.has('pr-view') && input.githubConfigured
+  const reviewShipDone = input.visitedReviewSteps.has('ship') && input.aiCommitPrConfigured
+  const reviewAllStepsDone = reviewVisited && reviewNotesDone && reviewPrViewDone && reviewShipDone
 
   return {
     workflowDone: {
-      workspaces: input.visitedWorkflows.has('workspaces'),
+      workspaces: workspacesVisited,
       tasks: tasksDone,
       'agents-orchestration': agentsWorkflowDone,
       workbench: workbenchAllStepsDone,
@@ -131,7 +137,9 @@ export function useFeatureWallCompletion(
         : false)
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
-  const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(new Set())
+  const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(() =>
+    readPersistedVisitedWorkflows()
+  )
   const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(() =>
     readPersistedVisitedAgentSteps()
   )
@@ -142,11 +150,11 @@ export function useFeatureWallCompletion(
     readPersistedVisitedReviewSteps()
   )
 
-  // Reset transient view-only steps when the modal closes. Persisted completion
-  // signals stay done across reopens once the matching signal is true.
+  // Reset from persisted state on close so another window or tab's tour visit
+  // is reflected the next time this modal opens.
   useEffect(() => {
     if (!isOpen) {
-      setVisitedWorkflows(new Set())
+      setVisitedWorkflows(readPersistedVisitedWorkflows())
       setVisitedAgentSteps(readPersistedVisitedAgentSteps())
       setVisitedWorkbenchSteps(readPersistedVisitedWorkbenchSteps())
       setVisitedReviewSteps(readPersistedVisitedReviewSteps())
@@ -196,9 +204,7 @@ export function useFeatureWallCompletion(
   }, [isOpen, rateLimits.claude, rateLimits.codex])
 
   const markWorkflowVisited = (id: FeatureWallWorkflowId): void => {
-    if (!VIEW_TO_COMPLETE_WORKFLOWS.has(id)) {
-      return
-    }
+    persistVisitedWorkflow(id)
     setVisitedWorkflows((prev) => {
       if (prev.has(id)) {
         return prev
@@ -209,9 +215,6 @@ export function useFeatureWallCompletion(
     })
   }
   const markAgentStepVisited = (id: AgentsStepId): void => {
-    if (id !== 'statuses' && id !== 'orchestration') {
-      return
-    }
     persistVisitedAgentStep(id)
     setVisitedAgentSteps((prev) => {
       if (prev.has(id)) {

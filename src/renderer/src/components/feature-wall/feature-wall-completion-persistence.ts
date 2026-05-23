@@ -1,13 +1,37 @@
 import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
+import {
+  FEATURE_WALL_WORKFLOW_IDS,
+  type FeatureWallWorkflowId
+} from '../../../../shared/feature-wall-workflows'
 import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 
-const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['statuses', 'orchestration'])
+const PERSISTED_WORKFLOW_IDS = new Set<FeatureWallWorkflowId>(FEATURE_WALL_WORKFLOW_IDS)
+const VISITED_WORKFLOWS_STORAGE_KEY = 'orca.featureWall.visitedWorkflows.v1'
+const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>([
+  'statuses',
+  'usage',
+  'orchestration',
+  'notifications'
+])
 const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
 const PERSISTED_WORKBENCH_STEP_IDS = new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
 const VISITED_WORKBENCH_STEPS_STORAGE_KEY = 'orca.featureWall.visitedWorkbenchSteps.v1'
-const PERSISTED_REVIEW_STEP_IDS = new Set<ReviewStepId>(['notes'])
+const PERSISTED_REVIEW_STEP_IDS = new Set<ReviewStepId>(['notes', 'pr-view', 'ship'])
 const VISITED_REVIEW_STEPS_STORAGE_KEY = 'orca.featureWall.visitedReviewSteps.v1'
+
+export function normalizeFeatureWallVisitedWorkflows(value: unknown): FeatureWallWorkflowId[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<FeatureWallWorkflowId>()
+  for (const item of value) {
+    if (typeof item === 'string' && PERSISTED_WORKFLOW_IDS.has(item as FeatureWallWorkflowId)) {
+      seen.add(item as FeatureWallWorkflowId)
+    }
+  }
+  return [...seen]
+}
 
 export function normalizeFeatureWallVisitedAgentSteps(value: unknown): AgentsStepId[] {
   if (!Array.isArray(value)) {
@@ -46,6 +70,21 @@ export function normalizeFeatureWallVisitedReviewSteps(value: unknown): ReviewSt
     }
   }
   return [...seen]
+}
+
+export function readPersistedVisitedWorkflows(): Set<FeatureWallWorkflowId> {
+  if (typeof localStorage === 'undefined') {
+    return new Set()
+  }
+  try {
+    return new Set(
+      normalizeFeatureWallVisitedWorkflows(
+        JSON.parse(localStorage.getItem(VISITED_WORKFLOWS_STORAGE_KEY) ?? '[]')
+      )
+    )
+  } catch {
+    return new Set()
+  }
 }
 
 export function readPersistedVisitedAgentSteps(): Set<AgentsStepId> {
@@ -90,6 +129,20 @@ export function readPersistedVisitedReviewSteps(): Set<ReviewStepId> {
     )
   } catch {
     return new Set()
+  }
+}
+
+export function persistVisitedWorkflow(id: FeatureWallWorkflowId): void {
+  if (!PERSISTED_WORKFLOW_IDS.has(id) || typeof localStorage === 'undefined') {
+    return
+  }
+  try {
+    const next = readPersistedVisitedWorkflows()
+    next.add(id)
+    localStorage.setItem(VISITED_WORKFLOWS_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts; completion
+    // still works for the current open modal from React state.
   }
 }
 

@@ -4,6 +4,7 @@ import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-work
 import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 import {
+  normalizeFeatureWallVisitedWorkflows,
   normalizeFeatureWallVisitedAgentSteps,
   normalizeFeatureWallVisitedReviewSteps,
   normalizeFeatureWallVisitedWorkbenchSteps
@@ -30,6 +31,46 @@ function completionInput(overrides: Partial<CompletionInput> = {}): CompletionIn
 }
 
 describe('getFeatureWallCompletionProgress', () => {
+  it('does not complete setup-backed items before the user visits them in the tour', () => {
+    const progress = getFeatureWallCompletionProgress(
+      completionInput({
+        hasConnectedTaskSource: true,
+        hasUsageAccount: true,
+        orchestrationSkillInstalled: true,
+        notificationsConfigured: true,
+        githubConfigured: true,
+        aiCommitPrConfigured: true
+      })
+    )
+
+    expect(progress.workflowDone.tasks).toBe(false)
+    expect(progress.workflowDone['agents-orchestration']).toBe(false)
+    expect(progress.workflowDone.review).toBe(false)
+    expect(progress.agentStepDone.usage).toBe(false)
+    expect(progress.agentStepDone.notifications).toBe(false)
+    expect(progress.reviewStepDone['pr-view']).toBe(false)
+    expect(progress.reviewStepDone.ship).toBe(false)
+  })
+
+  it('completes tasks only after the user visits Tasks and a task source is connected', () => {
+    expect(
+      getFeatureWallCompletionProgress(
+        completionInput({
+          visitedWorkflows: new Set<FeatureWallWorkflowId>(['tasks'])
+        })
+      ).workflowDone.tasks
+    ).toBe(false)
+
+    expect(
+      getFeatureWallCompletionProgress(
+        completionInput({
+          visitedWorkflows: new Set<FeatureWallWorkflowId>(['tasks']),
+          hasConnectedTaskSource: true
+        })
+      ).workflowDone.tasks
+    ).toBe(true)
+  })
+
   it('requires both visiting orchestration and detecting the skill before completing the step', () => {
     expect(
       getFeatureWallCompletionProgress(
@@ -59,7 +100,13 @@ describe('getFeatureWallCompletionProgress', () => {
 
   it('keeps the agents workflow incomplete until the orchestration skill is detected', () => {
     const otherwiseComplete = completionInput({
-      visitedAgentSteps: new Set<AgentsStepId>(['statuses', 'orchestration']),
+      visitedWorkflows: new Set<FeatureWallWorkflowId>(['agents-orchestration']),
+      visitedAgentSteps: new Set<AgentsStepId>([
+        'statuses',
+        'usage',
+        'orchestration',
+        'notifications'
+      ]),
       hasUsageAccount: true,
       notificationsConfigured: true
     })
@@ -75,11 +122,17 @@ describe('getFeatureWallCompletionProgress', () => {
     ).toBe(true)
   })
 
-  it('keeps the agents workflow complete after view-only sub-step visits are restored', () => {
+  it('keeps the agents workflow complete after sub-step visits are restored', () => {
     expect(
       getFeatureWallCompletionProgress(
         completionInput({
-          visitedAgentSteps: new Set<AgentsStepId>(['statuses', 'orchestration']),
+          visitedWorkflows: new Set<FeatureWallWorkflowId>(['agents-orchestration']),
+          visitedAgentSteps: new Set<AgentsStepId>([
+            'statuses',
+            'usage',
+            'orchestration',
+            'notifications'
+          ]),
           hasUsageAccount: true,
           notificationsConfigured: true,
           orchestrationSkillInstalled: true
@@ -92,7 +145,8 @@ describe('getFeatureWallCompletionProgress', () => {
     expect(
       getFeatureWallCompletionProgress(
         completionInput({
-          visitedReviewSteps: new Set<ReviewStepId>(['notes']),
+          visitedWorkflows: new Set<FeatureWallWorkflowId>(['review']),
+          visitedReviewSteps: new Set<ReviewStepId>(['notes', 'pr-view', 'ship']),
           githubConfigured: true,
           aiCommitPrConfigured: true
         })
@@ -104,6 +158,7 @@ describe('getFeatureWallCompletionProgress', () => {
     expect(
       getFeatureWallCompletionProgress(
         completionInput({
+          visitedWorkflows: new Set<FeatureWallWorkflowId>(['workbench']),
           visitedWorkbenchSteps: new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
         })
       ).workflowDone.workbench
@@ -111,17 +166,26 @@ describe('getFeatureWallCompletionProgress', () => {
   })
 })
 
+describe('normalizeFeatureWallVisitedWorkflows', () => {
+  it('keeps persisted workflow visits and drops duplicates or unknown ids', () => {
+    expect(normalizeFeatureWallVisitedWorkflows(['workspaces', 'tasks', 'tasks', 'bogus'])).toEqual(
+      ['workspaces', 'tasks']
+    )
+  })
+})
+
 describe('normalizeFeatureWallVisitedAgentSteps', () => {
-  it('keeps persisted agents visits and drops setup-backed or unknown steps', () => {
+  it('keeps persisted agents visits and drops duplicates or unknown steps', () => {
     expect(
       normalizeFeatureWallVisitedAgentSteps([
         'statuses',
         'orchestration',
         'usage',
         'orchestration',
+        'notifications',
         'bogus'
       ])
-    ).toEqual(['statuses', 'orchestration'])
+    ).toEqual(['statuses', 'orchestration', 'usage', 'notifications'])
   })
 })
 
@@ -140,9 +204,9 @@ describe('normalizeFeatureWallVisitedWorkbenchSteps', () => {
 })
 
 describe('normalizeFeatureWallVisitedReviewSteps', () => {
-  it('keeps persisted review notes visits and drops setup-backed or unknown steps', () => {
+  it('keeps persisted review visits and drops duplicates or unknown steps', () => {
     expect(
       normalizeFeatureWallVisitedReviewSteps(['notes', 'pr-view', 'ship', 'notes', 'bogus'])
-    ).toEqual(['notes'])
+    ).toEqual(['notes', 'pr-view', 'ship'])
   })
 })

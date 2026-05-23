@@ -111,6 +111,63 @@ test.describe('Feature tour modal', () => {
       .not.toBe('settings')
   })
 
+  test('does not pre-check configured workflows until the user visits them', async ({
+    orcaPage
+  }) => {
+    await orcaPage.evaluate(() => {
+      for (const key of [
+        'orca.featureWall.visitedWorkflows.v1',
+        'orca.featureWall.visitedAgentSteps.v1',
+        'orca.featureWall.visitedWorkbenchSteps.v1',
+        'orca.featureWall.visitedReviewSteps.v1'
+      ]) {
+        localStorage.removeItem(key)
+      }
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.setState({
+        preflightStatus: {
+          git: { installed: true },
+          gh: { installed: true, authenticated: true },
+          glab: { installed: false, authenticated: false },
+          bitbucket: { configured: false, authenticated: false, account: null },
+          azureDevOps: {
+            configured: false,
+            authenticated: false,
+            account: null,
+            baseUrl: null,
+            tokenConfigured: false
+          },
+          gitea: {
+            configured: false,
+            authenticated: false,
+            account: null,
+            baseUrl: null,
+            tokenConfigured: false
+          }
+        },
+        preflightStatusChecked: true,
+        preflightStatusLoading: false,
+        linearStatus: { connected: false, viewer: null },
+        linearStatusChecked: true
+      })
+      store.getState().openModal('feature-wall', { source: 'help_menu' })
+    })
+
+    const rail = orcaPage.getByRole('navigation', { name: 'Workflows' })
+    await expect(
+      rail.locator('[data-feature-wall-workflow-id] [aria-label="Completed"]')
+    ).toHaveCount(0)
+
+    const workspacesTab = rail.locator('[data-feature-wall-workflow-id="workspaces"]')
+    const tasksTab = rail.locator('[data-feature-wall-workflow-id="tasks"]')
+    await tasksTab.click()
+    await expect(tasksTab.locator('[aria-label="Completed"]')).toHaveCount(1)
+    await expect(workspacesTab.locator('[aria-label="Completed"]')).toHaveCount(0)
+  })
+
   test('shows the bottom-right nudge and opens the full tour', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store

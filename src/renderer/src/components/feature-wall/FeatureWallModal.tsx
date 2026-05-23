@@ -187,20 +187,14 @@ export default function FeatureWallModal(): JSX.Element | null {
     }
   }, [reviewSteps, selected.id])
 
-  // Why: viewing an informational workflow / sub-step is enough to count it as
-  // "done" — only setup-driven entries wait for an external signal (see
-  // use-feature-wall-completion.ts).
+  // Why: existing setup can satisfy a step only after the user intentionally
+  // navigates to that workflow or sub-step in the tour.
   const {
     markWorkflowVisited,
     markAgentStepVisited,
     markWorkbenchStepVisited,
     markReviewStepVisited
   } = completion
-  useEffect(() => {
-    if (isOpen) {
-      markWorkflowVisited(selectedId)
-    }
-  }, [isOpen, markWorkflowVisited, selectedId])
   useEffect(() => {
     if (isOpen && agentsActiveStep) {
       markAgentStepVisited(agentsActiveStep.id)
@@ -219,6 +213,7 @@ export default function FeatureWallModal(): JSX.Element | null {
 
   const handleSelect = useCallback(
     (workflow: FeatureWallWorkflow): void => {
+      markWorkflowVisited(workflow.id)
       if (workflow.id === selectedId) {
         return
       }
@@ -234,7 +229,7 @@ export default function FeatureWallModal(): JSX.Element | null {
         track('feature_wall_tile_focused', { tile_id: tile.id })
       }
     },
-    [selectedId, source]
+    [markWorkflowVisited, selectedId, source]
   )
 
   const handleOrchestrationSkillInstalledChange = useCallback((installed: boolean): void => {
@@ -262,6 +257,7 @@ export default function FeatureWallModal(): JSX.Element | null {
   const isLastWorkflow = selectedIndex >= FEATURE_WALL_WORKFLOWS.length - 1
   const continueLabel = isLastWorkflow ? 'Done' : 'Continue'
   const handleContinue = useCallback((): void => {
+    markWorkflowVisited(selected.id)
     if (isLastWorkflow) {
       closeModal()
       return
@@ -271,7 +267,7 @@ export default function FeatureWallModal(): JSX.Element | null {
       handleSelect(nextWorkflow)
       railRefs.current[selectedIndex + 1]?.focus()
     }
-  }, [closeModal, handleSelect, isLastWorkflow, selectedIndex])
+  }, [closeModal, handleSelect, isLastWorkflow, markWorkflowVisited, selected.id, selectedIndex])
 
   useEffect(() => {
     if (!isOpen) {
