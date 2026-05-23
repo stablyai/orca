@@ -3530,5 +3530,45 @@ describe('registerPtyHandlers', () => {
         vi.useRealTimers()
       }
     })
+
+    it('serializes overlapping headless snapshots for the same PTY', async () => {
+      let resolveFirst!: (snapshot: { data: string; cols: number; rows: number }) => void
+      let resolveSecond!: (snapshot: { data: string; cols: number; rows: number }) => void
+      const runtime = {
+        setPtyController: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyData: vi.fn(),
+        onPtyExit: vi.fn(),
+        preAllocateHandleForPty: vi.fn(),
+        serializeHeadlessTerminalBufferForRenderer: vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+                resolveFirst = resolve
+              })
+          )
+          .mockImplementationOnce(
+            () =>
+              new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+                resolveSecond = resolve
+              })
+          )
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const first = handlers.get('pty:serializeHeadlessBuffer')!(null, { id: 'pty-1' })
+      const second = handlers.get('pty:serializeHeadlessBuffer')!(null, { id: 'pty-1' })
+      expect(runtime.serializeHeadlessTerminalBufferForRenderer).toHaveBeenCalledTimes(1)
+
+      resolveFirst({ data: 'first', cols: 80, rows: 24 })
+      await expect(first).resolves.toEqual({ data: 'first', cols: 80, rows: 24 })
+      await Promise.resolve()
+      expect(runtime.serializeHeadlessTerminalBufferForRenderer).toHaveBeenCalledTimes(2)
+
+      resolveSecond({ data: 'second', cols: 80, rows: 24 })
+      await expect(second).resolves.toEqual({ data: 'second', cols: 80, rows: 24 })
+    })
   })
 })

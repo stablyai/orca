@@ -658,8 +658,11 @@ export function registerPtyHandlers(
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
   // throughput. Keystroke echo/redraws bypass this below because agent TUIs
   // already spend tens of ms producing their redraw.
+  type HeadlessRendererSnapshot = { data: string; cols: number; rows: number } | null
+
   const pendingData = new Map<string, string>()
-  const headlessSnapshotHeldPtyIds = new Set<string>()
+  const headlessSnapshotHoldCounts = new Map<string, number>()
+  const headlessSnapshotQueues = new Map<string, Promise<HeadlessRendererSnapshot>>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
@@ -670,7 +673,7 @@ export function registerPtyHandlers(
 
   const hasFlushablePendingData = (): boolean => {
     for (const id of pendingData.keys()) {
-      if (!headlessSnapshotHeldPtyIds.has(id)) {
+      if (!headlessSnapshotHoldCounts.has(id)) {
         return true
       }
     }
@@ -684,7 +687,7 @@ export function registerPtyHandlers(
       return
     }
     for (const [id, data] of pendingData) {
-      if (headlessSnapshotHeldPtyIds.has(id)) {
+      if (headlessSnapshotHoldCounts.has(id)) {
         continue
       }
       mainWindow.webContents.send('pty:data', { id, data })
@@ -718,6 +721,62 @@ export function registerPtyHandlers(
     pendingData.delete(id)
     clearFlushTimerIfIdle()
     return data
+  }
+
+  const captureHeadlessSnapshotForRenderer = async (
+    id: string,
+    opts: { scrollbackRows?: number }
+  ): Promise<HeadlessRendererSnapshot> => {
+    if (!runtime) {
+      return null
+    }
+    // Why: hidden-pane reveal uses the headless snapshot as the authoritative
+    // paint. Hold any ≤8ms main-process PTY batches while serializing: a
+    // successful headless snapshot already contains them, while a null
+    // snapshot must release them so the renderer fallback can replay them.
+    const pendingBeforeSnapshot = takePendingDataForPty(id)
+    const holdCount = headlessSnapshotHoldCounts.get(id) ?? 0
+    headlessSnapshotHoldCounts.set(id, holdCount + 1)
+    const releaseSnapshotHold = (): void => {
+      const current = headlessSnapshotHoldCounts.get(id) ?? 0
+      if (current <= 1) {
+        headlessSnapshotHoldCounts.delete(id)
+        return
+      }
+      headlessSnapshotHoldCounts.set(id, current - 1)
+    }
+    let snapshot: HeadlessRendererSnapshot
+    try {
+      snapshot = await runtime.serializeHeadlessTerminalBufferForRenderer(id, opts)
+    } catch (err) {
+      const pendingDuringSnapshot = takePendingDataForPty(id)
+      releaseSnapshotHold()
+      sendPtyDataToRenderer(id, pendingBeforeSnapshot + pendingDuringSnapshot)
+      throw err
+    }
+    const pendingDuringSnapshot = takePendingDataForPty(id)
+    releaseSnapshotHold()
+    if (!snapshot) {
+      sendPtyDataToRenderer(id, pendingBeforeSnapshot + pendingDuringSnapshot)
+    }
+    return snapshot
+  }
+
+  const queueHeadlessSnapshotForRenderer = (
+    id: string,
+    opts: { scrollbackRows?: number }
+  ): Promise<HeadlessRendererSnapshot> => {
+    const previous = headlessSnapshotQueues.get(id)
+    const next = previous
+      ? previous.catch(() => null).then(() => captureHeadlessSnapshotForRenderer(id, opts))
+      : captureHeadlessSnapshotForRenderer(id, opts)
+    const tracked = next.finally(() => {
+      if (headlessSnapshotQueues.get(id) === tracked) {
+        headlessSnapshotQueues.delete(id)
+      }
+    })
+    headlessSnapshotQueues.set(id, tracked)
+    return tracked
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -758,7 +817,7 @@ export function registerPtyHandlers(
         nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
         lastInputAt !== undefined &&
         performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
-      if (isInteractiveOutput && !headlessSnapshotHeldPtyIds.has(payload.id)) {
+      if (isInteractiveOutput && !headlessSnapshotHoldCounts.has(payload.id)) {
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
@@ -1868,27 +1927,7 @@ export function registerPtyHandlers(
       ) {
         opts.scrollbackRows = Math.floor(args.scrollbackRows)
       }
-      // Why: hidden-pane reveal uses the headless snapshot as the authoritative
-      // paint. Hold any ≤8ms main-process PTY batches while serializing: a
-      // successful headless snapshot already contains them, while a null
-      // snapshot must release them so the renderer fallback can replay them.
-      const pendingBeforeSnapshot = takePendingDataForPty(args.id)
-      headlessSnapshotHeldPtyIds.add(args.id)
-      let snapshot: { data: string; cols: number; rows: number } | null
-      try {
-        snapshot = await runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
-      } catch (err) {
-        const pendingDuringSnapshot = takePendingDataForPty(args.id)
-        headlessSnapshotHeldPtyIds.delete(args.id)
-        sendPtyDataToRenderer(args.id, pendingBeforeSnapshot + pendingDuringSnapshot)
-        throw err
-      }
-      const pendingDuringSnapshot = takePendingDataForPty(args.id)
-      headlessSnapshotHeldPtyIds.delete(args.id)
-      if (!snapshot) {
-        sendPtyDataToRenderer(args.id, pendingBeforeSnapshot + pendingDuringSnapshot)
-      }
-      return snapshot
+      return queueHeadlessSnapshotForRenderer(args.id, opts)
     }
   )
 

@@ -1376,6 +1376,39 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('updateRepo drops repo icons that fail shared sanitization', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      repoIcon: {
+        type: 'image',
+        source: 'upload',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+      } as never
+    })
+
+    expect(updated).not.toBeNull()
+    expect(updated!.repoIcon).toBeUndefined()
+    expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+  })
+
+  it('getRepo does not expose invalid persisted repo icons', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        repoIcon: {
+          type: 'image',
+          source: 'upload',
+          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+        } as never
+      })
+    )
+
+    expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+    expect(store.getRepos()[0]!.repoIcon).toBeUndefined()
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
