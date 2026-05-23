@@ -3,7 +3,6 @@ import { Kanban, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -14,7 +13,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
-  const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
+  const groupBy = useAppStore((s) => s.groupBy)
+  const canCreateWorkspace = repos.length > 0
+  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
 
   const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
     setWorkspaceBoardOpen(open)
@@ -66,8 +67,8 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     <>
       <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          <span className="pl-2 pr-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
-            Workspaces
+          <span className="pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80 select-none">
+            {sidebarTitle}
           </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -101,21 +102,21 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => {
-                  if (!canCreateWorktree) {
+                  if (!canCreateWorkspace) {
                     return
                   }
                   openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
                 }}
                 aria-label="New workspace"
-                disabled={!canCreateWorktree}
+                disabled={!canCreateWorkspace}
               >
                 <Plus className="size-3.5" strokeWidth={2.25} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={6}>
-              {canCreateWorktree
+              {canCreateWorkspace
                 ? `New workspace (${newWorktreeShortcutLabel})`
-                : 'Add a Git project to create worktrees'}
+                : 'Add a project to create workspaces'}
             </TooltipContent>
           </Tooltip>
         </div>

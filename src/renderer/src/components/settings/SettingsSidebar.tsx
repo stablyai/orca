@@ -138,7 +138,7 @@ export function SettingsSidebar({
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Repositories
+              Projects
             </p>
 
             {repoSections.length > 0 ? (
@@ -183,7 +183,7 @@ export function SettingsSidebar({
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos ? 'No matching repository settings.' : 'No repositories added yet.'}
+                {hasRepos ? 'No matching project settings.' : 'No projects added yet.'}
               </p>
             )}
           </div>

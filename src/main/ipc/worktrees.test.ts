@@ -253,7 +253,8 @@ describe('registerWorktreeHandlers', () => {
       store.getAllWorktreeLineage,
       store.removeWorktreeLineage,
       killAllProcessesForWorktreeMock,
-      getLocalPtyProviderMock
+      getLocalPtyProviderMock,
+      deleteWorktreeHistoryDirMock
     ]) {
       m.mockReset()
     }
@@ -483,6 +484,52 @@ describe('registerWorktreeHandlers', () => {
         path: '/workspace/feature-something',
         branch: 'feature/something'
       })
+    })
+  })
+
+  it('creates an additional workspace for folder-mode repos without git worktree add', async () => {
+    const repo = {
+      id: 'repo-folder',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      ...meta
+    }))
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-folder',
+      name: 'folder-session',
+      createdWithAgent: 'codex'
+    })) as { worktree: { id: string } }
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(result.worktree).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^repo-folder::\/workspace\/folder::workspace:[0-9a-f-]{36}$/),
+        repoId: 'repo-folder',
+        path: '/workspace/folder',
+        displayName: 'folder-session',
+        instanceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        createdWithAgent: 'codex'
+      })
+    )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-folder'
     })
   })
 
@@ -2422,6 +2469,55 @@ describe('registerWorktreeHandlers', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
+    })
+  })
+
+  it('refuses to delete the root workspace for folder-mode repos', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-folder',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-folder::/workspace/folder'
+      })
+    ).rejects.toThrow('Cannot delete the project root workspace')
+
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+  })
+
+  it('kills PTYs before removing additional folder workspace metadata', async () => {
+    const ptyProvider = {} as never
+    const worktreeId = 'repo-folder::/workspace/folder::workspace:child-1'
+    store.getRepo.mockReturnValue({
+      id: 'repo-folder',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+    getLocalPtyProviderMock.mockReturnValue(ptyProvider)
+
+    await handlers['worktrees:remove'](null, { worktreeId })
+
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
+      runtime: runtimeStub,
+      localProvider: ptyProvider
+    })
+    expect(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
+      store.removeWorktreeMeta.mock.invocationCallOrder[0]
+    )
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-folder'
     })
   })
 

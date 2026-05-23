@@ -1056,7 +1056,7 @@ export type GitHubSlice = {
    * Why: fan out a single work-item query across multiple repos. Partial
    * failures don't reject — a repo that both fails to fetch *and* has no
    * cached fallback contributes nothing and increments `failedCount`, which
-   * the caller surfaces as a "N of M repos failed to load" banner. A repo
+   * the caller surfaces as a "N of M projects failed to load" banner. A repo
    * served from stale cache on rejection is NOT counted as failed — matching
    * the single-repo behavior of quietly serving stale data.
    */

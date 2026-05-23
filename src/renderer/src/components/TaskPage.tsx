@@ -4305,14 +4305,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4667,14 +4667,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4823,7 +4823,7 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} of {selectedRepos.length} repos failed to load
+                    {failedCount} of {selectedRepos.length} projects failed to load
                   </div>
                 ) : null}
 
@@ -5177,7 +5177,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
                       ? 'No pending todos. You’re all caught up!'
-                      : 'Select a repo so we can authenticate to GitLab.'}
+                      : 'Select a project so we can authenticate to GitLab.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5271,7 +5271,7 @@ export default function TaskPage(): React.JSX.Element {
                         : gitlabView === 'mrs'
                           ? 'No GitLab MRs match this filter.'
                           : 'No GitLab work matches this filter.'
-                      : 'Select a repo to see GitLab work items.'}
+                      : 'Select a project to see GitLab work items.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5990,7 +5990,7 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => setNewIssueRepoId(v)}

@@ -83,6 +83,7 @@ type SmartWorkspaceNameFieldProps = {
   onPlainEnter?: () => void
   disabled?: boolean
   disabledPlaceholder?: string
+  textOnly?: boolean
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -147,7 +148,8 @@ export default function SmartWorkspaceNameField({
   inputRef,
   onPlainEnter,
   disabled = false,
-  disabledPlaceholder
+  disabledPlaceholder,
+  textOnly = false
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   const {
     addRepo,
@@ -182,7 +184,7 @@ export default function SmartWorkspaceNameField({
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
   )
-  const [mode, setMode] = useState<SmartNameMode>('smart')
+  const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : 'smart')
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [open, setOpen] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState(value)
@@ -216,6 +218,9 @@ export default function SmartWorkspaceNameField({
   const availableModes = useMemo(
     () =>
       MODES.filter((item) => {
+        if (textOnly) {
+          return item.id === 'text'
+        }
         if (item.id === 'gitlab') {
           return gitlabAvailable
         }
@@ -224,7 +229,7 @@ export default function SmartWorkspaceNameField({
         }
         return true
       }),
-    [gitlabAvailable, linearAvailable]
+    [gitlabAvailable, linearAvailable, textOnly]
   )
 
   const setInputNode = useCallback(
@@ -238,7 +243,7 @@ export default function SmartWorkspaceNameField({
   )
 
   useEffect(() => {
-    if (disabled) {
+    if (disabled || textOnly) {
       return
     }
     if (!preflightStatusChecked) {
@@ -252,10 +257,18 @@ export default function SmartWorkspaceNameField({
     disabled,
     linearStatusChecked,
     preflightStatusChecked,
-    refreshPreflightStatus
+    refreshPreflightStatus,
+    textOnly
   ])
 
   useEffect(() => {
+    if (textOnly) {
+      if (mode !== 'text') {
+        setMode('text')
+      }
+      setOpen(false)
+      return
+    }
     if ((mode === 'gitlab' && gitlabAvailable) || (mode === 'linear' && linearAvailable)) {
       return
     }
@@ -268,7 +281,7 @@ export default function SmartWorkspaceNameField({
     setGitlabLoading(false)
     setLinearLoading(false)
     setCommandValue('')
-  }, [gitlabAvailable, linearAvailable, mode])
+  }, [gitlabAvailable, linearAvailable, mode, textOnly])
 
   useEffect(() => {
     if (!disabled) {
@@ -303,9 +316,9 @@ export default function SmartWorkspaceNameField({
     [debouncedQuery]
   )
   const parsedGhLink = useMemo(() => parseGitHubIssueOrPRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGithub = mode === 'smart' || mode === 'github'
-  const shouldQueryBranches = mode === 'smart' || mode === 'branches'
-  const shouldQueryLinear = linearAvailable && (mode === 'smart' || mode === 'linear')
+  const shouldQueryGithub = !textOnly && (mode === 'smart' || mode === 'github')
+  const shouldQueryBranches = !textOnly && (mode === 'smart' || mode === 'branches')
+  const shouldQueryLinear = !textOnly && linearAvailable && (mode === 'smart' || mode === 'linear')
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub || !selectedRepo?.path) {
@@ -512,7 +525,7 @@ export default function SmartWorkspaceNameField({
   // GitLabWorkItem via the IPC. Skipped silently when the host hook
   // hasn't supplied an onGitLabItemSelect handler.
   const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGitlab = gitlabAvailable && (mode === 'smart' || mode === 'gitlab')
+  const shouldQueryGitlab = !textOnly && gitlabAvailable && (mode === 'smart' || mode === 'gitlab')
   useEffect(() => {
     if (
       !shouldQueryGitlab ||
@@ -894,49 +907,44 @@ export default function SmartWorkspaceNameField({
         }}
         className="gap-0"
       >
-        <TabsList
-          ref={tabsListRef}
-          variant="line"
-          className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
-          onFocusCapture={(event) => {
-            // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
-            // the active trigger on every render, so we can't keep it out of
-            // the natural Tab order via props or a MutationObserver (race
-            // with React commits). Instead, intercept focus *on entry* into
-            // the tabs list:
-            //   - Forward Tab from outside (e.g., Repo combobox) → bounce to
-            //     the search input so the segmented control is skipped.
-            //   - Shift-Tab from the input → relatedTarget is the input, so
-            //     allow focus to land on the active trigger (segmented
-            //     control remains reachable in reverse).
-            //   - Intra-list focus moves (arrow keys) → relatedTarget is
-            //     inside the list; allow.
-            const previous = event.relatedTarget as HTMLElement | null
-            const list = tabsListRef.current
-            const input = localInputRef.current
-            if (!list || !input) {
-              return
-            }
-            if (!previous || previous === input || list.contains(previous)) {
-              return
-            }
-            event.stopPropagation()
-            input.focus({ preventScroll: true })
-          }}
-        >
-          {availableModes.map(({ id, label, Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              tabIndex={-1}
-              data-smart-name-mode={id}
-              className="flex-none gap-1.5 px-0 text-xs"
-            >
-              <Icon className="size-3.5" />
-              <span>{label}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {textOnly ? null : (
+          <TabsList
+            ref={tabsListRef}
+            variant="line"
+            className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
+            onFocusCapture={(event) => {
+              // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
+              // the active trigger on every render, so we can't keep it out of
+              // the natural Tab order via props or a MutationObserver (race
+              // with React commits). Instead, intercept focus on entry into
+              // the tabs list so forward Tab goes straight to the input.
+              const previous = event.relatedTarget as HTMLElement | null
+              const list = tabsListRef.current
+              const input = localInputRef.current
+              if (!list || !input) {
+                return
+              }
+              if (!previous || previous === input || list.contains(previous)) {
+                return
+              }
+              event.stopPropagation()
+              input.focus({ preventScroll: true })
+            }}
+          >
+            {availableModes.map(({ id, label, Icon }) => (
+              <TabsTrigger
+                key={id}
+                value={id}
+                tabIndex={-1}
+                data-smart-name-mode={id}
+                className="flex-none gap-1.5 px-0 text-xs"
+              >
+                <Icon className="size-3.5" />
+                <span>{label}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
       </Tabs>
 
       <Popover

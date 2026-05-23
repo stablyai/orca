@@ -68,7 +68,8 @@ const {
   reopenGitLabMRMock,
   getGlabKnownHostsMock,
   getGitLabWorkItemDetailsMock,
-  getIssueMock
+  getIssueMock,
+  deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => {
   // Why: SSH runtime tests register providers through the public dispatcher API,
   // so the mock needs the same registry semantics as the real module.
@@ -120,7 +121,8 @@ const {
     reopenGitLabMRMock: vi.fn(),
     getGlabKnownHostsMock: vi.fn(),
     getGitLabWorkItemDetailsMock: vi.fn(),
-    getIssueMock: vi.fn()
+    getIssueMock: vi.fn(),
+    deleteWorktreeHistoryDirMock: vi.fn()
   }
 })
 
@@ -129,6 +131,10 @@ vi.mock('../git/worktree', () => ({
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
+}))
+
+vi.mock('../terminal-history', () => ({
+  deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -915,6 +921,102 @@ describe('OrcaRuntimeService', () => {
       id: result.worktree.id,
       path: createdWorktree.path
     })
+  })
+
+  it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
+    const folderRepo = {
+      id: 'folder-repo',
+      path: '/workspace/folder',
+      displayName: 'Folder',
+      badgeColor: 'blue',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [folderRepo],
+      getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      removeWorktreeMeta: (worktreeId: string) => {
+        delete metaById[worktreeId]
+      }
+    }
+    let deletedWorktreeId = ''
+    const localProvider = {
+      listProcesses: vi.fn(async () => [{ id: `${deletedWorktreeId}@@pty-1` }]),
+      shutdown: vi.fn(async () => undefined)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    const notifier = { worktreesChanged: vi.fn() }
+    runtime.setNotifier(notifier as never)
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:folder-repo',
+      name: 'folder-session',
+      createdWithAgent: 'codex'
+    })
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(result.worktree).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^folder-repo::\/workspace\/folder::workspace:[0-9a-f-]{36}$/),
+        repoId: 'folder-repo',
+        path: '/workspace/folder',
+        displayName: 'folder-session',
+        isMainWorktree: false,
+        createdWithAgent: 'codex'
+      })
+    )
+    expect(metaById[result.worktree.id]).toMatchObject({
+      instanceId: result.worktree.instanceId,
+      displayName: 'folder-session',
+      orcaCreationSource: 'runtime',
+      createdWithAgent: 'codex'
+    })
+    await expect(runtime.showManagedWorktree(`id:${result.worktree.id}`)).resolves.toMatchObject({
+      id: result.worktree.id,
+      repoId: 'folder-repo',
+      path: '/workspace/folder',
+      displayName: 'folder-session'
+    })
+    await expect(runtime.listManagedWorktrees('id:folder-repo')).resolves.toMatchObject({
+      totalCount: 2,
+      worktrees: [
+        expect.objectContaining({
+          id: 'folder-repo::/workspace/folder',
+          isMainWorktree: true
+        }),
+        expect.objectContaining({
+          id: result.worktree.id,
+          isMainWorktree: false
+        })
+      ]
+    })
+    await expect(
+      runtime.updateManagedWorktreeMeta(`id:${result.worktree.id}`, { comment: 'note' })
+    ).resolves.toMatchObject({
+      id: result.worktree.id,
+      comment: 'note'
+    })
+    await expect(
+      runtime.removeManagedWorktree('id:folder-repo::/workspace/folder')
+    ).rejects.toThrow('Cannot delete the project root workspace')
+    deletedWorktreeId = result.worktree.id
+    await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
+    expect(localProvider.shutdown).toHaveBeenCalledWith(`${result.worktree.id}@@pty-1`, {
+      immediate: true
+    })
+    expect(metaById[result.worktree.id]).toBeUndefined()
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
+    expect(notifier.worktreesChanged).toHaveBeenCalledWith('folder-repo')
   })
 
   it('refreshes runtime remote-tracking bases before creating local worktrees', async () => {

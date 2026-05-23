@@ -711,11 +711,10 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
-        // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
-        // composer when there is at least one real git repo configured, so
-        // users on a fresh install don't get a modal with nothing to target.
+        // Why: keep the global shortcut quiet on a fresh install, but allow
+        // both Git projects and plain folder projects to create workspaces.
         const store = useAppStore.getState()
-        if (!store.repos.some((repo) => isGitRepoKind(repo))) {
+        if (store.repos.length === 0) {
           return
         }
         if (store.activeModal === 'new-workspace-composer') {

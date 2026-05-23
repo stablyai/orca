@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { WorkspaceStatus } from '../../../../shared/types'
 
 export function useWorkspaceKanbanCreateWorktree(): {
@@ -8,7 +7,7 @@ export function useWorkspaceKanbanCreateWorktree(): {
   createWorktreeForStatus: (workspaceStatus: WorkspaceStatus) => void
 } {
   const openModal = useAppStore((s) => s.openModal)
-  const canCreateWorktree = useAppStore((s) => s.repos.some((repo) => isGitRepoKind(repo)))
+  const canCreateWorktree = useAppStore((s) => s.repos.length > 0)
 
   const createWorktreeForStatus = useCallback(
     (workspaceStatus: WorkspaceStatus) => {

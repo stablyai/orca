@@ -416,7 +416,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
   const quickActionKind = getWorkspaceQuickActionKind({
     hasActiveActivity,
-    isDeletable: !worktree.isMainWorktree && !isFolder,
+    isDeletable: !worktree.isMainWorktree,
     isInactive: !hasActiveActivity,
     isMacOptionPressed
   })
@@ -629,7 +629,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
+                  {isSshDisconnected ? 'SSH disconnected' : 'Remote project via SSH'}
                 </TooltipContent>
               </Tooltip>
             )}

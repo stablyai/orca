@@ -23,7 +23,7 @@ type RepoMultiComboboxProps = {
    *  `null` is never emitted here — persistence of "sticky-all" (selection
    *  equals every eligible repo) is the caller's responsibility. */
   onChange: (next: ReadonlySet<string>) => void
-  /** Clicking the sticky "All repos" row emits a full-set selection AND this
+  /** Clicking the sticky "All projects" row emits a full-set selection AND this
    *  signal, so the caller can persist `null` (sticky-all) rather than a
    *  frozen snapshot that would exclude repos added later. */
   onSelectAll: () => void
@@ -32,10 +32,10 @@ type RepoMultiComboboxProps = {
 
 function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React.JSX.Element {
   if (repos.length === 0) {
-    return <span className="text-muted-foreground">No repos</span>
+    return <span className="text-muted-foreground">No projects</span>
   }
   if (selected.size === repos.length) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">All repos</span>
+    return <span className="inline-flex min-w-0 items-center gap-1.5">All projects</span>
   }
   const selectedRepos = repos.filter((r) => selected.has(r.id))
   const [first, second, ...rest] = selectedRepos
@@ -92,7 +92,7 @@ export default function RepoMultiCombobox({
 
   const handleSelectAll = useCallback(() => {
     if (allSelected) {
-      // Why: toggle — clicking "All repos" while everything is selected
+      // Why: toggle — clicking "All projects" while everything is selected
       // collapses to a single repo. The fetch effect requires at least one
       // selection, so we keep the first eligible repo instead of emitting
       // an empty set.
@@ -120,7 +120,7 @@ export default function RepoMultiCombobox({
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
-      {/* Why: trigger width can be as narrow as the "All repos" label, but the
+      {/* Why: trigger width can be as narrow as the "All projects" label, but the
           popover hosts a search input and repo rows with paths. Use the
           trigger as a minimum width and let the content expand to a readable
           size so the search field and repo names aren't truncated. */}
@@ -131,12 +131,12 @@ export default function RepoMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder="Search repos..."
+            placeholder="Search projects..."
             value={query}
             onValueChange={setQuery}
             className="text-xs"
           />
-          {/* Why: sticky "All repos" row sits above the CommandList so it
+          {/* Why: sticky "All projects" row sits above the CommandList so it
               stays visible while the user scrolls a long repo list. Selecting
               it emits `onSelectAll` (not a snapshot via onChange) so the
               caller can persist sticky-all semantics. */}
@@ -157,11 +157,11 @@ export default function RepoMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>All repos</span>
+              <span>All projects</span>
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>No repos match your search.</CommandEmpty>
+            <CommandEmpty>No projects match your search.</CommandEmpty>
             {filteredRepos.map((repo) => {
               const isSelected = selected.has(repo.id)
               const isLastSelected = isSelected && selected.size <= 1

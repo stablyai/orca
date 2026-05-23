@@ -31,8 +31,7 @@ function getPreflightIssues(status: {
     issues.push({
       id: 'git',
       title: 'Git is not installed',
-      description:
-        'Git is required for Git repositories, source control, and workspace management.',
+      description: 'Git is required for Git projects, source control, and workspace management.',
       fixLabel: 'Install Git',
       fixUrl: 'https://git-scm.com/downloads'
     })
@@ -194,7 +193,9 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
+  const canCreateWorktree = repos.length > 0
+  const createTargetLabel =
+    canCreateWorktree && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -250,11 +251,15 @@ export default function Landing(): React.JSX.Element {
   const nextWorktreeKeys = useShortcutKeys('worktree.navigateDown')
   const shortcuts = useMemo<ShortcutItem[]>(() => {
     return [
-      { id: 'create', keys: createWorktreeKeys, action: 'Create workspace' },
+      {
+        id: 'create',
+        keys: createWorktreeKeys,
+        action: `Create ${createTargetLabel.toLowerCase()}`
+      },
       { id: 'up', keys: previousWorktreeKeys, action: 'Move up workspace' },
       { id: 'down', keys: nextWorktreeKeys, action: 'Move down workspace' }
     ]
-  }, [createWorktreeKeys, nextWorktreeKeys, previousWorktreeKeys])
+  }, [createTargetLabel, createWorktreeKeys, nextWorktreeKeys, previousWorktreeKeys])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -288,11 +293,11 @@ export default function Landing(): React.JSX.Element {
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a Git project first' : undefined}
+              title={!canCreateWorktree ? 'Add a project first' : undefined}
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              Create Workspace
+              Create {createTargetLabel}
             </button>
           </div>
 

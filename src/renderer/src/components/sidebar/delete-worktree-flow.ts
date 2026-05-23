@@ -166,13 +166,10 @@ export function runWorktreeDeleteWithToast(
  * running the delete immediately with toast feedback, or opening the
  * confirmation modal.
  *
- * Why folder mode is handled at the call site: folder-repo removal branches
- * to a different modal (`confirm-remove-folder`) and the folder-vs-git
- * determination requires the full Worktree record's repoId. Keeping that
- * decision adjacent to the caller (rather than branching inside this helper)
- * avoids bleeding folder-mode concerns into what is otherwise a simple
- * skip-confirm-vs-modal decision, and lets the context menu short-circuit
- * before ever entering this funnel.
+ * Why folder-root removal is handled at the call site: disconnecting the
+ * folder project branches to a different modal (`confirm-remove-folder`).
+ * Keeping that decision adjacent to the caller avoids mixing project removal
+ * into what is otherwise a workspace delete confirmation flow.
  *
  * The main-worktree / missing-record guard here is defense-in-depth — the
  * caller is responsible for disabling UI when this is known ahead of time,

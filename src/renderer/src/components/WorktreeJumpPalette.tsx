@@ -195,7 +195,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
-  const canCreateWorktree = useMemo(() => repos.some((repo) => isGitRepoKind(repo)), [repos])
+  const canCreateWorktree = repos.length > 0
 
   const hasQuery = deferredQuery.trim().length > 0
 
@@ -1182,8 +1182,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       </div>
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
-          ? `${resultCount} results found${showCreateAction ? ', create new worktree action available' : ''}`
-          : `${resultCount} items available${showCreateAction ? ', create new worktree action available' : ''}`}
+          ? `${resultCount} results found${showCreateAction ? ', create workspace action available' : ''}`
+          : `${resultCount} items available${showCreateAction ? ', create workspace action available' : ''}`}
       </div>
     </CommandDialog>
   )

@@ -179,7 +179,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-                Repositories
+                Projects
                 {hasRepoFilter && (
                   <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
                     · {selectedCount}
@@ -214,7 +214,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             >
               <CommandInput
                 autoFocus
-                placeholder="Search repos..."
+                placeholder="Search projects..."
                 value={query}
                 onValueChange={setQuery}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -223,7 +223,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 iconClassName="h-3.5 w-3.5"
               />
               <CommandList className="max-h-64 py-1">
-                <CommandEmpty className="py-4 text-[11px]">No repos match</CommandEmpty>
+                <CommandEmpty className="py-4 text-[11px]">No projects match</CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
                   return (
@@ -258,8 +258,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
         )}
 
         <DropdownMenuSeparator />
-        {/* Why: "Add repo" stays visible regardless of repo count so users
-            can recover from the 0/1-repo state where the repo section is
+        {/* Why: "Add project" stays visible regardless of project count so users
+            can recover from the 0/1-project state where the project section is
             hidden. Reset sits beside it only when a filter is active. */}
         <div className="flex items-center justify-between gap-1 px-1 py-1">
           {hasAnyFilter ? (
@@ -279,7 +279,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FolderPlus className="size-3.5" />
-            Add repo
+            Add project
           </button>
         </div>
       </DropdownMenuContent>

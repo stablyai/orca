@@ -64,7 +64,7 @@ export default function WorkspaceKanbanStatusLane({
   const meta = getWorkspaceStatusVisualMeta(status)
   const createTooltip = canCreateWorktree
     ? `New workspace in ${status.label}`
-    : 'Add a Git project to create worktrees'
+    : 'Add a project to create workspaces'
   const createButton = (
     <Button
       type="button"

@@ -45,7 +45,9 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  primaryActionLabel: string
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -207,7 +209,9 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  selectedRepoIsGit,
   onRepoChange,
+  primaryActionLabel,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
@@ -249,7 +253,7 @@ export default function NewWorkspaceComposerCard({
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
-    return repo?.displayName ?? repo?.path ?? 'This repository'
+    return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
   const sshStatusLabel = selectedRepoSshStatus
     ? SSH_STATUS_LABELS[selectedRepoSshStatus]
@@ -314,7 +318,7 @@ export default function NewWorkspaceComposerCard({
                   size="icon-xs"
                   onClick={handleAddRepo}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label="Add folder or repository"
+                  aria-label="Add project"
                 >
                   <FolderPlus className="size-3" />
                 </Button>
@@ -372,7 +376,7 @@ export default function NewWorkspaceComposerCard({
 
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Name or &apos;Create From&apos;{' '}
+            {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
             <span className="text-muted-foreground/70">[Optional]</span>
           </label>
           <SmartWorkspaceNameField
@@ -390,6 +394,7 @@ export default function NewWorkspaceComposerCard({
             onClearSelectedSource={onClearSmartNameSelection}
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder="Connect this repo first"
+            textOnly={!selectedRepoIsGit}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -611,7 +616,7 @@ export default function NewWorkspaceComposerCard({
                 />
                 {!canUseSparseCheckout ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Only available for local repositories.
+                    Only available for local Git projects.
                   </p>
                 ) : null}
               </div>
@@ -645,7 +650,7 @@ export default function NewWorkspaceComposerCard({
           className="text-xs"
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          Create Workspace
+          {primaryActionLabel}
           <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
             <span>{submitShortcutModifierLabel}</span>
             <CornerDownLeft className="size-3" />

@@ -31,7 +31,7 @@ const GROUP_BY_OPTIONS = [
   { id: 'none', label: 'None' },
   { id: 'workspace-status', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
-  { id: 'repo', label: 'Repo' }
+  { id: 'repo', label: 'Project' }
 ] as const
 
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
@@ -49,7 +49,7 @@ const SORT_OPTIONS = [
     description: 'Agents that need attention, then most recent activity.'
   },
   { id: 'recent', label: 'Recent', description: null },
-  { id: 'repo', label: 'Repo', description: null },
+  { id: 'repo', label: 'Project', description: null },
   {
     id: 'manual',
     label: 'Manual',

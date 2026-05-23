@@ -1,6 +1,7 @@
 import { basename } from 'path'
 import type { Repo } from '../shared/types'
-import { splitWorktreeId } from '../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree-id'
+import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
 
 export type UsageWorktreeRef = {
@@ -40,15 +41,20 @@ export function loadKnownUsageWorktreesByRepo(
     if (!parsed || !repoIds.has(parsed.repoId)) {
       continue
     }
+    const repo = localRepos.find((item) => item.id === parsed.repoId)
+    const worktreePath =
+      repo && isFolderRepo(repo)
+        ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
+        : parsed.worktreePath
     const seenPaths = seenPathsByRepo.get(parsed.repoId)
-    if (seenPaths?.has(parsed.worktreePath)) {
+    if (seenPaths?.has(worktreePath)) {
       continue
     }
-    seenPaths?.add(parsed.worktreePath)
+    seenPaths?.add(worktreePath)
     worktreesByRepo.get(parsed.repoId)?.push({
       worktreeId,
-      path: parsed.worktreePath,
-      displayName: meta.displayName || getDefaultUsageWorktreeLabel(parsed.worktreePath)
+      path: worktreePath,
+      displayName: meta.displayName || getDefaultUsageWorktreeLabel(worktreePath)
     })
   }
 

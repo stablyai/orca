@@ -18,7 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import { MANAGE_SESSIONS_SEARCH_ENTRIES } from './terminal-search'
-import { splitWorktreeId } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -55,7 +55,7 @@ function formatWorkspace(session: { cwd: string | null; sessionId: string }): st
     const worktreeId = session.sessionId.slice(0, sep)
     // Why: take everything after the first `::` to recover the worktree path
     // from the canonical `${repoId}::${path}` worktreeId encoding.
-    return shortCwd(splitWorktreeId(worktreeId)?.worktreePath ?? worktreeId)
+    return shortCwd(splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? worktreeId)
   }
   return 'unknown'
 }

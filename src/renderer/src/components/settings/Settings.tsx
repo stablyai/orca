@@ -1351,7 +1351,7 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       key={repo.id}
                       id={repoSectionId}
-                      title={`Repo Settings > ${repo.displayName}`}
+                      title={`Project Settings > ${repo.displayName}`}
                       description={repo.path}
                       searchEntries={getRepositoryPaneSearchEntries(repo)}
                     >

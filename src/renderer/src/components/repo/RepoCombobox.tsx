@@ -200,12 +200,12 @@ export default function RepoCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              placeholder="Search repos/folders..."
+              placeholder="Search projects/folders..."
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
-              <CommandEmpty>No repos/folders match your search.</CommandEmpty>
+              <CommandEmpty>No projects/folders match your search.</CommandEmpty>
               {filteredRepos.map((repo) => (
                 <CommandItem
                   key={repo.id}
@@ -252,7 +252,7 @@ export default function RepoCombobox({
                 className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal"
               >
                 <FolderPlus className="size-3.5 text-muted-foreground" />
-                <span>{isAdding ? 'Adding folder/repo…' : 'Add folder/repo'}</span>
+                <span>{isAdding ? 'Adding project…' : 'Add project'}</span>
               </Button>
             </div>
           </Command>
@@ -260,7 +260,7 @@ export default function RepoCombobox({
       </Popover>
 
       {showStandaloneAddButton ? (
-        /* Why: keep the add-repo action visible even when the repo selector is
+        /* Why: keep the add-project action visible even when the project selector is
             collapsed so adding a new source stays one click away in the compact composer header. */
         <Button
           type="button"
@@ -269,7 +269,7 @@ export default function RepoCombobox({
           disabled={isAdding}
           onClick={() => void handleAddFolder()}
           className="size-9 shrink-0 p-0"
-          aria-label={isAdding ? 'Adding folder or repository' : 'Add folder or repository'}
+          aria-label={isAdding ? 'Adding project' : 'Add project'}
         >
           <FolderPlus className="size-3.5" />
         </Button>

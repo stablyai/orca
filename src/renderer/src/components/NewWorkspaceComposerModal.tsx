@@ -83,10 +83,6 @@ function ComposerModalBody({
           trigger?.focus({ preventScroll: true })
         }}
       >
-        <DialogHeader className="gap-1">
-          <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
-        </DialogHeader>
-
         <QuickTabBody modalData={modalData} onClose={onClose} active />
       </DialogContent>
     </Dialog>
@@ -155,6 +151,7 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
@@ -206,12 +203,16 @@ function QuickTabBody({
 
   return (
     <>
+      <DialogHeader className="gap-1">
+        <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+      </DialogHeader>
       <NewWorkspaceComposerCard
         composerRef={composerRef}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
       />

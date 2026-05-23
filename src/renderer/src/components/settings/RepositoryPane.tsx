@@ -32,12 +32,12 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
   return [
     {
       title: 'Display Name',
-      description: 'Repo-specific display details for the sidebar and tabs.',
-      keywords: [repo.displayName, repo.path, 'repository name']
+      description: 'Project-specific display details for the sidebar and tabs.',
+      keywords: [repo.displayName, repo.path, 'project name', 'repository name']
     },
     {
       title: 'Badge Color',
-      description: 'Repo color used in the sidebar and tabs.',
+      description: 'Project color used in the sidebar and tabs.',
       keywords: [repo.displayName, 'color', 'badge']
     },
     ...(isFolder
@@ -64,9 +64,9 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           }
         ]),
     {
-      title: 'Remove Repo',
-      description: 'Remove this repository from Orca.',
-      keywords: [repo.displayName, 'delete', 'repository']
+      title: 'Remove Project',
+      description: 'Remove this project from Orca.',
+      keywords: [repo.displayName, 'delete', 'project', 'repository']
     },
     ...(isFolder
       ? []
@@ -87,7 +87,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           },
           {
             title: 'MCP Configs',
-            description: 'Inspect repo-level MCP server config files.',
+            description: 'Inspect project-level MCP server config files.',
             keywords: [
               repo.displayName,
               'mcp',
@@ -215,7 +215,7 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
+    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Project'].includes(entry.title)
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -257,7 +257,7 @@ export function RepositoryPane({
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
-              Repo-specific display details for the sidebar and tabs.
+              Project-specific display details for the sidebar and tabs.
             </p>
             <p className="text-xs text-muted-foreground">
               Type: <span className="text-foreground">{getRepoKindLabel(repo)}</span>
@@ -269,9 +269,9 @@ export function RepositoryPane({
             ) : null}
           </div>
           <SearchableSetting
-            title="Remove Repo"
-            description="Remove this repository from Orca."
-            keywords={[repo.displayName, 'delete', 'repository']}
+            title="Remove Project"
+            description="Remove this project from Orca."
+            keywords={[repo.displayName, 'delete', 'project', 'repository']}
           >
             <Button
               variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
@@ -281,15 +281,22 @@ export function RepositoryPane({
               className="gap-2"
             >
               <Trash2 className="size-3.5" />
-              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Repo'}
+              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Project'}
             </Button>
           </SearchableSetting>
         </div>
 
         <SearchableSetting
           title="Display Name"
-          description="Repo-specific display details for the sidebar and tabs."
-          keywords={[repo.displayName, repo.path, 'repository name', 'color', 'badge']}
+          description="Project-specific display details for the sidebar and tabs."
+          keywords={[
+            repo.displayName,
+            repo.path,
+            'project name',
+            'repository name',
+            'color',
+            'badge'
+          ]}
           className="space-y-2"
           id={getRepositoryBadgeColorSectionId(repo.id)}
         >

@@ -33,7 +33,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { getDefaultRemote } from '../git/repo'
-import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
+import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
@@ -84,6 +84,8 @@ import {
   isWorktreePathMissing
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
@@ -370,6 +372,139 @@ function stampAndMergeVisibleDetectedWorktree(
   return mergeWorktree(repo.id, detected, meta, repo.displayName)
 }
 
+function getFolderWorkspaceRootId(repo: Repo): string {
+  return `${repo.id}::${repo.path}`
+}
+
+function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
+  return `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
+}
+
+function getFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
+  const prefix = `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+  return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
+}
+
+function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
+  const rootId = getFolderWorkspaceRootId(repo)
+  return (
+    worktreeId === rootId ||
+    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+  )
+}
+
+function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
+  return {
+    id: worktreeId,
+    ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
+    repoId: repo.id,
+    path: repo.path,
+    head: '',
+    branch: '',
+    isBare: false,
+    isMainWorktree: worktreeId === getFolderWorkspaceRootId(repo),
+    displayName: meta.displayName || repo.displayName,
+    comment: meta.comment || '',
+    linkedIssue: meta.linkedIssue ?? null,
+    linkedPR: meta.linkedPR ?? null,
+    linkedLinearIssue: meta.linkedLinearIssue ?? null,
+    linkedGitLabMR: meta.linkedGitLabMR ?? null,
+    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    isArchived: meta.isArchived ?? false,
+    isUnread: meta.isUnread ?? false,
+    isPinned: meta.isPinned ?? false,
+    sortOrder: meta.sortOrder ?? 0,
+    ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
+    lastActivityAt: meta.lastActivityAt ?? 0,
+    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
+    ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
+    workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+    diffComments: meta.diffComments
+  }
+}
+
+function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
+  const rootId = getFolderWorkspaceRootId(repo)
+  const allMeta = store.getAllWorktreeMeta()
+  const ids = Object.keys(allMeta).filter((worktreeId) =>
+    isFolderWorkspaceIdForRepo(repo, worktreeId)
+  )
+  if (!ids.includes(rootId)) {
+    ids.unshift(rootId)
+  }
+
+  return ids
+    .map((worktreeId) => {
+      const existing = allMeta[worktreeId]
+      const meta = existing?.instanceId
+        ? existing
+        : store.setWorktreeMeta(worktreeId, {
+            instanceId: getFolderWorkspaceInstanceIdentity(repo, worktreeId),
+            ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
+          })
+      return mergeFolderWorkspace(repo, worktreeId, meta)
+    })
+    .sort((a, b) => {
+      if (a.id === rootId) {
+        return -1
+      }
+      if (b.id === rootId) {
+        return 1
+      }
+      return (b.createdAt ?? b.lastActivityAt) - (a.createdAt ?? a.lastActivityAt)
+    })
+}
+
+function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktree[] {
+  const settings = store.getSettings()
+  return listFolderWorkspaces(store, repo).map((worktree) =>
+    toDetectedWorktree({
+      repo,
+      worktree,
+      meta: store.getWorktreeMeta(worktree.id),
+      settings,
+      knownOrcaLayouts: [],
+      isLegacyRepoForVisibility: true
+    })
+  )
+}
+
+function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
+  return buildFolderDetectedWorktrees(store, repo)
+    .filter((worktree) => worktree.visible)
+    .map((worktree) => {
+      const meta = store.getWorktreeMeta(worktree.id)
+      return mergeFolderWorkspace(repo, worktree.id, meta ?? store.setWorktreeMeta(worktree.id, {}))
+    })
+}
+
+function createFolderWorkspace(
+  args: CreateWorktreeArgs,
+  repo: Repo,
+  store: Store
+): CreateWorktreeResult {
+  const now = Date.now()
+  const instanceId = randomUUID()
+  const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  const meta = store.setWorktreeMeta(worktreeId, {
+    instanceId,
+    displayName: args.displayName || args.name,
+    lastActivityAt: now,
+    createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: 'desktop',
+    ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+    ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
+    ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
+    ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
+    ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {})
+  })
+  return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
+}
+
 function buildDisconnectedDetectedWorktrees(
   store: Store,
   repo: Repo,
@@ -431,7 +566,7 @@ export function registerWorktreeHandlers(
         try {
           let gitWorktrees
           if (isFolderRepo(repo)) {
-            gitWorktrees = [createFolderWorktree(repo)]
+            return listVisibleFolderWorkspaces(store, repo)
           } else if (repo.connectionId) {
             const provider = getSshGitProvider(repo.connectionId)
             if (!provider) {
@@ -497,7 +632,7 @@ export function registerWorktreeHandlers(
     try {
       let gitWorktrees
       if (isFolderRepo(repo)) {
-        gitWorktrees = [createFolderWorktree(repo)]
+        return listVisibleFolderWorkspaces(store, repo)
       } else if (repo.connectionId) {
         const provider = getSshGitProvider(repo.connectionId)
         if (!provider) {
@@ -561,7 +696,12 @@ export function registerWorktreeHandlers(
       try {
         let gitWorktrees: GitWorktreeInfo[]
         if (isFolderRepo(repo)) {
-          gitWorktrees = [createFolderWorktree(repo)]
+          return {
+            repoId: repo.id,
+            authoritative: true,
+            source: 'git',
+            worktrees: buildFolderDetectedWorktrees(store, repo)
+          }
         } else if (repo.connectionId) {
           const provider = getSshGitProvider(repo.connectionId)
           if (!provider) {
@@ -623,9 +763,6 @@ export function registerWorktreeHandlers(
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
-        if (isFolderRepo(repo)) {
-          throw new Error('Folder mode does not support creating worktrees.')
-        }
 
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
@@ -637,9 +774,11 @@ export function registerWorktreeHandlers(
           // worktrees`) signal IPC-shape bugs, not the user-visible
           // git/filesystem failures the funnel cares about — bucketing them
           // into `unknown` would pollute the failure taxonomy.
-          result = repo.connectionId
-            ? await createRemoteWorktree(args, repo, store, mainWindow)
-            : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+          result = isFolderRepo(repo)
+            ? createFolderWorkspace(args, repo, store)
+            : repo.connectionId
+              ? await createRemoteWorktree(args, repo, store, mainWindow)
+              : await createLocalWorktree(args, repo, store, mainWindow, runtime)
         } catch (error) {
           track('workspace_create_failed', {
             source,
@@ -659,9 +798,16 @@ export function registerWorktreeHandlers(
         // the branch name itself.
         track('workspace_created', {
           source,
-          from_existing_branch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
+          from_existing_branch:
+            !isFolderRepo(repo) &&
+            typeof args.baseBranch === 'string' &&
+            args.baseBranch.length > 0,
           ...getCohortAtEmit()
         })
+
+        if (isFolderRepo(repo)) {
+          notifyWorktreesChanged(mainWindow, repo.id)
+        }
 
         return result
       })
@@ -768,7 +914,23 @@ export function registerWorktreeHandlers(
           throw new Error(`Repo not found: ${repoId}`)
         }
         if (isFolderRepo(repo)) {
-          throw new Error('Folder mode does not support deleting worktrees.')
+          if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
+            throw new Error(
+              'Cannot delete the project root workspace. Remove the folder project instead.'
+            )
+          }
+          // Why: folder workspaces share one filesystem root, so there is no Git
+          // remove step to close shells; sweep PTYs before dropping metadata.
+          await killAllProcessesForWorktree(args.worktreeId, {
+            runtime,
+            localProvider: getLocalPtyProvider()
+          }).catch((err) => {
+            console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+          })
+          store.removeWorktreeMeta(args.worktreeId)
+          deleteWorktreeHistoryDir(args.worktreeId)
+          notifyWorktreesChanged(mainWindow, repoId)
+          return
         }
 
         // Why: the renderer-supplied worktreeId contains a filesystem path.

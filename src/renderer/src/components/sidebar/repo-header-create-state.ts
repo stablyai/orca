@@ -17,9 +17,9 @@ export function getRepoHeaderCreateState(input: {
 }): RepoHeaderCreateState {
   if (!isGitRepoKind(input.repo)) {
     return {
-      disabled: true,
-      tooltip: `${input.label} is opened as a folder`,
-      ariaLabel: `${input.label} is opened as a folder`,
+      disabled: false,
+      tooltip: `Create workspace for ${input.label}`,
+      ariaLabel: `Create workspace for ${input.label}`,
       requiresSshReconnect: false
     }
   }
@@ -39,8 +39,8 @@ export function getRepoHeaderCreateState(input: {
 
   return {
     disabled: false,
-    tooltip: `Create workspace for ${input.label}`,
-    ariaLabel: `Create workspace for ${input.label}`,
+    tooltip: `Create new worktree for ${input.label}`,
+    ariaLabel: `Create new worktree for ${input.label}`,
     requiresSshReconnect: false
   }
 }
