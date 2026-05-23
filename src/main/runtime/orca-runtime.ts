@@ -24,6 +24,8 @@ import type {
 import type {
   BaseRefSearchResult,
   CreateWorktreeResult,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
   GitPushTarget,
   GitWorktreeInfo,
   GitHubOwnerRepo,
@@ -64,6 +66,11 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import {
+  buildKnownOrcaWorkspaceLayouts,
+  isLegacyRepoForExternalWorktreeVisibility,
+  toDetectedWorktree
+} from '../../shared/worktree-ownership'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
@@ -309,7 +316,7 @@ import {
   writeIssueCommand
 } from '../hooks'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { createFolderWorktree, listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -4935,7 +4942,13 @@ export class OrcaRuntimeService {
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind
+      kind,
+      ...(kind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false
+          }
+        : {})
     }
     this.store.addRepo(repo)
     this.invalidateResolvedWorktreeCache()
@@ -5043,7 +5056,13 @@ export class OrcaRuntimeService {
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind: repoKind
+      kind: repoKind,
+      ...(repoKind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false
+          }
+        : {})
     }
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
@@ -5110,7 +5129,9 @@ export class OrcaRuntimeService {
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind: 'git'
+      kind: 'git',
+      externalWorktreeVisibility: 'hide',
+      externalWorktreeVisibilityLegacy: false
     }
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
@@ -5152,6 +5173,8 @@ export class OrcaRuntimeService {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'externalWorktreeVisibility'
+        | 'externalWorktreeVisibilityPromptDismissedAt'
       >
     >
   ): Promise<Repo> {
@@ -6371,12 +6394,80 @@ export class OrcaRuntimeService {
     }
     const resolved = await this.listResolvedWorktrees()
     const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const worktrees = resolved.filter((worktree) => !repoId || worktree.repoId === repoId)
+    const worktrees = resolved.filter((worktree) => {
+      if (repoId && worktree.repoId !== repoId) {
+        return false
+      }
+      return this.isRuntimeWorktreeVisible(worktree)
+    })
     return {
       worktrees: worktrees.slice(0, limit),
       totalCount: worktrees.length,
       truncated: worktrees.length > limit
     }
+  }
+
+  async listDetectedManagedWorktrees(repoSelector: string): Promise<DetectedWorktreeListResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    let scan: RuntimeWorktreeScanResult
+    try {
+      scan = isFolderRepo(repo)
+        ? { ok: true, worktrees: [createFolderWorktree(repo)] }
+        : await this.listRepoWorktreesForResolution(repo)
+    } catch {
+      scan = { ok: false, worktrees: [] }
+    }
+    if (scan.ok) {
+      this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
+    }
+    const detected = scan.worktrees.map((gitWorktree) => {
+      const worktreeId = `${repo.id}::${gitWorktree.path}`
+      const meta = this.store?.getWorktreeMeta(worktreeId)
+      const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+      const detectedWorktree = this.toRuntimeDetectedWorktree(repo, worktree)
+      if (scan.ok) {
+        return detectedWorktree
+      }
+      return {
+        ...detectedWorktree,
+        visible: true,
+        ownership: detectedWorktree.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+      } satisfies DetectedWorktree
+    })
+    return {
+      repoId: repo.id,
+      authoritative: scan.ok,
+      source: scan.ok ? 'git' : 'metadata-fallback',
+      worktrees: detected
+    }
+  }
+
+  private isRuntimeWorktreeVisible(worktree: Worktree): boolean {
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo || !this.store) {
+      return true
+    }
+    return this.toRuntimeDetectedWorktree(repo, worktree).visible
+  }
+
+  private toRuntimeDetectedWorktree(repo: Repo, worktree: Worktree): DetectedWorktree {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      return {
+        ...worktree,
+        ownership: 'unknown-legacy',
+        selectedCheckout: false,
+        visible: true
+      }
+    }
+    return toDetectedWorktree({
+      repo,
+      worktree,
+      meta: this.store?.getWorktreeMeta(worktree.id),
+      settings,
+      knownOrcaLayouts: repo.connectionId ? [] : buildKnownOrcaWorkspaceLayouts(settings, repo),
+      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo)
+    })
   }
 
   async showManagedWorktree(worktreeSelector: string) {
@@ -7005,6 +7096,12 @@ export class OrcaRuntimeService {
       // push it down before the user has had a chance to notice it. Smart-sort
       // uses max(lastActivityAt, createdAt + CREATE_GRACE_MS).
       createdAt: now,
+      orcaCreatedAt: now,
+      orcaCreationSource: 'runtime',
+      orcaCreationWorkspaceLayout: {
+        path: settings.workspaceDir,
+        nestWorkspaces: settings.nestWorkspaces
+      },
       ...displayNameMeta,
       baseRef: baseBranch,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),

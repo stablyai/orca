@@ -23,6 +23,8 @@ type RepoUpdate = Partial<
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
+    | 'externalWorktreeVisibility'
+    | 'externalWorktreeVisibilityPromptDismissedAt'
   >
 >
 
@@ -35,6 +37,17 @@ function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>>
     updateRepoChainsByStore.set(get, chains)
   }
   return chains
+}
+
+function getKnownRepoWorktreeIds(state: AppState, repoId: string): string[] {
+  const ids = new Set<string>()
+  for (const worktree of state.worktreesByRepo[repoId] ?? []) {
+    ids.add(worktree.id)
+  }
+  for (const worktree of state.detectedWorktreesByRepo[repoId]?.worktrees ?? []) {
+    ids.add(worktree.id)
+  }
+  return [...ids]
 }
 
 export type RepoSlice = {
@@ -217,7 +230,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       clearRepoSlugCacheEntry(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
+      const worktreeIds = getKnownRepoWorktreeIds(get(), repoId)
       const killedTabIds = new Set<string>()
       const killedPtyIds = new Set<string>()
       if (target.kind === 'environment') {
@@ -243,6 +256,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set((s) => {
         const nextWorktrees = { ...s.worktreesByRepo }
         delete nextWorktrees[repoId]
+        const nextDetectedWorktrees = { ...s.detectedWorktreesByRepo }
+        delete nextDetectedWorktrees[repoId]
         const nextTabs = { ...s.tabsByWorktree }
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
@@ -293,6 +308,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           activeRepoId: s.activeRepoId === repoId ? null : s.activeRepoId,
           filterRepoIds: s.filterRepoIds.filter((id) => id !== repoId),
           worktreesByRepo: nextWorktrees,
+          detectedWorktreesByRepo: nextDetectedWorktrees,
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,

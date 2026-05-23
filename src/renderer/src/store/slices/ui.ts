@@ -432,6 +432,8 @@ export type UISlice = {
     | 'quick-open'
     | 'worktree-palette'
     | 'workspace-cleanup'
+    | 'project-added'
+    | 'worktree-visibility'
     | 'feature-wall'
     | 'feature-tips'
     | 'new-workspace-composer'

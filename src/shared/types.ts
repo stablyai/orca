@@ -68,6 +68,7 @@ export type RepoKind = 'git' | 'folder'
  * - `'origin'`: explicit origin. Same precedence.
  */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+export type ExternalWorktreeVisibility = 'hide' | 'show'
 
 export type Repo = {
   id: string
@@ -85,6 +86,12 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /** Controls whether worktrees Orca did not create appear in the sidebar. */
+  externalWorktreeVisibility?: ExternalWorktreeVisibility
+  /** True when the repo predates hidden-by-default external worktrees. */
+  externalWorktreeVisibilityLegacy?: boolean
+  /** One-shot guard for the optional existing-user visibility prompt. */
+  externalWorktreeVisibilityPromptDismissedAt?: number
   /** Paths (relative to the primary checkout) that should be symlinked into
    *  newly created worktrees of this repo. Consumed only when the global
    *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
@@ -234,9 +241,31 @@ export type WorktreeMeta = {
   preserveBranchOnDelete?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
+  /** Explicit marker stamped when Orca creates the worktree. */
+  orcaCreatedAt?: number
+  orcaCreationSource?: 'desktop' | 'runtime' | 'cli' | 'ssh'
+  /** Workspace layout active when Orca created the worktree. */
+  orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+}
+
+export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
+
+export type DetectedWorktreeListSource = 'git' | 'metadata-fallback' | 'session-fallback'
+
+export type DetectedWorktree = Worktree & {
+  ownership: WorktreeOwnership
+  selectedCheckout: boolean
+  visible: boolean
+}
+
+export type DetectedWorktreeListResult = {
+  repoId: string
+  authoritative: boolean
+  source: DetectedWorktreeListSource
+  worktrees: DetectedWorktree[]
 }
 
 export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
@@ -1518,6 +1547,7 @@ export type FloatingTerminalCwdRequest = {
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
+  workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
@@ -1823,6 +1853,11 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+}
+
+export type OrcaWorkspaceLayout = {
+  path: string
+  nestWorkspaces: boolean
 }
 
 export type CommitMessageAiModelCapability = {

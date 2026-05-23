@@ -1939,7 +1939,14 @@ describe('OrcaRuntimeService', () => {
     try {
       const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
       expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
-      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+      expect(added).toEqual([
+        expect.objectContaining({
+          badgeColor: DEFAULT_REPO_BADGE_COLOR,
+          externalWorktreeVisibility: 'hide',
+          externalWorktreeVisibilityLegacy: false
+        })
+      ])
+      expect(repo.externalWorktreeVisibility).toBe('hide')
     } finally {
       spawnSpy.mockRestore()
     }
@@ -5602,6 +5609,26 @@ describe('OrcaRuntimeService', () => {
     expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()
     expect(lineageById[childId]).toBeTruthy()
     expect(metaById[parentId].instanceId).toBe('parent-instance')
+  })
+
+  it('returns a non-authoritative detected list when a runtime local worktree scan fails', async () => {
+    const removeWorktreeLineage = vi.fn()
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeLineage: () => ({}),
+      removeWorktreeLineage
+    }
+    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toEqual({
+      repoId: TEST_REPO_ID,
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: []
+    })
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
   it('does not prune lineage when an SSH runtime provider is unavailable', async () => {

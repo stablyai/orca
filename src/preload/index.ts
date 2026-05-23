@@ -481,6 +481,9 @@ const api = {
     list: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('worktrees:list', args),
 
+    listDetected: (args: { repoId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('worktrees:listDetected', args),
+
     listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args: CreateWorktreeArgs): Promise<unknown> =>

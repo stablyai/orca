@@ -10,11 +10,19 @@ import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
   GitPushTarget,
   GitWorktreeInfo,
   Repo,
+  Worktree,
   WorktreeMeta
 } from '../../shared/types'
+import {
+  buildKnownOrcaWorkspaceLayouts,
+  isLegacyRepoForExternalWorktreeVisibility,
+  toDetectedWorktree
+} from '../../shared/worktree-ownership'
 import {
   assertWorktreeCleanForRemoval,
   listWorktrees as listGitWorktrees,
@@ -245,6 +253,75 @@ function listDisconnectedSshWorktrees(
   return [...byWorktreeId.values()]
 }
 
+function buildDetectedGitWorktrees(
+  store: Store,
+  repo: Repo,
+  gitWorktrees: GitWorktreeInfo[]
+): DetectedWorktree[] {
+  const settings = store.getSettings()
+  const knownOrcaLayouts = repo.connectionId ? [] : buildKnownOrcaWorkspaceLayouts(settings, repo)
+  const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
+  return gitWorktrees.map((gitWorktree) => {
+    const worktreeId = `${repo.id}::${gitWorktree.path}`
+    let meta = store.getWorktreeMeta(worktreeId)
+    const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+    const detected = toDetectedWorktree({
+      repo,
+      worktree,
+      meta,
+      settings,
+      knownOrcaLayouts,
+      isLegacyRepoForVisibility
+    })
+    if (!detected.visible) {
+      return detected
+    }
+
+    meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
+    return toDetectedWorktree({
+      repo,
+      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
+      meta,
+      settings,
+      knownOrcaLayouts,
+      isLegacyRepoForVisibility
+    })
+  })
+}
+
+function stampAndMergeVisibleDetectedWorktree(
+  store: Store,
+  repo: Repo,
+  detected: DetectedWorktree
+) {
+  const meta = resolveWorktreeMetaWithDiscoveryStamp(store, detected.id)
+  return mergeWorktree(repo.id, detected, meta, repo.displayName)
+}
+
+function buildDisconnectedDetectedWorktrees(
+  store: Store,
+  repo: Repo,
+  worktrees: Worktree[]
+): DetectedWorktree[] {
+  const settings = store.getSettings()
+  return worktrees.map((worktree) => {
+    const meta = store.getWorktreeMeta(worktree.id)
+    const detected = toDetectedWorktree({
+      repo,
+      worktree,
+      meta,
+      settings,
+      knownOrcaLayouts: [],
+      isLegacyRepoForVisibility: true
+    })
+    return {
+      ...detected,
+      visible: true,
+      ownership: detected.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+    }
+  })
+}
+
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
@@ -254,6 +331,7 @@ export function registerWorktreeHandlers(
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
+  ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:create')
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
@@ -310,11 +388,9 @@ export function registerWorktreeHandlers(
           rememberLocalWorktreeRoots(store, repo, gitWorktrees)
           pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
           loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-          return gitWorktrees.map((gw) => {
-            const worktreeId = `${repo.id}::${gw.path}`
-            const meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
-            return mergeWorktree(repo.id, gw, meta, repo.displayName)
-          })
+          return buildDetectedGitWorktrees(store, repo, gitWorktrees)
+            .filter((worktree) => worktree.visible)
+            .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
         } catch (err) {
           warnOnce(
             loggedWorktreeListFailures,
@@ -378,11 +454,9 @@ export function registerWorktreeHandlers(
       rememberLocalWorktreeRoots(store, repo, gitWorktrees)
       pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-      return gitWorktrees.map((gw) => {
-        const worktreeId = `${repo.id}::${gw.path}`
-        const meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
-        return mergeWorktree(repo.id, gw, meta, repo.displayName)
-      })
+      return buildDetectedGitWorktrees(store, repo, gitWorktrees)
+        .filter((worktree) => worktree.visible)
+        .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
     } catch (err) {
       warnOnce(
         loggedWorktreeListFailures,
@@ -395,6 +469,71 @@ export function registerWorktreeHandlers(
       return []
     }
   })
+
+  ipcMain.handle(
+    'worktrees:listDetected',
+    async (_event, args: { repoId: string }): Promise<DetectedWorktreeListResult> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        return {
+          repoId: args.repoId,
+          authoritative: false,
+          source: 'metadata-fallback',
+          worktrees: []
+        }
+      }
+      const sshWorktreeMetaIndex = repo.connectionId
+        ? createSshWorktreeMetaIndex(Object.entries(store.getAllWorktreeMeta()))
+        : new Map()
+
+      try {
+        let gitWorktrees: GitWorktreeInfo[]
+        if (isFolderRepo(repo)) {
+          gitWorktrees = [createFolderWorktree(repo)]
+        } else if (repo.connectionId) {
+          const provider = getSshGitProvider(repo.connectionId)
+          if (!provider) {
+            const worktrees = listDisconnectedSshWorktrees(repo, sshWorktreeMetaIndex)
+            return {
+              repoId: repo.id,
+              authoritative: false,
+              source: 'metadata-fallback',
+              worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees)
+            }
+          }
+          gitWorktrees = await provider.listWorktrees(repo.path)
+        } else {
+          gitWorktrees = await listRepoWorktrees(repo)
+        }
+        rememberLocalWorktreeRoots(store, repo, gitWorktrees)
+        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+        return {
+          repoId: repo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees)
+        }
+      } catch (err) {
+        warnOnce(
+          loggedWorktreeListFailures,
+          `${repo.id}:${repo.path}`,
+          `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
+          err
+        )
+        if (repo.connectionId) {
+          const worktrees = listDisconnectedSshWorktrees(repo, sshWorktreeMetaIndex)
+          return {
+            repoId: repo.id,
+            authoritative: false,
+            source: 'metadata-fallback',
+            worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees)
+          }
+        }
+        return { repoId: repo.id, authoritative: false, source: 'metadata-fallback', worktrees: [] }
+      }
+    }
+  )
 
   ipcMain.handle(
     'worktrees:create',

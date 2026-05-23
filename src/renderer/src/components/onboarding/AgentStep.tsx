@@ -66,6 +66,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
         <SectionHeader
           label={hasDetected ? 'Detected on your system' : 'Popular agents'}
           count={primary.length}
+          showDetectedIndicator={hasDetected}
         />
         <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
           {primary.map((agent) => (
@@ -103,9 +104,20 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
   )
 }
 
-function SectionHeader({ label, count }: { label: string; count: number }) {
+function SectionHeader({
+  label,
+  count,
+  showDetectedIndicator = false
+}: {
+  label: string
+  count: number
+  showDetectedIndicator?: boolean
+}) {
   return (
     <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      {showDetectedIndicator && (
+        <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+      )}
       <span>{label}</span>
       <span className="text-muted-foreground/60">·</span>
       <span className="tabular-nums text-muted-foreground">{count}</span>

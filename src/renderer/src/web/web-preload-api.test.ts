@@ -170,6 +170,87 @@ describe('web keybindings preload API', () => {
   })
 })
 
+describe('web worktree preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const worktree = {
+      id: 'repo-1::/workspace/repo',
+      repoId: 'repo-1',
+      path: '/workspace/repo',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'repo',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo'
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'worktree.detectedList') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: {
+                code: 'method_not_found',
+                message: 'Unknown method: worktree.detectedList'
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { worktrees: [worktree], totalCount: 1, truncated: false },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.worktrees.listDetected({ repoId: 'repo-1' })
+
+    expect(result).toMatchObject({
+      repoId: 'repo-1',
+      authoritative: true,
+      source: 'session-fallback',
+      worktrees: [{ id: worktree.id, ownership: 'orca-managed', visible: true }]
+    })
+    expect(runtimeCalls).toEqual([
+      { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
+      { method: 'worktree.list', params: { repo: 'repo-1', limit: 10_000 } }
+    ])
+  })
+})
+
 describe('web GitHub preload API', () => {
   beforeEach(() => {
     vi.resetModules()

@@ -350,9 +350,9 @@ export function useOnboardingFlow(
         duration_ms: consumeStepDurationMs()
       })
       if (isGit) {
-        openModal('new-workspace-composer', {
-          initialRepoId: repoId,
-          prefilledName: 'onboarding',
+        openModal('project-added', {
+          repoId,
+          defaultWorktreeName: 'orca-worktree-1',
           telemetrySource: 'onboarding'
         })
       }

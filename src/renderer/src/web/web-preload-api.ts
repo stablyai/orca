@@ -4,6 +4,7 @@
 import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
+  DetectedWorktreeListResult,
   DirEntry,
   GlobalSettings,
   MemorySnapshot,
@@ -68,7 +69,13 @@ let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntime
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
+let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
+
+function invalidateRuntimeWorktreeCaches(): void {
+  cachedWorktrees = null
+  cachedDetectedWorktrees = null
+}
 
 type WebSettingsApi = NonNullable<PreloadApi['settings']>
 type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
@@ -780,21 +787,28 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
-    add: async ({ path, kind }) => callRuntimeResult('repo.add', { path, kind }),
+    add: async ({ path, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.add', { path, kind })
+    },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
     },
     reorder: async ({ orderedIds }) => callRuntimeResult('repo.reorder', { orderedIds }),
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
     pickDirectory: () => Promise.resolve(null),
-    clone: async ({ url, destination }) =>
-      (await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000))
-        .repo,
+    clone: async ({ url, destination }) => {
+      invalidateRuntimeWorktreeCaches()
+      return (
+        await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
+      ).repo
+    },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
@@ -808,8 +822,10 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           }
         : result
     },
-    create: async ({ parentPath, name, kind }) =>
-      callRuntimeResult('repo.create', { parentPath, name, kind }),
+    create: async ({ parentPath, name, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.create', { parentPath, name, kind })
+    },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
@@ -846,9 +862,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
         })
       ).worktrees,
+    listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('worktree.create', {
         repo: args.repoId,
         name: args.name,
@@ -883,7 +900,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         isCrossRepository
       }),
     remove: async ({ worktreeId, force }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
     },
     updateMeta: async ({ worktreeId, updates }) =>
@@ -900,7 +917,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         )
       ).lineage,
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
@@ -1892,7 +1909,7 @@ function closeActiveRuntimeClients(): void {
   activeClient?.close()
   activeClient = null
   activeClientEnvironmentId = null
-  cachedWorktrees = null
+  invalidateRuntimeWorktreeCaches()
 }
 
 function disconnectActiveRuntimeEnvironment(): void {
@@ -2047,8 +2064,62 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   return result.worktrees
 }
 
+async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
+  if (cachedDetectedWorktrees && Date.now() - cachedDetectedWorktrees.loadedAt < 5_000) {
+    return cachedDetectedWorktrees.worktrees
+  }
+
+  const repos = (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos
+  const detectedLists = await Promise.all(
+    repos.map((repo) => callRuntimeDetectedWorktrees(repo.id))
+  )
+  const worktrees = detectedLists.flatMap((result) => result.worktrees)
+  cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  return worktrees
+}
+
+async function callRuntimeDetectedWorktrees(repoId: string): Promise<DetectedWorktreeListResult> {
+  const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
+    'worktree.detectedList',
+    { repo: repoId },
+    15_000
+  )
+  if (response.ok) {
+    return response.result
+  }
+  if (response.error.code !== 'method_not_found') {
+    throw new Error(response.error.message)
+  }
+
+  const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
+    'worktree.list',
+    { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
+    15_000
+  )
+  return toLegacyDetectedWorktreeResult(repoId, legacy.worktrees)
+}
+
+function toLegacyDetectedWorktreeResult(
+  repoId: string,
+  worktrees: Worktree[]
+): DetectedWorktreeListResult {
+  return {
+    repoId,
+    authoritative: true,
+    source: 'session-fallback',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
+  }
+}
+
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
-  const worktrees = await listAllRuntimeWorktrees()
+  // Why: hidden-but-open worktrees must still resolve for git/file operations.
+  // `worktree.list` is sidebar-visible only, so path resolution uses detected rows.
+  const worktrees = await listAllRuntimeDetectedWorktrees()
   const match = worktrees
     .map((worktree) => ({
       worktree,

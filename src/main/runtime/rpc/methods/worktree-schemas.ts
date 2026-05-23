@@ -13,6 +13,13 @@ export const WorktreeListParams = z.object({
   limit: OptionalFiniteNumber
 })
 
+export const WorktreeDetectedListParams = z.object({
+  repo: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing repo selector'))
+})
+
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber
 })

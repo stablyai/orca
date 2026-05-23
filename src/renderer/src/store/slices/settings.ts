@@ -41,6 +41,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     sparsePresetsLoadStatusByRepo: {},
     sparsePresetsErrorByRepo: {},
     worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
     worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},

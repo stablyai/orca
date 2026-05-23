@@ -1409,6 +1409,22 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBeUndefined()
   })
 
+  it('updateRepo stamps legacy external-worktree visibility before changing old repos', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        addedAt: Date.UTC(2026, 4, 24),
+        externalWorktreeVisibility: undefined,
+        externalWorktreeVisibilityLegacy: undefined
+      })
+    )
+
+    const updated = store.updateRepo('r1', { externalWorktreeVisibility: 'hide' })
+
+    expect(updated!.externalWorktreeVisibility).toBe('hide')
+    expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
+  })
+
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
 
   it('setWorktreeMeta creates meta with defaults for missing fields', async () => {

@@ -201,11 +201,14 @@ describe('repos:addRemote', () => {
         connectionId: 'conn-1',
         kind: 'git',
         displayName: 'project',
-        badgeColor: DEFAULT_REPO_BADGE_COLOR
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
       })
     )
     expect(result).toHaveProperty('repo.id')
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
   })
 
   it('uses custom displayName when provided', async () => {
@@ -416,13 +419,28 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
 
+  it('defaults new git repos:add records to hiding non-Orca worktrees', async () => {
+    const result = await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        kind: 'git',
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
+      })
+    )
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+  })
+
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
     const existing = {
       id: 'repo-add-existing',
       path: '/tmp/from-add-existing',
       displayName: 'from-add-existing',
       kind: 'folder',
-      badgeColor: '#22c55e'
+      badgeColor: '#22c55e',
+      externalWorktreeVisibility: 'show'
     }
     mockStore.getRepos.mockReturnValue([existing])
 
@@ -433,6 +451,7 @@ describe('repos:add + repos:clone', () => {
 
     expect(result).toEqual({ repo: existing })
     expect(result).toHaveProperty('repo.badgeColor', '#22c55e')
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'show')
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -446,10 +465,13 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({
         path: '/tmp/orca',
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        kind: 'git'
+        kind: 'git',
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
       })
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
+    expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {

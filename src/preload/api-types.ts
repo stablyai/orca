@@ -23,6 +23,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
+  DetectedWorktreeListResult,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -624,6 +625,8 @@ export type PreloadApi = {
           | 'worktreeBaseRef'
           | 'kind'
           | 'issueSourcePreference'
+          | 'externalWorktreeVisibility'
+          | 'externalWorktreeVisibilityPromptDismissedAt'
         >
       >
     }) => Promise<Repo>
@@ -668,6 +671,7 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
+    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
