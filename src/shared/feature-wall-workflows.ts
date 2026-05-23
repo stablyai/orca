@@ -27,7 +27,7 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     id: 'workspaces',
     title: 'Workspaces',
     meta: 'Isolated work · Context kept together',
-    lede: 'Each task gets its own workspace with isolated branch, terminal, editor, browser, and agent state, so parallel work stays organized.',
+    lede: 'Workspaces let you quickly split tasks into isolated environments, so multiple agents can work side by side without interfering with each other. Each workspace has its own branch, terminal, and agent state, keeping parallel work organized.',
     primaryTileId: 'tile-01',
     relatedTileIds: ['tile-10'],
     docsUrl: 'https://www.onorca.dev/docs/model/worktrees'
