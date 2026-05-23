@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isLinuxUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
@@ -16,7 +16,13 @@ export function resolvePrimarySelectionMiddleClickPaste(
   setting: boolean | undefined,
   userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
 ): boolean {
-  return setting ?? isLinuxUserAgent(userAgent)
+  return setting ?? isDefaultPrimarySelectionMiddleClickPasteUserAgent(userAgent)
+}
+
+export function isDefaultPrimarySelectionMiddleClickPasteUserAgent(
+  userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
+): boolean {
+  return isLinuxUserAgent(userAgent) || isMacUserAgent(userAgent)
 }
 
 function captureCurrentSelection(): void {
@@ -45,12 +51,21 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       return target === pendingMiddleTarget || pendingMiddleTarget.contains(target)
     }
 
-    const rememberPendingTarget = (event: MouseEvent): boolean => {
+    const rememberPendingTarget = (
+      event: MouseEvent,
+      options?: { allowNativeLinuxPaste?: boolean }
+    ): boolean => {
       if (event.button !== 1) {
         return false
       }
       const target = findEditablePrimarySelectionPasteTarget(event.target)
       if (!target) {
+        return false
+      }
+      if (options?.allowNativeLinuxPaste && isLinuxUserAgent()) {
+        // Why: Chromium already implements X11 primary paste for editable DOM
+        // controls. Suppressing that native path can turn a working OS paste
+        // into a no-op before Orca's async fallback runs.
         return false
       }
       pendingMiddleTarget = target
@@ -127,7 +142,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     }
 
     const onMouseDown = (event: MouseEvent): void => {
-      rememberPendingTarget(event)
+      rememberPendingTarget(event, { allowNativeLinuxPaste: true })
     }
 
     const onMouseUp = (event: MouseEvent): void => {
@@ -152,9 +167,14 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     }
 
     const onAuxClick = (event: MouseEvent): void => {
-      if (event.button === 1 && findEditablePrimarySelectionPasteTarget(event.target)) {
-        suppressEvent(event)
+      if (event.button !== 1) {
+        return
       }
+      const target = findEditablePrimarySelectionPasteTarget(event.target)
+      if (!target || isLinuxUserAgent()) {
+        return
+      }
+      suppressEvent(event)
     }
 
     document.addEventListener('selectionchange', scheduleCapture)

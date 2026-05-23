@@ -9,8 +9,33 @@ import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 const ERROR_TOAST_DURATION = 60_000
+
+type RepoUpdate = Partial<
+  Pick<
+    Repo,
+    | 'displayName'
+    | 'badgeColor'
+    | 'hookSettings'
+    | 'worktreeBaseRef'
+    | 'kind'
+    | 'symlinkPaths'
+    | 'issueSourcePreference'
+  >
+>
+
+const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
+
+function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>> {
+  let chains = updateRepoChainsByStore.get(get)
+  if (!chains) {
+    chains = new Map<string, Promise<boolean>>()
+    updateRepoChainsByStore.set(get, chains)
+  }
+  return chains
+}
 
 export type RepoSlice = {
   repos: Repo[]
@@ -20,21 +45,7 @@ export type RepoSlice = {
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
-  updateRepo: (
-    repoId: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-      >
-    >
-  ) => Promise<void>
+  updateRepo: (repoId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (repoId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
 }
@@ -65,7 +76,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return {
           repos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds.filter((repoId) =>
+            validRepoIds.has(repoId)
+          )
         }
       })
     } catch (err) {
@@ -154,6 +168,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   addNonGitFolder: async (path) => {
     try {
+      const hadProjectBeforeAdd = get().repos.length > 0
       const repo = await get().addRepoPath(path, 'folder')
       if (!repo) {
         return null
@@ -168,7 +183,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const folderWorktree = get().worktreesByRepo[repo.id]?.[0]
       if (folderWorktree) {
         const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
-        activateAndRevealWorktree(folderWorktree.id)
+        const onboarding = await window.api.onboarding.get().catch(() => null)
+        // Why: a new user can dismiss the wizard, then immediately add their
+        // first folder from Landing. That path skips onboarding's completeRepo
+        // hook, so carry the selected default agent into the first terminal here.
+        const startup = buildDismissedOnboardingFolderAgentStartup(
+          get().settings,
+          onboarding,
+          hadProjectBeforeAdd
+        )
+        activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
       }
       return repo
     } catch (err) {
@@ -187,6 +211,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         : callRuntimeRpc(target, 'repo.rm', { repo: repoId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(repoId)
+      const repoPath = get().repos.find((repo) => repo.id === repoId)?.path
+      get().evictGitHubRepoCaches(repoId, repoPath)
+      const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+      clearRepoSlugCacheEntry(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
@@ -297,17 +325,36 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateRepo: async (repoId, updates) => {
-    try {
-      const target = getActiveRuntimeTarget(get().settings)
-      await (target.kind === 'local'
-        ? window.api.repos.update({ repoId, updates })
-        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
-      set((s) => ({
-        repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
-      }))
-    } catch (err) {
-      console.error('Failed to update repo:', err)
+    const updateRepoChains = getRepoUpdateChains(get)
+    const applyRepoUpdate = async () => {
+      try {
+        const target = getActiveRuntimeTarget(get().settings)
+        await (target.kind === 'local'
+          ? window.api.repos.update({ repoId, updates })
+          : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
+        set((s) => ({
+          repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
+        }))
+        return true
+      } catch (err) {
+        console.error('Failed to update repo:', err)
+        return false
+      }
     }
+    const previous = updateRepoChains.get(repoId)
+    // Why: repo settings are persisted as full nested values. Preserve call
+    // order per repo so a slower IPC/RPC response cannot overwrite newer state.
+    const next = previous
+      ? previous.catch(() => undefined).then(applyRepoUpdate)
+      : applyRepoUpdate()
+    updateRepoChains.set(repoId, next)
+    const cleanup = () => {
+      if (updateRepoChains.get(repoId) === next) {
+        updateRepoChains.delete(repoId)
+      }
+    }
+    void next.then(cleanup, cleanup)
+    return next
   },
 
   setActiveRepo: (repoId) => set({ activeRepoId: repoId }),

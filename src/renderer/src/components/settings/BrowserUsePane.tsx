@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import {
-  BROWSER_USE_ENABLED_STORAGE_KEY,
-  BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
-} from '@/lib/browser-use-setup-state'
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -93,18 +97,15 @@ export function BrowserUseSetup({
   const cliEnabled = cliStatus?.state === 'installed'
   const cliSupported = cliStatus?.supported ?? false
 
-  // Why: the skill install step is a copy-and-run command that happens in the
-  // user's terminal. We cannot detect completion from the app, so we let the
-  // user mark it done explicitly after copying — this avoids falsely implying
-  // progress and keeps the guided flow honest.
-  const [skillInstalled, setSkillInstalled] = useState<boolean>(() => {
-    return localStorage.getItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY) === '1'
+  const {
+    installed: skillDetected,
+    loading: skillLoading,
+    error: skillError,
+    refresh: refreshSkill
+  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    enabled: browserUseEnabled,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-
-  const markSkillInstalled = (value: boolean): void => {
-    setSkillInstalled(value)
-    localStorage.setItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
-  }
 
   const handleEnableCli = async (): Promise<void> => {
     setCliBusy(true)
@@ -116,15 +117,6 @@ export function BrowserUseSetup({
       toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in PATH.')
     } finally {
       setCliBusy(false)
-    }
-  }
-
-  const handleCopySkillCommand = async (): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(ORCA_CLI_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it on this computer.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
     }
   }
 
@@ -162,8 +154,7 @@ export function BrowserUseSetup({
   const showStep1 = matchesSettingsSearch(searchQuery, [BROWSER_USE_PANE_SEARCH_ENTRIES[0]])
   const showStep2 = matchesSettingsSearch(searchQuery, [BROWSER_USE_PANE_SEARCH_ENTRIES[1]])
   const showStep3 = matchesSettingsSearch(searchQuery, [BROWSER_USE_PANE_SEARCH_ENTRIES[2]])
-
-  const completedCount = [cliEnabled, skillInstalled, cookiesImported].filter(Boolean).length
+  const completedCount = [cliEnabled, skillDetected, cookiesImported].filter(Boolean).length
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -310,10 +301,11 @@ export function BrowserUseSetup({
         >
           <BrowserUseSkillStep
             command={ORCA_CLI_SKILL_INSTALL_COMMAND}
-            skillInstalled={skillInstalled}
+            skillDetected={skillDetected}
+            skillLoading={skillLoading}
+            skillError={skillError}
             disabled={!cliEnabled}
-            onCopy={() => void handleCopySkillCommand()}
-            onToggleInstalled={() => markSkillInstalled(!skillInstalled)}
+            onRecheck={refreshSkill}
           />
         </SearchableSetting>
       ) : null}
@@ -324,7 +316,7 @@ export function BrowserUseSetup({
           description="Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[2].keywords}
           className={`rounded-xl border border-border/60 bg-card/50 p-4 ${
-            cliEnabled && skillInstalled ? '' : 'opacity-60'
+            cliEnabled && skillDetected ? '' : 'opacity-60'
           }`}
         >
           <div className="flex items-start gap-3">

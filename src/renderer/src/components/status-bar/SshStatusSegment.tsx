@@ -105,13 +105,11 @@ function TargetRow({
   targetId,
   label,
   status,
-  syncEnabled,
   syncStatus
 }: {
   targetId: string
   label: string
   status: SshConnectionStatus
-  syncEnabled: boolean
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
@@ -145,23 +143,17 @@ function TargetRow({
         <div className="truncate text-[12px] font-medium">{label}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
           <span>{STATUS_LABELS[status]}</span>
-          {syncEnabled && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span
-                className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}
-              >
-                {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
-                  <Loader2 className="size-2.5 shrink-0 animate-spin" />
-                ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
-                  <AlertTriangle className="size-2.5 shrink-0" />
-                ) : (
-                  <Cloud className="size-2.5 shrink-0" />
-                )}
-                <span className="truncate">{syncStatusLabel(syncStatus)}</span>
-              </span>
-            </>
-          )}
+          <span aria-hidden="true">·</span>
+          <span className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}>
+            {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
+              <Loader2 className="size-2.5 shrink-0 animate-spin" />
+            ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
+              <AlertTriangle className="size-2.5 shrink-0" />
+            ) : (
+              <Cloud className="size-2.5 shrink-0" />
+            )}
+            <span className="truncate">{syncStatusLabel(syncStatus)}</span>
+          </span>
         </div>
       </div>
       {busy ? (
@@ -196,7 +188,6 @@ export function SshStatusSegment({
 }): React.JSX.Element | null {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshTargetRemoteSyncEnabled = useAppStore((s) => s.sshTargetRemoteSyncEnabled)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
@@ -209,7 +200,6 @@ export function SshStatusSegment({
       id,
       label,
       status: (state?.status ?? 'disconnected') as SshConnectionStatus,
-      syncEnabled: sshTargetRemoteSyncEnabled.get(id) === true,
       syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
     }
   })
@@ -293,14 +283,13 @@ export function SshStatusSegment({
             targetId={t.id}
             label={t.label}
             status={t.status}
-            syncEnabled={t.syncEnabled}
             syncStatus={t.syncStatus}
           />
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            openSettingsTarget({ pane: 'general', repoId: null, sectionId: 'ssh' })
+            openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
             setActiveView('settings')
           }}
         >

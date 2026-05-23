@@ -23,6 +23,7 @@ import type {
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
 import { Field } from './automation-page-parts'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
+import { AutomationSessionField } from './AutomationSessionField'
 import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-templates'
 import { CreateFromPicker } from './CreateFromPicker'
 import { WorkspaceCombobox } from './WorkspaceCombobox'
@@ -40,6 +41,7 @@ export type AutomationDraft = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
   baseBranch: string
+  reuseSession: boolean
   preset: AutomationSchedulePreset
   time: string
   dayOfWeek: string
@@ -191,7 +193,7 @@ export function AutomationEditorDialog({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4 scrollbar-sleek">
           {draft.scheduleWarning ? (
             <div className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               {draft.scheduleWarning}
@@ -213,8 +215,8 @@ export function AutomationEditorDialog({
           <div
             className={
               isHermesCreate
-                ? 'grid gap-3 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(14rem,1.4fr)_minmax(12rem,1.2fr)]'
-                : 'grid gap-3 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(14rem,1.4fr)_minmax(12rem,1.2fr)_minmax(8rem,0.8fr)_minmax(9rem,1fr)]'
+                ? 'grid gap-3 md:grid-cols-3'
+                : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4'
             }
           >
             <Field label="Project">
@@ -229,37 +231,28 @@ export function AutomationEditorDialog({
             </Field>
             <Field
               label={
-                isHermesCreate
-                  ? 'Workspace'
-                  : draft.workspaceMode === 'new_per_run'
-                    ? 'Start branch'
-                    : 'Workspace'
+                <span className="inline-flex items-center gap-1">
+                  Workspace
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Workspace mode help"
+                        className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      >
+                        <Info className="size-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                      Worktree runs in the selected workspace. New run creates a fresh workspace
+                      from the selected branch each time.
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
               }
+              className={isHermesCreate ? undefined : 'sm:col-span-2 lg:col-span-3'}
             >
-              {isHermesCreate ? null : (
-                <ToggleGroup
-                  type="single"
-                  value={draft.workspaceMode}
-                  onValueChange={(workspaceMode) =>
-                    workspaceMode &&
-                    onDraftChange((current) => ({
-                      ...current,
-                      workspaceMode: workspaceMode as AutomationWorkspaceMode
-                    }))
-                  }
-                  variant="outline"
-                  size="sm"
-                  className="mb-2 grid w-full grid-cols-2"
-                >
-                  <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
-                    worktree
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
-                    New run
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              )}
-              {draft.workspaceMode === 'existing' || isHermesCreate ? (
+              {isHermesCreate ? (
                 <WorkspaceCombobox
                   worktrees={worktrees}
                   value={draft.workspaceId}
@@ -269,16 +262,51 @@ export function AutomationEditorDialog({
                   }
                 />
               ) : (
-                <CreateFromPicker
-                  repoId={draft.projectId}
-                  repoMap={repoMap}
-                  worktrees={worktrees}
-                  value={draft.baseBranch}
-                  triggerClassName={PICKER_TRIGGER_CLASS}
-                  onValueChange={(baseBranch) =>
-                    onDraftChange((current) => ({ ...current, baseBranch }))
-                  }
-                />
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                  <ToggleGroup
+                    type="single"
+                    value={draft.workspaceMode}
+                    onValueChange={(workspaceMode) =>
+                      workspaceMode &&
+                      onDraftChange((current) => ({
+                        ...current,
+                        workspaceMode: workspaceMode as AutomationWorkspaceMode,
+                        reuseSession: workspaceMode === 'existing' ? current.reuseSession : false
+                      }))
+                    }
+                    variant="outline"
+                    size="sm"
+                    className="grid w-full grid-cols-2"
+                  >
+                    <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
+                      Worktree
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
+                      New run
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  {draft.workspaceMode === 'existing' ? (
+                    <WorkspaceCombobox
+                      worktrees={worktrees}
+                      value={draft.workspaceId}
+                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                      onValueChange={(workspaceId) =>
+                        onDraftChange((current) => ({ ...current, workspaceId }))
+                      }
+                    />
+                  ) : (
+                    <CreateFromPicker
+                      repoId={draft.projectId}
+                      repoMap={repoMap}
+                      worktrees={worktrees}
+                      value={draft.baseBranch}
+                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                      onValueChange={(baseBranch) =>
+                        onDraftChange((current) => ({ ...current, baseBranch }))
+                      }
+                    />
+                  )}
+                </div>
               )}
             </Field>
             {isHermesCreate ? null : (
@@ -291,8 +319,16 @@ export function AutomationEditorDialog({
                   }
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                  allowNarrowTrigger
                 />
               </Field>
+            )}
+            {isHermesCreate ? null : (
+              <AutomationSessionField
+                draft={draft}
+                toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
+                onDraftChange={onDraftChange}
+              />
             )}
             <Field label="Schedule">
               <AutomationSchedulePicker

@@ -32,6 +32,7 @@ import {
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitUsername } from '../git/git-username'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
@@ -710,19 +711,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     if (!repo || isFolderRepo(repo)) {
       return ''
     }
-    // Why: remote repos have their git config on the remote host, so we
-    // must route through the relay's git.exec to read user.name.
+    // Why: remote repos have their git config on the remote host. Keep this
+    // to explicit username config; user.email/name are author identity.
     if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
       if (!provider) {
         return ''
       }
-      try {
-        const result = await provider.exec(['config', 'user.name'], repo.path)
-        return result.stdout.trim()
-      } catch {
-        return ''
-      }
+      return getSshGitUsername(provider, repo.path)
     }
     return getGitUsername(repo.path)
   })

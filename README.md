@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, Codex, Grok, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.<br/>
+  Run Claude Code, Codex, Grok, Antigravity, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.<br/>
   Available for <strong>macOS, Windows, and Linux</strong>.
 </p>
 
@@ -22,9 +22,7 @@
   <a href="#install"><strong>Download 🐋</strong></a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/file-drag.gif" alt="Orca Screenshot" width="800" />
-</p>
+![Orca worktree IDE demo showing Claude Code, Codex, and OpenCode running in parallel across isolated git worktrees](docs/assets/file-drag.gif)
 
 ## Supported Agents
 
@@ -35,6 +33,7 @@ Orca supports any CLI agent (*not just this list*).
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
+  <a href="https://antigravity.google/docs/cli-overview"><kbd><img src="https://www.google.com/s2/favicons?domain=antigravity.google&sz=64" width="16" valign="middle" /> Antigravity</kbd></a> &nbsp;
   <a href="https://pi.dev"><kbd><img src="https://pi.dev/favicon.svg" width="16" valign="middle" /> Pi</kbd></a> &nbsp;
   <a href="https://hermes-agent.nousresearch.com/docs/"><kbd><img src="https://www.google.com/s2/favicons?domain=nousresearch.com&sz=64" width="16" valign="middle" /> Hermes Agent</kbd></a> &nbsp;
   <a href="https://opencode.ai/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=opencode.ai&sz=64" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
@@ -61,7 +60,7 @@ Orca supports any CLI agent (*not just this list*).
 
 ## Features
 
-- **No login required** — Bring your own Claude Code, Codex, or Grok subscription.
+- **No login required** — Bring your own Claude Code, Codex, Grok, or Antigravity subscription.
 - **Worktree-native** — Every feature gets its own worktree. No stashing, no branch juggling. Spin up and switch instantly.
 - **Multi-agent terminals** — Run multiple AI agents side-by-side in tabs and panes. See which ones are active at a glance.
 - **Built-in source control** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
@@ -107,7 +106,7 @@ Control your agents from your phone.
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.7)
+- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.8)
 
 ---
 

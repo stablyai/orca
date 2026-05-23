@@ -6,7 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type MutableRefObject
+  type MutableRefObject,
+  type ReactNode
 } from 'react'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -16,7 +17,10 @@ import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
+import {
+  useDiffCommentDecorator,
+  type DecoratedDiffComment
+} from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
   getDiffCommentPopoverLeft,
@@ -31,6 +35,7 @@ import type { DiffComment } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { Button } from '@/components/ui/button'
+import { installEditorSaveShortcut } from './editor-shortcuts'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -48,6 +53,12 @@ export function DiffSectionItem({
   toggleSection,
   openSection,
   openSectionTitle,
+  renderHeaderTrailingContent,
+  onAddLineComment,
+  addLineCommentLabel,
+  addLineCommentPlaceholder,
+  inlineComments,
+  getCommentableLineNumbers,
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
@@ -60,12 +71,25 @@ export function DiffSectionItem({
   isDark: boolean
   settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
   sectionHeight: number | undefined
-  worktreeId: string
+  worktreeId?: string
   loadSection: (index: number) => void
   retrySection: (index: number) => void
   toggleSection: (index: number) => void
   openSection: (index: number) => void
   openSectionTitle: string
+  renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
+  onAddLineComment?: (
+    section: DiffSection,
+    args: {
+      lineNumber: number
+      startLine?: number
+      body: string
+    }
+  ) => Promise<boolean>
+  addLineCommentLabel?: string
+  addLineCommentPlaceholder?: string
+  inlineComments?: readonly DecoratedDiffComment[]
+  getCommentableLineNumbers?: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
@@ -81,8 +105,8 @@ export function DiffSectionItem({
   // stable across unrelated store updates) and filter by filePath inside a
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
   // store change and cause needless re-renders of this section.
-  const allDiffComments = useAppStore(
-    (s): DiffComment[] | undefined => findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments
+  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
+    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
   )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
@@ -91,7 +115,8 @@ export function DiffSectionItem({
   const language = detectLanguage(section.path)
   const isEditable = section.area === 'unstaged'
   const modelPathBase = useMemo(
-    () => `diff-section:${encodeURIComponent(worktreeId)}:${encodeURIComponent(section.key)}`,
+    () =>
+      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
     [section.key, worktreeId]
   )
   const editorFontSize = computeEditorFontSize(
@@ -109,6 +134,7 @@ export function DiffSectionItem({
     top: number
     left?: number
   } | null>(null)
+  const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   const disposeDiffModels = useCallback(() => {
     window.setTimeout(() => {
@@ -142,10 +168,12 @@ export function DiffSectionItem({
   }, [scrollToDiffCommentId, diffComments])
 
   useDiffCommentDecorator({
-    editor: modifiedEditor,
+    editor: hasLineCommentAction ? modifiedEditor : null,
     filePath: section.path,
-    worktreeId,
-    comments: diffComments,
+    worktreeId: worktreeId ?? '',
+    comments: inlineComments ?? (worktreeId ? diffComments : []),
+    commentableLineNumbers: getCommentableLineNumbers?.(section),
+    addButtonLabel: addLineCommentLabel,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
       setPopover({
         lineNumber,
@@ -155,8 +183,12 @@ export function DiffSectionItem({
           ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
           : undefined
       }),
-    onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
-    onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
+    onDeleteComment: (id) => {
+      if (worktreeId) {
+        void deleteDiffComment(worktreeId, id)
+      }
+    },
+    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
     pendingScrollCommentId: pendingScrollForThisSection,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
@@ -207,6 +239,20 @@ export function DiffSectionItem({
 
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
+      return
+    }
+    if (onAddLineComment) {
+      const ok = await onAddLineComment(section, {
+        lineNumber: popover.lineNumber,
+        startLine: popover.startLine,
+        body
+      })
+      if (ok) {
+        setPopover(null)
+      }
+      return
+    }
+    if (!worktreeId) {
       return
     }
     // Why: await persistence before closing the popover. If addDiffComment
@@ -262,7 +308,7 @@ export function DiffSectionItem({
     useIntrinsicImageHeight
   })
 
-  const handleMount: DiffOnMount = (editor, monaco) => {
+  const handleMount: DiffOnMount = (editor, _monaco) => {
     diffEditorRef.current = editor
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
@@ -332,9 +378,10 @@ export function DiffSectionItem({
     }
 
     modifiedEditorsRef.current.set(index, modified)
-    modified.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () =>
+    const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )
+    modified.onDidDispose(() => cleanupSaveShortcut())
     modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
       setSections((prev) => {
@@ -379,6 +426,7 @@ export function DiffSectionItem({
           openSection(index)
         }}
         openSectionTitle={openSectionTitle}
+        trailingContent={renderHeaderTrailingContent?.(section, index)}
       />
 
       {!section.collapsed && (
@@ -397,6 +445,9 @@ export function DiffSectionItem({
               startLine={popover.startLine}
               top={popover.top}
               left={popover.left}
+              placeholder={addLineCommentPlaceholder}
+              submitLabel={addLineCommentLabel}
+              submittingLabel="Posting…"
               onCancel={() => setPopover(null)}
               onSubmit={handleSubmitComment}
             />

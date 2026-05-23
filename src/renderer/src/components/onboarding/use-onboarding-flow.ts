@@ -7,7 +7,9 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, Repo, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
 import {
@@ -18,18 +20,49 @@ import {
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
-import { useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
+import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export type OnboardingFlowController = ReturnType<typeof useOnboardingFlow>
 
+type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
+type TaskSourcesGithubStatus = TaskSourcesSnapshotProps['github_status']
+type TaskSourcesLinearStatus = TaskSourcesSnapshotProps['linear_status']
+type TaskSourcesExitAction = TaskSourcesSnapshotProps['exit_action']
+
+function getGitHubTaskSourceStatus(
+  status: ReturnType<typeof useAppStore.getState>['preflightStatus'],
+  loading: boolean
+): TaskSourcesGithubStatus {
+  if (loading || !status) {
+    return 'checking'
+  }
+  if (!status.gh.installed) {
+    return 'not_installed'
+  }
+  return status.gh.authenticated ? 'connected' : 'not_authenticated'
+}
+
+function getLinearTaskSourceStatus(
+  status: ReturnType<typeof useAppStore.getState>['linearStatus'],
+  checked: boolean
+): TaskSourcesLinearStatus {
+  if (status.connected) {
+    return 'connected'
+  }
+  return checked ? 'not_connected' : 'checking'
+}
+
 export function useOnboardingFlow(
   onboarding: OnboardingState,
-  onOnboardingChange: (state: OnboardingState) => void
+  onOnboardingChange: (state: OnboardingState) => void,
+  options: { onSettingsDetourStart?: () => void } = {}
 ) {
+  const { onSettingsDetourStart } = options
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
@@ -41,6 +74,12 @@ export function useOnboardingFlow(
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
+  const linearStatus = useAppStore((s) => s.linearStatus)
+  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
 
   const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
   const [stepIndex, setStepIndex] = useState(initialStep)
@@ -231,6 +270,25 @@ export function useOnboardingFlow(
     return Math.max(0, Date.now() - stepStartedAtRef.current)
   }, [])
 
+  const trackTaskSourcesSnapshot = useCallback(
+    (
+      exitAction: TaskSourcesExitAction,
+      durationMs: number,
+      advancedVia: 'button' | 'keyboard'
+    ): void => {
+      // Why: one low-cardinality snapshot answers whether task sources were
+      // usable at step exit without paying for per-button telemetry.
+      track('onboarding_task_sources_snapshot', {
+        github_status: getGitHubTaskSourceStatus(preflightStatus, preflightStatusLoading),
+        linear_status: getLinearTaskSourceStatus(linearStatus, linearStatusChecked),
+        exit_action: exitAction,
+        duration_ms: durationMs,
+        advanced_via: advancedVia
+      })
+    },
+    [linearStatus, linearStatusChecked, preflightStatus, preflightStatusLoading]
+  )
+
   // Why: only auto-pick on first mount when detection completes; otherwise
   // selecting an agent would re-trigger this effect and clobber/race user clicks.
   const didAutoSelectRef = useRef(false)
@@ -264,26 +322,30 @@ export function useOnboardingFlow(
       await fetchWorktrees(repoId)
       const worktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
       if (worktree) {
-        activateAndRevealWorktree(worktree.id)
+        // Why: onboarding asks for a default agent immediately before this step.
+        // Non-git folders skip the composer, so seed their first terminal here.
+        const startup = isGit ? undefined : buildOnboardingFolderAgentStartup(settings)
+        activateAndRevealWorktree(worktree.id, startup ? { startup } : undefined)
       }
-      // Why: next() short-circuits step 4, so emit step_completed here once the
-      // repo is successfully added to keep the funnel consistent. Gate on
-      // closeWith's success so a persistence failure doesn't double-count.
+      // Why: next() short-circuits the repo step, so emit step_completed here
+      // once the repo is successfully added to keep the funnel consistent.
+      // Gate on closeWith's success so a persistence failure doesn't
+      // double-count.
       const closed = await closeWith(
         'completed',
         isGit ? { addedRepo: true } : { addedFolder: true },
-        4,
+        ONBOARDING_FINAL_STEP,
         path
       )
       if (!closed) {
         return
       }
-      // Why: step 4 has no keyboard-vs-button advance — Cmd+Enter routes to
-      // `openFolder()` which collapses both into the path-clicked path. Emit
-      // `duration_ms` only; `advanced_via` is intentionally absent for step 4.
-      // See docs/onboarding-telemetry-extensions.md §3.
+      // Why: the repo step has no keyboard-vs-button advance — Cmd+Enter
+      // routes to `openFolder()` which collapses both into the path-clicked
+      // path. Emit `duration_ms` only; `advanced_via` is intentionally absent
+      // for the final step. See docs/onboarding-telemetry-extensions.md §3.
       track('onboarding_step_completed', {
-        step: 4,
+        step: ONBOARDING_FINAL_STEP,
         value_kind: 'repo',
         duration_ms: consumeStepDurationMs()
       })
@@ -295,7 +357,7 @@ export function useOnboardingFlow(
         })
       }
     },
-    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal]
+    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal, settings]
   )
 
   const persistCurrentStep = usePersistCurrentStep({
@@ -359,12 +421,16 @@ export function useOnboardingFlow(
             // not double-count the same step completion.
             notificationsStepCompletedTrackedRef.current = true
           }
+          const durationMs = consumeStepDurationMs()
           track('onboarding_step_completed', {
             step: currentStep.stepNumber,
             value_kind: currentStep.valueKind,
-            duration_ms: consumeStepDurationMs(),
+            duration_ms: durationMs,
             advanced_via: advancedVia
           })
+          if (currentStep.id === 'integrations') {
+            trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
+          }
         }
         const result = await persistCurrentStep()
         const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
@@ -394,7 +460,8 @@ export function useOnboardingFlow(
       featureSetupSelection,
       featureSetupTerminalCommand,
       hasSelectedFeatureSetup,
-      persistCurrentStep
+      persistCurrentStep,
+      trackTaskSourcesSnapshot
     ]
   )
 
@@ -502,36 +569,114 @@ export function useOnboardingFlow(
     }
   }, [busyLabel, cloneDestination, cloneUrl, completeRepo, settings])
 
-  const skip = useCallback(async () => {
+  const skipToRepo = useCallback(async () => {
     if (busyLabel) {
       return
     }
+    setError(null)
+    const repoStepIndex = STEPS.findIndex((step) => step.id === 'repo')
+    const repoStep = STEPS[repoStepIndex]
+    if (currentStep.id === 'repo' || !repoStep) {
+      return
+    }
     const durationMs = consumeStepDurationMs()
-    // Why: skip has no keyboard path today, so `advanced_via` is always
-    // `'button'`. Keep the current step event before the all-onboarding
-    // dismissal so the funnel still records where the user bailed.
-    track('onboarding_step_skipped', {
-      step: currentStep.stepNumber,
-      duration_ms: durationMs,
-      advanced_via: 'button'
-    })
     // Why: theme step previews on the document without persisting. On skip,
     // revert to the saved theme before advancing so the preview doesn't leak.
     if (currentStep.id === 'theme' && settings) {
       setTheme(settings.theme)
       applyDocumentTheme(settings.theme)
     }
-    await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
-      advancedVia: 'button',
-      durationMs
-    })
+    // Why: the repo step seeds folder terminals from saved settings. Preserve
+    // the visible agent choice when optional preferences are skipped.
+    if (currentStep.id === 'agent' && selectedAgent) {
+      await updateSettings({ defaultTuiAgent: selectedAgent })
+    }
+    try {
+      const nextState = await persistStep(repoStep.stepNumber - 1)
+      onOnboardingChange(nextState)
+      // Why: users can skip optional preferences, but onboarding remains open
+      // because Orca needs a project before the app has a useful first state.
+      track('onboarding_step_skipped', {
+        step: currentStep.stepNumber,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      if (currentStep.id === 'integrations') {
+        trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+      }
+      setStepIndex(repoStepIndex)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not skip to Add Project', { description: message })
+    }
   }, [
     busyLabel,
-    closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
-    settings
+    onOnboardingChange,
+    selectedAgent,
+    settings,
+    trackTaskSourcesSnapshot,
+    updateSettings
+  ])
+
+  const skipAgentSetup = useCallback(async () => {
+    if (busyLabel || currentStep.id !== 'notifications') {
+      return
+    }
+    setError(null)
+    const durationMs = consumeStepDurationMs()
+    try {
+      // Why: this step's primary action can request notification permission and
+      // run selected feature setup. Skip is the explicit "not now" path.
+      const nextState = await persistStep(currentStep.stepNumber)
+      onOnboardingChange(nextState)
+      track('onboarding_step_skipped', {
+        step: currentStep.stepNumber,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      setFeatureSetupTerminalCommand(null)
+      setFeatureSetupTerminalSelection(null)
+      setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not skip agent setup', { description: message })
+    }
+  }, [busyLabel, consumeStepDurationMs, currentStep.id, currentStep.stepNumber, onOnboardingChange])
+
+  const openSshSettings = useCallback(async () => {
+    if (busyLabel || currentStep.id !== 'repo') {
+      return
+    }
+    setError(null)
+    try {
+      onOnboardingChange(await persistStep(currentStep.stepNumber - 1))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not open SSH settings', { description: message })
+      return
+    }
+    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
+    // need a temporary detour without marking required repo setup dismissed.
+    onSettingsDetourStart?.()
+    // Why: keep the target in the store before the Settings view mounts. A
+    // timer here can run before the lazy view subscribes and strand users on
+    // the default General pane.
+    openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+    openSettingsPage()
+  }, [
+    busyLabel,
+    currentStep.id,
+    currentStep.stepNumber,
+    onOnboardingChange,
+    onSettingsDetourStart,
+    openSettingsPage,
+    openSettingsTarget
   ])
 
   const back = useCallback(() => {
@@ -569,10 +714,12 @@ export function useOnboardingFlow(
     detectedSet,
     isDetectingAgents,
     next,
-    skip,
+    skipAgentSetup,
+    skipToRepo,
     back,
     jumpToStep,
     openFolder,
+    openSshSettings,
     clone
   }
 }

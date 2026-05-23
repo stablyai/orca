@@ -387,9 +387,9 @@ export function RuntimeEnvironmentsPane({
         <div className="overflow-hidden rounded-lg border border-border/50">
           <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0 space-y-0.5">
-              <div className="text-sm font-medium">Share this desktop</div>
+              <div className="text-sm font-medium">Share this Orca server</div>
               <p className="text-xs text-muted-foreground">
-                Generate a pairing URL for the web client or another Orca client.
+                Create a revocable access grant so a browser or another Orca client can connect.
               </p>
             </div>
             <Button
@@ -400,14 +400,16 @@ export function RuntimeEnvironmentsPane({
               onClick={() => setShareServerFormOpen((open) => !open)}
             >
               <Share2 />
-              {shareServerFormOpen ? 'Hide' : 'Generate Link'}
+              {shareServerFormOpen ? 'Hide Form' : 'New Link'}
             </Button>
           </div>
-          {shareServerFormOpen ? (
-            <div className="border-t border-border/40 px-3 py-3">
-              <RuntimePairingUrlGenerator framed={false} showHeader={false} />
-            </div>
-          ) : null}
+          <div className="border-t border-border/40 px-3 py-3">
+            <RuntimePairingUrlGenerator
+              framed={false}
+              showHeader={false}
+              showGeneratorForm={shareServerFormOpen}
+            />
+          </div>
         </div>
       ) : null}
 

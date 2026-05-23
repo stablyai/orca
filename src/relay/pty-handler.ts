@@ -10,6 +10,7 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -81,7 +82,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     /* swallow */
   }
 }
-const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000
+const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',
@@ -625,17 +626,17 @@ export class PtyHandler {
     }
   }
 
-  startGraceTimer(onExpire: () => void): void {
+  startGraceTimer(onExpire: () => void, timeoutMs = this.graceTimeMs): void {
     this.cancelGraceTimer()
-    if (this.graceTimeMs === 0) {
+    if (timeoutMs === 0) {
       return
     }
-    // Why: always wait the full grace period even with zero PTYs.  A detached
-    // relay may have no PTYs yet but a --connect client will arrive shortly.
-    // Firing immediately would kill the relay before anyone could connect.
+    // Why: callers may shorten the first empty-detached startup window, but
+    // connected relays still use the configured grace so live PTYs can survive
+    // app restarts and reconnects.
     this.graceTimer = setTimeout(() => {
       onExpire()
-    }, this.graceTimeMs)
+    }, timeoutMs)
   }
 
   cancelGraceTimer(): void {
@@ -672,5 +673,9 @@ export class PtyHandler {
 
   get activePtyCount(): number {
     return this.ptys.size
+  }
+
+  get graceTimerActive(): boolean {
+    return this.graceTimer !== null
   }
 }

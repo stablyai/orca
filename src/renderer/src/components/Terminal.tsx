@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 
-import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import React, { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import {
@@ -9,7 +9,6 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
-import { useAllWorktrees } from '../store/selectors'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { getConnectionId } from '../lib/connection-context'
@@ -45,13 +44,19 @@ import {
   destroyWorkspaceWebviews
 } from '../store/slices/browser-webview-cleanup'
 import {
+  handleSwitchRecentTab,
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
+import { getActiveWorktreeOpenFiles } from './terminal/active-worktree-open-files'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
+import { getTerminalBrowserPaneWorktreeIds } from './terminal/terminal-browser-pane-worktrees'
+import { getTerminalBrowserTabSlices } from './terminal/terminal-browser-tab-slices'
+import { getTerminalMountedWorktreeSnapshot } from './terminal/terminal-mounted-worktrees'
+import { getTerminalTabSlices } from './terminal/terminal-tab-slices'
 import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -66,6 +71,24 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
+import {
+  createFloatingWorkspaceTerminalTab,
+  isFloatingWorkspacePanelVisible
+} from '@/lib/floating-workspace-terminal-actions'
+import {
+  keybindingMatchesAction,
+  type KeybindingActionId,
+  type KeybindingContext
+} from '../../../shared/keybindings'
+import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -76,31 +99,71 @@ const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 // trailing edge of a physical double-click (~150 ms on most hardware).
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
 
+function getKeybindingContext(target: EventTarget | null): KeybindingContext {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+    ? 'terminal'
+    : 'app'
+}
+
 function Terminal(): React.JSX.Element | null {
-  const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const openFiles = useAppStore((s) => s.openFiles)
+  // Track which worktrees have been activated during this app session.
+  // Only mount TerminalPanes for visited worktrees to prevent mass PTY
+  // spawning when restoring a session with many saved worktree tabs.
+  const mountedWorktreeIdsRef = useRef(new Set<string>())
+  const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
+  const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
+  const [, setBackgroundMountRevision] = useState(0)
+  // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
+  // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
+  // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
+  // with ptyId: null, and TerminalPane would call connectPanePty -> pty:spawn,
+  // creating a duplicate PTY for the same tab.
+  if (activeWorktreeId && workspaceSessionReady) {
+    mountedWorktreeIdsRef.current.add(activeWorktreeId)
+  }
+  const terminalWorktreeSnapshot = useAppStore((s) =>
+    getTerminalMountedWorktreeSnapshot(s.worktreesByRepo, mountedWorktreeIdsRef.current)
+  )
+  const terminalTabSlices = useAppStore((s) =>
+    getTerminalTabSlices(s.tabsByWorktree, mountedWorktreeIdsRef.current, activeWorktreeId)
+  )
+  const terminalBrowserTabSlices = useAppStore((s) =>
+    getTerminalBrowserTabSlices(
+      s.browserTabsByWorktree,
+      mountedWorktreeIdsRef.current,
+      activeWorktreeId
+    )
+  )
+  const worktreeFiles = useAppStore((s) =>
+    getActiveWorktreeOpenFiles(s.openFiles, activeWorktreeId)
+  )
   const activeFileId = useAppStore((s) => s.activeFileId)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const activeTabType = useAppStore((s) => s.activeTabType)
+  const keybindings = useAppStore((s) => s.keybindings)
+  const terminalShortcutPolicy = useAppStore(
+    (s) => s.settings?.terminalShortcutPolicy ?? 'orca-first'
+  )
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const openFile = useAppStore((s) => s.openFile)
   const closeFile = useAppStore((s) => s.closeFile)
   const pinFile = useAppStore((s) => s.pinFile)
-  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((s) => s.setActiveBrowserTab)
@@ -124,10 +187,7 @@ function Terminal(): React.JSX.Element | null {
     activeView === 'activity'
   )
 
-  const tabs = useMemo(
-    () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
-    [activeWorktreeId, tabsByWorktree]
-  )
+  const tabs = terminalTabSlices.activeTabs
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
   // the same row as the "Orca" title. The target element is created by App.tsx.
@@ -147,13 +207,7 @@ function Terminal(): React.JSX.Element | null {
     ensureWorktreeRootGroup(activeWorktreeId)
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
-  // Filter editor files to only show those belonging to the active worktree
-  const worktreeFiles = activeWorktreeId
-    ? openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-    : []
-  const worktreeBrowserTabs = activeWorktreeId
-    ? (browserTabsByWorktree[activeWorktreeId] ?? [])
-    : []
+  const worktreeBrowserTabs = terminalBrowserTabSlices.activeBrowserTabs
   const getEffectiveLayoutForWorktree = useCallback(
     (worktreeId: string) =>
       getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
@@ -162,21 +216,20 @@ function Terminal(): React.JSX.Element | null {
   const effectiveActiveLayout = activeWorktreeId
     ? getEffectiveLayoutForWorktree(activeWorktreeId)
     : undefined
-  const activeWorktreeBrowserTabIdsKey = activeWorktreeId
-    ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
-    : ''
-
-  const [wslAvailable, setWslAvailable] = useState(false)
-  useEffect(() => {
-    // Why: wsl:isAvailable is synchronous on the main-process side but we
-    // call it asynchronously so the renderer doesn't block on startup. The
-    // result only gates UI options, so a brief false→true transition is fine.
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
+  const activeWorktreeBrowserTabIdsKey = worktreeBrowserTabs.map((tab) => tab.id).join(',')
+  const browserPaneWorktreeIds = getTerminalBrowserPaneWorktreeIds({
+    mountedWorktreeIds: terminalWorktreeSnapshot.mountedWorktrees.map((worktree) => worktree.id),
+    worktreeIds: terminalWorktreeSnapshot.worktreeIds,
+    activeWorktreeId,
+    activeTabType,
+    activeBrowserTabCount: worktreeBrowserTabs.length
+  })
 
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
-  const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
+  const saveDialogFile = useAppStore((s) =>
+    saveDialogFileId ? (s.openFiles.find((file) => file.id === saveDialogFileId) ?? null) : null
+  )
   const pendingEditorCloseQueueRef = useRef<string[]>([])
 
   // Why: while a save-and-close is awaiting the file to disappear from
@@ -509,47 +562,57 @@ function Terminal(): React.JSX.Element | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, activeTabType, setActiveTab, tabs])
 
-  // Track which worktrees have been activated during this app session.
-  // Only mount TerminalPanes for visited worktrees to prevent mass PTY
-  // spawning when restoring a session with many saved worktree tabs.
-  const mountedWorktreeIdsRef = useRef(new Set<string>())
-  const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
+    const timers = measurableBackgroundWorktreeTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
-      addBackgroundMountedTerminalWorktree(
-        mountedWorktreeIdsRef.current,
-        customEvent.detail?.worktreeId,
-        () => setBackgroundMountRevision((revision) => revision + 1)
+      const worktreeId = customEvent.detail?.worktreeId
+      addBackgroundMountedTerminalWorktree(mountedWorktreeIdsRef.current, worktreeId, () =>
+        setBackgroundMountRevision((revision) => revision + 1)
       )
+      if (!worktreeId) {
+        return
+      }
+      measurableBackgroundWorktreeIdsRef.current.add(worktreeId)
+      const existingTimer = timers.get(worktreeId)
+      if (existingTimer !== undefined) {
+        window.clearTimeout(existingTimer)
+      }
+      // Why: background renderer-backed terminal creation must be measurable
+      // for the first xterm fit, but it must not keep hidden worktrees laid
+      // out indefinitely after the PTY has started.
+      const timer = window.setTimeout(() => {
+        measurableBackgroundWorktreeIdsRef.current.delete(worktreeId)
+        timers.delete(worktreeId)
+        setBackgroundMountRevision((revision) => revision + 1)
+      }, 3000)
+      timers.set(worktreeId, timer)
+      setBackgroundMountRevision((revision) => revision + 1)
     }
     window.addEventListener(
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
       onBackgroundMountTerminalWorktree as EventListener
     )
-    return () =>
+    return () => {
       window.removeEventListener(
         BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
         onBackgroundMountTerminalWorktree as EventListener
       )
+      for (const timer of timers.values()) {
+        window.clearTimeout(timer)
+      }
+      timers.clear()
+    }
   }, [])
-  // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
-  // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
-  // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
-  // with ptyId: null, and TerminalPane would call connectPanePty → pty:spawn,
-  // creating a duplicate PTY for the same tab.
-  if (activeWorktreeId && workspaceSessionReady) {
-    mountedWorktreeIdsRef.current.add(activeWorktreeId)
-  }
   // Prune IDs of worktrees that no longer exist (deleted/removed)
-  const allWorktreeIds = new Set(allWorktrees.map((wt) => wt.id))
+  const allWorktreeIds = new Set(terminalWorktreeSnapshot.worktreeIds)
   for (const id of mountedWorktreeIdsRef.current) {
     if (!allWorktreeIds.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
-    allWorktrees.map((wt) => wt.id),
+    terminalWorktreeSnapshot.worktreeIds,
     mountedWorktreeIdsRef.current,
     layoutByWorktree,
     groupsByWorktree,
@@ -561,6 +624,11 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     if (!activeWorktreeId) {
+      return
+    }
+    // Why: in the paired web client, host session-tabs are authoritative.
+    // Creating a local fallback races the host's initial terminal and duplicates tabs.
+    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
       return
     }
 
@@ -577,11 +645,26 @@ function Terminal(): React.JSX.Element | null {
     // activity and reshuffle the sidebar. Explicit "New Tab" actions
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeRuntimeEnvironmentId,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
       if (!activeWorktreeId) {
+        return
+      }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void createWebRuntimeSessionTerminal({
+          worktreeId: activeWorktreeId,
+          environmentId: activeRuntimeEnvironmentId,
+          command: shellOverride,
+          activate: true
+        })
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
@@ -618,7 +701,7 @@ function Terminal(): React.JSX.Element | null {
       // the new xterm. Matches the "+" menu path in TabBar.tsx.
       focusTerminalTabSurface(newTab.id)
     },
-    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+    [activeRuntimeEnvironmentId, activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
   )
 
   const handleNewBrowserTab = useCallback(() => {
@@ -626,11 +709,19 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      void createWebRuntimeSessionBrowserTab({
+        worktreeId: activeWorktreeId,
+        environmentId: activeRuntimeEnvironmentId,
+        url: defaultUrl
+      })
+      return
+    }
     createBrowserTab(activeWorktreeId, defaultUrl, {
       title: 'New Browser Tab',
       focusAddressBar: true
     })
-  }, [activeWorktreeId, createBrowserTab])
+  }, [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab])
 
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
@@ -643,12 +734,21 @@ function Terminal(): React.JSX.Element | null {
       if (!source) {
         return
       }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void createWebRuntimeSessionBrowserTab({
+          worktreeId: activeWorktreeId,
+          environmentId: activeRuntimeEnvironmentId,
+          url: source.url,
+          profileId: source.sessionProfileId
+        })
+        return
+      }
       createBrowserTab(activeWorktreeId, source.url, {
         title: source.title,
         sessionProfileId: source.sessionProfileId
       })
     },
-    [activeWorktreeId, createBrowserTab]
+    [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab]
   )
 
   const handleNewFile = useCallback(async () => {
@@ -691,6 +791,15 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void closeWebRuntimeSessionTab({
+          worktreeId: owningWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+        return
+      }
+
       const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
         closeTab(tabId)
@@ -726,6 +835,7 @@ function Terminal(): React.JSX.Element | null {
       closeTab(tabId)
     },
     [
+      activeRuntimeEnvironmentId,
       closeTab,
       setActiveBrowserTab,
       setActiveTab,
@@ -743,6 +853,14 @@ function Terminal(): React.JSX.Element | null {
       )
       const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
       if (!owningWorktreeId) {
+        return
+      }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void closeWebRuntimeSessionTab({
+          worktreeId: owningWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
         return
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
@@ -777,6 +895,7 @@ function Terminal(): React.JSX.Element | null {
       closeBrowserTab(tabId)
     },
     [
+      activeRuntimeEnvironmentId,
       closeBrowserTab,
       setActiveBrowserTab,
       setActiveFile,
@@ -808,6 +927,20 @@ function Terminal(): React.JSX.Element | null {
         if (id === tabId) {
           continue
         }
+        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+          (candidate) => candidate.id === id || candidate.entityId === id
+        )
+        if (
+          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+        ) {
+          void closeWebRuntimeSessionTab({
+            worktreeId: activeWorktreeId,
+            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
+            environmentId: activeRuntimeEnvironmentId
+          })
+          continue
+        }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
@@ -830,7 +963,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -847,6 +987,20 @@ function Terminal(): React.JSX.Element | null {
       const rightIds = currentOrder.slice(index + 1)
       const dirtyFileIds: string[] = []
       for (const id of rightIds) {
+        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+          (candidate) => candidate.id === id || candidate.entityId === id
+        )
+        if (
+          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+        ) {
+          void closeWebRuntimeSessionTab({
+            worktreeId: activeWorktreeId,
+            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
+            environmentId: activeRuntimeEnvironmentId
+          })
+          continue
+        }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
@@ -869,7 +1023,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseAllFiles = useCallback(() => {
@@ -891,10 +1052,17 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateTab = useCallback(
     (tabId: string) => {
+      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+      }
       setActiveTab(tabId)
       setActiveTabType('terminal')
     },
-    [setActiveTab, setActiveTabType]
+    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveTab, setActiveTabType]
   )
 
   const handleTogglePaneExpand = useCallback(
@@ -913,10 +1081,17 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateBrowserTab = useCallback(
     (tabId: string) => {
+      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+      }
       setActiveBrowserTab(tabId)
       setActiveTabType('browser')
     },
-    [setActiveBrowserTab, setActiveTabType]
+    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveBrowserTab, setActiveTabType]
   )
 
   // Keyboard shortcuts
@@ -926,22 +1101,48 @@ function Terminal(): React.JSX.Element | null {
     }
 
     const isMac = navigator.userAgent.includes('Mac')
+    const shortcutPlatform: NodeJS.Platform = isMac
+      ? 'darwin'
+      : navigator.userAgent.includes('Windows')
+        ? 'win32'
+        : 'linux'
     const onKeyDown = (e: KeyboardEvent): void => {
-      const mod = isMac ? e.metaKey : e.ctrlKey
+      const context = getKeybindingContext(e.target)
+      const matchShortcut = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(actionId, e, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy
+        })
+      const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
+        if (context !== 'terminal' || terminalShortcutPolicy !== 'orca-first') {
+          return
+        }
+        showTerminalShortcutCaptureNotification({
+          actionId,
+          platform: shortcutPlatform,
+          keybindings
+        })
+      }
       // Why: Cmd/Ctrl+T always opens a new terminal, regardless of which
       // surface is active. Browser-tab creation has its own shortcut
       // (Cmd/Ctrl+Shift+B) so users have a predictable way to spawn a
       // terminal from anywhere in the central pane.
-      if (mod && e.key === 't' && !e.shiftKey && !e.repeat) {
+      if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()
+        notifyTerminalCapture('tab.newTerminal')
+        if (isFloatingWorkspacePanelVisible()) {
+          void createFloatingWorkspaceTerminalTab(useAppStore.getState())
+          return
+        }
         handleNewTab()
         return
       }
 
       // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
       // otherwise reopen the most recently closed editor tab (VS Code–style).
-      if (mod && e.shiftKey && e.key.toLowerCase() === 't' && !e.repeat) {
+      if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
+        notifyTerminalCapture('tab.reopenClosed')
         const state = useAppStore.getState()
         if (state.activeTabType === 'browser') {
           const restored = state.reopenClosedBrowserTab(activeWorktreeId)
@@ -955,17 +1156,18 @@ function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+B - new browser tab
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'b' && !e.repeat) {
+      if (!e.repeat && matchShortcut('tab.newBrowser')) {
         e.preventDefault()
+        notifyTerminalCapture('tab.newBrowser')
         handleNewBrowserTab()
         return
       }
 
-      // Cmd/Ctrl+S - save active editor file (fallback for when focus is
+      // Save active editor file (fallback for when focus is
       // outside the editor content area, e.g. on the tab bar or sidebar).
-      // When the editor itself has focus, Monaco/rich-markdown handle Cmd+S
-      // internally, so we skip this when the target is editable.
-      if (mod && e.key === 's' && !e.shiftKey && !e.repeat) {
+      // When the editor itself has focus, editor-local handlers own the save
+      // shortcut, so we skip this when the target is editable.
+      if (!e.repeat && matchShortcut('editor.save')) {
         const target = e.target as HTMLElement | null
         const inEditor =
           target?.closest('.monaco-editor, [contenteditable]') !== null ||
@@ -974,6 +1176,7 @@ function Terminal(): React.JSX.Element | null {
           const state = useAppStore.getState()
           if (state.activeTabType === 'editor' && state.activeFileId) {
             e.preventDefault()
+            notifyTerminalCapture('editor.save')
             window.dispatchEvent(new Event(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT))
             return
           }
@@ -981,8 +1184,9 @@ function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+M - new markdown file
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'm' && !e.repeat) {
+      if (!e.repeat && matchShortcut('tab.newMarkdown')) {
         e.preventDefault()
+        notifyTerminalCapture('tab.newMarkdown')
         void handleNewFile()
         return
       }
@@ -992,14 +1196,35 @@ function Terminal(): React.JSX.Element | null {
       // in keyboard-handlers.ts so it can close individual split panes and
       // show a confirmation dialog. We still preventDefault here so Electron
       // doesn't close the window as its default Cmd+W action.
-      if (mod && e.key === 'w' && !e.shiftKey && !e.repeat) {
-        e.preventDefault()
+      if (!e.repeat && matchShortcut('tab.close')) {
         const state = useAppStore.getState()
+        if (state.activeTabType === 'terminal' && context === 'terminal') {
+          return
+        }
+        e.preventDefault()
+        notifyTerminalCapture('tab.close')
         if (state.activeTabType === 'editor' && state.activeFileId) {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
-          closeBrowserTab(state.activeBrowserTabId)
+          handleCloseBrowserTab(state.activeBrowserTabId)
         }
+        return
+      }
+
+      // Ctrl+Tab - quick-toggle to the previously focused tab in this group.
+      if (
+        matchesRecentTabSwitcherChord(e, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy
+        })
+      ) {
+        return
+      }
+      if (!e.repeat && matchShortcut('tab.previousRecent')) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchRecentTab()
         return
       }
 
@@ -1011,12 +1236,17 @@ function Terminal(): React.JSX.Element | null {
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on
       // event.key would miss the chord entirely on non-US layouts.
-      if (
-        mod &&
-        (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
-        !e.repeat &&
-        (e.shiftKey || e.altKey)
-      ) {
+      const switchSameTypeDirection = matchShortcut('tab.nextSameType')
+        ? 1
+        : matchShortcut('tab.previousSameType')
+          ? -1
+          : null
+      const switchAllTypesDirection = matchShortcut('tab.nextAllTypes')
+        ? 1
+        : matchShortcut('tab.previousAllTypes')
+          ? -1
+          : null
+      if (!e.repeat && (switchSameTypeDirection !== null || switchAllTypesDirection !== null)) {
         // Why: delegate to the shared handler used by the IPC shortcut path
         // so both code paths share one implementation. Always consume the
         // chord — even when the switch is a no-op (e.g. single tab), we own
@@ -1025,10 +1255,19 @@ function Terminal(): React.JSX.Element | null {
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
-        if (e.altKey) {
-          handleSwitchTabAcrossAllTypes(e.code === 'BracketRight' ? 1 : -1)
+        notifyTerminalCapture(
+          switchAllTypesDirection !== null
+            ? switchAllTypesDirection === 1
+              ? 'tab.nextAllTypes'
+              : 'tab.previousAllTypes'
+            : switchSameTypeDirection === 1
+              ? 'tab.nextSameType'
+              : 'tab.previousSameType'
+        )
+        if (switchAllTypesDirection !== null) {
+          handleSwitchTabAcrossAllTypes(switchAllTypesDirection)
         } else {
-          handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
+          handleSwitchTab(switchSameTypeDirection ?? 1)
         }
       }
 
@@ -1039,14 +1278,12 @@ function Terminal(): React.JSX.Element | null {
       // for focused terminal / editor consumers and matches the unshifted
       // predicate in browser-guest-ui.ts and the chord advertised in
       // ShortcutsPane.
-      if (
-        e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !e.shiftKey &&
-        (e.code === 'PageDown' || e.code === 'PageUp') &&
-        !e.repeat
-      ) {
+      const terminalTabDirection = matchShortcut('tab.nextTerminal')
+        ? 1
+        : matchShortcut('tab.previousTerminal')
+          ? -1
+          : null
+      if (!e.repeat && terminalTabDirection !== null) {
         // Why: always consume the chord before xterm's textarea listener
         // sees it, regardless of whether we actually switched tabs. xterm
         // translates plain Ctrl+PageUp/PageDown into \e[5~ / \e[6~ escape
@@ -1061,7 +1298,7 @@ function Terminal(): React.JSX.Element | null {
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
-        handleSwitchTerminalTab(e.code === 'PageDown' ? 1 : -1)
+        handleSwitchTerminalTab(terminalTabDirection)
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
@@ -1074,7 +1311,9 @@ function Terminal(): React.JSX.Element | null {
     handleCloseTab,
     handleCloseBrowserTab,
     closeBrowserTab,
-    handleCloseFile
+    handleCloseFile,
+    keybindings,
+    terminalShortcutPolicy
   ])
 
   // Warn on window close if there are unsaved editor files
@@ -1217,7 +1456,6 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
-            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}
@@ -1254,28 +1492,29 @@ function Terminal(): React.JSX.Element | null {
               can preserve hidden trees without reflowing the active one. Keep
               a relative anchor here so those panes size to the workspace body
               rather than some outer ancestor when split groups are enabled. */}
-          {allWorktrees
-            .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-            .map((worktree) => {
-              const layout = getEffectiveLayoutForWorktree(worktree.id)
-              if (!layout) {
-                return null
-              }
-              // Why: use strict equality with 'terminal' instead of !== 'settings'
-              // so the terminal/browser surface hides on the tasks page too.
-              const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
-              return (
-                <WorktreeSplitSurface
-                  key={`tab-groups-${worktree.id}`}
-                  worktreeId={worktree.id}
-                  worktreePath={worktree.path}
-                  layout={layout}
-                  focusedGroupId={activeGroupIdByWorktree[worktree.id]}
-                  isVisible={isVisible}
-                  activityTerminalPortals={activityTerminalPortals}
-                />
-              )
-            })}
+          {terminalWorktreeSnapshot.mountedWorktrees.map((worktree) => {
+            const layout = getEffectiveLayoutForWorktree(worktree.id)
+            if (!layout) {
+              return null
+            }
+            // Why: use strict equality with 'terminal' instead of !== 'settings'
+            // so the terminal/browser surface hides on the tasks page too.
+            const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+            const shouldMeasureHiddenWorktree =
+              !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
+            return (
+              <WorktreeSplitSurface
+                key={`tab-groups-${worktree.id}`}
+                worktreeId={worktree.id}
+                worktreePath={worktree.path}
+                layout={layout}
+                focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+                isVisible={isVisible}
+                shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+                activityTerminalPortals={activityTerminalPortals}
+              />
+            )
+          })}
         </div>
       ) : null}
 
@@ -1313,59 +1552,65 @@ function Terminal(): React.JSX.Element | null {
                 : ''
             }`}
           >
-            {allWorktrees
-              .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-              .map((worktree) => {
-                // Why: use strict equality with 'terminal' instead of !== 'settings'
-                // so the terminal/browser surface hides on the tasks page too.
-                const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
-                return (
-                  <div
-                    key={worktree.id}
-                    className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                    aria-hidden={!isVisible}
-                  >
-                    <CodexRestartChip worktreeId={worktree.id} />
-                    {(tabsByWorktree[worktree.id] ?? []).map((tab) => {
-                      const activityTerminalPortal = findActivityTerminalPortal(
-                        activityTerminalPortals,
-                        { worktreeId: worktree.id, tabId: tab.id }
+            {terminalWorktreeSnapshot.mountedWorktrees.map((worktree) => {
+              // Why: use strict equality with 'terminal' instead of !== 'settings'
+              // so the terminal/browser surface hides on the tasks page too.
+              const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+              const shouldMeasureHiddenWorktree =
+                !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
+              return (
+                <div
+                  key={worktree.id}
+                  className={
+                    isVisible
+                      ? 'absolute inset-0'
+                      : shouldMeasureHiddenWorktree
+                        ? 'absolute inset-0 opacity-0 pointer-events-none'
+                        : 'absolute inset-0 hidden'
+                  }
+                  aria-hidden={!isVisible}
+                >
+                  <CodexRestartChip worktreeId={worktree.id} />
+                  {(terminalTabSlices.mountedTabsByWorktree[worktree.id] ?? []).map((tab) => {
+                    const activityTerminalPortal = findActivityTerminalPortal(
+                      activityTerminalPortals,
+                      { worktreeId: worktree.id, tabId: tab.id }
+                    )
+                    const isActivityPortalTab = activityTerminalPortal !== null
+                    const isActiveTerminalTab =
+                      isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+                    const terminalPane = (
+                      <TerminalPane
+                        key={`${tab.id}-${tab.generation ?? 0}`}
+                        tabId={tab.id}
+                        worktreeId={worktree.id}
+                        cwd={worktree.path}
+                        isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
+                        // Why: the activity page hosts this existing pane via
+                        // portal while the workspace surface remains hidden.
+                        // Keeping `isVisible` true for the portaled tab lets
+                        // xterm fit and stream foreground output in-place.
+                        isVisible={isActiveTerminalTab || isActivityPortalTab}
+                        // Why: when portaled to Activity for a specific agent
+                        // pane, isolate that leaf so split siblings stay
+                        // hidden. Workspace renders pass null -> no override.
+                        isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+                        onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                        onCloseTab={() => handleCloseTab(tab.id)}
+                      />
+                    )
+                    if (activityTerminalPortal) {
+                      return createPortal(
+                        terminalPane,
+                        activityTerminalPortal.target,
+                        `activity-terminal-${tab.id}`
                       )
-                      const isActivityPortalTab = activityTerminalPortal !== null
-                      const isActiveTerminalTab =
-                        isVisible && tab.id === activeTabId && activeTabType === 'terminal'
-                      const terminalPane = (
-                        <TerminalPane
-                          key={`${tab.id}-${tab.generation ?? 0}`}
-                          tabId={tab.id}
-                          worktreeId={worktree.id}
-                          cwd={worktree.path}
-                          isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
-                          // Why: the activity page hosts this existing pane via
-                          // portal while the workspace surface remains hidden.
-                          // Keeping `isVisible` true for the portaled tab lets
-                          // xterm fit and stream foreground output in-place.
-                          isVisible={isActiveTerminalTab || isActivityPortalTab}
-                          // Why: when portaled to Activity for a specific agent
-                          // pane, isolate that leaf so split siblings stay
-                          // hidden. Workspace renders pass null → no override.
-                          isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-                          onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
-                          onCloseTab={() => handleCloseTab(tab.id)}
-                        />
-                      )
-                      if (activityTerminalPortal) {
-                        return createPortal(
-                          terminalPane,
-                          activityTerminalPortal.target,
-                          `activity-terminal-${tab.id}`
-                        )
-                      }
-                      return terminalPane
-                    })}
-                  </div>
-                )
-              })}
+                    }
+                    return terminalPane
+                  })}
+                </div>
+              )
+            })}
           </div>
 
           {/* Browser panes container — all browser panes for the active worktree
@@ -1376,18 +1621,20 @@ function Terminal(): React.JSX.Element | null {
               activeTabType !== 'browser' ? 'hidden' : ''
             }`}
           >
-            {allWorktrees.map((worktree) => {
-              const browserTabs = browserTabsByWorktree[worktree.id] ?? []
+            {browserPaneWorktreeIds.map((worktreeId) => {
+              const browserTabs =
+                worktreeId === activeWorktreeId
+                  ? worktreeBrowserTabs
+                  : (terminalBrowserTabSlices.mountedBrowserTabsByWorktree[worktreeId] ?? [])
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so browser panes also hide on the tasks page.
-              const isVisibleWorktree =
-                activeView === 'terminal' && worktree.id === activeWorktreeId
+              const isVisibleWorktree = activeView === 'terminal' && worktreeId === activeWorktreeId
               if (browserTabs.length === 0) {
                 return null
               }
               return (
                 <div
-                  key={`browser-${worktree.id}`}
+                  key={`browser-${worktreeId}`}
                   className={isVisibleWorktree ? 'absolute inset-0' : 'absolute inset-0 hidden'}
                   aria-hidden={!isVisibleWorktree}
                 >
@@ -1519,6 +1766,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout,
   focusedGroupId,
   isVisible,
+  shouldMeasureHiddenWorktree,
   activityTerminalPortals
 }: {
   worktreeId: string
@@ -1526,11 +1774,18 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
   return (
     <div
-      className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+      className={
+        isVisible
+          ? 'absolute inset-0 flex'
+          : shouldMeasureHiddenWorktree
+            ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+            : 'absolute inset-0 hidden'
+      }
       aria-hidden={!isVisible}
     >
       <CodexRestartChip worktreeId={worktreeId} />

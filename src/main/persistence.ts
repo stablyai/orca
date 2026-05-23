@@ -10,10 +10,11 @@ import {
   renameSync,
   unlinkSync,
   copyFileSync,
-  statSync
+  statSync,
+  realpathSync
 } from 'fs'
 import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
-import { join, dirname } from 'path'
+import { join, dirname, isAbsolute, resolve, sep } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -36,6 +37,7 @@ import type {
   WorktreeMeta,
   WorktreeLineage,
   GlobalSettings,
+  NotificationSettings,
   OnboardingChecklistState,
   OnboardingOutcome,
   OnboardingState,
@@ -57,9 +59,11 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -75,8 +79,9 @@ import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
-import { normalizeVisibleTaskProviders } from '../shared/task-providers'
+import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
+import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -175,11 +180,33 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   return getDefaultUIState().groupBy
 }
 
-function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' {
-  if (sortBy === 'smart' || sortBy === 'recent' || sortBy === 'repo' || sortBy === 'name') {
+function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
+  if (
+    sortBy === 'smart' ||
+    sortBy === 'recent' ||
+    sortBy === 'repo' ||
+    sortBy === 'name' ||
+    sortBy === 'manual'
+  ) {
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeNotificationSettings(value: unknown): NotificationSettings {
+  const defaults = getDefaultNotificationSettings()
+  const candidate =
+    value && typeof value === 'object' ? (value as Partial<NotificationSettings>) : {}
+  const rawVolume = candidate.customSoundVolume
+  const customSoundVolume =
+    typeof rawVolume === 'number' && Number.isFinite(rawVolume)
+      ? Math.min(100, Math.max(0, rawVolume))
+      : defaults.customSoundVolume
+  return {
+    ...defaults,
+    ...candidate,
+    customSoundVolume
+  }
 }
 
 function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
@@ -208,10 +235,43 @@ function normalizeAutomationRunOutputSnapshot(
   }
 }
 
+function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  return {
+    ...automation,
+    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+  }
+}
+
+type LegacySshTarget = SshTarget & {
+  remoteWorkspaceSyncEnabled?: unknown
+  remoteWorkspaceSyncGracePeriodSeconds?: unknown
+}
+
 // Why: old persisted targets predate configHost. Default to label-based lookup
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
 function normalizeSshTarget(t: SshTarget): SshTarget {
-  return { ...t, configHost: t.configHost ?? t.label ?? t.host }
+  const target = { ...(t as LegacySshTarget) }
+  const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
+  const currentGracePeriodSeconds = target.relayGracePeriodSeconds
+  const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
+  // Why: remote workspace sync now follows the SSH relay lifecycle, so the
+  // retired per-target sync opt-out and grace-period fields stop at disk load.
+  delete target.remoteWorkspaceSyncEnabled
+  delete target.remoteWorkspaceSyncGracePeriodSeconds
+  delete target.relayGracePeriodSeconds
+  const relayGracePeriodSeconds =
+    currentGracePeriodSeconds ??
+    (legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
+      ? legacyGracePeriodSeconds
+      : undefined)
+  const normalized: SshTarget = {
+    ...target,
+    configHost: target.configHost ?? target.label ?? target.host
+  }
+  if (relayGracePeriodSeconds !== undefined) {
+    normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  return normalized
 }
 
 // Why: shared by load-time merge and the IPC update handler so the same
@@ -294,6 +354,76 @@ function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boole
 
 function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
+}
+
+function expandFloatingWorkspaceHomePath(input: string, home: string): string {
+  if (input === '~') {
+    return home
+  }
+  if (input.startsWith(`~${sep}`) || (process.platform === 'win32' && input.startsWith('~/'))) {
+    return join(home, input.slice(2))
+  }
+  return input
+}
+
+function resolveFloatingWorkspacePath(input: string, home: string): string {
+  const expanded = expandFloatingWorkspaceHomePath(input, home)
+  return isAbsolute(expanded) ? resolve(expanded) : resolve(home, expanded)
+}
+
+function canonicalizePersistedFloatingWorkspaceDirectory(
+  input: string,
+  home: string
+): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    return null
+  }
+  try {
+    const canonicalPath = resolve(realpathSync(resolveFloatingWorkspacePath(trimmed, home)))
+    return statSync(canonicalPath).isDirectory() ? canonicalPath : null
+  } catch {
+    return null
+  }
+}
+
+function normalizeFloatingWorkspaceTrustedCwds(
+  input: unknown,
+  home: string
+): { trustedCwds: string[]; changed: boolean } {
+  const rawTrustedCwds = Array.isArray(input) ? input : []
+  const trustedCwds: string[] = []
+  const seen = new Set<string>()
+  let changed = input !== undefined && !Array.isArray(input)
+
+  for (const rawTrustedCwd of rawTrustedCwds) {
+    if (typeof rawTrustedCwd !== 'string') {
+      changed = true
+      continue
+    }
+    const trimmedTrustedCwd = rawTrustedCwd.trim()
+    if (!trimmedTrustedCwd) {
+      changed = true
+      continue
+    }
+    const canonicalPath = canonicalizePersistedFloatingWorkspaceDirectory(trimmedTrustedCwd, home)
+    const normalizedPath = canonicalPath ?? resolveFloatingWorkspacePath(trimmedTrustedCwd, home)
+    if (!normalizedPath) {
+      changed = true
+      continue
+    }
+    if (seen.has(normalizedPath)) {
+      changed = true
+      continue
+    }
+    seen.add(normalizedPath)
+    trustedCwds.push(normalizedPath)
+    if (rawTrustedCwd !== normalizedPath) {
+      changed = true
+    }
+  }
+
+  return { trustedCwds, changed }
 }
 
 function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
@@ -1181,7 +1311,8 @@ export class Store {
         }
 
         // Merge with defaults in case new fields were added
-        const defaults = getDefaultPersistedState(homedir())
+        const homeDir = homedir()
+        const defaults = getDefaultPersistedState(homeDir)
         // Why: before the layout-aware 'auto' mode shipped (issue #903),
         // terminalMacOptionAsAlt defaulted to 'true' globally. That silently
         // broke Option-layer characters (@ on Turkish via Option+Q, @ on
@@ -1210,6 +1341,79 @@ export class Store {
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
+        const floatingTerminalCwdMigrated =
+          parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
+        // Why: an earlier migration wrote '' for the default app-owned notes
+        // directory. Floating terminals should still open at home by default;
+        // markdown notes resolve their app-owned directory through a separate IPC.
+        const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
+          ? !parsed.settings?.floatingTerminalCwd
+            ? defaults.settings.floatingTerminalCwd
+            : parsed.settings.floatingTerminalCwd
+          : parsed.settings?.floatingTerminalCwd === undefined
+            ? defaults.settings.floatingTerminalCwd
+            : parsed.settings.floatingTerminalCwd
+        const normalizedFloatingTerminalTrustedCwds = normalizeFloatingWorkspaceTrustedCwds(
+          parsed.settings?.floatingTerminalTrustedCwds,
+          homeDir
+        )
+        const migratedFloatingTerminalTrustedCwds = [
+          ...normalizedFloatingTerminalTrustedCwds.trustedCwds
+        ]
+        const rawLegacyFloatingTerminalCwd = parsed.settings?.floatingTerminalCwd
+        const shouldTrustLegacyFloatingTerminalCwd =
+          !floatingTerminalCwdMigrated &&
+          typeof rawLegacyFloatingTerminalCwd === 'string' &&
+          rawLegacyFloatingTerminalCwd.trim().length > 0 &&
+          rawLegacyFloatingTerminalCwd.trim() !== '~'
+        if (!floatingTerminalCwdMigrated) {
+          this.loadNeedsSave = true
+        }
+        if (shouldTrustLegacyFloatingTerminalCwd && rawLegacyFloatingTerminalCwd) {
+          const canonicalLegacyCwd = canonicalizePersistedFloatingWorkspaceDirectory(
+            rawLegacyFloatingTerminalCwd,
+            homeDir
+          )
+          if (
+            canonicalLegacyCwd &&
+            !migratedFloatingTerminalTrustedCwds.includes(canonicalLegacyCwd)
+          ) {
+            // Why: pre-grant profiles with an explicit Floating Workspace cwd
+            // already represented user intent; migrate only that legacy value.
+            migratedFloatingTerminalTrustedCwds.push(canonicalLegacyCwd)
+            normalizedFloatingTerminalTrustedCwds.changed = true
+          }
+        }
+        if (normalizedFloatingTerminalTrustedCwds.changed) {
+          this.loadNeedsSave = true
+        }
+        const experimentalActivityDefaultedOffForAllUsers =
+          parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
+        // Why: the Agents view moved back behind Experimental. Flip every
+        // pre-migration profile off once, then preserve future user opt-ins.
+        const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
+          ? (parsed.settings?.experimentalActivity ?? false)
+          : false
+        const taskProviderSettings = normalizeTaskProviderSettings({
+          visibleTaskProviders: parsed.settings?.visibleTaskProviders,
+          defaultTaskSource: parsed.settings?.defaultTaskSource
+        })
+        const primarySelectionDefaultedForLinux =
+          parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
+        const primarySelectionDefaultedForTerminalDefaults =
+          parsed.settings?.primarySelectionMiddleClickPasteDefaultedForTerminalDefaults === true
+        const primarySelectionPlatformDefaultEnabled =
+          defaults.settings.primarySelectionMiddleClickPaste === true
+        const primarySelectionAlreadyDefaultedForPlatform =
+          primarySelectionDefaultedForTerminalDefaults ||
+          (process.platform === 'linux' && primarySelectionDefaultedForLinux)
+        const migratePrimarySelectionPlatformDefault =
+          primarySelectionPlatformDefaultEnabled && !primarySelectionAlreadyDefaultedForPlatform
+        const stampPrimarySelectionTerminalDefaults =
+          primarySelectionPlatformDefaultEnabled && !primarySelectionDefaultedForTerminalDefaults
+        if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1221,25 +1425,37 @@ export class Store {
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
-            // Why: Activity graduated from its experimental gate. Force the
-            // legacy flag on so existing profiles and rollback builds see the
-            // same default-on behavior as fresh installs.
-            experimentalActivity: true,
+            // Why: early primary-selection builds saved the disabled default.
+            // Flip Linux/macOS profiles once so terminal-style defaults match
+            // platform convention; the guards preserve future opt-outs.
+            primarySelectionMiddleClickPaste: migratePrimarySelectionPlatformDefault
+              ? true
+              : (parsed.settings?.primarySelectionMiddleClickPaste ??
+                defaults.settings.primarySelectionMiddleClickPaste),
+            primarySelectionMiddleClickPasteDefaultedForLinux:
+              primarySelectionDefaultedForLinux ||
+              (process.platform === 'linux' && migratePrimarySelectionPlatformDefault),
+            primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
+              primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
+            experimentalActivity: migratedExperimentalActivity,
+            experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
+            floatingTerminalCwd: migratedFloatingTerminalCwd,
+            floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
+            floatingTerminalCwdMigratedToAppWorkspace: true,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
-            visibleTaskProviders: normalizeVisibleTaskProviders(
-              parsed.settings?.visibleTaskProviders
+            defaultTaskSource: taskProviderSettings.defaultTaskSource,
+            visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
+            terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
+              parsed.settings?.terminalShortcutPolicy
             ),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
-            notifications: {
-              ...getDefaultNotificationSettings(),
-              ...parsed.settings?.notifications
-            },
+            notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             voice: {
               ...getDefaultVoiceSettings(),
               ...parsed.settings?.voice
@@ -1320,10 +1536,25 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
-            const migratedCardProps =
-              needsInlineAgentsMigration && Array.isArray(rawCardProps)
+            const migratedCardProps = (() => {
+              if (!Array.isArray(rawCardProps)) {
+                return undefined
+              }
+              const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
-                : undefined
+                : rawCardProps
+              // Why: only Agent activity remains configurable; older hidden
+              // card fields must be restored because users can no longer
+              // toggle them back on from the sidebar menu.
+              const normalized = normalizeWorktreeCardProperties(candidate)
+              const changed =
+                normalized.length !== rawCardProps.length ||
+                normalized.some((property, index) => property !== rawCardProps[index])
+              return changed ? normalized : undefined
+            })()
+            if (migratedCardProps !== undefined || !inlineAgentsMigrated) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
               ...parsed.ui,
@@ -1813,9 +2044,9 @@ export class Store {
   // ── Automations ───────────────────────────────────────────────────
 
   listAutomations(): Automation[] {
-    return [...(this.state.automations ?? [])].sort((left, right) =>
-      left.name.localeCompare(right.name)
-    )
+    return (this.state.automations ?? [])
+      .map((automation) => normalizeAutomationSessionReuse(automation))
+      .sort((left, right) => left.name.localeCompare(right.name))
   }
 
   listAutomationRuns(automationId?: string): AutomationRun[] {
@@ -1841,6 +2072,7 @@ export class Store {
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
       timezone: input.timezone,
       rrule: input.rrule,
       dtstart: input.dtstart,
@@ -1891,6 +2123,10 @@ export class Store {
             ? (updates.baseBranch ?? null)
             : (current.baseBranch ?? null)
           : null,
+      reuseSession:
+        workspaceMode === 'existing'
+          ? (updates.reuseSession ?? current.reuseSession ?? false)
+          : false,
       rrule,
       dtstart,
       nextRunAt: scheduleChanged
@@ -2095,13 +2331,27 @@ export class Store {
         updates.terminalQuickCommands
       )
     }
-    if ('visibleTaskProviders' in updates) {
-      sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
-        updates.visibleTaskProviders
-      )
+    if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
+      const taskProviderSettings = normalizeTaskProviderSettings({
+        visibleTaskProviders:
+          'visibleTaskProviders' in updates
+            ? updates.visibleTaskProviders
+            : this.state.settings.visibleTaskProviders,
+        defaultTaskSource:
+          'defaultTaskSource' in updates
+            ? updates.defaultTaskSource
+            : this.state.settings.defaultTaskSource
+      })
+      sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
+      sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+    }
+    if ('terminalShortcutPolicy' in updates) {
+      sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
+        updates.terminalShortcutPolicy
+      )
     }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
@@ -2116,10 +2366,10 @@ export class Store {
     this.state.settings = {
       ...this.state.settings,
       ...sanitizedUpdates,
-      notifications: {
+      notifications: normalizeNotificationSettings({
         ...this.state.settings.notifications,
         ...sanitizedUpdates.notifications
-      },
+      }),
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
@@ -2134,6 +2384,9 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      worktreeCardProperties: normalizeWorktreeCardProperties(
+        this.state.ui?.worktreeCardProperties
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
@@ -2153,6 +2406,10 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      worktreeCardProperties:
+        updates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+          : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
@@ -2388,6 +2645,18 @@ export class Store {
     return !leases?.some((lease) => lease.state === 'terminated' || lease.state === 'expired')
   }
 
+  private getRelayPtyIdForSshLeaseComparison(targetId: string, ptyId: string): string {
+    try {
+      return toRelaySshPtyId(targetId, ptyId)
+    } catch {
+      return ptyId
+    }
+  }
+
+  private getRelayPtyIdForSshLeaseStorage(targetId: string, ptyId: string): string {
+    return toRelaySshPtyId(targetId, ptyId)
+  }
+
   private sshRemotePtyLeaseMatchesBinding(
     lease: SshRemotePtyLease,
     binding: {
@@ -2398,7 +2667,8 @@ export class Store {
       leafId?: string
     }
   ): boolean {
-    if (lease.ptyId !== binding.ptyId) {
+    const bindingPtyId = this.getRelayPtyIdForSshLeaseComparison(lease.targetId, binding.ptyId)
+    if (lease.ptyId !== bindingPtyId) {
       return false
     }
     // Why: remote PTY ids are scoped to a relay target. Workspace PTY bindings
@@ -2442,7 +2712,8 @@ export class Store {
       leafId?: string
     }
   ): boolean {
-    if (lease.targetId !== binding.targetId || lease.ptyId !== binding.ptyId) {
+    const bindingPtyId = this.getRelayPtyIdForSshLeaseComparison(binding.targetId, binding.ptyId)
+    if (lease.targetId !== binding.targetId || lease.ptyId !== bindingPtyId) {
       return false
     }
     // Why: target removal is destructive. Legacy/contextless leases should
@@ -2621,6 +2892,12 @@ export class Store {
     if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
       delete normalizedLease.leafId
     }
+    // Why: app-facing SSH PTY ids are globally scoped; durable relay leases
+    // stay target-local so reconnect can call relay pty.attach with raw ids.
+    normalizedLease.ptyId = this.getRelayPtyIdForSshLeaseStorage(
+      normalizedLease.targetId,
+      normalizedLease.ptyId
+    )
     const now = Date.now()
     const existingIndex = this.state.sshRemotePtyLeases.findIndex(
       (entry) =>
@@ -2667,8 +2944,9 @@ export class Store {
   }
 
   markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
+    const relayPtyId = this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId)
     const lease = this.state.sshRemotePtyLeases?.find(
-      (entry) => entry.targetId === targetId && entry.ptyId === ptyId
+      (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
     )
     if (!lease || lease.state === state) {
       return
@@ -2685,13 +2963,14 @@ export class Store {
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {
+    const relayPtyId = this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId)
     const leases = (this.state.sshRemotePtyLeases ?? []).filter(
-      (lease) => lease.targetId === targetId && lease.ptyId === ptyId
+      (lease) => lease.targetId === targetId && lease.ptyId === relayPtyId
     )
     const before = this.state.sshRemotePtyLeases?.length ?? 0
     this.clearSshRemotePtyBindingsForLeases(targetId, leases)
     this.state.sshRemotePtyLeases = (this.state.sshRemotePtyLeases ?? []).filter(
-      (lease) => lease.targetId !== targetId || lease.ptyId !== ptyId
+      (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
       this.flush()

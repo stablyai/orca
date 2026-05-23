@@ -6,6 +6,10 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { useAppStore } from '@/store'
+import {
+  activateWebRuntimeSessionWorktree,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   setWorktreeNavActivator,
@@ -141,6 +145,12 @@ export function activateAndRevealWorktree(
   // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
   // clears unread, bumps dead PTY generations, triggers GitHub refresh
   state.setActiveWorktree(worktreeId)
+  if (isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId)) {
+    // Why: paired web clients own only local selection state. The desktop host
+    // must also activate the worktree so hidden renderer-owned terminal panes
+    // mount and publish session surfaces back to the web client.
+    void activateWebRuntimeSessionWorktree({ worktreeId })
+  }
 
   // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
   // later async step (initial terminal / reveal) could throw — the user
@@ -194,6 +204,13 @@ export function ensureWorktreeHasInitialTerminal(
   // reconciled tab-group model. Creating a terminal just because the legacy
   // terminal slice is empty would reopen worktrees with an unexpected extra tab.
   if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    return null
+  }
+  // Why: remote web clients mirror the runtime server's session tabs. A local
+  // activation fallback can spawn a second host terminal before the mirror lands.
+  if (
+    isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId ?? null)
+  ) {
     return null
   }
 
@@ -272,10 +289,50 @@ export function ensureWorktreeHasInitialTerminal(
 // at module init here lets the slice call back without importing this file.
 setWorktreeNavActivator(activateAndRevealWorktree)
 
-// Why: Tasks entries in the nav history dispatch via setActiveView('tasks')
-// (not openTaskPage) — see the 'tasks' branch in navigateToIndex. Going this
-// route avoids mutating previousViewBeforeTasks and skips the SWR prefetch
-// (an accepted residual from the design doc; see "Known residual quirks").
+// Why: page entries in nav history replay through setActiveView(...)
+// (not open*Page) so back/forward does not mutate previousViewBefore* or
+// append duplicate history. See navigateToIndex for the replay branch.
 setWorktreeNavViewActivator((entry) => {
-  useAppStore.getState().setActiveView(entry)
+  if (entry === 'automations') {
+    useAppStore.getState().setActiveView(entry)
+    return
+  }
+  if (entry === 'tasks') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        openGitHubWorkItem: undefined,
+        openGitHubInitialTab: undefined,
+        openLinearIssue: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'github') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'github',
+        preselectedRepoId: entry.workItem.repoId,
+        openGitHubWorkItem: entry.workItem,
+        openGitHubInitialTab: entry.initialTab,
+        openLinearIssue: undefined
+      }
+    }))
+    return
+  }
+  useAppStore.setState((state) => ({
+    activeView: 'tasks',
+    githubTaskDrawerWorkItem: null,
+    taskPageData: {
+      ...state.taskPageData,
+      taskSource: 'linear',
+      openGitHubWorkItem: undefined,
+      openGitHubInitialTab: undefined,
+      openLinearIssue: entry.issue
+    }
+  }))
 })

@@ -16,6 +16,7 @@ type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
   connectionId?: string | null
   disabled?: boolean
+  labelPrefix?: string
 }
 
 type OpenInMenuEntry = {
@@ -115,7 +116,8 @@ function useOpenInWorktreePath({
 export function WorktreeOpenInMenuItems({
   worktreePath,
   connectionId,
-  disabled
+  disabled,
+  labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
   const openInApplications = useAppStore((s) => s.settings?.openInApplications ?? [])
@@ -138,6 +140,7 @@ export function WorktreeOpenInMenuItems({
           ) : (
             <ExternalLink className="size-3.5" />
           )}
+          {labelPrefix}
           {entry.label}
         </DropdownMenuItem>
       ))}

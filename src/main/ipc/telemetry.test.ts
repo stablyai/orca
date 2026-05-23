@@ -156,6 +156,42 @@ describe('telemetry IPC handlers', () => {
     })
   })
 
+  it('injects cohort for setup script prompt events', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'setup_script_prompt_shown', {
+      mode: 'import_available',
+      provider: 'codex',
+      file_count_bucket: '1',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false
+    })
+    handler({}, 'setup_script_prompt_action', {
+      action: 'configure_clicked',
+      mode: 'configure_needed',
+      file_count_bucket: '0',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: true
+    })
+    expect(trackMock).toHaveBeenCalledWith('setup_script_prompt_shown', {
+      mode: 'import_available',
+      provider: 'codex',
+      file_count_bucket: '1',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false,
+      nth_repo_added: 3
+    })
+    expect(trackMock).toHaveBeenCalledWith('setup_script_prompt_action', {
+      action: 'configure_clicked',
+      mode: 'configure_needed',
+      file_count_bucket: '0',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: true,
+      nth_repo_added: 3
+    })
+  })
+
   // Fail-soft: a degraded classifier returns `{ nth_repo_added: undefined }`.
   // The schemas declare the field optional, so the event still validates.
   it('forwards undefined cohort when the classifier returns undefined', () => {

@@ -31,8 +31,9 @@ import {
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
-import { useAllWorktrees, useWorktreeMap } from '../../store/selectors'
+import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
@@ -40,7 +41,6 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -52,6 +52,16 @@ import {
 } from './mergeSnapshotAndSessions'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+import {
+  isResourceSessionActivationKey,
+  navigateResourceSessionToTab
+} from './resource-session-navigation'
+import {
+  getResourceUsageAllWorktrees,
+  getResourceUsageRepos,
+  getResourceUsageRuntimePaneTitlesByTabId,
+  getResourceUsageTabsByWorktree
+} from './resource-usage-open-slices'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -334,7 +344,7 @@ function SessionRow({
       onKeyDown={
         clickable
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (isResourceSessionActivationKey(e.key)) {
                 e.preventDefault()
                 handleClick()
               }
@@ -656,16 +666,12 @@ export function ResourceUsageStatusSegment({
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const activeView = useAppStore((s) => s.activeView)
   const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
-  const repos = useAppStore((s) => s.repos)
-  const allWorktrees = useAllWorktrees()
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => s.settings?.activeRuntimeEnvironmentId ?? null
   )
@@ -681,6 +687,19 @@ export function ResourceUsageStatusSegment({
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
   const [spaceScanReady, setSpaceScanReady] = useState(false)
+  // Why: tab titles can update on terminal keystrokes. The resource popover's
+  // merged tree needs them only while open, so closed status-bar badges should
+  // not subscribe to those high-churn maps.
+  const runtimePaneTitlesByTabId = useAppStore((s) =>
+    getResourceUsageRuntimePaneTitlesByTabId(s, open, runtimeEnvironmentActive)
+  )
+  const repos = useAppStore((s) => getResourceUsageRepos(s, open, runtimeEnvironmentActive))
+  const allWorktrees = useAppStore((s) =>
+    getResourceUsageAllWorktrees(s, open, runtimeEnvironmentActive)
+  )
+  const tabsByWorktree = useAppStore((s) =>
+    getResourceUsageTabsByWorktree(s, open, runtimeEnvironmentActive)
+  )
   const previousSpaceScanningRef = useRef(workspaceSpaceScanning)
   const lastSeenSpaceScanAtRef = useRef<number | null>(workspaceSpaceScannedAt)
   // Why: this segment only understands the local Electron PTY/resource daemon.
@@ -780,23 +799,13 @@ export function ResourceUsageStatusSegment({
       setSessionsError(false)
       return
     }
-    const refreshIfVisible = (): void => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) {
-        void refreshSessions()
-      }
-    }
-    void refreshSessions()
     // Why: the closed-popover badge is informational. Polling daemon sessions
     // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; focus/visibility refreshes catch the badge up immediately.
-    const interval = setInterval(refreshIfVisible, SESSIONS_POLL_MS)
-    window.addEventListener('focus', refreshIfVisible)
-    document.addEventListener('visibilitychange', refreshIfVisible)
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('focus', refreshIfVisible)
-      document.removeEventListener('visibilitychange', refreshIfVisible)
-    }
+    // no visible UI; visibility refreshes catch the badge up immediately.
+    return installWindowVisibilityInterval({
+      run: () => void refreshSessions(),
+      intervalMs: SESSIONS_POLL_MS
+    })
   }, [runtimeEnvironmentActive, refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
@@ -949,10 +958,9 @@ export function ResourceUsageStatusSegment({
     })
   }, [])
 
-  // Why: navigation handlers leave the popover open so users can chain
-  // multiple jumps (e.g. browse worktrees, hop between terminals) without
-  // having to re-open the popover each time. The popover still closes via
-  // its own outside-click / Escape handlers.
+  // Why: worktree navigation leaves the popover open so users can browse the
+  // tree without reopening it; bound terminal rows close explicitly because
+  // focus transfer is intentionally suppressed by onFocusOutside below.
   const navigateToWorktree = useCallback((worktreeId: string): void => {
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
@@ -962,19 +970,13 @@ export function ResourceUsageStatusSegment({
 
   const navigateToTab = useCallback(
     (tabId: string, paneKey: string | null) => {
-      // Resolve the tab → worktree from the store so we can also reveal the
-      // worktree in the sidebar before flipping the active tab.
-      for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          activateAndRevealWorktree(worktreeId)
-          break
-        }
-      }
-      setActiveView('terminal')
-      // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
-      // Legacy numeric keys degrade to tab-only activation instead of guessing.
-      const parsed = paneKey ? parsePaneKey(paneKey) : null
-      activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null)
+      navigateResourceSessionToTab(tabId, paneKey, {
+        tabsByWorktree,
+        setOpen,
+        setActiveView,
+        activateAndRevealWorktree,
+        activateTabAndFocusPane
+      })
     },
     [tabsByWorktree, setActiveView]
   )
@@ -1392,7 +1394,7 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  delete inactive workspaces ({oldWorkspaceCount})
+                  Review inactive workspaces ({oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"

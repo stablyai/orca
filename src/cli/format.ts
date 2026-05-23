@@ -33,6 +33,8 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
+import type { Automation, AutomationRun } from '../shared/automations-types'
+import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
@@ -172,12 +174,43 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
   const terminal = result.terminal
+  const oldestCursor =
+    typeof terminal.oldestCursor === 'string' ? [`oldest cursor: ${terminal.oldestCursor}`] : []
+  const latestCursor =
+    typeof terminal.latestCursor === 'string' ? [`latest cursor: ${terminal.latestCursor}`] : []
+  const limitedWarning = formatTerminalReadLimitedWarning(terminal)
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
-    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : [])
+    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
+    ...oldestCursor,
+    ...latestCursor,
+    ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
+    ...(limitedWarning ? [limitedWarning] : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
+}
+
+function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string | null {
+  if (!terminal.limited) {
+    return null
+  }
+  if (
+    typeof terminal.nextCursor === 'string' &&
+    typeof terminal.latestCursor === 'string' &&
+    terminal.nextCursor !== terminal.latestCursor
+  ) {
+    return `warning: output limited; continue with --cursor ${terminal.nextCursor}`
+  }
+  if (
+    typeof terminal.oldestCursor === 'string' &&
+    typeof terminal.latestCursor === 'string' &&
+    terminal.oldestCursor !== terminal.latestCursor
+  ) {
+    // A tail preview's next cursor is already latest, so oldestCursor is the retained history entry point.
+    return `warning: output limited; page retained output with --cursor ${terminal.oldestCursor} --limit <count>`
+  }
+  return 'warning: output limited'
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
@@ -210,13 +243,17 @@ export function formatTerminalClose(result: { close: RuntimeTerminalClose }): st
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
-  return [
+  const lines = [
     `handle: ${result.wait.handle}`,
     `condition: ${result.wait.condition}`,
     `satisfied: ${result.wait.satisfied}`,
     `status: ${result.wait.status}`,
     `exitCode: ${result.wait.exitCode ?? 'null'}`
-  ].join('\n')
+  ]
+  if (result.wait.blockedReason) {
+    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+  }
+  return lines.join('\n')
 }
 
 export function formatWorktreePs(result: RuntimeWorktreePsResult): string {
@@ -280,6 +317,69 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
     .join('\n')
+}
+
+export function formatAutomationList(result: { automations: Automation[] }): string {
+  if (result.automations.length === 0) {
+    return 'No automations found.'
+  }
+  return result.automations
+    .map((automation) => {
+      const status = automation.enabled ? 'enabled' : 'disabled'
+      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
+    })
+    .join('\n\n')
+}
+
+export function formatAutomationShow(result: { automation: Automation }): string {
+  const automation = result.automation
+  return [
+    `id: ${automation.id}`,
+    `name: ${automation.name}`,
+    `provider: ${automation.agentId}`,
+    `enabled: ${automation.enabled}`,
+    `schedule: ${formatAutomationSchedule(automation.rrule)}`,
+    `rrule: ${automation.rrule}`,
+    `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
+    `projectId: ${automation.projectId}`,
+    `workspaceMode: ${automation.workspaceMode}`,
+    `workspaceId: ${automation.workspaceId ?? 'null'}`,
+    `baseBranch: ${automation.baseBranch ?? 'null'}`,
+    `reuseSession: ${automation.reuseSession}`,
+    `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
+    `prompt: ${automation.prompt}`
+  ].join('\n')
+}
+
+export function formatAutomationRemoved(result: { removed: boolean; id: string }): string {
+  return result.removed
+    ? `Removed automation ${result.id}.`
+    : `Automation ${result.id} not removed.`
+}
+
+export function formatAutomationRun(result: { run: AutomationRun }): string {
+  return [
+    `id: ${result.run.id}`,
+    `automationId: ${result.run.automationId}`,
+    `title: ${result.run.title}`,
+    `status: ${result.run.status}`,
+    `trigger: ${result.run.trigger}`,
+    `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
+    `workspaceId: ${result.run.workspaceId ?? 'null'}`,
+    `error: ${result.run.error ?? 'null'}`
+  ].join('\n')
+}
+
+export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {
+  if (result.runs.length === 0) {
+    return 'No automation runs found.'
+  }
+  return result.runs
+    .map(
+      (run) =>
+        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.error ? `\nerror: ${run.error}` : ''}`
+    )
+    .join('\n\n')
 }
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {

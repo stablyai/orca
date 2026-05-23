@@ -9,6 +9,7 @@ import {
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
   normalizeRelativePath,
+  splitSearchGlobPatterns,
   toGitGlobPathspec
 } from './text-search'
 
@@ -43,6 +44,26 @@ describe('buildRgArgs', () => {
     expect(args).toContain('*.ts')
     expect(args).toContain('*.tsx')
     expect(args).toContain('!*.md')
+  })
+
+  it('keeps escaped commas inside a single generated folder glob', () => {
+    const args = buildRgArgs('q', '/r', { includePattern: 'foo\\,bar/**, *.ts' })
+    expect(args).toContain('foo\\,bar/**')
+    expect(args).toContain('*.ts')
+  })
+})
+
+describe('splitSearchGlobPatterns', () => {
+  it('splits comma-separated patterns while preserving escaped commas', () => {
+    expect(splitSearchGlobPatterns('foo\\,bar/**, *.ts, dist/**')).toEqual([
+      'foo\\,bar/**',
+      '*.ts',
+      'dist/**'
+    ])
+  })
+
+  it('preserves trailing escapes as literal glob input', () => {
+    expect(splitSearchGlobPatterns('src\\')).toEqual(['src\\'])
   })
 })
 
@@ -176,6 +197,12 @@ describe('buildGitGrepArgs', () => {
     const args = buildGitGrepArgs('q', { includePattern: '*.ts', excludePattern: 'dist/**' })
     expect(args).toContain(':(glob)**/*.ts')
     expect(args).toContain(':(exclude,glob)dist/**')
+  })
+
+  it('keeps escaped commas inside one generated folder pathspec', () => {
+    const args = buildGitGrepArgs('q', { includePattern: 'foo\\,bar/**, *.ts' })
+    expect(args).toContain(':(glob)foo\\,bar/**')
+    expect(args).toContain(':(glob)**/*.ts')
   })
 })
 

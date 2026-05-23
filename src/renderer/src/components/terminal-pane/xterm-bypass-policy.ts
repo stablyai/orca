@@ -18,6 +18,7 @@
 // this exact bug) both converge on the same pattern.
 
 export type XtermBypassEvent = {
+  type: string
   key: string
   code?: string
   defaultPrevented?: boolean
@@ -35,15 +36,32 @@ export type XtermBypassOptions = {
   hasSelection: boolean
 }
 
+function isSingleNonAsciiPrintableText(key: string): boolean {
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
+    return false
+  }
+  const codePoint = chars[0].codePointAt(0)
+  return codePoint !== undefined && codePoint >= 0x80
+}
+
+function isXtermHandledKeyEvent(type: string): boolean {
+  return type === 'keydown' || type === 'keyup'
+}
+
 /**
- * Decide whether a chord should bypass xterm's keydown handler so the native
- * browser pipeline (Chromium `copy` event, Electron menu accelerators) can
- * handle it instead of the kitty CSI-u encoder swallowing it.
+ * Decide whether a chord should bypass xterm's key handlers so the native
+ * browser pipeline (Chromium `copy` event, Electron menu accelerators) or
+ * layout-aware text event can handle it instead of the kitty CSI-u encoder.
  */
-export function shouldBypassXtermKeydown(
+export function shouldBypassXtermKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermBypassOptions
 ): boolean {
+  if (!isXtermHandledKeyEvent(event.type)) {
+    return false
+  }
+
   const { isMac, hasSelection } = options
   const platformModifierHeld = isMac
     ? event.metaKey && !event.ctrlKey
@@ -53,6 +71,19 @@ export function shouldBypassXtermKeydown(
     // Why: window-level Orca shortcuts may have already handled the chord but
     // not stopped propagation. Match VS Code by preventing xterm's kitty
     // encoder from also sending that app shortcut to the shell.
+    return true
+  }
+
+  if (
+    event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    isSingleNonAsciiPrintableText(event.key)
+  ) {
+    // Why: xterm's kitty encoder derives shifted key codes from physical
+    // `code` (KeyA -> Latin "a"). Bypass keydown so Chromium emits layout text
+    // via keypress, and bypass keyup so xterm doesn't leak the release CSI-u.
     return true
   }
 

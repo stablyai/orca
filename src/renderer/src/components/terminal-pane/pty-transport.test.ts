@@ -8,6 +8,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -27,6 +28,7 @@ describe('createIpcPtyTransport', () => {
           ...originalWindow?.api?.pty,
           spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
           write: vi.fn(),
+          writeAccepted: vi.fn().mockResolvedValue(true),
           resize: vi.fn(),
           kill: vi.fn(),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
@@ -64,6 +66,19 @@ describe('createIpcPtyTransport', () => {
     expect(onData).not.toBeNull()
     expect(onExit).not.toBeNull()
     transport.disconnect()
+  })
+
+  it('uses acknowledged writes only for local IPC PTYs', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const localTransport = createIpcPtyTransport({})
+
+    await localTransport.connect({ url: '', callbacks: {} })
+    await expect(localTransport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03')
+
+    const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
+    await sshTransport.connect({ url: '', callbacks: {} })
+    expect(sshTransport.sendInputAccepted).toBeUndefined()
   })
 
   it('suppresses attention side effects when replaying eager-buffered data during attach', async () => {
@@ -172,6 +187,30 @@ describe('createIpcPtyTransport', () => {
     expect(handle.flush()).toBe('')
     expect(onReplayData).toHaveBeenCalledWith(bufferedPayload)
     expect(onDataCallback).not.toHaveBeenCalledWith(bufferedPayload)
+  })
+
+  it('clears before replaying eager-buffered output so hidden automation terminals do not open blank', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+
+    const bufferedPayload = '\x1b[?1049hAutomation agent is running'
+    registerEagerPtyBuffer('pty-automation', vi.fn())
+    onData?.({
+      id: 'pty-automation',
+      data: bufferedPayload
+    })
+
+    const transport = createIpcPtyTransport()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-automation',
+      callbacks: {
+        onReplayData
+      }
+    })
+
+    const clear = '\x1b[2J\x1b[3J\x1b[H'
+    expect(onReplayData.mock.calls.map(([data]) => data)).toEqual([clear, bufferedPayload])
   })
 
   it('routes the attach-time clear sequence through onReplayData for non-alternate-screen sessions', async () => {
@@ -530,6 +569,39 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).toHaveBeenCalledWith('ENOENT: spawn /bin/nope not found')
+  })
+
+  it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`
+    const spawnMock = vi.fn().mockRejectedValue(new Error(wrappedMessage))
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const onError = vi.fn()
+
+    await transport.connect({
+      url: '',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith(createTerminalSessionStateSaveFailureMessage())
   })
 
   it('keeps the exit observer alive after detach so remounts do not reuse dead PTYs', async () => {

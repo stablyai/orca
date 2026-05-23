@@ -4,9 +4,14 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
+  statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import net from 'node:net'
@@ -134,7 +139,7 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const bundleLayoutVersion = 'dock-title-app-filename-v2'
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v4'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -148,24 +153,54 @@ function prepareMacDevElectronApp() {
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
   const bundleId = `com.stablyai.orca.dev.${sanitizeBundleIdPart(hash)}`
+  process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
   const expectedMarker = JSON.stringify(
     { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
     null,
     2
   )
+  const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  const requiredResourcePaths = [
+    path.join(
+      appPath,
+      'Contents',
+      'Frameworks',
+      'Electron Framework.framework',
+      'Resources',
+      'icudtl.dat'
+    )
+  ]
 
-  if (existsSync(markerPath) && existsSync(appPath)) {
+  function copiedAppIsUsable() {
+    if (!existsSync(markerPath) || !existsSync(appPath)) {
+      return false
+    }
     try {
-      if (readFileSync(markerPath, 'utf8') === expectedMarker) {
-        process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
-        return
+      if (readFileSync(markerPath, 'utf8') !== expectedMarker) {
+        return false
       }
-    } catch {}
+    } catch {
+      return false
+    }
+    // Why: a previous interrupted copy can leave the marker and executable
+    // present but miss Chromium framework resources, causing a blank crash.
+    return (
+      existsSync(executablePath) &&
+      requiredResourcePaths.every((resourcePath) => existsSync(resourcePath))
+    )
+  }
+
+  if (copiedAppIsUsable()) {
+    process.env.ELECTRON_EXEC_PATH = executablePath
+    return
   }
 
   rmSync(distDir, { recursive: true, force: true })
   mkdirSync(distDir, { recursive: true })
-  cpSync(sourceAppPath, appPath, { recursive: true })
+  // Why: Electron.framework uses relative symlinks for its bundle resources;
+  // resolving them to pnpm-store absolutes breaks Chromium's bundle lookup.
+  cpSync(sourceAppPath, appPath, { recursive: true, verbatimSymlinks: true })
+  restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
   setPlistValue(plistPath, 'CFBundleName', title)
@@ -176,7 +211,54 @@ function prepareMacDevElectronApp() {
   // and Electron's framework bundle is ambiguous to codesign when deep-signing
   // an already-built distribution. Avoid blocking `pn dev` on local signing.
   writeFileSync(markerPath, expectedMarker, 'utf8')
-  process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  process.env.ELECTRON_EXEC_PATH = executablePath
+}
+
+function isSymlink(filePath) {
+  try {
+    return lstatSync(filePath).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+function ensureRelativeSymlink(linkPath, target) {
+  if (isSymlink(linkPath)) {
+    try {
+      if (readlinkSync(linkPath) === target) {
+        return
+      }
+    } catch {}
+  }
+
+  const targetPath = path.join(path.dirname(linkPath), target)
+  if (!existsSync(targetPath)) {
+    return
+  }
+
+  rmSync(linkPath, { recursive: true, force: true })
+  symlinkSync(target, linkPath)
+}
+
+function restoreElectronFrameworkSymlinks(appPath) {
+  const frameworkPath = path.join(
+    appPath,
+    'Contents',
+    'Frameworks',
+    'Electron Framework.framework'
+  )
+  const versionsPath = path.join(frameworkPath, 'Versions')
+  if (!existsSync(path.join(versionsPath, 'A'))) {
+    return
+  }
+
+  // Why: some Electron installs have framework symlinks flattened into
+  // duplicate directories. Recreate the relative bundle links after copying so
+  // Chromium resolves resources through the canonical macOS framework layout.
+  ensureRelativeSymlink(path.join(versionsPath, 'Current'), 'A')
+  for (const entry of ['Electron Framework', 'Resources', 'Libraries', 'Helpers']) {
+    ensureRelativeSymlink(path.join(frameworkPath, entry), `Versions/Current/${entry}`)
+  }
 }
 
 function getDevUserDataPath() {
@@ -246,6 +328,86 @@ if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !==
 const electronViteCli =
   process.env.ORCA_ELECTRON_VITE_CLI ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
+const viteCli =
+  process.env.ORCA_VITE_CLI ||
+  path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
+
+function getMtimeMs(filePath) {
+  try {
+    return statSync(filePath).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
+function getDevWebClientIndexPath() {
+  return path.join(repoRoot, 'out', 'web', 'web-index.html')
+}
+
+function latestMtimeMs(targetPath) {
+  const stat = (() => {
+    try {
+      return statSync(targetPath)
+    } catch {
+      return null
+    }
+  })()
+  if (!stat) {
+    return 0
+  }
+  if (!stat.isDirectory()) {
+    return stat.mtimeMs
+  }
+  let latest = stat.mtimeMs
+  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+      continue
+    }
+    latest = Math.max(latest, latestMtimeMs(path.join(targetPath, entry.name)))
+  }
+  return latest
+}
+
+function isDevWebClientFresh() {
+  const outputMtime = getMtimeMs(getDevWebClientIndexPath())
+  if (outputMtime === 0) {
+    return false
+  }
+  const sourceMtime = Math.max(
+    latestMtimeMs(path.join(repoRoot, 'vite.web.config.ts')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'renderer')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'shared')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'preload', 'api-types.ts'))
+  )
+  return sourceMtime <= outputMtime
+}
+
+function prepareDevWebClient() {
+  if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
+    return
+  }
+  // Why: fresh worktrees should start Electron immediately; pairing already
+  // falls back to non-browser URLs when the optional web bundle is unavailable.
+  if (!existsSync(getDevWebClientIndexPath()) && process.env.ORCA_DEV_WEB_PREPARE !== '1') {
+    console.error(
+      '[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.'
+    )
+    return
+  }
+  if (isDevWebClientFresh()) {
+    return
+  }
+  console.error('[orca-dev] Building web client for pairing...')
+  execFileSync(
+    process.execPath,
+    [viteCli, 'build', '--config', path.join(repoRoot, 'vite.web.config.ts')],
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: process.env
+    }
+  )
+}
 
 // Why: every `pn dev` should be attachable from agent-browser/playwright-cli
 // without manual port juggling. Pick a best-effort deterministic port per
@@ -329,6 +491,7 @@ if (!userPassedPort && !isHelpOrVersion) {
     )
   }
 }
+prepareDevWebClient()
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',

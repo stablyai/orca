@@ -55,6 +55,14 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).attach(id)
   }
 
+  hasPty(id: string): boolean {
+    const routed = this.sessionAdapters.get(id)
+    if (routed) {
+      return routed.hasPty(id)
+    }
+    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+  }
+
   write(id: string, data: string): void {
     this.adapterFor(id).write(id, data)
   }

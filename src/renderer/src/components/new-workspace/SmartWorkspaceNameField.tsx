@@ -42,6 +42,7 @@ import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
 import type {
   BaseRefSearchResult,
   GitHubWorkItem,
@@ -156,6 +157,9 @@ export default function SmartWorkspaceNameField({
     linearStatus,
     linearStatusChecked,
     listLinearIssues,
+    preflightStatus,
+    preflightStatusChecked,
+    refreshPreflightStatus,
     searchLinearIssues,
     settings
   } = useAppStore(
@@ -167,6 +171,9 @@ export default function SmartWorkspaceNameField({
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
       listLinearIssues: s.listLinearIssues,
+      preflightStatus: s.preflightStatus,
+      preflightStatusChecked: s.preflightStatusChecked,
+      refreshPreflightStatus: s.refreshPreflightStatus,
       searchLinearIssues: s.searchLinearIssues,
       settings: s.settings
     }))
@@ -196,6 +203,29 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  const availableTaskProviders = useMemo(
+    () =>
+      filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
+        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        linearConnected: linearStatus.connected === true
+      }),
+    [linearStatus.connected, preflightStatus?.glab?.installed]
+  )
+  const gitlabAvailable = availableTaskProviders.includes('gitlab')
+  const linearAvailable = availableTaskProviders.includes('linear')
+  const availableModes = useMemo(
+    () =>
+      MODES.filter((item) => {
+        if (item.id === 'gitlab') {
+          return gitlabAvailable
+        }
+        if (item.id === 'linear') {
+          return linearAvailable
+        }
+        return true
+      }),
+    [gitlabAvailable, linearAvailable]
+  )
 
   const setInputNode = useCallback(
     (node: HTMLInputElement | null) => {
@@ -211,14 +241,34 @@ export default function SmartWorkspaceNameField({
     if (disabled) {
       return
     }
-    // Why: the composer can be opened before any other Linear-aware surface
-    // (TaskPage, IntegrationsPane) has had a chance to refresh status, leaving
-    // `linearStatus.connected=false` even when the user is actually connected.
-    // Trigger a check on mount if it hasn't run this session.
+    if (!preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
-  }, [checkLinearConnection, disabled, linearStatusChecked])
+  }, [
+    checkLinearConnection,
+    disabled,
+    linearStatusChecked,
+    preflightStatusChecked,
+    refreshPreflightStatus
+  ])
+
+  useEffect(() => {
+    if ((mode === 'gitlab' && gitlabAvailable) || (mode === 'linear' && linearAvailable)) {
+      return
+    }
+    if (mode !== 'gitlab' && mode !== 'linear') {
+      return
+    }
+    setMode('smart')
+    setGitlabItems([])
+    setLinearIssues([])
+    setGitlabLoading(false)
+    setLinearLoading(false)
+    setCommandValue('')
+  }, [gitlabAvailable, linearAvailable, mode])
 
   useEffect(() => {
     if (!disabled) {
@@ -255,7 +305,7 @@ export default function SmartWorkspaceNameField({
   const parsedGhLink = useMemo(() => parseGitHubIssueOrPRLink(debouncedQuery), [debouncedQuery])
   const shouldQueryGithub = mode === 'smart' || mode === 'github'
   const shouldQueryBranches = mode === 'smart' || mode === 'branches'
-  const shouldQueryLinear = mode === 'smart' || mode === 'linear'
+  const shouldQueryLinear = linearAvailable && (mode === 'smart' || mode === 'linear')
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub || !selectedRepo?.path) {
@@ -462,7 +512,7 @@ export default function SmartWorkspaceNameField({
   // GitLabWorkItem via the IPC. Skipped silently when the host hook
   // hasn't supplied an onGitLabItemSelect handler.
   const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGitlab = mode === 'smart' || mode === 'gitlab'
+  const shouldQueryGitlab = gitlabAvailable && (mode === 'smart' || mode === 'gitlab')
   useEffect(() => {
     if (
       !shouldQueryGitlab ||
@@ -473,7 +523,7 @@ export default function SmartWorkspaceNameField({
     ) {
       // Why: don't clobber list-mode items here — the listMRs effect below
       // is the sole writer when the user is in 'gitlab' mode without a URL.
-      if (parsedGlLink === null && mode !== 'gitlab') {
+      if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
         setGitlabItems([])
       }
       setGitlabLoading(false)
@@ -529,7 +579,11 @@ export default function SmartWorkspaceNameField({
   // MR list view. Smart mode includes GitLab MRs alongside GitHub
   // items so the unified picker actually surfaces both providers.
   useEffect(() => {
-    if (disabled || (mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
+    if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
+      if (!shouldQueryGitlab) {
+        setGitlabItems([])
+        setGitlabLoading(false)
+      }
       return
     }
     if (!selectedRepo?.path || selectedRepo.connectionId) {
@@ -576,7 +630,15 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [disabled, mode, mrStateFilter, onGitLabItemSelect, parsedGlLink, selectedRepo])
+  }, [
+    disabled,
+    mode,
+    mrStateFilter,
+    onGitLabItemSelect,
+    parsedGlLink,
+    selectedRepo,
+    shouldQueryGitlab
+  ])
 
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
@@ -617,7 +679,7 @@ export default function SmartWorkspaceNameField({
         }))
       )
     }
-    if (mode === 'smart' || mode === 'gitlab') {
+    if (gitlabAvailable && (mode === 'smart' || mode === 'gitlab')) {
       nextRows.push(
         ...gitlabItems.map((item) => ({
           kind: 'gitlab' as const,
@@ -639,7 +701,7 @@ export default function SmartWorkspaceNameField({
         }))
       )
     }
-    if (mode === 'smart' || mode === 'linear') {
+    if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
       nextRows.push(
         ...linearIssues.map((issue) => ({
           kind: 'linear' as const,
@@ -649,7 +711,16 @@ export default function SmartWorkspaceNameField({
       )
     }
     return nextRows.slice(0, RESULT_LIMIT + 1)
-  }, [branches, githubItems, gitlabItems, linearIssues, mode, value])
+  }, [
+    branches,
+    githubItems,
+    gitlabAvailable,
+    gitlabItems,
+    linearIssues,
+    linearAvailable,
+    mode,
+    value
+  ])
 
   // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
   // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
@@ -677,11 +748,11 @@ export default function SmartWorkspaceNameField({
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
     }
-    if (/^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
+    if (linearAvailable && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
       return 'linear'
     }
     return null
-  }, [value])
+  }, [linearAvailable, value])
 
   useEffect(() => {
     if (rows.length === 0) {
@@ -801,7 +872,9 @@ export default function SmartWorkspaceNameField({
   const placeholder = disabled
     ? (disabledPlaceholder ?? 'Unavailable')
     : mode === 'smart'
-      ? 'Type a name, #1234, branch, GitHub or Linear URL'
+      ? linearAvailable
+        ? 'Type a name, #1234, branch, GitHub or Linear URL'
+        : 'Type a name, #1234, branch, or GitHub URL'
       : mode === 'github'
         ? 'Search GitHub PRs and issues'
         : mode === 'branches'
@@ -851,7 +924,7 @@ export default function SmartWorkspaceNameField({
             input.focus({ preventScroll: true })
           }}
         >
-          {MODES.map(({ id, label, Icon }) => (
+          {availableModes.map(({ id, label, Icon }) => (
             <TabsTrigger
               key={id}
               value={id}

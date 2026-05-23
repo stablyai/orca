@@ -39,9 +39,11 @@ type AgentComboboxProps = {
    *  instead of opening the popover — lets the parent form treat the Agent
    *  field as the last keyboard-submit step. */
   onTriggerEnter?: () => void
+  allowNarrowTrigger?: boolean
 }
 
 const BLANK_VALUE = '__none__'
+const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 type ItemRenderArgs = {
   key: string
@@ -126,7 +128,8 @@ export default function AgentCombobox({
   defaultAgent,
   onSetDefault,
   triggerClassName,
-  onTriggerEnter
+  onTriggerEnter,
+  allowNarrowTrigger = false
 }: AgentComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -239,18 +242,21 @@ export default function AgentCombobox({
             aria-expanded={open}
             onKeyDown={handleTriggerKeyDown}
             className={cn(
-              'h-8 min-w-[184px] justify-between px-3 text-xs font-normal',
-              triggerClassName
+              // Why: callers sometimes pass `min-w-0` for grid layouts, but
+              // the compact trigger still needs room for "GitHub Copilot".
+              'h-8 justify-between px-3 text-xs font-normal',
+              triggerClassName,
+              !allowNarrowTrigger && TRIGGER_MIN_WIDTH_CLASS
             )}
             data-agent-combobox-root="true"
           >
             {selectedAgent ? (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <AgentIcon agent={selectedAgent.id} />
                 <span className="truncate">{selectedAgent.label}</span>
               </span>
             ) : (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
                 <span className="truncate">Blank Terminal</span>
               </span>
@@ -260,7 +266,10 @@ export default function AgentCombobox({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+          className={cn(
+            'w-[var(--radix-popover-trigger-width)] p-0',
+            !allowNarrowTrigger && 'min-w-[18rem]'
+          )}
           data-agent-combobox-root="true"
           onOpenAutoFocus={(event) => event.preventDefault()}
         >

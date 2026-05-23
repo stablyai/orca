@@ -1,5 +1,10 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
-import { destroyPersistentWebview } from '../../components/browser-pane/webview-registry'
+import {
+  destroyPersistentWebview,
+  moveFocusToRendererBeforeFocusedWebviewHidden
+} from '../../components/browser-pane/webview-registry'
+
+export { moveFocusToRendererBeforeFocusedWebviewHidden }
 
 export function collectBrowserWebviewIds(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,

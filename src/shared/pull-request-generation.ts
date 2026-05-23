@@ -3,6 +3,7 @@ import { truncateDiffForPrompt } from './commit-message-prompt'
 export type PullRequestDraftContext = {
   branch: string | null
   base: string
+  branchChangedByPreparation: boolean
   currentTitle: string
   currentBody: string
   currentDraft: boolean

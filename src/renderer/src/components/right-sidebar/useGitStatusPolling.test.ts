@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
-import type { GitStatusResult } from '../../../../shared/types'
+import type { GitPushTarget, GitStatusResult } from '../../../../shared/types'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
@@ -27,6 +27,7 @@ async function usePollingOnce(
   status: GitStatusResult,
   options: {
     connectionId?: string | null
+    pushTarget?: GitPushTarget
     sshStatus?: string
     expectStatusCall?: boolean
   } = {}
@@ -70,7 +71,8 @@ async function usePollingOnce(
   }))
 
   vi.doMock('@/store/selectors', () => ({
-    useActiveWorktree: () => worktree,
+    useActiveWorktree: () =>
+      options.pushTarget ? { ...worktree, pushTarget: options.pushTarget } : worktree,
     useAllWorktrees: () => [worktree],
     useRepoById: () => mockedRepo,
     useRepoMap: () => new Map([[mockedRepo.id, mockedRepo]])
@@ -90,7 +92,12 @@ async function usePollingOnce(
     removeEventListener: vi.fn()
   })
 
-  vi.stubGlobal('document', { hasFocus: () => true })
+  vi.stubGlobal('document', {
+    visibilityState: 'visible',
+    hasFocus: () => true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })
   vi.stubGlobal('setInterval', vi.fn())
   vi.stubGlobal('clearInterval', vi.fn())
 
@@ -121,7 +128,7 @@ describe('useGitStatusPolling', () => {
         hasUpstream: true,
         upstreamName: 'origin/main',
         ahead: 2,
-        behind: 1
+        behind: 0
       }
     })
 
@@ -129,7 +136,7 @@ describe('useGitStatusPolling', () => {
       hasUpstream: true,
       upstreamName: 'origin/main',
       ahead: 2,
-      behind: 1
+      behind: 0
     })
     expect(state.fetchUpstreamStatus).not.toHaveBeenCalled()
   })
@@ -144,6 +151,26 @@ describe('useGitStatusPolling', () => {
 
     expect(state.setUpstreamStatus).not.toHaveBeenCalled()
     expect(state.fetchUpstreamStatus).toHaveBeenCalledWith(worktree.id, '/repo', undefined)
+  })
+
+  it('passes the explicit push target to upstream refreshes', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+    const { state } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      { pushTarget }
+    )
+
+    expect(state.fetchUpstreamStatus).toHaveBeenCalledWith(
+      worktree.id,
+      '/repo',
+      undefined,
+      pushTarget
+    )
   })
 
   it('skips remote git status polling while the SSH target is disconnected', async () => {
@@ -161,7 +188,7 @@ describe('useGitStatusPolling', () => {
     expect(state.setGitStatus).not.toHaveBeenCalled()
   })
 
-  it('does not overlap slow git status polls and runs one trailing refresh', async () => {
+  it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
     vi.resetModules()
     let intervalCallback: (() => void) | null = null
     let resolveFirst!: (value: GitStatusResult) => void
@@ -219,7 +246,12 @@ describe('useGitStatusPolling', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
-    vi.stubGlobal('document', { hasFocus: () => true })
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      hasFocus: () => false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
     vi.stubGlobal(
       'setInterval',
       vi.fn((callback: () => void) => {

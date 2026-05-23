@@ -32,6 +32,9 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 // so replayed mode bits do not leak into the fresh shell. ghostty achieves
 // the same end by not restoring state at all.
 //
+//   0 SP q              — DECSCUSR cursor style/blink reset (raw replay can
+//                         carry a stale steady cursor override; reset to the
+//                         user's configured xterm cursor)
 //   25                  — DECTCEM cursor visibility (SerializeAddon captures
 //                         `?25l` when the cursor was hidden at snapshot time;
 //                         without an explicit `?25h` here the cursor stays
@@ -40,12 +43,17 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
 export const POST_REPLAY_MODE_RESET =
-  '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+  '\x1b[0 q\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Two exceptions are safe to reset:
+// rely on mouse or bracketed-paste modes. Three exceptions are safe to reset:
 //
+//   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
+//          steady cursor override, while SerializeAddon does not preserve an
+//          authoritative current cursor style. Reset to the user's configured
+//          xterm cursor; the post-reattach SIGWINCH lets live TUIs repaint if
+//          they need a different cursor.
 //   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
 //          snapshot when the cursor was hidden at capture time. Without `?25h`
 //          here the cursor stays invisible after reattach. If a TUI is still
@@ -55,7 +63,7 @@ export const POST_REPLAY_MODE_RESET =
 //   1004 — focus event reporting: preserving `?1004h` makes restored shells
 //          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
 //          as unbound key input).
-export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
+export const POST_REPLAY_REATTACH_RESET = '\x1b[0 q\x1b[?25h\x1b[?1004l'
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are

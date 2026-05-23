@@ -60,6 +60,7 @@ type ClaudeKeychainReadResult =
 type ClaudeKeychainSnapshotValue =
   | { status: 'captured'; credentialsJson: string | null }
   | { status: 'unknown' }
+type ClaudeRefreshTokenComparison = 'same' | 'different' | 'missing'
 
 const RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR = Symbol('runtime-oauth-account-parse-error')
 
@@ -517,14 +518,24 @@ export class ClaudeRuntimeAuthService {
         managedIdentity?.organizationUuid ??
         managedOauthIdentity.organizationUuid
     )
+    const refreshTokenComparison = this.compareRefreshTokens(
+      runtimeCredentialsJson,
+      managedCredentialsJson
+    )
     if (!identity.email) {
+      if (refreshTokenComparison === 'same') {
+        return 'match'
+      }
+      if (!identity.organizationUuid && refreshTokenComparison === 'different') {
+        return 'mismatch'
+      }
       return 'unverifiable'
     }
     if (account.email && this.normalizeField(account.email) !== identity.email) {
       return 'mismatch'
     }
     if (selectedOrganizationUuid && !identity.organizationUuid) {
-      return 'unverifiable'
+      return refreshTokenComparison === 'same' ? 'match' : 'unverifiable'
     }
     if (
       selectedOrganizationUuid &&
@@ -534,7 +545,7 @@ export class ClaudeRuntimeAuthService {
       return 'mismatch'
     }
     if (!selectedOrganizationUuid && identity.organizationUuid) {
-      return 'unverifiable'
+      return refreshTokenComparison === 'same' ? 'match' : 'unverifiable'
     }
 
     return 'match'
@@ -654,6 +665,28 @@ export class ClaudeRuntimeAuthService {
       this.readNumber(oauth, 'expiry') ??
       this.readNumber(oauth, 'expires')
     )
+  }
+
+  private compareRefreshTokens(
+    runtimeCredentialsJson: string,
+    managedCredentialsJson: string
+  ): ClaudeRefreshTokenComparison {
+    const runtimeRefreshToken = this.readRefreshTokenFromCredentials(runtimeCredentialsJson)
+    const managedRefreshToken = this.readRefreshTokenFromCredentials(managedCredentialsJson)
+    if (!runtimeRefreshToken || !managedRefreshToken) {
+      return 'missing'
+    }
+    return runtimeRefreshToken === managedRefreshToken ? 'same' : 'different'
+  }
+
+  private readRefreshTokenFromCredentials(credentialsJson: string): string | null {
+    try {
+      const parsed = JSON.parse(credentialsJson) as Record<string, unknown>
+      const oauth = this.asRecord(parsed.claudeAiOauth)
+      return this.normalizeField(this.readString(oauth, 'refreshToken'))
+    } catch {
+      return null
+    }
   }
 
   private readIdentityFromOauthAccount(oauthAccount: unknown): ClaudeAuthIdentity {

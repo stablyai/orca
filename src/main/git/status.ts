@@ -13,10 +13,15 @@ import type {
   GitDiffResult,
   GitFileStatus,
   GitStatusEntry,
-  GitStatusResult
+  GitStatusResult,
+  GitUpstreamStatus
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
+import {
+  getEffectiveGitUpstreamStatus,
+  splitRemoteBranchName
+} from '../../shared/git-effective-upstream'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -39,6 +44,7 @@ export async function getStatus(
   let branch: string | undefined
   let upstreamName: string | undefined
   let upstreamAheadBehind: { ahead: number; behind: number } | null = null
+  let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
@@ -59,7 +65,12 @@ export async function getStatus(
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
   }
-  const statusPromise = gitExecFileAsync(statusArgs, { cwd: worktreePath })
+  const statusPromise = gitExecFileAsync(statusArgs, {
+    cwd: worktreePath,
+    // Why: status polling is read-like; avoid refreshing the index and racing
+    // terminal Git commands on `.git/worktrees/*/index.lock`.
+    env: gitOptionalLocksDisabledEnv()
+  })
   const conflictOperation = await conflictPromise
 
   try {
@@ -143,6 +154,18 @@ export async function getStatus(
       }
     }
     statusSucceeded = true
+
+    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+      try {
+        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
+          gitExecFileAsync(args, { cwd: worktreePath })
+        )
+      } catch {
+        // Why: git status polling should not fail just because the richer
+        // upstream probe hit a transient ref/read error; the explicit
+        // upstream-status path will surface those failures when invoked.
+      }
+    }
   } catch {
     // Not a git repo or git not available
   }
@@ -155,17 +178,39 @@ export async function getStatus(
     ...(options.includeIgnored ? { ignoredPaths } : {}),
     ...(statusSucceeded
       ? {
-          upstreamStatus: upstreamName
-            ? {
-                hasUpstream: true,
-                upstreamName,
-                ahead: upstreamAheadBehind?.ahead ?? 0,
-                behind: upstreamAheadBehind?.behind ?? 0
-              }
-            : { hasUpstream: false, ahead: 0, behind: 0 }
+          upstreamStatus:
+            effectiveUpstreamStatus ??
+            (upstreamName
+              ? {
+                  hasUpstream: true,
+                  upstreamName,
+                  ahead: upstreamAheadBehind?.ahead ?? 0,
+                  behind: upstreamAheadBehind?.behind ?? 0
+                }
+              : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
   }
+}
+
+function getShortBranchName(branch: string | undefined): string | null {
+  const prefix = 'refs/heads/'
+  return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function shouldProbeEffectiveUpstreamStatus(
+  branch: string | undefined,
+  upstreamName: string | undefined
+): boolean {
+  const branchName = getShortBranchName(branch)
+  if (!branchName) {
+    return false
+  }
+  if (!upstreamName) {
+    return true
+  }
+  const parsed = splitRemoteBranchName(upstreamName)
+  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }
 
 function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
@@ -433,17 +478,31 @@ export async function getBranchCompare(
   summary.compareRef = compareRef
 
   let headOid = ''
+  let baseOid = ''
   try {
     headOid = await resolveRefOid(worktreePath, 'HEAD')
     summary.headOid = headOid
   } catch {
+    try {
+      baseOid = await resolveRefOid(worktreePath, baseRef)
+      summary.baseOid = baseOid
+      // Why: new remote worktrees can be on an unborn branch until the first
+      // commit. There are no committed branch changes yet; surfacing this as a
+      // compare error makes the source-control panel look broken.
+      summary.changedFiles = 0
+      summary.commitsAhead = 0
+      summary.status = 'ready'
+      return { summary, entries: [] }
+    } catch {
+      // Preserve the existing unborn-head message when even the base is not
+      // resolvable; callers cannot compare or present a useful empty state.
+    }
     summary.status = 'unborn-head'
     summary.errorMessage =
       'This branch does not have a committed HEAD yet, so compare-to-base is unavailable.'
     return { summary, entries: [] }
   }
 
-  let baseOid = ''
   try {
     baseOid = await resolveRefOid(worktreePath, baseRef)
     summary.baseOid = baseOid
@@ -811,8 +870,10 @@ async function readGitBlobAtIndexPath(
   worktreePath: string,
   filePath: string
 ): Promise<GitBlobReadResult> {
+  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${filePath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
       cwd: worktreePath,
       maxBuffer: MAX_GIT_SHOW_BYTES
     })
@@ -828,9 +889,11 @@ async function readGitBlobAtOidPath(
   oid: string,
   filePath: string
 ): Promise<GitBlobReadResult> {
+  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
-      ['show', '--end-of-options', `${oid}:${filePath}`],
+      ['show', '--end-of-options', `${oid}:${gitPath}`],
       {
         cwd: worktreePath,
         maxBuffer: MAX_GIT_SHOW_BYTES

@@ -77,15 +77,17 @@ Host myserver
     expect(hosts[0].identityFile).toBe('/home/testuser/.ssh/id_ed25519')
   })
 
-  it('parses ProxyCommand and ProxyJump', () => {
+  it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
     const config = `
 Host internal
   HostName 10.0.0.5
   ProxyCommand ssh -W %h:%p bastion
+  ProxyUseFdpass yes
   ProxyJump bastion.example.com
 `
     const hosts = parseSshConfig(config)
     expect(hosts[0].proxyCommand).toBe('ssh -W %h:%p bastion')
+    expect(hosts[0].proxyUseFdpass).toBe(true)
     expect(hosts[0].proxyJump).toBe('bastion.example.com')
   })
 
@@ -200,6 +202,7 @@ describe('sshConfigHostsToTargets', () => {
         hostname: '10.0.0.5',
         identityFile: '/home/user/.ssh/id_rsa',
         proxyCommand: 'ssh -W %h:%p bastion',
+        proxyUseFdpass: true,
         proxyJump: 'bastion.example.com'
       }
     ]
@@ -291,6 +294,16 @@ describe('parseSshGOutput', () => {
     const noneOutput = 'hostname example.com\nproxycommand none\nport 22'
     const noneResult = parseSshGOutput(noneOutput)
     expect(noneResult.proxyCommand).toBeUndefined()
+  })
+
+  it('parses proxyusefdpass yes', () => {
+    const output = 'hostname example.com\nproxyusefdpass yes\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.proxyUseFdpass).toBe(true)
+
+    const noneOutput = 'hostname example.com\nproxyusefdpass no\nport 22'
+    const noneResult = parseSshGOutput(noneOutput)
+    expect(noneResult.proxyUseFdpass).toBe(false)
   })
 
   it('parses proxyjump and filters "none"', () => {

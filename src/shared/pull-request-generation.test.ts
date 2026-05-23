@@ -8,6 +8,7 @@ import {
 const context: PullRequestDraftContext = {
   branch: 'feature/pr-details',
   base: 'main',
+  branchChangedByPreparation: false,
   currentTitle: 'Feature pr details',
   currentBody: '- Add form',
   currentDraft: false,

@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this module keeps Claude credential source
+ordering, OAuth usage fetch semantics, and PTY fallback behavior together so
+subscription usage state cannot drift across code paths. */
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -14,6 +17,7 @@ import {
   readClaudeManagedAuthFile,
   resolveOwnedClaudeManagedAuthPath
 } from '../claude-accounts/managed-auth-path'
+import { createOAuthUsageError, OAuthUsageError } from './claude-oauth-usage-error'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -83,26 +87,36 @@ type OAuthCredentialReadResult = {
 }
 
 // Why: factored out so both the active-account Keychain reader and the
-// managed-account reader share the same JSON parsing + expiry check.
+// managed-account reader share the same JSON parsing + refreshability check.
 function parseOAuthCredentialsJson(raw: string): OAuthCredentialReadResult {
   try {
     const parsed = JSON.parse(raw) as KeychainCredentials
     const oauth = parsed?.claudeAiOauth
     const token = oauth?.accessToken
-    if (!token || typeof token !== 'string') {
-      return { token: null, hasRefreshableCredentials: false }
-    }
     const refreshToken = oauth?.refreshToken
-    const expiresAt = oauth?.expiresAt
-    if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
+    const hasRefreshableCredentials = typeof refreshToken === 'string' && refreshToken.trim() !== ''
+    if (!token || typeof token !== 'string') {
       return {
         token: null,
-        hasRefreshableCredentials: typeof refreshToken === 'string' && refreshToken.trim() !== ''
+        hasRefreshableCredentials
       }
     }
-    return { token, hasRefreshableCredentials: true }
+    // Why: Claude's local expiresAt metadata is not authoritative for the
+    // /api/oauth/usage endpoint. Real Claude Code 2.1 credentials have been
+    // observed authenticating there after expiresAt, so let the server decide.
+    return {
+      token,
+      hasRefreshableCredentials
+    }
   } catch {
-    return { token: null, hasRefreshableCredentials: false }
+    return emptyOAuthCredentialReadResult()
+  }
+}
+
+function emptyOAuthCredentialReadResult(): OAuthCredentialReadResult {
+  return {
+    token: null,
+    hasRefreshableCredentials: false
   }
 }
 
@@ -113,7 +127,7 @@ function parseOAuthCredentialsJson(raw: string): OAuthCredentialReadResult {
  */
 async function readFromKeychain(configDir?: string): Promise<OAuthCredentialReadResult> {
   if (process.platform !== 'darwin') {
-    return { token: null, hasRefreshableCredentials: false }
+    return emptyOAuthCredentialReadResult()
   }
 
   if (configDir) {
@@ -128,20 +142,14 @@ async function readFromKeychain(configDir?: string): Promise<OAuthCredentialRead
     if (legacyCredentials.token) {
       return legacyCredentials
     }
-    return {
-      token: null,
-      hasRefreshableCredentials:
-        scopedCredentials.hasRefreshableCredentials || legacyCredentials.hasRefreshableCredentials
-    }
+    return scopedCredentials.hasRefreshableCredentials ? scopedCredentials : legacyCredentials
   }
 
   try {
     const credentials = await readActiveClaudeKeychainCredentials(configDir)
-    return credentials
-      ? parseOAuthCredentialsJson(credentials)
-      : { token: null, hasRefreshableCredentials: false }
+    return credentials ? parseOAuthCredentialsJson(credentials) : emptyOAuthCredentialReadResult()
   } catch {
-    return { token: null, hasRefreshableCredentials: false }
+    return emptyOAuthCredentialReadResult()
   }
 }
 
@@ -150,11 +158,9 @@ async function readCredentialsFromStrictKeychain(
 ): Promise<OAuthCredentialReadResult> {
   try {
     const credentials = await readActiveClaudeKeychainCredentialsStrict(configDir)
-    return credentials
-      ? parseOAuthCredentialsJson(credentials)
-      : { token: null, hasRefreshableCredentials: false }
+    return credentials ? parseOAuthCredentialsJson(credentials) : emptyOAuthCredentialReadResult()
   } catch {
-    return { token: null, hasRefreshableCredentials: false }
+    return emptyOAuthCredentialReadResult()
   }
 }
 
@@ -169,7 +175,7 @@ async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredent
     const raw = await readFile(credPath, 'utf-8')
     return parseOAuthCredentialsJson(raw)
   } catch {
-    return { token: null, hasRefreshableCredentials: false }
+    return emptyOAuthCredentialReadResult()
   }
 }
 
@@ -194,12 +200,11 @@ async function readOAuthCredentials(configDir?: string): Promise<OAuthCredential
   if (fromFile.token) {
     return fromFile
   }
-
-  return {
-    token: null,
-    hasRefreshableCredentials:
-      fromKeychain.hasRefreshableCredentials || fromFile.hasRefreshableCredentials
+  if (fromFile.hasRefreshableCredentials) {
+    return fromFile
   }
+
+  return emptyOAuthCredentialReadResult()
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +281,7 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
     })
 
     if (!res.ok) {
-      throw new Error(`OAuth API returned ${res.status}`)
+      throw await createOAuthUsageError(res)
     }
 
     const data = (await res.json()) as OAuthUsageResponse
@@ -306,15 +311,25 @@ export async function fetchClaudeRateLimits(options?: {
   if (oauthCredentials.token) {
     try {
       return await fetchViaOAuth(oauthCredentials.token)
-    } catch {
+    } catch (err) {
+      if (err instanceof OAuthUsageError && err.skipPtyFallback) {
+        return {
+          provider: 'claude',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: err.message,
+          status: 'error'
+        }
+      }
       // OAuth API failed — fall through to PTY scraping as a backup
       // for subscription users whose token may still be valid for the CLI.
     }
   }
 
   // Path B: PTY fallback — only for subscription plan users (Max/Pro)
-  // whose OAuth credentials exist. The CLI can refresh expired OAuth tokens,
-  // so an expired access token should not be treated like API-key billing.
+  // whose OAuth credentials exist. This remains a fallback for older Claude
+  // auth shapes and transient OAuth failures.
   if (oauthCredentials.token || oauthCredentials.hasRefreshableCredentials) {
     try {
       return await fetchViaPty({ authPreparation: options?.authPreparation })

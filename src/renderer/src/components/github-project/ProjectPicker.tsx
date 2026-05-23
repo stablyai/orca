@@ -388,7 +388,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
             {!browseError && partialFailures.length > 0 ? (
               <PartialFailuresBanner failures={partialFailures} />
             ) : null}
-            <div className="max-h-[340px] overflow-y-auto p-1">
+            <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
               {projectSettings.pinned.length > 0 ? (
                 <Section label="Pinned">
                   {projectSettings.pinned.map((p) => {
@@ -619,7 +619,7 @@ function ViewPickStep({
         <span className="text-xs font-medium">Choose a view</span>
         <span />
       </div>
-      <div className="max-h-[340px] overflow-y-auto p-1">
+      <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
             <Loader className="size-3 animate-spin" /> Loading views…

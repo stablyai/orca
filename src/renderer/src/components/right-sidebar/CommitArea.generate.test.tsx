@@ -27,6 +27,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitError: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    showComposer: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -149,5 +150,20 @@ describe('CommitArea AI generation', () => {
     })
     expect(markup).toContain('Commit')
     expect(markup).toContain('aria-label="Generate commit message with AI"')
+  })
+
+  it('can hide only the composer while keeping the split action surface visible', () => {
+    const markup = renderCommitArea({
+      ...baseProps({ hasMessage: false, stagedCount: 0 }),
+      commitMessage: '',
+      aiEnabled: true,
+      aiAgentConfigured: true,
+      showComposer: false
+    })
+
+    expect(markup).not.toContain('aria-label="Commit message"')
+    expect(markup).not.toContain('aria-label="Generate commit message with AI"')
+    expect(markup).toContain('Nothing to commit')
+    expect(markup).toContain('aria-label="More commit and remote actions"')
   })
 })

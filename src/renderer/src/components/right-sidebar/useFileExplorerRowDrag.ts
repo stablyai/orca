@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
 const DRAG_EXPAND_DELAY_MS = 500
 
 type UseFileExplorerRowDragParams = {
@@ -53,7 +53,7 @@ export function useFileExplorerRowDrag({
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+    const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
     const isNative = e.dataTransfer.types.includes('Files')
     if (!isInternal && !isNative) {
       return
@@ -64,7 +64,7 @@ export function useFileExplorerRowDrag({
 
   const handleDragEnter = useCallback(
     (e: React.DragEvent) => {
-      const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+      const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
       const isNative = !isInternal && e.dataTransfer.types.includes('Files')
       if (!isInternal && !isNative) {
         return
@@ -148,7 +148,7 @@ export function useFileExplorerRowDrag({
       clearNativeExpandTimer()
       onDragTargetChange(null)
       onNativeDragTargetChange(null)
-      const sourcePath = e.dataTransfer.getData(ORCA_PATH_MIME)
+      const sourcePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
       if (sourcePath) {
         onMoveDrop(sourcePath, rowDropDir)
       }

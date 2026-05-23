@@ -7,24 +7,26 @@ describe('isMarkdownPreviewFindShortcut', () => {
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: true,
           ctrlKey: false,
           altKey: false,
           shiftKey: false
         },
-        true
+        'darwin'
       )
     ).toBe(true)
     expect(
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: false,
           ctrlKey: true,
           altKey: false,
           shiftKey: false
         },
-        true
+        'darwin'
       )
     ).toBe(false)
   })
@@ -34,24 +36,26 @@ describe('isMarkdownPreviewFindShortcut', () => {
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: false,
           ctrlKey: true,
           altKey: false,
           shiftKey: false
         },
-        false
+        'linux'
       )
     ).toBe(true)
     expect(
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: true,
           ctrlKey: false,
           altKey: false,
           shiftKey: false
         },
-        false
+        'linux'
       )
     ).toBe(false)
   })

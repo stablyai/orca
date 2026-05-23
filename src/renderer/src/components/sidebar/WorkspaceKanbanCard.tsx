@@ -1,17 +1,16 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Pin } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
-import StatusIndicator from './StatusIndicator'
 import WorktreeCard from './WorktreeCard'
+import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 import WorktreeContextMenu from './WorktreeContextMenu'
-import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { getWorkspaceKanbanDetailsHoverOpenState } from './workspace-kanban-details-hover'
 import { writeWorkspaceDragData } from './workspace-status'
 
 type WorkspaceKanbanCardProps = {
@@ -84,7 +83,6 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
-        hideCiCheck={worktree.isPinned}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
@@ -109,7 +107,8 @@ function WorkspaceKanbanCompactCard({
 }: Omit<WorkspaceKanbanCardProps, 'compact'>): React.JSX.Element {
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const isDeleting = deleteState?.isDeleting ?? false
-  const status = useWorktreeActivityStatus(worktree.id)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const contextMenuOpenRef = useRef(false)
   const contextWorktrees = useMemo(
     () =>
       isSelected && selectedWorktrees && selectedWorktrees.length > 0
@@ -154,13 +153,45 @@ function WorkspaceKanbanCompactCard({
     [contextWorktrees, isDeleting, isSelected, worktree.id]
   )
 
+  const handleDetailsOpenChange = useCallback((requestedOpen: boolean) => {
+    setDetailsOpen(
+      getWorkspaceKanbanDetailsHoverOpenState({
+        contextMenuOpen: contextMenuOpenRef.current,
+        requestedOpen
+      })
+    )
+  }, [])
+
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    contextMenuOpenRef.current = open
+    if (open) {
+      // Why: the preview sits beside the compact card, so it should disappear
+      // as soon as the card's context menu becomes the active surface.
+      setDetailsOpen(false)
+    }
+  }, [])
+
+  const handleContextMenuSelect = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      setDetailsOpen(false)
+      return onContextMenuSelect(event, worktree)
+    },
+    [onContextMenuSelect, worktree]
+  )
+
   return (
     <WorktreeContextMenu
       worktree={worktree}
       selectedWorktrees={contextWorktrees}
-      onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+      onContextMenuSelect={handleContextMenuSelect}
+      onOpenChange={handleContextMenuOpenChange}
     >
-      <HoverCard openDelay={450} closeDelay={100}>
+      <HoverCard
+        open={detailsOpen}
+        onOpenChange={handleDetailsOpenChange}
+        openDelay={450}
+        closeDelay={100}
+      >
         <HoverCardTrigger asChild>
           <button
             type="button"
@@ -188,8 +219,7 @@ function WorkspaceKanbanCompactCard({
             aria-label={`Open ${worktree.displayName}`}
             aria-busy={isDeleting}
           >
-            <StatusIndicator status={status} aria-hidden="true" className="mr-1" />
-            <span className="sr-only">{getWorktreeStatusLabel(status)}</span>
+            <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mr-1" />
             <span className="min-w-0 flex-1 truncate">{worktree.displayName}</span>
             {repo ? (
               <Tooltip>
@@ -214,7 +244,12 @@ function WorkspaceKanbanCompactCard({
             ) : null}
           </button>
         </HoverCardTrigger>
-        <HoverCardContent side="right" align="start" sideOffset={8} className="w-72 p-1.5">
+        <HoverCardContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="w-72 p-1.5 data-[state=closed]:hidden"
+        >
           <WorktreeCard
             worktree={worktree}
             repo={repo}

@@ -141,6 +141,28 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     expect(computeAutoAckTargets(store.getState(), 'tab-codex', CODEX_LEAF_ID)).toEqual([])
   })
 
+  it('skips sibling panes in the same terminal tab', () => {
+    const store = createTestStore()
+    const activeTabId = 'tab-split'
+    const activePaneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
+    const siblingPaneKey = makePaneKey(activeTabId, OTHER_LEAF_ID)
+
+    store.getState().setAgentStatus(activePaneKey, {
+      state: 'done',
+      prompt: 'visible pane',
+      agentType: 'codex'
+    })
+    store.getState().setAgentStatus(siblingPaneKey, {
+      state: 'done',
+      prompt: 'hidden sibling pane',
+      agentType: 'claude'
+    })
+
+    expect(computeAutoAckTargets(store.getState(), activeTabId, CODEX_LEAF_ID)).toEqual([
+      activePaneKey
+    ])
+  })
+
   it('acks a paneKey present in BOTH live and retained without throwing', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-05T12:00:00.000Z'))

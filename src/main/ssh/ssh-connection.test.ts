@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Socket } from 'net'
+import { EventEmitter } from 'events'
 
 let eventHandlers: Map<string, (...args: unknown[]) => void>
 let connectBehavior: 'ready' | 'error' = 'ready'
@@ -8,6 +9,7 @@ let connectErrorMessage = ''
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
+  lastExecCommand?: string
 }
 let clientInstances: MockSshClient[] = []
 
@@ -18,6 +20,7 @@ vi.mock('ssh2', () => {
     // to decide which log line to emit. A real Socket instance lets the test
     // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
     _sock: Socket | undefined = new Socket()
+    lastExecCommand?: string
     constructor() {
       clientInstances.push(this)
     }
@@ -35,11 +38,18 @@ vi.mock('ssh2', () => {
     }
     end() {}
     destroy() {}
-    exec() {}
+    exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
+      this.lastExecCommand = cmd
+      cb(undefined, {})
+    }
     sftp() {}
   }
   return { Client: MockSshClient }
 })
+
+const { spawnSystemSshCommandMock } = vi.hoisted(() => ({
+  spawnSystemSshCommandMock: vi.fn()
+}))
 
 vi.mock('./ssh-system-fallback', () => ({
   spawnSystemSsh: vi.fn().mockReturnValue({
@@ -49,14 +59,22 @@ vi.mock('./ssh-system-fallback', () => ({
     kill: vi.fn(),
     onExit: vi.fn(),
     pid: 99999
-  })
+  }),
+  spawnSystemSshCommand: spawnSystemSshCommandMock,
+  uploadDirectoryViaSystemSsh: vi.fn(),
+  writeFileViaSystemSsh: vi.fn()
 }))
 
 vi.mock('./ssh-config-parser', () => ({
   resolveWithSshG: vi.fn().mockResolvedValue(null)
 }))
 
-import { SshConnection, SshConnectionManager, type SshConnectionCallbacks } from './ssh-connection'
+import {
+  SshConnection,
+  SshConnectionManager,
+  shouldUseSystemSshTransport,
+  type SshConnectionCallbacks
+} from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -78,12 +96,37 @@ function createCallbacks(overrides?: Partial<SshConnectionCallbacks>): SshConnec
   }
 }
 
+function createSystemCommandChannel(): EventEmitter & {
+  stdin: { end: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }
+  stderr: EventEmitter
+  close: ReturnType<typeof vi.fn>
+} {
+  const channel = new EventEmitter() as EventEmitter & {
+    stdin: { end: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }
+    stderr: EventEmitter
+    close: ReturnType<typeof vi.fn>
+  }
+  channel.stdin = { end: vi.fn(), write: vi.fn() }
+  channel.stderr = new EventEmitter()
+  channel.close = vi.fn()
+  queueMicrotask(() => {
+    channel.emit('data', Buffer.from('ORCA-SYSTEM-SSH-OK'))
+    channel.emit('close', 0)
+  })
+  return channel
+}
+
 describe('SshConnection', () => {
   beforeEach(() => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
     clientInstances = []
+    spawnSystemSshCommandMock.mockReset()
+    spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
+    vi.mocked(resolveWithSshG).mockReset()
+    vi.mocked(resolveWithSshG).mockResolvedValue(null)
+    vi.unstubAllEnvs()
   })
 
   it('transitions to connected on successful connect', async () => {
@@ -204,6 +247,50 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(resolveWithSshG).toHaveBeenCalledWith('ssh-alias')
+  })
+
+  it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.exec("cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)")
+
+    expect(clientInstances[0].lastExecCommand).toBe(
+      "exec /bin/sh -c 'cd '\\''/tmp'\\'' && ('\\''/usr/bin/node'\\'' -e '\\''console.log(1)'\\'' || echo MISSING)'"
+    )
+  })
+
+  it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(0)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'printf ORCA-SYSTEM-SSH-OK'
+    )
+  })
+})
+
+describe('shouldUseSystemSshTransport', () => {
+  it('uses system transport for target or resolved ProxyUseFdpass', () => {
+    expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: true })).toBe(true)
+    expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: false })).toBe(false)
+  })
+
+  it('allows an environment override for e2e coverage', () => {
+    vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
+    expect(shouldUseSystemSshTransport(createTarget(), null)).toBe(true)
   })
 })
 

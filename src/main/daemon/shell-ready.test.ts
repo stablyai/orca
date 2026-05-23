@@ -1,7 +1,11 @@
+/* eslint-disable max-lines -- Why: shell-ready wrapper coverage keeps zsh,
+   bash, marker scanning, and env restoration cases in one suite so the
+   generated wrapper contract is reviewed as a unit. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'child_process'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import type * as ShellReadyModule from './shell-ready'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
@@ -10,6 +14,48 @@ async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
 }
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+const itWithBash = hasBash ? it : it.skip
+
+function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+  const rcfile = join(tempDir, 'bash-osc133-rcfile')
+  writeFileSync(rcfile, rcfileContent)
+
+  const result = spawnSync(
+    'bash',
+    ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
+    {
+      input: 'true\nfalse\nexit 0\n',
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        ORCA_SHELL_READY_MARKER: '1',
+        TERM: process.env.TERM || 'xterm'
+      },
+      timeout: 5000
+    }
+  )
+
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  return result.stdout
+}
+
+function expectBashOsc133Lifecycle(output: string): void {
+  const oscA = '\x1b]133;A\x07'
+  const oscC = '\x1b]133;C\x07'
+  const oscD = '\x1b]133;D;'
+  const firstPromptMarker = output.indexOf(oscA)
+
+  expect(firstPromptMarker).toBeGreaterThanOrEqual(0)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscC)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscD)
+  expect(output).toContain(`${oscD}0\x07${oscA}`)
+  expect(output).toContain(`${oscD}1\x07${oscA}`)
+  expect(output.split(oscC)).toHaveLength(4)
+  expect(output.split(oscD)).toHaveLength(3)
+}
 
 describePosix('daemon shell-ready launch config', () => {
   let previousUserDataPath: string | undefined
@@ -188,6 +234,74 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(piRestoreLine)
     expect(zlogin).toContain(piRestoreLine)
     expect(bashRc).toContain(piRestoreLine)
+  })
+
+  // Why: regression guard for issue #2422. The daemon-side bash wrapper must
+  // emit OSC 133 C/D so SSH/remote bash sessions also clear stale 'working'
+  // agent rows when the foreground command exits.
+  it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+    getShellReadyLaunchConfig('/bin/bash')
+
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+
+    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    expect(bashRc).toContain(
+      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"'
+    )
+    expect(bashRc.indexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
+      bashRc.indexOf('if [[ "${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then')
+    )
+    expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(zshrc).toContain('printf "\\033]133;C\\007"')
+  })
+
+  itWithBash(
+    'runs the daemon bash wrapper without fake C/D markers before the first prompt',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash(
+    'preserves prompt hooks and existing DEBUG traps without fake command markers',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      writeFileSync(
+        join(userDataPath, '.bash_profile'),
+        [
+          'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
+          'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
+        ].join('\n')
+      )
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expect(output).toContain('PROMPT_HOOK')
+      expect(output).toContain('USER_DEBUG_AFTER')
+      expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=(\'AFTER_ARRAY_PROMPT=1; printf "PROMPT_ARRAY\\n"\')\n'
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+    expect(output).toContain('PROMPT_ARRAY')
+    expectBashOsc133Lifecycle(output)
   })
 
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {

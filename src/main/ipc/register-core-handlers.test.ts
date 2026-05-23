@@ -17,7 +17,9 @@ const {
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
   registerSettingsHandlersMock,
+  registerKeybindingHandlersMock,
   registerTelemetryHandlersMock,
+  registerDiagnosticsHandlersMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
@@ -44,7 +46,8 @@ const {
   registerOnboardingHandlersMock,
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
-  registerWorkspaceSpaceHandlersMock
+  registerWorkspaceSpaceHandlersMock,
+  registerWorkspacePortHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -60,7 +63,9 @@ const {
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
+  registerKeybindingHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
+  registerDiagnosticsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
@@ -87,7 +92,8 @@ const {
   registerOnboardingHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
-  registerWorkspaceSpaceHandlersMock: vi.fn()
+  registerWorkspaceSpaceHandlersMock: vi.fn(),
+  registerWorkspacePortHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
@@ -166,8 +172,20 @@ vi.mock('./workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 
+vi.mock('./workspace-ports', () => ({
+  registerWorkspacePortHandlers: registerWorkspacePortHandlersMock
+}))
+
+vi.mock('./keybindings', () => ({
+  registerKeybindingHandlers: registerKeybindingHandlersMock
+}))
+
 vi.mock('./telemetry', () => ({
   registerTelemetryHandlers: registerTelemetryHandlersMock
+}))
+
+vi.mock('./diagnostics', () => ({
+  registerDiagnosticsHandlers: registerDiagnosticsHandlersMock
 }))
 
 vi.mock('./shell', () => ({
@@ -270,7 +288,9 @@ describe('registerCoreHandlers', () => {
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
+    registerKeybindingHandlersMock.mockReset()
     registerTelemetryHandlersMock.mockReset()
+    registerDiagnosticsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
@@ -297,6 +317,7 @@ describe('registerCoreHandlers', () => {
     registerSpeechHandlersMock.mockReset()
     registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
+    registerWorkspacePortHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -330,6 +351,7 @@ describe('registerCoreHandlers', () => {
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
+    expect(registerAppHandlersMock).toHaveBeenCalledWith(store)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
     expect(registerPetHandlersMock).toHaveBeenCalled()
@@ -349,6 +371,7 @@ describe('registerCoreHandlers', () => {
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
     expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerWorkspacePortHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)

@@ -1,5 +1,6 @@
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => void
+  takePending: () => string
   flush: () => void
   clear: () => void
 }
@@ -25,12 +26,17 @@ export function createRemoteRuntimePtyTextBatcher(
   }
 
   const flush = (): void => {
-    const text = pending
-    pending = ''
-    clear()
+    const text = takePending()
     if (text) {
       onFlush(text)
     }
+  }
+
+  const takePending = (): string => {
+    const text = pending
+    pending = ''
+    clear()
+    return text
   }
 
   return {
@@ -40,6 +46,7 @@ export function createRemoteRuntimePtyTextBatcher(
         timer = setTimeout(flush, delayMs)
       }
     },
+    takePending,
     flush,
     clear
   }

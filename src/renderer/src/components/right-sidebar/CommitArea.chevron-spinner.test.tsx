@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
@@ -54,7 +55,13 @@ function buttons(markup: string): string[] {
 }
 
 function renderButtons(props: ReturnType<typeof baseProps>): string[] {
-  return buttons(renderToStaticMarkup(<CommitArea {...props} />))
+  return buttons(
+    renderToStaticMarkup(
+      <TooltipProvider>
+        <CommitArea {...props} />
+      </TooltipProvider>
+    )
+  )
 }
 
 describe('CommitArea chevron spinner', () => {

@@ -1522,7 +1522,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,
-      parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null
+      parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
+      { scrollToBottomIfOutputSinceLastView: true }
     )
   }
 

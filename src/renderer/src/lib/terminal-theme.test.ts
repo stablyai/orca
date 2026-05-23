@@ -3,6 +3,7 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   getTerminalThemePreview,
+  isTerminalBackgroundLight,
   resolveEffectiveTerminalAppearance
 } from './terminal-theme'
 
@@ -89,5 +90,36 @@ describe('resolveEffectiveTerminalAppearance', () => {
 
     expect(appearance.themeName).toBe('Invalid Theme Name')
     expect(appearance.theme).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_DARK))
+  })
+})
+
+describe('isTerminalBackgroundLight', () => {
+  it('classifies common terminal background color formats by luminance', () => {
+    expect(isTerminalBackgroundLight('#ffffff')).toBe(true)
+    expect(isTerminalBackgroundLight('#18181b')).toBe(false)
+    expect(isTerminalBackgroundLight('#fffc')).toBe(true)
+    expect(isTerminalBackgroundLight('rgb(245 245 244)')).toBe(true)
+    expect(isTerminalBackgroundLight('rgba(24, 24, 27, 0.92)')).toBe(false)
+  })
+
+  it('classifies transparent backgrounds after compositing with the app surface', () => {
+    expect(
+      isTerminalBackgroundLight('#ffffff', { backgroundOpacity: 0.1, appSurface: 'dark' })
+    ).toBe(false)
+    expect(
+      isTerminalBackgroundLight('#ffffff', { backgroundOpacity: 0.6, appSurface: 'dark' })
+    ).toBe(true)
+    expect(isTerminalBackgroundLight('rgba(255, 255, 255, 0.1)', { appSurface: 'dark' })).toBe(
+      false
+    )
+    expect(isTerminalBackgroundLight('rgb(255 255 255 / 10%)', { appSurface: 'dark' })).toBe(false)
+    expect(
+      isTerminalBackgroundLight('#000000', { backgroundOpacity: 0.1, appSurface: 'light' })
+    ).toBe(true)
+  })
+
+  it('defaults unknown colors to dark-surface title styling', () => {
+    expect(isTerminalBackgroundLight(undefined)).toBe(false)
+    expect(isTerminalBackgroundLight('var(--background)')).toBe(false)
   })
 })

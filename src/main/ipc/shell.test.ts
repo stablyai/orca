@@ -251,6 +251,24 @@ describe('registerShellHandlers', () => {
       ])
     })
 
+    it('forces Cursor launcher folders into a new window', async () => {
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/cursor')
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(handler({}, workspacePath, 'cursor')).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('/usr/local/bin/cursor', [
+        '--new-window',
+        normalize(workspacePath)
+      ])
+      resolveCliCommandMock.mockReturnValueOnce('C:\\Cursor\\cursor.cmd')
+      await expect(handler({}, workspacePath, 'cursor')).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenLastCalledWith('C:\\Cursor\\cursor.cmd', [
+        '--new-window',
+        normalize(workspacePath)
+      ])
+    })
+
     it('falls back to VS Code when command is blank', async () => {
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInExternalEditor')

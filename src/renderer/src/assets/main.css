@@ -5,6 +5,7 @@
 @import './rich-markdown-editor.css';
 @import './markdown-preview.css';
 @import './terminal.css';
+@import './mobile-page.css';
 
 @font-face {
   font-family: 'Geist';
@@ -57,6 +58,24 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-terminal-pane-title-on-dark-fg: var(--terminal-pane-title-on-dark-fg);
+  --color-terminal-pane-title-on-dark-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --color-terminal-pane-title-on-dark-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --color-terminal-pane-title-on-dark-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --color-terminal-pane-title-on-dark-button-hover-fg: var(
+    --terminal-pane-title-on-dark-button-hover-fg
+  );
+  --color-terminal-pane-title-on-dark-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --color-terminal-pane-title-on-dark-separator: var(--terminal-pane-title-on-dark-separator);
+  --color-terminal-pane-title-on-light-fg: var(--terminal-pane-title-on-light-fg);
+  --color-terminal-pane-title-on-light-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --color-terminal-pane-title-on-light-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --color-terminal-pane-title-on-light-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --color-terminal-pane-title-on-light-button-hover-fg: var(
+    --terminal-pane-title-on-light-button-hover-fg
+  );
+  --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -65,6 +84,7 @@
   --color-git-graph-lane-3: var(--git-graph-lane-3);
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
+  --color-annotation-highlight: var(--annotation-highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -103,6 +123,7 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --terminal-pane-locate: var(--color-blue-600);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -116,6 +137,20 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
@@ -131,6 +166,7 @@
   --git-graph-lane-3: #994f00;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #f59e0b;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -156,6 +192,7 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --terminal-pane-locate: var(--color-blue-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -169,6 +206,20 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
@@ -184,6 +235,7 @@
   --git-graph-lane-3: #ce9178;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #fbbf24;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
@@ -218,11 +270,11 @@
     list-style: none;
   }
 
-  button:not(:disabled) {
+  :where(button:not(:disabled)) {
     cursor: pointer;
   }
 
-  button:disabled {
+  :where(button:disabled) {
     cursor: default;
   }
 }
@@ -251,6 +303,21 @@
   min-height: 28px;
 }
 
+/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
+.scrollbar-sleek-lg {
+  scrollbar-width: auto;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  min-height: 36px;
+}
+
 .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }
@@ -267,7 +334,7 @@
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
   /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 6px;
+  padding-right: 2px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
@@ -346,6 +413,18 @@
 }
 
 .terminal-tab-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.project-view-tab-strip {
+  /* Why: project views load after the table shell; keeping the row stable
+     prevents the list below from jumping when the tabs arrive. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -645,6 +724,8 @@
 
 .editor-header-path {
   display: block;
+  min-width: 0;
+  flex: 0 1 auto;
   padding: 0;
   max-width: 100%;
   border: none;
@@ -735,33 +816,6 @@
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
-}
-
-/* Why: after clicking a sidebar item we center the target section and briefly
-   pulse its border so the user can see exactly which section their click
-   landed on — the scroll destination alone is subtle when the section is
-   already partially visible. */
-@keyframes settings-section-flash {
-  0% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
-  }
-  60% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
-  }
-  100% {
-    border-color: var(--border);
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  }
-}
-
-.settings-section-flash {
-  animation: settings-section-flash 900ms ease-out;
 }
 
 .sidebar.collapsed {
@@ -866,6 +920,72 @@
 
 [data-workspace-board-card-drag-preview='true'] * {
   cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-preview='true'] {
+  z-index: 2147483000;
+  overflow: visible;
+  border-radius: var(--radius);
+  opacity: 0.96;
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--foreground) 18%, transparent));
+  will-change: transform;
+}
+
+[data-worktree-sidebar-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-count='true'] {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  color: var(--sidebar);
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--sidebar);
+}
+
+[data-workspace-board-card-drop-indicator='true'] {
+  z-index: 2147483646;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 24%, transparent),
+    0 8px 20px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+  opacity: 0;
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 80ms ease-out;
+  will-change: transform, width, opacity;
+}
+
+[data-workspace-board-card-drop-indicator='true']::before,
+[data-workspace-board-card-drop-indicator='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  transform: translateY(-50%);
+}
+
+[data-workspace-board-card-drop-indicator='true']::before {
+  left: -1px;
+}
+
+[data-workspace-board-card-drop-indicator='true']::after {
+  right: -1px;
 }
 
 [data-workspace-board-card-drag-count='true'] {
@@ -1156,6 +1276,24 @@
   animation: update-card-exit 150ms ease-in both;
 }
 
+/* Waveform bars in the FeatureTipsModal voice tip — purely decorative. */
+@keyframes waveform {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-waveform {
+  animation: waveform 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
 /* ── Diff comment decorations ────────────────────────────────────── */
 
 /* Why: the "+" button is appended into Monaco's editor DOM node by
@@ -1263,6 +1401,63 @@
   letter-spacing: 0.03em;
 }
 
+.orca-diff-comment-author-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.orca-diff-comment-avatar {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  background: var(--muted);
+}
+
+.orca-diff-comment-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.orca-diff-comment-author {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orca-diff-comment-created-at {
+  flex: 0 0 auto;
+}
+
+.orca-diff-comment-link {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.orca-diff-comment-link:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
 /* Why: keep edit + delete close together but visually distinct from the meta
    label. Both share the same subtle button styling; only delete recolours on
    hover (destructive intent). */
@@ -1326,6 +1521,10 @@
   color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.orca-diff-comment-review-body {
+  padding-left: 24px;
 }
 
 /* Why: mirror the saved-note card treatment so the "entering" and "saved"

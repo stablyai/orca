@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshTarget
+} from '../../../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog'
 import type { SettingsSearchEntry } from './settings-search'
+import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
+import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 
 export const SSH_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
@@ -52,10 +51,6 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
-  const [pendingRemove, setPendingRemove] = useState<{ id: string; label: string } | null>(null)
-  const [pendingTerminate, setPendingTerminate] = useState<{ id: string; label: string } | null>(
-    null
-  )
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
 
@@ -95,17 +90,18 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
 
-    const graceSeconds = parseInt(form.relayGracePeriodSeconds, 10)
-    if (isNaN(graceSeconds) || graceSeconds < 60 || graceSeconds > 3600) {
-      toast.error('Relay grace period must be between 60 and 3600 seconds')
-      return
-    }
-    const remoteGraceSeconds = parseInt(form.remoteWorkspaceSyncGracePeriodSeconds, 10)
+    const graceSeconds = form.relayKeepAliveUntilReset
+      ? 0
+      : parseInt(form.relayGracePeriodSeconds, 10)
     if (
-      form.remoteWorkspaceSyncEnabled &&
-      (isNaN(remoteGraceSeconds) || remoteGraceSeconds < 0 || remoteGraceSeconds > 3600)
+      !form.relayKeepAliveUntilReset &&
+      (isNaN(graceSeconds) ||
+        graceSeconds < MIN_SSH_RELAY_GRACE_PERIOD_SECONDS ||
+        graceSeconds > MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ) {
-      toast.error('Synced relay grace period must be between 0 and 3600 seconds')
+      toast.error(
+        `Relay grace period must be between 60 and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds, or choose keep alive until reset`
+      )
       return
     }
 
@@ -116,10 +112,6 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       port,
       username: form.username.trim(),
       relayGracePeriodSeconds: graceSeconds,
-      remoteWorkspaceSyncEnabled: form.remoteWorkspaceSyncEnabled,
-      remoteWorkspaceSyncGracePeriodSeconds: form.remoteWorkspaceSyncEnabled
-        ? remoteGraceSeconds
-        : 300,
       ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
       ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),
       ...(form.jumpHost.trim() ? { jumpHost: form.jumpHost.trim() } : {})
@@ -159,10 +151,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleRemove = async (id: string): Promise<void> => {
     try {
-      // Why: removing a target is destructive even after non-destructive
-      // disconnect, when remote PTYs can still be alive in the grace window.
-      await terminateSessionsWithReconnect(id)
-      await window.api.ssh.removeTarget({ id })
+      await removeSshTargetWithBestEffortCleanup(window.api.ssh, id)
       toast.success('Target removed')
       await loadTargets()
     } catch (err) {
@@ -181,11 +170,12 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       identityFile: target.identityFile ?? '',
       proxyCommand: target.proxyCommand ?? '',
       jumpHost: target.jumpHost ?? '',
-      relayGracePeriodSeconds: String(target.relayGracePeriodSeconds ?? 300),
-      remoteWorkspaceSyncEnabled: target.remoteWorkspaceSyncEnabled === true,
-      remoteWorkspaceSyncGracePeriodSeconds: String(
-        target.remoteWorkspaceSyncGracePeriodSeconds ?? 300
-      )
+      relayGracePeriodSeconds: String(
+        target.relayGracePeriodSeconds === 0
+          ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+          : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+      ),
+      relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
     })
     setShowForm(true)
   }
@@ -212,6 +202,16 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       toast.success('Remote terminals ended')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to end remote terminals')
+    }
+  }
+
+  const handleResetRelay = async (targetId: string): Promise<void> => {
+    try {
+      await window.api.ssh.resetRelay({ targetId })
+      toast.success('Remote relay reset')
+      await loadTargets()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reset remote relay')
     }
   }
 
@@ -293,125 +293,55 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         </div>
       </div>
 
-      {/* Target list */}
-      {targets.length === 0 && !showForm ? (
-        <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-          No SSH targets configured.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {targets.map((target) => (
-            <SshTargetCard
-              key={target.id}
-              target={target}
-              state={sshConnectionStates.get(target.id)}
-              testing={testingIds.has(target.id)}
-              onConnect={(id) => void handleConnect(id)}
-              onDisconnect={(id) => void handleDisconnect(id)}
-              onTerminateSessions={(id) => setPendingTerminate({ id, label: target.label })}
-              onTest={(id) => void handleTest(id)}
-              onEdit={handleEdit}
-              onRemove={(id) => setPendingRemove({ id, label: target.label })}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Add/Edit form */}
-      {showForm ? (
-        <SshTargetForm
-          editingId={editingId}
-          form={form}
-          onFormChange={setForm}
-          onSave={() => void handleSave()}
-          onCancel={cancelForm}
-        />
-      ) : null}
-
-      {/* Remove confirmation dialog */}
-      <Dialog
-        open={!!pendingRemove}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingRemove(null)
-          }
-        }}
+      <SshTargetDestructiveActions
+        connectionStates={sshConnectionStates}
+        onRemove={handleRemove}
+        onResetRelay={handleResetRelay}
+        onTerminateSessions={handleTerminateSessions}
       >
-        <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">Remove SSH Target</DialogTitle>
-            <DialogDescription className="text-xs">
-              This will remove the target and end any active remote terminals.
-            </DialogDescription>
-          </DialogHeader>
+        {({ busyActionForTarget, requestRemove, requestResetRelay, requestTerminateSessions }) => (
+          <>
+            {/* Target list */}
+            {targets.length === 0 && !showForm ? (
+              <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
+                No SSH targets configured.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {targets.map((target) => (
+                  <SshTargetCard
+                    key={target.id}
+                    target={target}
+                    state={sshConnectionStates.get(target.id)}
+                    testing={testingIds.has(target.id)}
+                    busyAction={busyActionForTarget(target.id)}
+                    onConnect={handleConnect}
+                    onDisconnect={handleDisconnect}
+                    onTerminateSessions={(id) =>
+                      requestTerminateSessions({ id, label: target.label })
+                    }
+                    onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
+                    onTest={handleTest}
+                    onEdit={handleEdit}
+                    onRemove={(id) => requestRemove({ id, label: target.label })}
+                  />
+                ))}
+              </div>
+            )}
 
-          {pendingRemove ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-              <div className="break-all text-muted-foreground">{pendingRemove.label}</div>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingRemove(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (pendingRemove) {
-                  void handleRemove(pendingRemove.id)
-                  setPendingRemove(null)
-                }
-              }}
-            >
-              Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* End remote terminals confirmation dialog */}
-      <Dialog
-        open={!!pendingTerminate}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingTerminate(null)
-          }
-        }}
-      >
-        <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">End Remote Terminals?</DialogTitle>
-            <DialogDescription className="text-xs">
-              This will stop active terminal sessions on this SSH target. Reconnecting will not
-              restore them.
-            </DialogDescription>
-          </DialogHeader>
-
-          {pendingTerminate ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-              <div className="break-all text-muted-foreground">{pendingTerminate.label}</div>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingTerminate(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (pendingTerminate) {
-                  void handleTerminateSessions(pendingTerminate.id)
-                  setPendingTerminate(null)
-                }
-              }}
-            >
-              End Terminals
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            {/* Add/Edit form */}
+            {showForm ? (
+              <SshTargetForm
+                editingId={editingId}
+                form={form}
+                onFormChange={setForm}
+                onSave={() => void handleSave()}
+                onCancel={cancelForm}
+              />
+            ) : null}
+          </>
+        )}
+      </SshTargetDestructiveActions>
     </div>
   )
 }

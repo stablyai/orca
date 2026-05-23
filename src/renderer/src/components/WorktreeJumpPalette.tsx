@@ -17,6 +17,7 @@ import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,7 @@ import {
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
   isBlankBrowserUrl,
   searchBrowserPages,
@@ -168,7 +170,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
+  const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -187,9 +191,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const hasQuery = deferredQuery.trim().length > 0
 
-  // Why: keep the jump palette aligned with the sidebar. If the user
-  // opted to hide the default-branch workspace, surfacing it here via
-  // Cmd+J would reintroduce the entry they asked to remove.
+  // Why: keep the jump palette aligned with the sidebar. Surfacing hidden
+  // default-branch or sleeping workspaces here would reintroduce entries the
+  // user asked the workspace navigation surfaces to omit.
   // Drift warning: this check must stay in lockstep with the sidebar's
   // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
   // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
@@ -205,9 +209,22 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
+        if (
+          !showSleepingWorkspaces &&
+          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+        ) {
+          return false
+        }
         return true
       }),
-    [allWorktrees, hideDefaultBranchWorkspace]
+    [
+      allWorktrees,
+      browserTabsByWorktree,
+      hideDefaultBranchWorkspace,
+      ptyIdsByTabId,
+      showSleepingWorkspaces,
+      tabsByWorktree
+    ]
   )
 
   // Why: empty-query rows use focus-recency (lastVisitedAtByWorktreeId) with
@@ -302,8 +319,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const worktreeMatches = useMemo(
-    () => searchWorktrees(sortedWorktrees, deferredQuery.trim(), repoMap, prCache, issueCache),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache]
+    () =>
+      searchWorktrees(
+        sortedWorktrees,
+        deferredQuery.trim(),
+        repoMap,
+        prCache,
+        issueCache,
+        getWorkspacePortsByWorktreeId(workspacePortScan)
+      ),
+    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -417,7 +442,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         entries.push({
           id: '__header_worktrees__',
           type: 'section-header',
-          label: hasQuery ? 'Worktrees' : 'Recent Worktrees'
+          label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
         })
       }
       entries.push(...visibleWorktreeItems)
@@ -425,7 +450,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         entries.push({
           id: '__hint_worktree_cap__',
           type: 'hint',
-          label: `Type to see all ${worktreeItems.length} worktrees`
+          label: `Type to see all ${worktreeItems.length} workspaces`
         })
       }
     }
@@ -582,7 +607,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     (worktreeId: string) => {
       const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
       if (!worktree) {
-        toast.error('Worktree no longer exists')
+        toast.error('Workspace no longer exists')
         return
       }
       activateAndRevealWorktree(worktreeId)
@@ -608,7 +633,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const { worktree, workspace, page } = selection
       const activated = activateAndRevealWorktree(worktree.id)
       if (!activated) {
-        toast.error('Worktree no longer exists')
+        toast.error('Workspace no longer exists')
         return
       }
 
@@ -796,7 +821,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if ((hasAnyWorktrees || hasAnyBrowserPages) && hasQuery) {
       return {
         title: 'No results match your search',
-        subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+        subtitle: 'Try a name, branch, repo, port, comment, PR, page title, or URL.'
       }
     }
     // Why: empty-query rows exclude the current worktree, so a single-worktree
@@ -964,8 +989,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           </div>
                           {entry.match.supportingText && (
-                            <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                              <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
+                            <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                              <span className="inline-flex h-[18px] shrink-0 items-center rounded border border-border bg-foreground/[0.04] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                                 {entry.match.supportingText.label}
                               </span>
                               <span className="truncate">
@@ -1099,7 +1124,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    {`Create worktree "${createWorktreeName}"`}
+                    {`Create workspace "${createWorktreeName}"`}
                   </div>
                 </div>
               </CommandItem>

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
-import { runWorktreeDeleteWithToast } from '../sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 
 const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
@@ -26,8 +26,6 @@ export default function PRActions({
   worktree: Worktree
   onRefreshPR: () => Promise<void>
 }): React.JSX.Element | null {
-  const openModal = useAppStore((s) => s.openModal)
-  const skipDeleteConfirm = useAppStore((s) => s.settings?.skipDeleteWorktreeConfirm ?? false)
   const isDeletingWorktree = useAppStore(
     (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
   )
@@ -46,7 +44,8 @@ export default function PRActions({
           repoPath: repo.path,
           repoId: repo.id,
           prNumber: pr.number,
-          method
+          method,
+          prRepo: pr.prRepo ?? null
         })
         if (!result.ok) {
           setMergeError(result.error)
@@ -59,7 +58,7 @@ export default function PRActions({
         setMerging(false)
       }
     },
-    [repo.id, repo.path, pr.number, onRefreshPR]
+    [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
   )
 
   useEffect(() => {
@@ -76,17 +75,10 @@ export default function PRActions({
   }, [mergeMenuOpen])
 
   const handleDeleteWorktree = useCallback(() => {
-    // Why: honor the user's "don't ask again" preference from the main
-    // worktree-delete dialog here too; otherwise the merged-PR shortcut would
-    // still prompt after the user opted out everywhere else. Main worktrees
-    // can't reach this action — PRs are opened from non-main worktrees — so
-    // we don't need the main-worktree guard the context menu uses.
-    if (skipDeleteConfirm) {
-      runWorktreeDeleteWithToast(worktree.id, worktree.displayName)
-      return
-    }
-    openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [worktree.id, worktree.displayName, openModal, skipDeleteConfirm])
+    // Why: route every UI delete entry point through the shared funnel so
+    // skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
+    runWorktreeDelete(worktree.id)
+  }, [worktree.id])
 
   // Why: merging a PR with unresolved conflicts would fail on GitHub anyway;
   // disabling the button prevents a confusing error and signals the user must
@@ -186,7 +178,7 @@ export default function PRActions({
         ) : (
           <Trash2 className="size-3.5" />
         )}
-        {isDeletingWorktree ? 'Deleting…' : 'Delete Worktree'}
+        {isDeletingWorktree ? 'Deleting…' : 'Delete Workspace'}
       </Button>
     )
   }

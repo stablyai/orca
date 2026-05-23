@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { NotificationStep } from './NotificationStep'
 
 describe('NotificationStep', () => {
-  it('renders the feature setup checklist in the notification step', () => {
+  it('renders feature setup in the notification step', () => {
     const html = renderToStaticMarkup(
       <NotificationStep
         value={{
@@ -28,5 +28,6 @@ describe('NotificationStep', () => {
     expect(html).toContain('Computer Use')
     expect(html).toContain('Agent Orchestration')
     expect(html).toContain('role="checkbox"')
+    expect(html).not.toContain('Connect task sources')
   })
 })

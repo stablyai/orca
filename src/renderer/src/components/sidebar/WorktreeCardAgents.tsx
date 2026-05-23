@@ -108,7 +108,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       if (tabs.some((t) => t.id === tabId)) {
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
-          flashFocusedPane: true
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
         })
       } else {
         dismissStaleAgentRowByKey(paneKey)
@@ -130,14 +131,14 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     // Why: swallow bubbling so clicks on the gutter around the agent rows
     // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1 divide-y divide-border/30', className)}
+      className={cn('flex flex-col mt-1 mb-1 divide-y divide-border/30', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       role="group"
       aria-label="Agents"
     >
       {agents.map((agent) => (
-        <div key={agent.paneKey} className="py-0.5">
+        <div key={agent.paneKey}>
           <DashboardAgentRow
             agent={agent}
             onDismiss={handleDismissAgent}

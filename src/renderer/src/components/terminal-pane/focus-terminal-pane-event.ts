@@ -14,11 +14,18 @@ type FocusTerminalPaneEventDeps = {
   manager: FocusTerminalPaneManager | null
   acknowledgeAgents: (paneKeys: string[]) => void
   surfaceStaleAgentRow: (tabId: string, leafId: string) => void
+  scrollToBottomIfOutputSinceLastView?: (paneId: number) => void
 }
 
 export function handleFocusTerminalPaneDetail(
   detail: FocusTerminalPaneDetail | undefined,
-  { tabId, manager, acknowledgeAgents, surfaceStaleAgentRow }: FocusTerminalPaneEventDeps
+  {
+    tabId,
+    manager,
+    acknowledgeAgents,
+    surfaceStaleAgentRow,
+    scrollToBottomIfOutputSinceLastView
+  }: FocusTerminalPaneEventDeps
 ): void {
   if (!detail?.tabId || detail.tabId !== tabId) {
     return
@@ -40,6 +47,9 @@ export function handleFocusTerminalPaneDetail(
     return
   }
   manager.setActivePane(resolution.numericPaneId, { focus: true })
+  if (detail.scrollToBottomIfOutputSinceLastView) {
+    scrollToBottomIfOutputSinceLastView?.(resolution.numericPaneId)
+  }
   if (detail.flashFocusedPane) {
     const pane = manager.getPanes().find((candidate) => candidate.id === resolution.numericPaneId)
     if (pane) {

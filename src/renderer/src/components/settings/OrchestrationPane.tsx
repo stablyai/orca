@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Copy } from 'lucide-react'
-import { toast } from 'sonner'
-import { Button } from '../ui/button'
+import { Workflow } from 'lucide-react'
 import { Label } from '../ui/label'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
+import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
-  ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
   isOrchestrationSetupEnabled,
-  isOrchestrationSkillMarkedInstalled,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
 export function OrchestrationPane(): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
@@ -26,14 +27,19 @@ export function OrchestrationPane(): React.JSX.Element {
     return isOrchestrationSetupEnabled()
   })
 
-  const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState<boolean>(() => {
-    return isOrchestrationSkillMarkedInstalled()
+  const {
+    installed: orchestrationSkillDetected,
+    loading: orchestrationSkillLoading,
+    error: orchestrationSkillError,
+    refresh: refreshOrchestrationSkill
+  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    enabled: orchestrationEnabled,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
   useEffect(() => {
     const syncSetupState = (): void => {
       setOrchestrationEnabled(isOrchestrationSetupEnabled())
-      setOrchestrationSkillInstalled(isOrchestrationSkillMarkedInstalled())
     }
     window.addEventListener(ORCHESTRATION_SETUP_STATE_EVENT, syncSetupState)
     return () => {
@@ -47,19 +53,8 @@ export function OrchestrationPane(): React.JSX.Element {
     notifyOrchestrationSetupStateChanged()
   }
 
-  const markOrchestrationSkillInstalled = (value: boolean): void => {
-    setOrchestrationSkillInstalled(value)
-    localStorage.setItem(ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
-    notifyOrchestrationSetupStateChanged()
-  }
-
-  const handleCopyOrchestrationCommand = async (): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(ORCHESTRATION_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it on this computer.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
-    }
+  const handleRecheckOrchestrationSkill = async (): Promise<void> => {
+    await refreshOrchestrationSkill()
   }
 
   if (!showOrchestration) {
@@ -98,50 +93,21 @@ export function OrchestrationPane(): React.JSX.Element {
       </div>
 
       {orchestrationEnabled ? (
-        <div className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Install Orchestration Skill</p>
-            <p className="text-xs text-muted-foreground">
-              Run this once on your computer so agents learn to use inter-agent orchestration.
-            </p>
-          </div>
-          <div className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
-            <code className="flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-              {ORCHESTRATION_SKILL_INSTALL_COMMAND}
-            </code>
-            <TooltipProvider delayDuration={250}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => void handleCopyOrchestrationCommand()}
-                    aria-label="Copy orchestration skill install command"
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Copy
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>
-              {orchestrationSkillInstalled
-                ? 'Marked as installed on this machine.'
-                : "Check off once you've run it on this computer."}
-            </span>
-            <button
-              type="button"
-              className="underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() => markOrchestrationSkillInstalled(!orchestrationSkillInstalled)}
-            >
-              {orchestrationSkillInstalled ? 'Undo' : 'I ran it'}
-            </button>
-          </div>
-        </div>
+        <AgentSkillSetupPanel
+          title="Orchestration skill"
+          detectedDescription="Detected on this machine. Agents can use inter-agent orchestration."
+          missingDescription="Agents need this skill before they can use inter-agent orchestration. If you already installed it, click Re-check instead of running the installer again."
+          command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          terminalTitle="Orchestration setup"
+          terminalAriaLabel="Orchestration skill install terminal"
+          terminalWorktreeId="settings-orchestration-skill-terminal"
+          installed={orchestrationSkillDetected}
+          detected={orchestrationSkillDetected}
+          loading={orchestrationSkillLoading}
+          error={orchestrationSkillError}
+          icon={<Workflow className="size-5" />}
+          onRecheck={handleRecheckOrchestrationSkill}
+        />
       ) : null}
     </SearchableSetting>
   )

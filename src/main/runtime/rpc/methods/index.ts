@@ -1,10 +1,12 @@
 import type { RpcAnyMethod } from '../core'
 import { STATUS_METHODS } from './status'
+import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
 import { TERMINAL_METHODS } from './terminal'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
+import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
@@ -15,19 +17,25 @@ import { SESSION_TAB_METHODS } from './session-tabs'
 import { FILE_METHODS } from './files'
 import { GIT_METHODS } from './git'
 import { GITHUB_METHODS } from './github'
+import { GITLAB_METHODS } from './gitlab'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
+import { SSH_METHODS } from './ssh'
 import { SPEECH_METHODS } from './speech'
+import { CLIENT_UI_METHODS } from './client-ui'
+import { WORKSPACE_PORT_METHODS } from './workspace-ports'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
 export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATUS_METHODS,
+  ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
   ...TERMINAL_METHODS,
   ...BROWSER_CORE_METHODS,
+  ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_EXTRA_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
@@ -39,7 +47,11 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
+  ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
-  ...SPEECH_METHODS
+  ...SSH_METHODS,
+  ...SPEECH_METHODS,
+  ...WORKSPACE_PORT_METHODS,
+  ...CLIENT_UI_METHODS
 ]

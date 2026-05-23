@@ -15,6 +15,14 @@ export function normalizeRuntimePathForComparison(value: string): string {
   return isWindowsAbsolutePathLike(value) ? normalized.toLowerCase() : normalized
 }
 
+export function getRuntimePathBasename(value: string): string {
+  const trimmed = value.replace(/[\\/]+$/g, '')
+  if (!trimmed) {
+    return ''
+  }
+  return trimmed.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
+}
+
 export function isPathInsideOrEqual(rootPath: string, candidatePath: string): boolean {
   const root = normalizeRuntimePathForComparison(rootPath)
   const candidate = normalizeRuntimePathForComparison(candidatePath)

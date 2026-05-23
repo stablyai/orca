@@ -119,7 +119,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {previouslyApproved ? `New ${scriptKind} script` : `${scriptKind} script`}
             </div>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground">
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek">
               {scriptContent}
             </pre>
           </div>

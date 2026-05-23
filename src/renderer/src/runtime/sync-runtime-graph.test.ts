@@ -1,9 +1,12 @@
+/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileSessionTabSnapshots,
+  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { AppState } from '../store/types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -17,9 +20,14 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     tabBarOrderByWorktree: {},
     activeFileId: null,
     activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0,
     ...overrides
   } as AppState
 }
@@ -27,12 +35,13 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 // Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
 // `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
 // `activeGroupIdByWorktree`, `unifiedTabsByWorktree`, `tabBarOrderByWorktree`,
-// and `activeFileIdByWorktree` by reference, and checks `activeTabId` by scalar
-// equality. `makeState`'s defaults allocate fresh `{}` for each map, so two
-// unrelated `makeState({...})` calls trivially diverge. Tests that want to
-// isolate a single field must share every other reference-checked map between
-// the two states; this factory produces one `Partial<AppState>` whose fields
-// can be spread into both `makeState` calls.
+// `activeFileIdByWorktree`, `openFiles`, and `editorDrafts` by reference, and
+// checks `activeTabId` by scalar equality. `makeState`'s defaults allocate
+// fresh `{}`/`[]` for each collection, so two unrelated `makeState({...})`
+// calls trivially diverge. Tests that want to isolate a single field must
+// share every other reference-checked collection between the two states; this
+// factory produces one `Partial<AppState>` whose fields can be spread into both
+// `makeState` calls.
 function makeSharedOverrides(): Partial<AppState> {
   return {
     tabsByWorktree: {},
@@ -42,7 +51,28 @@ function makeSharedOverrides(): Partial<AppState> {
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
     tabBarOrderByWorktree: {},
-    activeFileIdByWorktree: {}
+    activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {},
+    openFiles: [],
+    editorDrafts: {},
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0
+  }
+}
+
+function makeAgentStatusEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+  return {
+    state: 'working',
+    prompt: 'fix parity',
+    updatedAt: 1_700_000_000_000,
+    stateStartedAt: 1_699_999_999_000,
+    agentType: 'codex',
+    paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
+    terminalTitle: 'codex [working]',
+    stateHistory: [],
+    ...overrides
   }
 }
 
@@ -232,9 +262,194 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
+
+  it('changes when explicit agent status epoch changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 0
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes for same-state agent detail updates with the same epoch', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const beforeAgentStatusByPaneKey = {
+      [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'fix parity' })
+    }
+    const afterAgentStatusByPaneKey = {
+      [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'continue parity' })
+    }
+
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: beforeAgentStatusByPaneKey,
+        agentStatusEpoch: 1
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: afterAgentStatusByPaneKey,
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('coalesces timestamp-only agent heartbeats inside the same freshness bucket', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_000_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_001_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(true)
+  })
+
+  it('changes for timestamp-only agent heartbeats in a later freshness bucket', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_000_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({ paneKey, updatedAt: 30_030_000 })
+        },
+        agentStatusEpoch: 1
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('does not skip the App subscriber gate for same-epoch agent detail updates', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const before = makeState({
+      ...sharedOverrides,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'fix parity' })
+      },
+      agentStatusEpoch: 1
+    })
+    const after = makeState({
+      ...sharedOverrides,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'continue parity' })
+      },
+      agentStatusEpoch: 1
+    })
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
+  })
+
+  it('skips the App subscriber gate when sync inputs keep the same references', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const before = makeState(sharedOverrides)
+    const after = makeState(sharedOverrides)
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(true)
+  })
 })
 
 describe('buildMobileSessionTabSnapshots', () => {
+  it('preserves source-control diff metadata for mobile file tabs', () => {
+    const diffId = 'wt-1::diff::unstaged::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'unstaged',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs).toMatchObject([
+      {
+        type: 'file',
+        id: diffId,
+        mode: 'diff',
+        diffSource: 'unstaged',
+        relativePath: 'src/app.ts'
+      }
+    ])
+  })
+
+  it('omits unsupported branch and commit diff metadata from mobile file tabs', () => {
+    const diffId = 'wt-1::diff::branch::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'branch',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+    const tab = snapshot?.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'file', mode: 'diff', relativePath: 'src/app.ts' })
+    expect(tab).not.toHaveProperty('diffSource')
+  })
+
   it('keeps duplicate file ids scoped to their worktree', () => {
     const sharedRemotePath = '/home/dev/project/README.md'
     const previewId = `markdown-preview::${sharedRemotePath}`
@@ -286,6 +501,50 @@ describe('buildMobileSessionTabSnapshots', () => {
     ])
     expect(snapshotsByWorktree.get('wt-2')?.tabs).toMatchObject([
       { type: 'markdown', title: 'wt-two.md', sourceRelativePath: 'docs/wt-two.md' }
+    ])
+  })
+
+  it('publishes terminal pane agent status', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `term-1:${leafId}`
+    const state = makeState({
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'codex [working]', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId'],
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'fix parity',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000,
+          agentType: 'codex',
+          paneKey,
+          terminalTitle: 'codex [working]',
+          stateHistory: []
+        }
+      }
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        id: `term-1::${leafId}`,
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix parity',
+          agentType: 'codex',
+          paneKey
+        }
+      }
     ])
   })
 })

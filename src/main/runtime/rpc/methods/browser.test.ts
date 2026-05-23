@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
+import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -74,6 +75,77 @@ describe('browser RPC methods', () => {
       profileId: 'profile-1',
       browserFamily: 'chrome',
       browserProfile: 'Default'
+    })
+  })
+
+  it('routes browser screencast over the streaming dispatcher', async () => {
+    const sendBinary = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserScreencast: vi.fn(
+        async (_params: unknown, options: { emit: (result: unknown) => void }) => {
+          options.emit({ type: 'end', subscriptionId: 'browser-screencast:page-1:test' })
+        }
+      )
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('browser.screencast', {
+        worktree: 'id:wt-1',
+        page: 'page-1',
+        format: 'jpeg',
+        quality: 80,
+        maxWidth: 1024,
+        viewportWidth: 900,
+        viewportHeight: 600
+      }),
+      (reply) => replies.push(reply),
+      { connectionId: 'conn-1', sendBinary }
+    )
+
+    expect(runtime.browserScreencast).toHaveBeenCalledWith(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-1',
+        format: 'jpeg',
+        quality: 80,
+        maxWidth: 1024,
+        viewportWidth: 900,
+        viewportHeight: 600
+      },
+      {
+        connectionId: 'conn-1',
+        sendBinary,
+        signal: undefined,
+        emit: expect.any(Function)
+      }
+    )
+    expect(JSON.parse(replies[0])).toMatchObject({
+      ok: true,
+      streaming: true,
+      result: { type: 'end', subscriptionId: 'browser-screencast:page-1:test' }
+    })
+  })
+
+  it('routes browser screencast unsubscribe to runtime cleanup', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscription: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('browser.screencast.unsubscribe', {
+        subscriptionId: 'browser-screencast:page-1:test'
+      })
+    )
+
+    expect(runtime.cleanupSubscription).toHaveBeenCalledWith('browser-screencast:page-1:test')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { unsubscribed: true }
     })
   })
 

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
 type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'setup'
@@ -24,7 +25,8 @@ export function useCreateRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
   setStep: (step: DialogStep) => void,
   setAddedRepo: (repo: Repo | null) => void,
-  closeModal: () => void
+  closeModal: () => void,
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
@@ -128,6 +130,7 @@ export function useCreateRepo(
         // Why: setAddedRepo only drives the git "setup" step; the folder
         // branch closes the dialog, which resets addedRepo to null anyway.
         setAddedRepo(repo)
+        setExistingWorkspaceSource?.('create_project')
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current) {
           return
@@ -159,7 +162,16 @@ export function useCreateRepo(
         setIsCreating(false)
       }
     }
-  }, [createName, createParent, createKind, fetchWorktrees, setStep, setAddedRepo, closeModal])
+  }, [
+    createName,
+    createParent,
+    createKind,
+    fetchWorktrees,
+    setStep,
+    setAddedRepo,
+    closeModal,
+    setExistingWorkspaceSource
+  ])
 
   return {
     createName,

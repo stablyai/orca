@@ -18,7 +18,6 @@ import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsuppor
 // reference when there's nothing for this worktree. Without stable empties,
 // zustand's shallow equality would see a new `[]` every render and trigger
 // unnecessary re-renders — defeating the purpose of the narrow selector.
-const EMPTY_TABS: TerminalTab[] = []
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
@@ -31,63 +30,188 @@ type WorktreeAgentRowsState = Pick<
   | 'tabsByWorktree'
 >
 
-export function selectLiveAgentStatusEntriesForWorktree(
-  state: WorktreeAgentRowsState,
-  worktreeId: string
-): AgentStatusEntry[] {
-  const wtTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
-  if (wtTabs.length === 0) {
-    return EMPTY_LIVE_ENTRIES
+type TabWorktreeIndexCache = {
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+  tabIdToWorktreeId: Map<string, string>
+}
+
+type LiveEntriesByWorktreeCache = {
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+  agentStatusByPaneKey: WorktreeAgentRowsState['agentStatusByPaneKey']
+  entriesByWorktree: Map<string, AgentStatusEntry[]>
+}
+
+type MigrationUnsupportedByWorktreeCache = {
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+  migrationUnsupportedByPtyId: WorktreeAgentRowsState['migrationUnsupportedByPtyId']
+  entriesByWorktree: Map<string, MigrationUnsupportedPtyEntry[]>
+}
+
+type RetainedEntriesByWorktreeCache = {
+  retainedAgentsByPaneKey: WorktreeAgentRowsState['retainedAgentsByPaneKey']
+  entriesByWorktree: Map<string, RetainedAgentEntry[]>
+}
+
+let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
+let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
+let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
+let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
+
+function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
+  if (!previous || previous.length !== next.length) {
+    return next
   }
-  const tabIds = new Set(wtTabs.map((t) => t.id))
-  const out: AgentStatusEntry[] = []
+  for (let i = 0; i < next.length; i += 1) {
+    if (previous[i] !== next[i]) {
+      return next
+    }
+  }
+  return previous
+}
+
+function getTabIdToWorktreeId(
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+): Map<string, string> {
+  if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
+    return tabWorktreeIndexCache.tabIdToWorktreeId
+  }
+  const tabIdToWorktreeId = new Map<string, string>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    for (const tab of tabs) {
+      tabIdToWorktreeId.set(tab.id, worktreeId)
+    }
+  }
+  tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
+  return tabIdToWorktreeId
+}
+
+function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, AgentStatusEntry[]> {
+  if (
+    liveEntriesByWorktreeCache?.tabsByWorktree === state.tabsByWorktree &&
+    liveEntriesByWorktreeCache.agentStatusByPaneKey === state.agentStatusByPaneKey
+  ) {
+    return liveEntriesByWorktreeCache.entriesByWorktree
+  }
+
+  const tabIdToWorktreeId = getTabIdToWorktreeId(state.tabsByWorktree)
+  const previous = liveEntriesByWorktreeCache?.entriesByWorktree
+  const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
     if (!parsed) {
       continue
     }
-    if (!tabIds.has(parsed.tabId)) {
+    const worktreeId = tabIdToWorktreeId.get(parsed.tabId)
+    if (!worktreeId) {
       continue
     }
-    out.push(entry)
+    const bucket = entriesByWorktree.get(worktreeId)
+    if (bucket) {
+      bucket.push(entry)
+    } else {
+      entriesByWorktree.set(worktreeId, [entry])
+    }
   }
-  return out.length > 0 ? out : EMPTY_LIVE_ENTRIES
+  for (const [worktreeId, entries] of entriesByWorktree) {
+    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+  }
+  liveEntriesByWorktreeCache = {
+    tabsByWorktree: state.tabsByWorktree,
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    entriesByWorktree
+  }
+  return entriesByWorktree
+}
+
+function getMigrationUnsupportedByWorktree(
+  state: WorktreeAgentRowsState
+): Map<string, MigrationUnsupportedPtyEntry[]> {
+  if (
+    migrationUnsupportedByWorktreeCache?.tabsByWorktree === state.tabsByWorktree &&
+    migrationUnsupportedByWorktreeCache.migrationUnsupportedByPtyId ===
+      state.migrationUnsupportedByPtyId
+  ) {
+    return migrationUnsupportedByWorktreeCache.entriesByWorktree
+  }
+
+  const tabIdToWorktreeId = getTabIdToWorktreeId(state.tabsByWorktree)
+  const previous = migrationUnsupportedByWorktreeCache?.entriesByWorktree
+  const entriesByWorktree = new Map<string, MigrationUnsupportedPtyEntry[]>()
+  for (const unsupported of Object.values(state.migrationUnsupportedByPtyId)) {
+    if (!unsupported.paneKey) {
+      continue
+    }
+    const parsed = parsePaneKey(unsupported.paneKey)
+    const worktreeId = parsed ? tabIdToWorktreeId.get(parsed.tabId) : undefined
+    if (!worktreeId) {
+      continue
+    }
+    const bucket = entriesByWorktree.get(worktreeId)
+    if (bucket) {
+      bucket.push(unsupported)
+    } else {
+      entriesByWorktree.set(worktreeId, [unsupported])
+    }
+  }
+  for (const [worktreeId, entries] of entriesByWorktree) {
+    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+  }
+  migrationUnsupportedByWorktreeCache = {
+    tabsByWorktree: state.tabsByWorktree,
+    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+    entriesByWorktree
+  }
+  return entriesByWorktree
+}
+
+function getRetainedEntriesByWorktree(
+  state: WorktreeAgentRowsState
+): Map<string, RetainedAgentEntry[]> {
+  if (retainedEntriesByWorktreeCache?.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey) {
+    return retainedEntriesByWorktreeCache.entriesByWorktree
+  }
+
+  const previous = retainedEntriesByWorktreeCache?.entriesByWorktree
+  const entriesByWorktree = new Map<string, RetainedAgentEntry[]>()
+  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+    const bucket = entriesByWorktree.get(retained.worktreeId)
+    if (bucket) {
+      bucket.push(retained)
+    } else {
+      entriesByWorktree.set(retained.worktreeId, [retained])
+    }
+  }
+  for (const [worktreeId, entries] of entriesByWorktree) {
+    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+  }
+  retainedEntriesByWorktreeCache = {
+    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    entriesByWorktree
+  }
+  return entriesByWorktree
+}
+
+export function selectLiveAgentStatusEntriesForWorktree(
+  state: WorktreeAgentRowsState,
+  worktreeId: string
+): AgentStatusEntry[] {
+  return getLiveEntriesByWorktree(state).get(worktreeId) ?? EMPTY_LIVE_ENTRIES
 }
 
 export function selectMigrationUnsupportedEntriesForWorktree(
   state: WorktreeAgentRowsState,
   worktreeId: string
 ): MigrationUnsupportedPtyEntry[] {
-  const wtTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
-  if (wtTabs.length === 0) {
-    return EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
-  }
-  const tabIds = new Set(wtTabs.map((t) => t.id))
-  const out: MigrationUnsupportedPtyEntry[] = []
-  for (const unsupported of Object.values(state.migrationUnsupportedByPtyId)) {
-    if (!unsupported.paneKey) {
-      continue
-    }
-    const parsed = parsePaneKey(unsupported.paneKey)
-    if (!parsed || !tabIds.has(parsed.tabId)) {
-      continue
-    }
-    out.push(unsupported)
-  }
-  return out.length > 0 ? out : EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
+  return (
+    getMigrationUnsupportedByWorktree(state).get(worktreeId) ?? EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
+  )
 }
 
 export function selectRetainedAgentEntriesForWorktree(
   state: WorktreeAgentRowsState,
   worktreeId: string
 ): RetainedAgentEntry[] {
-  const out: RetainedAgentEntry[] = []
-  for (const ra of Object.values(state.retainedAgentsByPaneKey)) {
-    if (ra.worktreeId === worktreeId) {
-      out.push(ra)
-    }
-  }
-  return out.length > 0 ? out : EMPTY_RETAINED
+  return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
 }
 
 export function buildWorktreeAgentRows(args: {
@@ -155,10 +279,10 @@ export function buildWorktreeAgentRows(args: {
  * list. Produces live hook-reported agents plus retained "done" snapshots,
  * stale-decayed to 'idle' when the hook stream has gone quiet.
  *
- * Uses per-worktree selectors rather than reusing useDashboardData's
- * cross-worktree aggregate — that pipeline is O(repos × worktrees × agents)
- * and would recompute once per sidebar card on every agent-status event.
- * Scoped selectors keep the cost O(this-worktree-entries) per card.
+ * Uses indexed per-worktree selectors rather than reusing useDashboardData's
+ * cross-worktree aggregate. The index is rebuilt once per relevant immutable
+ * store slice and then shared by every visible card, avoiding O(cards × agents)
+ * selector work on high-frequency agent status pings.
  */
 export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId])

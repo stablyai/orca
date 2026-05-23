@@ -15,6 +15,8 @@
 
 import { z } from 'zod'
 import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
+import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
+import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -41,6 +43,7 @@ export const AGENT_KIND_VALUES = [
   'opencode',
   'pi',
   'gemini',
+  'antigravity',
   'aider',
   'goose',
   'amp',
@@ -101,6 +104,18 @@ export const addRepoSetupStepActionSchema = z.enum([
 ])
 export type AddRepoSetupStepAction = z.infer<typeof addRepoSetupStepActionSchema>
 
+export const addRepoExistingWorkspaceSourceSchema = z.enum([
+  'local_folder_picker',
+  'runtime_server_path',
+  'ssh_remote_path',
+  'clone_url',
+  'create_project'
+])
+export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorkspaceSourceSchema>
+
+export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
+export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
+
 // Deliberately a separate enum from `errorClassSchema` (PTY-spawn taxonomy):
 // different domain — this one buckets git/filesystem failures thrown by
 // `createLocalWorktree` / `createRemoteWorktree`. Merging the two would lock
@@ -115,15 +130,8 @@ export const workspaceCreateErrorClassSchema = z.enum([
 ])
 export type WorkspaceCreateErrorClass = z.infer<typeof workspaceCreateErrorClassSchema>
 
-export const workspaceSourceSchema = z.enum([
-  'command_palette',
-  'sidebar',
-  'shortcut',
-  'drag_drop',
-  'onboarding',
-  'unknown'
-])
-export type WorkspaceSource = z.infer<typeof workspaceSourceSchema>
+export const workspaceSourceSchema = z.enum(WORKSPACE_SOURCE_VALUES)
+export type { WorkspaceSource }
 
 export const launchSourceSchema = z.enum([
   'command_palette',
@@ -136,6 +144,7 @@ export const launchSourceSchema = z.enum([
   'onboarding',
   'diff_notes_send',
   'notes_send',
+  'conflict_resolution',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
@@ -197,6 +206,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'openLinksInApp',
   'experimentalMobile',
   'experimentalPet',
+  'experimentalActivity',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
@@ -285,8 +295,32 @@ const featureWallTileClickedSchema = z
   })
   .strict()
 
+const existingWorkspaceCountSchema = z.number().int().min(1).max(50)
+const addRepoExistingWorkspaceContextSchema = {
+  source: addRepoExistingWorkspaceSourceSchema,
+  existing_workspace_count: existingWorkspaceCountSchema,
+  existing_linked_workspace_count: z.number().int().min(0).max(50)
+} as const
+
 const addRepoSetupStepActionEventSchema = z
-  .object({ action: addRepoSetupStepActionSchema, nth_repo_added: nthRepoAddedSchema })
+  .object({
+    action: addRepoSetupStepActionSchema,
+    source: addRepoExistingWorkspaceSourceSchema.optional(),
+    existing_workspace_count: existingWorkspaceCountSchema.optional(),
+    existing_linked_workspace_count: z.number().int().min(0).max(50).optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const addRepoExistingWorkspacesDetectedSchema = z
+  .object({
+    ...addRepoExistingWorkspaceContextSchema,
+    main_workspace_count: z.number().int().min(0).max(50),
+    branch_named_workspace_count: z.number().int().min(0).max(50),
+    detached_workspace_count: z.number().int().min(0).max(50),
+    custom_named_workspace_count: z.number().int().min(0).max(50),
+    sparse_workspace_count: z.number().int().min(0).max(50),
+    nth_repo_added: nthRepoAddedSchema
+  })
   .strict()
 
 // Why: same enum-only discipline as `agent_error` — `.strict()` rejects raw
@@ -300,6 +334,57 @@ const workspaceCreateFailedSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
+const setupScriptPromptModeSchema = z.enum(['import_available', 'configure_needed'])
+const setupScriptCountBucketSchema = z.enum(['0', '1', '2-3', '4+'])
+const setupScriptPromptContextSchema = {
+  mode: setupScriptPromptModeSchema,
+  // Why: cohort injection probes top-level ZodObject shapes; superRefine
+  // keeps that path while still rejecting impossible mode/provider pairs.
+  provider: setupScriptImportProviderSchema.optional(),
+  file_count_bucket: setupScriptCountBucketSchema,
+  unsupported_field_count_bucket: setupScriptCountBucketSchema,
+  has_shared_hooks: z.boolean(),
+  nth_repo_added: nthRepoAddedSchema
+} as const
+
+type SetupScriptPromptContextTelemetry = {
+  mode: z.infer<typeof setupScriptPromptModeSchema>
+  provider?: z.infer<typeof setupScriptImportProviderSchema>
+}
+
+function validateSetupScriptPromptProvider(
+  props: SetupScriptPromptContextTelemetry,
+  ctx: z.RefinementCtx
+): void {
+  if (props.mode === 'import_available' && props.provider === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'provider is required when setup import is available'
+    })
+  }
+  if (props.mode === 'configure_needed' && props.provider !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'provider is only valid when setup import is available'
+    })
+  }
+}
+// Why: setup-import telemetry is for a retention cohort, not debugging a
+// user's repo, so it carries only closed enums and count buckets.
+const setupScriptPromptShownSchema = z
+  .object(setupScriptPromptContextSchema)
+  .strict()
+  .superRefine(validateSetupScriptPromptProvider)
+const setupScriptPromptActionSchema = z
+  .object({
+    ...setupScriptPromptContextSchema,
+    action: z.enum(['import_completed', 'import_failed', 'configure_clicked', 'dismissed'])
+  })
+  .strict()
+  .superRefine(validateSetupScriptPromptProvider)
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
 // hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
@@ -352,7 +437,27 @@ const onboardingFailureReasonSchema = z.enum([
   'cancelled',
   'unknown'
 ])
-const onboardingValueKindSchema = z.enum(['agent', 'theme', 'notifications', 'repo'])
+const onboardingValueKindSchema = z.enum([
+  'agent',
+  'theme',
+  'notifications',
+  'integrations',
+  'repo'
+])
+const onboardingTaskSourcesGithubStatusSchema = z.enum([
+  'connected',
+  'not_authenticated',
+  'not_installed',
+  'checking',
+  'unknown'
+])
+const onboardingTaskSourcesLinearStatusSchema = z.enum([
+  'connected',
+  'not_connected',
+  'checking',
+  'unknown'
+])
+const onboardingTaskSourcesExitActionSchema = z.enum(['continue', 'skip_to_project_setup'])
 // `dismissed` from `OnboardingChecklistState` is intentionally excluded —
 // it is a UI panel-visibility flag, not an activation event, so it never
 // fires `activation_checklist_item_completed`. Keep this list in sync with
@@ -461,6 +566,16 @@ const onboardingStep4PathFailedSchema = z
   .object({
     path: onboardingPathSchema,
     reason: onboardingFailureReasonSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+const onboardingTaskSourcesSnapshotSchema = z
+  .object({
+    github_status: onboardingTaskSourcesGithubStatusSchema,
+    linear_status: onboardingTaskSourcesLinearStatusSchema,
+    exit_action: onboardingTaskSourcesExitActionSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
     cohort: cohortSchema
   })
   .strict()
@@ -679,8 +794,11 @@ export const eventSchemas = {
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
+  add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
   workspace_created: workspaceCreatedSchema,
   workspace_create_failed: workspaceCreateFailedSchema,
+  setup_script_prompt_shown: setupScriptPromptShownSchema,
+  setup_script_prompt_action: setupScriptPromptActionSchema,
 
   agent_started: agentStartedSchema,
   agent_error: agentErrorSchema,
@@ -703,6 +821,7 @@ export const eventSchemas = {
   onboarding_step_skipped: onboardingStepSkippedSchema,
   onboarding_step4_path_clicked: onboardingStep4PathClickedSchema,
   onboarding_step4_path_failed: onboardingStep4PathFailedSchema,
+  onboarding_task_sources_snapshot: onboardingTaskSourcesSnapshotSchema,
   onboarding_completed: onboardingCompletedSchema,
   onboarding_dismissed: onboardingDismissedSchema,
   onboarding_agent_picked: onboardingAgentPickedSchema,
@@ -759,8 +878,11 @@ type _CohortExtendedRoster =
   | 'app_opened'
   | 'repo_added'
   | 'add_repo_setup_step_action'
+  | 'add_repo_existing_workspaces_detected'
   | 'workspace_created'
   | 'workspace_create_failed'
+  | 'setup_script_prompt_shown'
+  | 'setup_script_prompt_action'
   | 'agent_started'
   | 'agent_error'
 // Why: `z.object({}).strict()` infers a string index signature, which would
@@ -809,6 +931,7 @@ type _OnboardingCohortRoster =
   | 'onboarding_step_skipped'
   | 'onboarding_step4_path_clicked'
   | 'onboarding_step4_path_failed'
+  | 'onboarding_task_sources_snapshot'
   | 'onboarding_completed'
   | 'onboarding_dismissed'
   | 'onboarding_agent_picked'

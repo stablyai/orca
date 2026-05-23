@@ -59,7 +59,7 @@ export type RpcContext = {
   // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
   // responses after the binary terminal cutover. Undefined on Unix/socket
   // transports and non-E2EE WebSocket paths.
-  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
   // Why: binary terminal input/resize frames arrive outside JSON-RPC after a
   // stream is established. The WebSocket transport owns the connection-scoped
   // stream table; handlers register only the stream IDs they created.

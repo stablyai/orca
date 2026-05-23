@@ -653,6 +653,36 @@ describe('effectiveRecentActivity — create-grace floor', () => {
   })
 })
 
+describe('buildWorktreeComparator — manual order', () => {
+  it('orders by persisted manualOrder with higher values first', () => {
+    const first = makeWorktree({ id: 'first', displayName: 'First', manualOrder: 3000 })
+    const second = makeWorktree({ id: 'second', displayName: 'Second', manualOrder: 2000 })
+    const worktrees = [second, first]
+
+    worktrees.sort(buildWorktreeComparator('manual', repoMap, NOW, new Map()))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['first', 'second'])
+  })
+
+  it('falls back to sortOrder before a workspace has manualOrder', () => {
+    const restoredTop = makeWorktree({
+      id: 'restored-top',
+      displayName: 'Restored Top',
+      sortOrder: 5000
+    })
+    const restoredBottom = makeWorktree({
+      id: 'restored-bottom',
+      displayName: 'Restored Bottom',
+      sortOrder: 1000
+    })
+    const worktrees = [restoredBottom, restoredTop]
+
+    worktrees.sort(buildWorktreeComparator('manual', repoMap, NOW, new Map()))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['restored-top', 'restored-bottom'])
+  })
+})
+
 describe('buildWorktreeComparator — recent with createdAt grace window', () => {
   it('keeps a newly-created worktree on top even when another worktree bumps lastActivityAt', () => {
     const newWorktree = makeWorktree({

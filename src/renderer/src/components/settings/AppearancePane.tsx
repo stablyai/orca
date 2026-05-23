@@ -6,6 +6,7 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FontAutocomplete } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
@@ -96,6 +97,14 @@ const STATUS_BAR_TOGGLES: readonly {
     keywords: ['status bar', 'resource', 'manager', 'memory', 'cpu', 'terminal', 'disk', 'space'],
     toggleDescription:
       'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
+  },
+  {
+    id: 'ports',
+    title: 'Ports',
+    description: 'Show live workspace ports in the status bar.',
+    keywords: ['status bar', 'ports', 'localhost', 'server', 'workspace'],
+    toggleDescription:
+      'Show live workspace ports. Click it for workspace-scoped ports and external listeners.'
   }
 ]
 
@@ -173,9 +182,8 @@ export function AppearancePane({
   fontSuggestions
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const isMac = navigator.userAgent.includes('Mac')
-  const zoomInLabel = isMac ? '⌘+' : 'Ctrl +'
-  const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
+  const zoomInLabel = useShortcutLabel('zoom.in')
+  const zoomOutLabel = useShortcutLabel('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)

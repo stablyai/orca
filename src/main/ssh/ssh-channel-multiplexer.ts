@@ -361,13 +361,33 @@ export class SshChannelMultiplexer {
     // collection and skips the next handler. Iterating a snapshot prevents that.
     const snapshot = Array.from(this.notificationHandlers)
     for (const handler of snapshot) {
-      handler(msg.method, params)
+      try {
+        handler(msg.method, params)
+      } catch (err) {
+        // Why: relay notifications arrive on the SSH stream callback; one
+        // bad subscriber must not escape as a main-process uncaught exception.
+        console.warn(
+          `[ssh-mux] Notification handler failed for ${msg.method}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+      }
     }
     const methodHandlers = this.methodNotificationHandlers.get(msg.method)
     if (methodHandlers && methodHandlers.size > 0) {
       const methodSnapshot = Array.from(methodHandlers)
       for (const handler of methodSnapshot) {
-        handler(params)
+        try {
+          handler(params)
+        } catch (err) {
+          // Why: file-stream and PTY listeners are per-method subscribers; keep
+          // the mux alive even if one consumer rejects a malformed notification.
+          console.warn(
+            `[ssh-mux] Method notification handler failed for ${msg.method}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+        }
       }
     }
   }

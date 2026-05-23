@@ -82,4 +82,19 @@ describe('registerSettingsHandlers', () => {
 
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
   })
+
+  it('does not accept floating workspace trust grants from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })
+    store.updateSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(null, { floatingTerminalTrustedCwds: ['/tmp/notes'] })
+
+    expect(store.updateSettings).toHaveBeenCalledWith({})
+  })
 })

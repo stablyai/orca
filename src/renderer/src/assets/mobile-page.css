@@ -1,0 +1,1839 @@
+/* Why: ported from mobile/orca-mobile-sidebar-mock-v3.html. The mock is the
+   1:1 design spec for the in-app Mobile page; styles are scoped under
+   .mobile-page-root so they don't leak into the rest of the app shell. */
+
+.mobile-page-root .mp-close-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+}
+
+.mobile-page-root {
+  /* Real mobile-app tokens (from mobile/src/theme/mobile-theme.ts) — used
+     inside .mp-device-screen so simulated screens match the app exactly. */
+  --m-bg-base: #111111;
+  --m-bg-panel: #1a1a1a;
+  --m-bg-raised: #242424;
+  --m-border: #2a2a2a;
+  --m-text-primary: #e0e0e0;
+  --m-text-secondary: #888888;
+  --m-text-muted: #555555;
+  --m-accent-blue: #3b82f6;
+  --m-status-green: #22c55e;
+  --m-status-amber: #f59e0b;
+  --m-status-red: #ef4444;
+  --m-mono: 'Menlo', 'SF Mono', monospace;
+
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--foreground);
+}
+
+/* ── Hero ────────────────────────────────────────────────────────── */
+
+.mobile-page-root .mp-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 660px) minmax(0, 470px);
+  justify-content: center;
+  align-items: center;
+  gap: clamp(40px, 4.5vw, 70px);
+  padding: clamp(44px, 5.5vw, 72px) clamp(36px, 4.5vw, 64px);
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: thin;
+  /* Why: layer four large soft radial blobs across the whole hero so the
+     blue/indigo glow fills the dead space the corner-pinned blobs used to
+     leave empty. Each blob is animated below for slow drift. */
+  background-color: transparent;
+  background-image:
+    radial-gradient(
+      ellipse 40% 35% at 90% 10%,
+      rgba(99, 102, 241, 0.28) 0%,
+      rgba(99, 102, 241, 0.08) 30%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 38% 32% at 10% 95%,
+      rgba(59, 130, 246, 0.22) 0%,
+      rgba(59, 130, 246, 0.06) 35%,
+      transparent 60%
+    ),
+    /* Why: theme-aware so dots are visible in light mode too — hardcoded
+       white dots disappear on the light background. */
+    radial-gradient(
+        circle,
+        color-mix(in srgb, var(--foreground) 8%, transparent) 1px,
+        transparent 1.2px
+      );
+  background-size:
+    200% 200%,
+    200% 200%,
+    5px 5px;
+  background-position:
+    90% 10%,
+    10% 95%,
+    0 0;
+  background-repeat: no-repeat, no-repeat, repeat;
+  /* Why: animating background-position drifts the four blobs slowly across
+     the hero. The dot grid (last layer) stays fixed at 0 0. */
+  animation: mp-hero-bg-drift 32s ease-in-out infinite alternate;
+  will-change: background-position;
+}
+
+@keyframes mp-hero-bg-drift {
+  0% {
+    background-position:
+      90% 10%,
+      10% 95%,
+      0 0;
+  }
+  100% {
+    background-position:
+      75% 25%,
+      25% 80%,
+      0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-page-root .mp-hero {
+    animation: none;
+  }
+}
+
+.mobile-page-root .mp-hero-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 660px;
+  display: flex;
+  flex-direction: column;
+  /* Why: min-height (rather than fixed height) keeps the intro/flow
+     screens at a uniform 420px box for centering, while letting the
+     paired view grow when the device list needs more room. */
+  min-height: 420px;
+}
+
+.mobile-page-root .mp-hero-copy > * {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-page-root .mp-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.mobile-page-root .mp-eyebrow {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mobile-page-root .mp-h1 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(46px, 5vw, 72px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.04;
+}
+
+.mobile-page-root .mp-lead {
+  max-width: 580px;
+  margin: 24px 0 38px;
+  color: var(--muted-foreground);
+  font-size: 20px;
+  font-weight: 450;
+  line-height: 1.55;
+}
+
+.mobile-page-root .mp-paired-list {
+  list-style: none;
+  margin: 18px 0 0;
+  /* Why: right padding reserves space for the scrollbar so it doesn't
+     sit on top of the row's right edge when the list overflows. */
+  padding: 0 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 452px;
+  /* Why: cap so 4 rows fit fully and the 5th onward scrolls. Rows render
+     at ~64px each plus 8px gap, so 4 × 64 + 3 × 8 ≈ 280px. */
+  max-height: 288px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mobile-page-root .mp-paired-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+.mobile-page-root .mp-paired-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-paired-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-page-root .mp-paired-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-paired-name {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-page-root .mp-paired-meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.mobile-page-root .mp-paired-revoke {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.mobile-page-root .mp-paired-revoke:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--destructive, oklch(0.6 0.2 25)) 12%, transparent);
+  color: var(--destructive, oklch(0.6 0.2 25));
+}
+
+.mobile-page-root .mp-paired-revoke[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-paired-revoke svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mobile-page-root .mp-cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.mobile-page-root .mp-primary-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.mobile-page-root .mp-primary-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Step flow ─────────────────────────────────────────────────────── */
+
+.mobile-page-root .mp-flow-header {
+  margin-bottom: 24px;
+}
+
+.mobile-page-root .mp-flow-step-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-page-root .mp-step-num {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-step-title {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--foreground);
+}
+
+/* Why: stack both step screens in the same grid cell so the viewport
+   sizes to the tallest child. This keeps the back button at the same
+   Y on Step 1 and Step 2 even though Step 2 has more rows of content. */
+.mobile-page-root .mp-flow-viewport {
+  display: grid;
+  grid-template-areas: 'stack';
+}
+
+.mobile-page-root .mp-flow-screen {
+  grid-area: stack;
+  transform: translateX(40px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 280ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    opacity 200ms ease;
+}
+
+.mobile-page-root .mp-flow-screen.is-active {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-page-root .mp-flow-screen.is-past {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+
+.mobile-page-root .mp-flow-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+  /* Why: keep row height stable across steps so the back button doesn't jump
+     vertically when the right side switches between a 40px Continue button
+     and a placeholder span. */
+  min-height: calc(40px + 16px);
+}
+
+.mobile-page-root .mp-flow-continue {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.mobile-page-root .mp-flow-continue svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mobile-page-root .mp-flow-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.mobile-page-root .mp-flow-back:hover {
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-flow-back svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mobile-page-root .mp-flow-continue.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-page-root .mp-step-body {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mobile-page-root .mp-platform-toggle {
+  display: inline-flex;
+  margin: 12px 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.mobile-page-root .mp-platform-toggle button {
+  border: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mobile-page-root .mp-platform-toggle button.is-active {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.mobile-page-root .mp-install-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.mobile-page-root .mp-install-row > div:first-child {
+  flex: 1;
+}
+
+.mobile-page-root .mp-small-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mobile-page-root .mp-ghost-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mobile-page-root .mp-ghost-action:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.mobile-page-root .mp-ghost-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mobile-page-root .mp-qr {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.mobile-page-root .mp-qr img {
+  display: block;
+  width: 116px;
+  height: 116px;
+}
+
+.mobile-page-root .mp-qr-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-page-root .mp-link-under {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.mobile-page-root .mp-link-under:hover:not([disabled]) {
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-link-under[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Step 1 (Get the app) — borderless layout, page-1 typography */
+.mobile-page-root .mp-step2-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Why: align the QR's top with the body copy ("Scan the QR…") instead
+   of the eyebrow row above it. The eyebrow row is ~22px tall + 22px
+   margin-bottom, and the h2 is ~38px line-height with no top margin —
+   so push the QR down by roughly that combined height. */
+.mobile-page-root .mp-step2-layout > .mp-qr,
+.mobile-page-root .mp-step2-layout > .mp-qr-stack {
+  margin-top: 88px;
+}
+
+.mobile-page-root .mp-step2-copy {
+  min-width: 0;
+}
+
+.mobile-page-root .mp-h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.mobile-page-root .mp-lead-sm {
+  max-width: 420px;
+  margin: 14px 0 22px;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.55;
+}
+
+.mobile-page-root .mp-tab-toggle {
+  display: inline-flex;
+  gap: 18px;
+  margin: 2px 0 22px;
+}
+
+.mobile-page-root .mp-tab-toggle button {
+  border: 0;
+  background: transparent;
+  padding: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mobile-page-root .mp-tab-toggle button.is-active {
+  color: var(--foreground);
+  border-bottom-color: var(--foreground);
+}
+
+.mobile-page-root .mp-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.mobile-page-root .mp-text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 140ms ease;
+}
+
+.mobile-page-root .mp-text-link:hover {
+  opacity: 1;
+}
+
+.mobile-page-root .mp-text-link svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mobile-page-root .mp-text-link[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-network-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.mobile-page-root .mp-network-label {
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-network-select {
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.mobile-page-root .mp-network-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.mobile-page-root .mp-network-refresh:hover:not([disabled]) {
+  background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-network-refresh[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mobile-page-root .mp-network-refresh svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mobile-page-root .mp-network-refresh.is-spinning svg {
+  animation: mp-network-refresh-spin 900ms linear infinite;
+}
+
+@keyframes mp-network-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mobile-page-root .mp-action-divider {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* Pairing settings card */
+.mobile-page-root .mp-pair-settings {
+  margin-top: 12px;
+  background: var(--m-bg-panel);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mobile-page-root .mp-pair-settings + .mp-pair-settings {
+  margin-top: 12px;
+}
+
+.mobile-page-root .mp-pair-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--m-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.mobile-page-root .mp-pair-row .mp-pair-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--m-text-secondary);
+  flex-shrink: 0;
+}
+
+.mobile-page-root .mp-pair-row .mp-pair-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-page-root .mp-pair-row .mp-pair-label {
+  flex: 1;
+  color: var(--m-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.mobile-page-root .mp-pair-row .mp-pair-value {
+  color: var(--m-text-muted);
+  font-family: var(--m-mono);
+  font-size: 12px;
+}
+
+.mobile-page-root .mp-pair-row.mp-pair-row-qr {
+  align-items: flex-start;
+}
+
+.mobile-page-root .mp-pair-row.mp-pair-row-qr .mp-pair-label {
+  padding-top: 4px;
+}
+
+.mobile-page-root .mp-pair-separator {
+  height: 1px;
+  background: var(--m-border);
+  margin: 0 14px;
+}
+
+.mobile-page-root .mp-pair-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--m-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobile-page-root .mp-pair-action-row:hover {
+  background: var(--m-bg-raised);
+}
+
+.mobile-page-root .mp-pair-action-row .mp-pair-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-page-root .mp-pair-action-row .mp-pair-label {
+  flex: 1;
+}
+
+.mobile-page-root .mp-pair-action-row .mp-pair-meta {
+  color: var(--m-text-muted);
+  font-size: 12px;
+}
+
+.mobile-page-root .mp-pair-action-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ── Phone stage ────────────────────────────────────────────────── */
+
+.mobile-page-root .mp-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 830px;
+}
+
+.mobile-page-root .mp-phone-frame {
+  position: relative;
+  width: min(100%, 470px);
+  aspect-ratio: 9 / 19.5;
+  border-radius: 48px;
+  background: #0a0a0a;
+  padding: 7px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent),
+    0 50px 100px -30px rgba(0, 0, 0, 0.7);
+}
+
+.mobile-page-root .mp-phone-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 41px;
+  background: var(--m-bg-base);
+  /* Why: Chromium occasionally fails to clip transformed children to a
+     rounded-corner overflow:hidden ancestor. Forcing a paint containment
+     boundary guarantees the off-screen slide can't leak past the bezel. */
+  contain: paint;
+  isolation: isolate;
+}
+
+.mobile-page-root .mp-screen-slide {
+  position: absolute;
+  inset: 0;
+  transform: translateX(100%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0.24, 1);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.mobile-page-root .mp-screen-slide.is-active {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.mobile-page-root .mp-screen-slide.is-past {
+  transform: translateX(-22%);
+}
+
+.mobile-page-root .mp-screen-slide.is-reset {
+  transition: none;
+}
+
+@keyframes mp-tap-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+  20%,
+  70% {
+    box-shadow: inset 0 0 0 200px var(--m-bg-raised);
+  }
+}
+
+.mobile-page-root .is-tapping {
+  animation: mp-tap-pulse 280ms ease-out;
+}
+
+/* ── Simulated mobile-app screens (real tokens) ─────────────────── */
+
+.mobile-page-root .mp-device-screen {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background: var(--m-bg-base);
+  color: var(--m-text-primary);
+  font-family:
+    'Geist',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 13px;
+  /* Why: phone-frame grew 50% but slide content uses fixed px tokens; zoom
+     scales children in layout space so they fill the bigger frame proportionally. */
+  zoom: 1.35;
+}
+
+.mobile-page-root .mp-wl-chrome,
+.mobile-page-root .mp-session-chrome {
+  padding-top: 18px;
+}
+
+/* Top bar */
+.mobile-page-root .mp-app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 11px 12px;
+}
+
+.mobile-page-root .mp-app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-page-root .mp-app-brand .mp-orca-logo {
+  width: 28px;
+  height: 18px;
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-app-brand-name {
+  color: var(--m-text-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.mobile-page-root .mp-icon-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-icon-button svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-scroll-region {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 11px;
+}
+
+.mobile-page-root .mp-greeting {
+  padding: 6px 4px 10px;
+}
+
+.mobile-page-root .mp-greeting-title {
+  color: var(--m-text-primary);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.mobile-page-root .mp-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mobile-page-root .mp-stat-card {
+  border: 1px solid var(--m-border);
+  border-radius: 10px;
+  background: rgba(26, 26, 26, 0.6);
+  padding: 8px 10px;
+}
+
+.mobile-page-root .mp-stat-value {
+  color: var(--m-text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mobile-page-root .mp-stat-label {
+  margin-top: 1px;
+  color: var(--m-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mobile-page-root .mp-section-label {
+  margin: 0 0 6px;
+  padding-left: 4px;
+  color: var(--m-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Host card */
+.mobile-page-root .mp-host-card {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  padding: 10px 12px;
+  gap: 12px;
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  background: var(--m-bg-panel);
+}
+
+.mobile-page-root .mp-host-card + .mp-host-card {
+  margin-top: 6px;
+}
+
+.mobile-page-root .mp-host-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-host-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-host-icon.is-dim {
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-host-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-host-name {
+  color: var(--m-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.mobile-page-root .mp-host-name.is-dim {
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-host-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--m-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mobile-page-root .mp-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.mobile-page-root .mp-status-dot.is-green {
+  background: var(--m-status-green);
+}
+
+.mobile-page-root .mp-status-dot.is-amber {
+  background: var(--m-status-amber);
+}
+
+.mobile-page-root .mp-status-dot.is-muted {
+  background: var(--m-text-muted);
+}
+
+.mobile-page-root .mp-chevron-right {
+  color: var(--m-text-muted);
+}
+
+.mobile-page-root .mp-chevron-right svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+/* Resume card */
+.mobile-page-root .mp-resume-card {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 12px;
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  background: var(--m-bg-panel);
+}
+
+.mobile-page-root .mp-resume-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-resume-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-resume-title {
+  color: var(--m-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-resume-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--m-text-secondary);
+  font-size: 11px;
+}
+
+.mobile-page-root .mp-repo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+/* Quick actions */
+.mobile-page-root .mp-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mobile-page-root .mp-quick-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  background: var(--m-bg-panel);
+}
+
+.mobile-page-root .mp-quick-action-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-quick-action-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-quick-action-label {
+  color: var(--m-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Tasks home card */
+.mobile-page-root .mp-task-home-card {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 12px;
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  background: var(--m-bg-panel);
+}
+
+.mobile-page-root .mp-task-home-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-task-home-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-task-home-title {
+  color: var(--m-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-task-home-subtitle {
+  margin-top: 2px;
+  color: var(--m-text-secondary);
+  font-size: 11px;
+}
+
+.mobile-page-root .mp-task-home-providers {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+}
+
+.mobile-page-root .mp-task-home-provider-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-task-home-provider-button svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.75;
+}
+
+/* Account usage */
+.mobile-page-root .mp-accounts-card {
+  background: var(--m-bg-panel);
+  border: 1px solid var(--m-border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-page-root .mp-accounts-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-page-root .mp-accounts-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-accounts-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-page-root .mp-accounts-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobile-page-root .mp-accounts-email {
+  color: var(--m-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-accounts-bars {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.mobile-page-root .mp-usage-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-page-root .mp-usage-bar-label {
+  color: var(--m-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 16px;
+}
+
+.mobile-page-root .mp-usage-bar-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--m-bg-raised);
+  overflow: hidden;
+}
+
+.mobile-page-root .mp-usage-bar-fill {
+  height: 100%;
+  background: var(--m-text-secondary);
+  border-radius: inherit;
+}
+
+/* ── Worktree-list screen ───────────────────────────────────────── */
+
+.mobile-page-root .mp-wl-chrome {
+  background: var(--m-bg-panel);
+  border-bottom: 1px solid var(--m-border);
+}
+
+.mobile-page-root .mp-wl-statusrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px 0;
+  min-height: 34px;
+}
+
+.mobile-page-root .mp-wl-back {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  margin-right: 4px;
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-wl-back svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-wl-host {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-wl-host-name {
+  color: var(--m-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-wl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--m-border);
+}
+
+.mobile-page-root .mp-wl-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--m-border);
+  border-radius: 12px;
+  color: var(--m-text-secondary);
+  font-size: 12px;
+}
+
+.mobile-page-root .mp-wl-chip svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-wl-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  color: var(--m-text-secondary);
+  font-size: 12px;
+}
+
+.mobile-page-root .mp-wl-button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-wl-spacer {
+  flex: 1;
+}
+
+.mobile-page-root .mp-wl-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-wl-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-wl-section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px 4px;
+  color: var(--m-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-page-root .mp-wl-section svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.mobile-page-root .mp-wl-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-page-root .mp-wl-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 16px;
+  gap: 8px;
+}
+
+.mobile-page-root .mp-wl-sep {
+  height: 1px;
+  margin-left: 40px;
+  margin-right: 16px;
+  background: var(--m-border);
+}
+
+.mobile-page-root .mp-wl-indicator {
+  display: grid;
+  width: 20px;
+  place-items: center;
+  padding-top: 6px;
+}
+
+.mobile-page-root .mp-wl-spinner {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  border: 2px solid #eab308;
+  border-top-color: transparent;
+  animation: mp-wl-spin 1s linear infinite;
+}
+
+.mobile-page-root .mp-wl-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.mobile-page-root .mp-wl-dot.is-green {
+  background: #10b981;
+}
+
+.mobile-page-root .mp-wl-dot.is-muted {
+  background: rgba(115, 115, 115, 0.4);
+}
+
+.mobile-page-root .mp-wl-dot.is-red {
+  background: #ef4444;
+}
+
+@keyframes mp-wl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mobile-page-root .mp-wl-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-wl-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-page-root .mp-wl-name {
+  color: var(--m-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-wl-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-secondary);
+  font-size: 10px;
+}
+
+.mobile-page-root .mp-wl-pr svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-wl-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--m-text-secondary);
+  font-size: 11px;
+}
+
+.mobile-page-root .mp-wl-meta-row .mp-repo-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.mobile-page-root .mp-wl-branch {
+  color: var(--m-text-muted);
+  font-family: var(--m-mono);
+}
+
+.mobile-page-root .mp-wl-preview {
+  margin-top: 2px;
+  color: var(--m-text-muted);
+  font-family: var(--m-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-page-root .mp-wl-tcount {
+  min-width: 16px;
+  padding-top: 3px;
+  color: var(--m-text-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* ── Session / terminal screen ─────────────────────────────────── */
+
+.mobile-page-root .mp-session-chrome {
+  background: var(--m-bg-panel);
+  border-bottom: 1px solid var(--m-border);
+}
+
+.mobile-page-root .mp-session-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 8px;
+  min-height: 48px;
+}
+
+.mobile-page-root .mp-session-back {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-session-back svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
+}
+
+.mobile-page-root .mp-session-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-session-title {
+  color: var(--m-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mobile-page-root .mp-session-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--m-text-secondary);
+  font-size: 12px;
+}
+
+.mobile-page-root .mp-session-iconbtn {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-session-iconbtn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.1;
+}
+
+.mobile-page-root .mp-session-tabbar {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--m-border);
+  height: 36px;
+}
+
+.mobile-page-root .mp-session-tab {
+  max-width: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--m-text-secondary);
+  font-size: 13px;
+}
+
+.mobile-page-root .mp-session-tab.is-active {
+  border-bottom-color: var(--m-accent-blue);
+  color: var(--m-text-primary);
+}
+
+.mobile-page-root .mp-session-tab svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.1;
+}
+
+.mobile-page-root .mp-session-tab-add {
+  width: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-session-tab-add svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+
+/* Tokyonight terminal */
+.mobile-page-root .mp-terminal {
+  flex: 1;
+  background: #1a1b26;
+  color: #c0caf5;
+  font-family: var(--m-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.mobile-page-root .mp-term-line {
+  display: block;
+}
+
+.mobile-page-root .mp-term-prompt {
+  color: #7aa2f7;
+}
+.mobile-page-root .mp-term-cmd {
+  color: #c0caf5;
+}
+.mobile-page-root .mp-term-comment {
+  color: #565f89;
+}
+.mobile-page-root .mp-term-warn {
+  color: #e0af68;
+}
+.mobile-page-root .mp-term-ok {
+  color: #9ece6a;
+}
+.mobile-page-root .mp-term-tool {
+  color: #bb9af7;
+}
+.mobile-page-root .mp-term-mid {
+  color: #a9b1d6;
+}
+.mobile-page-root .mp-term-dim {
+  color: #565f89;
+}
+
+.mobile-page-root .mp-term-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: #c0caf5;
+  vertical-align: text-bottom;
+  animation: mp-term-blink 1s steps(2, start) infinite;
+}
+
+@keyframes mp-term-blink {
+  to {
+    background: transparent;
+  }
+}
+
+/* Accessory + input bar */
+.mobile-page-root .mp-accessory-bar {
+  background: var(--m-bg-panel);
+  border-top: 1px solid var(--m-border);
+  overflow: hidden;
+}
+
+.mobile-page-root .mp-accessory-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mobile-page-root .mp-accessory-content::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-page-root .mp-accessory-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-secondary);
+  font-size: 12px;
+  font-family: var(--m-mono);
+}
+
+.mobile-page-root .mp-accessory-key.is-icon {
+  padding: 4px 8px;
+}
+
+.mobile-page-root .mp-accessory-key.is-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.mobile-page-root .mp-accessory-key.is-add {
+  background: transparent;
+  color: var(--m-text-secondary);
+}
+
+.mobile-page-root .mp-input-bar {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--m-border);
+  background: var(--m-bg-panel);
+  gap: 8px;
+}
+
+.mobile-page-root .mp-text-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-muted);
+  font-family: var(--m-mono);
+  font-size: 14px;
+}
+
+.mobile-page-root .mp-round-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 17px;
+  background: var(--m-bg-raised);
+  color: var(--m-text-secondary);
+  flex: 0 0 auto;
+}
+
+.mobile-page-root .mp-round-button svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
+
+/* Reduced motion: pin to home, no slide transitions */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-page-root .mp-screen-slide {
+    transition: none;
+  }
+}
+
+/* Narrow viewport: stack the hero so the phone falls below the copy */
+@media (max-width: 920px) {
+  .mobile-page-root .mp-hero {
+    grid-template-columns: 1fr;
+    padding: 56px 32px 48px;
+  }
+}

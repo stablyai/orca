@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
 
@@ -31,6 +32,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -51,7 +53,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [openingIssue, setOpeningIssue] = useState(false)
-  const isMac = navigator.userAgent.includes('Mac')
 
   const issueInputRef = useRef<HTMLInputElement>(null)
   const prInputRef = useRef<HTMLInputElement>(null)
@@ -175,7 +176,8 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+      const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+      if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
         e.stopPropagation()
         handleSave()
@@ -256,7 +258,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         <DialogHeader>
           <DialogTitle className="text-sm">Edit Worktree Details</DialogTitle>
           <DialogDescription className="text-xs">
-            Edit GitHub links and notes for this worktree.
+            Edit GitHub links and notes for this workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -340,11 +342,11 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               onKeyDown={handleCommentKeyDown}
               placeholder="Notes about this worktree..."
               rows={3}
-              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
             />
             <p className="text-[10px] text-muted-foreground">
               Supports **markdown** — bold, lists, `code`, links. Press Enter or{' '}
-              {isMac ? 'Cmd' : 'Ctrl'}+Enter to save, Shift+Enter for a new line.
+              {submitShortcutLabel} to save, Shift+Enter for a new line.
             </p>
           </div>
         </div>

@@ -211,6 +211,14 @@ export function usePersistCurrentStep({
         onOnboardingChange(await persistStep(3))
         return { ok: true, featureSetupResult }
       }
+      if (currentStepId === 'integrations') {
+        // Why: GitHub and Linear connections persist through their own
+        // store slices when the user actually wires them up. The step itself
+        // is a no-op for settings/onboarding state beyond marking it
+        // completed.
+        onOnboardingChange(await persistStep(4))
+        return { ok: true }
+      }
       return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

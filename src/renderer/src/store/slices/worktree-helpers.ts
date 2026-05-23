@@ -87,7 +87,9 @@ export type WorktreeSlice = {
     createdWithAgent?: TuiAgent,
     linkedLinearIssue?: string,
     branchNameOverride?: string,
-    workspaceStatus?: WorkspaceStatus
+    workspaceStatus?: WorkspaceStatus,
+    linkedGitLabMR?: number,
+    linkedGitLabIssue?: number
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,

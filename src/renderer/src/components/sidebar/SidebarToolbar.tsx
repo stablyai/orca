@@ -9,8 +9,7 @@ import {
   HardDrive,
   MessageSquareText,
   School,
-  Settings,
-  Smartphone
+  Settings
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -253,7 +252,6 @@ function FeedbackDialog({
 const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -266,11 +264,6 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
     }
     lastShowOnboardingAtRef.current = now
     void showOnboardingFromRenderer()
-  }
-
-  const openMobileSettings = (): void => {
-    openSettingsTarget({ pane: 'mobile', repoId: null })
-    openSettingsPage()
   }
 
   return (
@@ -313,10 +306,6 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44">
-              <DropdownMenuItem onSelect={openMobileSettings}>
-                <Smartphone className="size-3.5" />
-                Orca Mobile
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={openSkillsPage}>
                 <BookOpen className="size-3.5" />
                 Skills

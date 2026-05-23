@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,6 +15,22 @@ export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
   | { status: 'refreshing' | 'ready'; result: GitHistoryResult; error?: string }
   | { status: 'error'; result?: GitHistoryResult; error: string }
+
+const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
+const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
+const MAX_GIT_HISTORY_PANEL_HEIGHT = 520
+const MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT = '33vh'
+
+type GitHistoryResizeSession = {
+  startY: number
+  startHeight: number
+  previousCursor: string
+  previousUserSelect: string
+}
+
+function clampGitHistoryPanelHeight(height: number): number {
+  return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
+}
 
 function formatHistoryTimestamp(timestamp: number | undefined): string {
   if (!timestamp) {
@@ -69,46 +85,53 @@ function GitHistoryRow({
   const visibleRefs = refs.slice(0, 2)
   const hiddenRefs = refs.slice(2)
   const rowTooltip = item.message || item.subject
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-1.5 px-3 py-1 text-left text-xs transition-colors disabled:cursor-default disabled:opacity-100',
-        canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
-        isBoundaryNode && 'text-muted-foreground'
-      )}
-      title={rowTooltip}
-      data-testid="git-history-row"
-      disabled={!canOpenCommit}
-      onClick={() => {
-        if (canOpenCommit) {
-          onOpenCommit?.(item)
-        }
-      }}
-    >
-      <GitHistoryGraphSvg viewModel={viewModel} />
-      <div className="flex min-w-0 flex-col justify-center overflow-hidden">
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="min-w-0 flex-1 truncate text-foreground" title={rowTooltip}>
-                {item.subject}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
-              {rowTooltip}
-            </TooltipContent>
-          </Tooltip>
-          {item.author && (
-            <span className="max-w-[5.5rem] shrink truncate text-[11px] text-muted-foreground">
+  const rowClassName = cn(
+    'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_4.5rem_3.25rem_3.75rem] grid-rows-[auto_auto] items-start gap-x-1.5 px-3 py-1 text-left text-xs transition-colors',
+    canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
+    !canOpenCommit && 'cursor-default',
+    isBoundaryNode && 'text-muted-foreground'
+  )
+  const rowContent = (
+    <>
+      <div className="row-span-2">
+        <GitHistoryGraphSvg viewModel={viewModel} />
+      </div>
+      <div className="min-w-0 overflow-hidden">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block min-w-0 truncate text-foreground" title={rowTooltip}>
+              {item.subject}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
+            {rowTooltip}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      {item.author ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground"
+              title={item.author}
+            >
               {item.author}
             </span>
-          )}
-          {timestamp && (
-            <span className="shrink-0 text-[11px] text-muted-foreground">{timestamp}</span>
-          )}
-        </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-all">
+            {item.author}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground" />
+      )}
+      <span className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground">
+        {timestamp}
+      </span>
+      <span className="min-w-0 truncate text-right font-mono text-[10px] leading-4 text-muted-foreground">
+        {!isBoundaryNode ? item.displayId : ''}
+      </span>
+      <div className="col-span-4 col-start-2 min-w-0 overflow-hidden">
         {refs.length > 0 && (
           <div className="mt-0.5 flex h-3.5 min-w-0 items-center gap-1 overflow-hidden">
             {visibleRefs.map((ref) => (
@@ -132,11 +155,29 @@ function GitHistoryRow({
           </div>
         )}
       </div>
-      {item.displayId && !isBoundaryNode && (
-        <span className="mt-0.5 shrink-0 font-mono text-[10px] leading-none text-muted-foreground">
-          {item.displayId}
-        </span>
-      )}
+    </>
+  )
+
+  if (!canOpenCommit) {
+    return (
+      <div className={rowClassName} title={rowTooltip} data-testid="git-history-row">
+        {rowContent}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={rowClassName}
+      title={rowTooltip}
+      aria-label={`Open commit ${item.displayId ?? item.id}: ${item.subject}`}
+      data-testid="git-history-row"
+      onClick={() => {
+        onOpenCommit?.(item)
+      }}
+    >
+      {rowContent}
     </button>
   )
 }
@@ -173,26 +214,111 @@ export function GitHistoryPanel({
 
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
+  const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
-  if (!result && state.status === 'idle') {
-    return null
+  const stopResize = useCallback((): void => {
+    const session = resizeSessionRef.current
+    if (!session) {
+      return
+    }
+    resizeSessionRef.current = null
+    document.body.style.cursor = session.previousCursor
+    document.body.style.userSelect = session.previousUserSelect
+  }, [])
+
+  const handleResizePointerMove = useCallback((event: PointerEvent): void => {
+    const session = resizeSessionRef.current
+    if (!session) {
+      return
+    }
+    setPanelHeight(clampGitHistoryPanelHeight(session.startHeight + session.startY - event.clientY))
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('pointermove', handleResizePointerMove)
+    window.addEventListener('pointerup', stopResize)
+    window.addEventListener('pointercancel', stopResize)
+    window.addEventListener('blur', stopResize)
+    return () => {
+      window.removeEventListener('pointermove', handleResizePointerMove)
+      window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+      window.removeEventListener('blur', stopResize)
+      stopResize()
+    }
+  }, [handleResizePointerMove, stopResize])
+
+  const startResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => {
+      if (collapsed) {
+        return
+      }
+      event.preventDefault()
+      resizeSessionRef.current = {
+        startY: event.clientY,
+        startHeight: panelHeight,
+        previousCursor: document.body.style.cursor,
+        previousUserSelect: document.body.style.userSelect
+      }
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    [collapsed, panelHeight]
+  )
+
+  const handleResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const step = event.shiftKey ? 32 : 16
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setPanelHeight((height) => clampGitHistoryPanelHeight(height + step))
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setPanelHeight((height) => clampGitHistoryPanelHeight(height - step))
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      setPanelHeight(MIN_GIT_HISTORY_PANEL_HEIGHT)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      setPanelHeight(MAX_GIT_HISTORY_PANEL_HEIGHT)
+    }
+  }, [])
+
+  const expandedBodyClassName = 'overflow-y-auto scrollbar-sleek'
+  const expandedBodyStyle = {
+    height: `min(${panelHeight}px, ${MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT})`
   }
 
   return (
-    <div>
-      <div className="pl-1 pr-3 pt-3 pb-1">
-        <div className="group/history flex items-center rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
+    <div className="relative">
+      {!collapsed && (
+        <div
+          role="separator"
+          aria-label="Resize graph"
+          aria-orientation="horizontal"
+          aria-valuemin={MIN_GIT_HISTORY_PANEL_HEIGHT}
+          aria-valuemax={MAX_GIT_HISTORY_PANEL_HEIGHT}
+          aria-valuenow={panelHeight}
+          tabIndex={0}
+          className="absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize outline-none focus-visible:bg-ring/30"
+          onPointerDown={startResize}
+          onKeyDown={handleResizeKeyDown}
+        />
+      )}
+      <div className="h-7 pl-1 pr-3">
+        <div className="flex h-full items-stretch rounded-md pr-1">
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-1 px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/history:text-accent-foreground"
+            className="flex min-w-0 flex-1 items-center gap-1 px-0.5 text-left text-[11px] font-semibold uppercase tracking-wider text-foreground/70"
             onClick={onToggle}
           >
             <ChevronDown
-              className={cn('size-3.5 shrink-0 transition-transform', collapsed && '-rotate-90')}
+              className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
             <span>Graph</span>
-            <span className="text-[11px] font-medium tabular-nums">{count}</span>
-            {result?.hasMore && <span className="text-[11px] font-medium">+</span>}
+            {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
+            {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -200,7 +326,7 @@ export function GitHistoryPanel({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
+                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
                 aria-label="What are graph refs?"
                 onClick={(event) => {
                   event.stopPropagation()
@@ -220,9 +346,13 @@ export function GitHistoryPanel({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
+                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
                 onClick={(event) => {
                   event.stopPropagation()
+                  if (collapsed) {
+                    onToggle()
+                    return
+                  }
                   onRefresh()
                 }}
                 aria-label="Refresh graph"
@@ -237,19 +367,35 @@ export function GitHistoryPanel({
         </div>
       </div>
       {!collapsed && state.status === 'error' && !result && (
-        <div className="px-6 py-2 text-[11px] text-destructive">{state.error}</div>
+        <div
+          className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-destructive')}
+          style={expandedBodyStyle}
+        >
+          {state.error}
+        </div>
       )}
-      {!collapsed && state.status === 'loading' && !result && (
-        <div className="flex items-center gap-2 px-6 py-2 text-[11px] text-muted-foreground">
+      {!collapsed && (state.status === 'idle' || state.status === 'loading') && !result && (
+        <div
+          className={cn(
+            expandedBodyClassName,
+            'flex items-start gap-2 px-6 py-2 text-[11px] text-muted-foreground'
+          )}
+          style={expandedBodyStyle}
+        >
           <RefreshCw className="size-3 animate-spin" />
           <span>Loading graph...</span>
         </div>
       )}
       {!collapsed && result && viewModels.length === 0 && (
-        <div className="px-6 py-2 text-[11px] text-muted-foreground">No commits yet</div>
+        <div
+          className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-muted-foreground')}
+          style={expandedBodyStyle}
+        >
+          No commits yet
+        </div>
       )}
       {!collapsed && viewModels.length > 0 && (
-        <div className="max-h-[33vh] overflow-y-auto scrollbar-sleek">
+        <div className={expandedBodyClassName} style={expandedBodyStyle}>
           {viewModels.map((viewModel) => (
             <GitHistoryRow
               key={`${viewModel.kind}:${viewModel.historyItem.id}`}

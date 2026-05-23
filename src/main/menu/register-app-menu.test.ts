@@ -29,6 +29,7 @@ function buildMenuOptions() {
     onOpenSettings: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
+    onBeforeReload: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -63,61 +64,70 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
-  it('uses a reload menu item without a ctrl/cmd+r accelerator', () => {
+  it('shows reload shortcuts as policy-routed menu hints', () => {
     registerAppMenu(buildMenuOptions())
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+Shift+R'}`
 
     expect(viewSubmenu).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Reload' }),
-        expect.objectContaining({ label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R' })
-      ])
+      expect.arrayContaining([expect.objectContaining({ label: 'Reload' })])
     )
 
     const reloadItem = viewSubmenu.find((item) => item.label === 'Reload')
     expect(reloadItem?.accelerator).toBeUndefined()
+    const forceReloadItem = viewSubmenu.find((item) => item.label === expectedForceReloadLabel)
+    expect(forceReloadItem).toBeDefined()
+    expect(forceReloadItem?.accelerator).toBeUndefined()
   })
 
   it('reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 101,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
     const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
     reloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadMock).toHaveBeenCalledTimes(1)
     expect(reloadIgnoringCacheMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: false, webContentsId: 101 })
   })
 
   it('force reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 102,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
-    const forceReloadItem = getSubmenu(getTemplate(), 'View').find(
-      (item) => item.label === 'Force Reload'
+    const forceReloadItem = getSubmenu(getTemplate(), 'View').find((item) =>
+      item.label?.startsWith('Force Reload\t')
     )
     forceReloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
   it('includes prereleases when Check for Updates is clicked with shift held', () => {
@@ -153,7 +163,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+Shift+J'}`
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
@@ -170,7 +180,13 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).toEqual(expect.arrayContaining(['Export as PDF...', 'Settings', 'Exit']))
+    expect(fileLabels).toEqual(
+      expect.arrayContaining([
+        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
+        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
+        'Exit'
+      ])
+    )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
@@ -184,11 +200,13 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
+    expect(appLabels).toEqual(
+      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
+    )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
     // the system app menu, so only Export belongs under File.
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain('Settings')
+    expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).not.toContain('Exit')
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(['Report Crash...', undefined, 'Feature tour'])
@@ -278,8 +296,8 @@ describe('registerAppMenu', () => {
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 
-    const leftLabel = `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`
-    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`
+    const leftLabel = `Toggle Left Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
+    const rightLabel = `Toggle Right Sidebar\t${isMac ? '⌘L' : 'Ctrl+L'}`
 
     appearanceSubmenu
       .find((item) => item.label === leftLabel)

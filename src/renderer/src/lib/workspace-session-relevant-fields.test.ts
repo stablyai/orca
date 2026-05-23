@@ -9,6 +9,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     activeWorktreeId: true,
     activeTabId: true,
     tabsByWorktree: true,
+    ptyIdsByTabId: true,
     terminalLayoutsByTabId: true,
     activeTabIdByWorktree: true,
     openFiles: true,

@@ -2,16 +2,16 @@ import { useEffect } from 'react'
 import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
+import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import logo from '../../../../../resources/logo.svg'
-
-const isMac = navigator.userAgent.includes('Mac')
 
 const stepCopy = {
   agent: {
@@ -28,9 +28,13 @@ const stepCopy = {
     subtitle:
       'Get notifications when agents need you, and choose the capabilities Orca should enable on this computer.'
   },
+  integrations: {
+    title: 'Connect your task sources',
+    subtitle: 'Connect GitHub or Linear to:'
+  },
   repo: {
     title: 'Point Orca at some code',
-    subtitle: 'Open a folder, clone a repo, or skip and add one later.'
+    subtitle: 'Open a folder or clone a repo to finish setup.'
   }
 } as const
 
@@ -38,19 +42,23 @@ const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
   notifications: 'Agent tools',
+  integrations: 'Integrations',
   repo: 'Create project'
 } as const
 
 type OnboardingFlowProps = {
   onboarding: OnboardingState
   onOnboardingChange: (state: OnboardingState) => void
+  onSettingsDetourStart?: () => void
 }
 
 export default function OnboardingFlow({
   onboarding,
-  onOnboardingChange
+  onOnboardingChange,
+  onSettingsDetourStart
 }: OnboardingFlowProps): React.JSX.Element {
-  const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
+  const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
   const shouldShowSetupAction =
@@ -69,8 +77,9 @@ export default function OnboardingFlow({
       if (isEditableTarget(event.target)) {
         return
       }
-      const mod = isMac ? event.metaKey : event.ctrlKey
-      if (!mod || event.key !== 'Enter') {
+      // Why: onboarding continue is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       event.preventDefault()
@@ -188,6 +197,7 @@ export default function OnboardingFlow({
               featureSetupCommandSelection={flow.featureSetupTerminalSelection}
             />
           )}
+          {currentStep.id === 'integrations' && <IntegrationsStep />}
           {currentStep.id === 'repo' && (
             <RepoStep
               cloneUrl={flow.cloneUrl}
@@ -195,6 +205,7 @@ export default function OnboardingFlow({
               onOpenFolder={() => void flow.openFolder()}
               onOpenServerFolder={(kind) => void flow.openFolder(kind)}
               onClone={() => void flow.clone()}
+              onOpenSshSettings={() => void flow.openSshSettings()}
               serverPath={flow.serverPath}
               onServerPathChange={flow.setServerPath}
               cloneDestination={flow.cloneDestination}
@@ -208,13 +219,17 @@ export default function OnboardingFlow({
         </div>
 
         <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          <button
-            className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-            disabled={Boolean(busyLabel)}
-            onClick={() => void flow.skip()}
-          >
-            Skip all onboarding
-          </button>
+          {currentStep.id !== 'repo' ? (
+            <button
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+              disabled={Boolean(busyLabel)}
+              onClick={() => void flow.skipToRepo()}
+            >
+              Skip to project setup
+            </button>
+          ) : (
+            <span />
+          )}
           <div className="flex items-center gap-2">
             {stepIndex > 0 && (
               <button
@@ -224,6 +239,15 @@ export default function OnboardingFlow({
               >
                 <ChevronLeft className="size-4" />
                 Back
+              </button>
+            )}
+            {shouldShowSetupAction && (
+              <button
+                className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+                disabled={Boolean(busyLabel)}
+                onClick={() => void flow.skipAgentSetup()}
+              >
+                Skip
               </button>
             )}
             {currentStep.id !== 'repo' && (
@@ -236,7 +260,7 @@ export default function OnboardingFlow({
                 {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
                 {primaryActionLabel}
                 <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-                  <span>{isMac ? '⌘' : 'Ctrl'}</span>
+                  <span>{continueShortcutModifierLabel}</span>
                   <CornerDownLeft className="size-3" />
                 </span>
               </button>

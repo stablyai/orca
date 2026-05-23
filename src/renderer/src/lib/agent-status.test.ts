@@ -389,6 +389,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('Antigravity running')).toBe('Antigravity')
+    expect(getAgentLabel('agy working')).toBe('Antigravity')
     expect(getAgentLabel('Grok running')).toBe('Grok')
     expect(getAgentLabel('⠋ Droid')).toBe('Droid')
     expect(getAgentLabel('Droid ready')).toBe('Droid')
@@ -703,6 +705,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
   })
 
+  it("maps 'antigravity' to 'Antigravity'", () => {
+    expect(formatAgentTypeLabel('antigravity')).toBe('Antigravity')
+  })
+
   it("maps 'cursor' to 'Cursor'", () => {
     expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
   })
@@ -731,6 +737,7 @@ describe('agentTypeToIconAgent', () => {
 
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
+    expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

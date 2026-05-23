@@ -15,6 +15,7 @@ type WorktreeSnapshot = {
 // needs cross-render caching. WeakMap ties each snapshot to the store slice ref
 // without pinning old test/dev instances in memory once that slice is replaced.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
+const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
 const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
 
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
@@ -50,6 +51,19 @@ function getCachedWorktreeMap(worktreesByRepo: AppState['worktreesByRepo']): Map
   return getWorktreeSnapshot(worktreesByRepo).worktreeMap
 }
 
+function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']): boolean {
+  const cached = hasAnyWorktreesCache.get(worktreesByRepo)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  // Why: this selector sits in an always-mounted scanner. Cache by slice
+  // identity so unrelated store writes do not rescan every repo bucket.
+  const hasWorktrees = Object.values(worktreesByRepo).some((worktrees) => worktrees.length > 0)
+  hasAnyWorktreesCache.set(worktreesByRepo, hasWorktrees)
+  return hasWorktrees
+}
+
 function getCachedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   const cachedMap = repoMapCache.get(repos)
   if (cachedMap) {
@@ -69,6 +83,10 @@ export function getWorktreeMapFromState(
   state: Pick<AppState, 'worktreesByRepo'>
 ): Map<string, Worktree> {
   return getCachedWorktreeMap(state.worktreesByRepo)
+}
+
+export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {
+  return getCachedHasAnyWorktrees(state.worktreesByRepo)
 }
 
 export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string, Repo> {
@@ -118,6 +136,7 @@ export const useModalData = () => useAppStore((s) => s.modalData)
 export const useGroupBy = () => useAppStore((s) => s.groupBy)
 export const useSortBy = () => useAppStore((s) => s.sortBy)
 export const useShowActiveOnly = () => useAppStore((s) => s.showActiveOnly)
+export const useShowSleepingWorkspaces = () => useAppStore((s) => s.showSleepingWorkspaces)
 export const useFilterRepoIds = () => useAppStore((s) => s.filterRepoIds)
 
 // ─── GitHub ─────────────────────────────────────────────────────────

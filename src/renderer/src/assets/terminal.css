@@ -134,19 +134,23 @@
   inset: 1px;
   z-index: 30;
   pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--ring) 82%, transparent);
-  border-radius: 3px;
+  border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
+  border-radius: 2px;
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--ring) 44%, transparent),
-    0 0 0 2px color-mix(in srgb, var(--ring) 28%, transparent),
-    0 0 18px color-mix(in srgb, var(--ring) 28%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: pane-focus-rim-flash 1.5s ease-out forwards;
 }
 
 @keyframes pane-focus-rim-flash {
-  0%,
-  72% {
+  0% {
     opacity: 1;
+  }
+  24% {
+    opacity: 0.42;
+  }
+  46% {
+    opacity: 0;
   }
   100% {
     opacity: 0;
@@ -183,6 +187,27 @@
 
 /* ── Pane title bar ──────────────────────────────────── */
 
+:root {
+  --orca-pane-title-height: 24px;
+  --orca-pane-title-fg: var(--terminal-pane-title-on-dark-fg);
+  --orca-pane-title-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --orca-pane-title-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --orca-pane-title-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --orca-pane-title-button-hover-fg: var(--terminal-pane-title-on-dark-button-hover-fg);
+  --orca-pane-title-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --orca-pane-title-separator: var(--terminal-pane-title-on-dark-separator);
+}
+
+[data-pane-title-surface='light'] {
+  --orca-pane-title-fg: var(--terminal-pane-title-on-light-fg);
+  --orca-pane-title-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --orca-pane-title-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --orca-pane-title-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --orca-pane-title-button-hover-fg: var(--terminal-pane-title-on-light-button-hover-fg);
+  --orca-pane-title-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --orca-pane-title-separator: var(--terminal-pane-title-on-light-separator);
+}
+
 /* Floating tab style — no full-width background bar. The title sits as a
    lightweight inline label so the terminal content isn't visually "capped."
    Uses muted grey + monospace to read as metadata, not actionable text. */
@@ -191,54 +216,61 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 20px;
+  height: var(--orca-pane-title-height);
   z-index: 5; /* below drag handle (z:10) */
   display: flex;
   align-items: center;
   padding: 0 8px;
   font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  color: rgba(255, 255, 255, 0.52);
+  color: var(--orca-pane-title-fg, rgb(255 255 255 / 0.52));
   background: transparent;
   border-bottom: none;
-  cursor: pointer; /* click to edit title */
   user-select: none;
 }
 
 .pane-title-text {
+  align-self: stretch;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  line-height: var(--orca-pane-title-height);
+}
+
+.pane-title-text:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
 }
 
 .pane-title-close {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin-left: auto;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 14px;
-  line-height: 14px;
-  transform: translateY(-1px);
-  cursor: pointer;
+  color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
   opacity: 0;
   transition:
     opacity 120ms ease,
     color 120ms ease;
 }
 
-.pane-title-bar:hover .pane-title-close {
+.pane-title-bar:hover .pane-title-close,
+.pane-title-bar:focus-within .pane-title-close,
+.pane-title-close:focus-visible {
   opacity: 1;
 }
 
 .pane-title-close:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
 }
 
 /* Inline edit input — matches the title text styling exactly to prevent
@@ -253,19 +285,27 @@
   flex: 1;
   min-width: 0;
   width: 100%;
-  height: 20px;
+  height: var(--orca-pane-title-height);
   box-sizing: border-box;
   padding: 0 8px;
   margin: 0;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 0;
-  background: transparent;
+  background: var(--orca-pane-title-input-bg, rgb(255 255 255 / 0.04));
   outline: none;
   font-size: 13px;
   line-height: 20px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  color: rgba(255, 255, 255, 0.7);
-  caret-color: rgba(255, 255, 255, 0.6);
+  color: var(--orca-pane-title-input-fg, rgb(255 255 255 / 0.7));
+  caret-color: var(--orca-pane-title-input-fg, rgb(255 255 255 / 0.7));
+}
+
+.pane-title-input::placeholder {
+  color: var(--orca-pane-title-placeholder, rgb(255 255 255 / 0.38));
+}
+
+.pane-title-input:focus-visible {
+  border-color: var(--ring);
 }
 
 /* Baseline xterm-container layout — padding is driven by CSS custom properties
@@ -281,11 +321,11 @@
 
 /* When a pane has a title, shift the terminal content down to make room.
    The .pane container uses position: relative, so the absolutely-positioned
-   title bar occupies the top 20px. Height is reduced by the full 24px
-   (20px title bar + 4px base margin-top) to prevent overflow/clipping. */
+   title bar occupies the top title-height pixels. Height is reduced by the
+   same amount to prevent overflow/clipping. */
 .pane[data-has-title] .xterm-container {
-  margin-top: 24px; /* 20px title bar + 4px base margin-top */
-  height: calc(100% - 24px); /* must match margin-top to avoid overflow */
+  margin-top: var(--orca-pane-title-height);
+  height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
 }
 
 /* Override the inline overflow:hidden set by pane-manager so the title
@@ -303,11 +343,11 @@
 .pane[data-has-title]::after {
   content: '';
   position: absolute;
-  top: 20px;
+  top: var(--orca-pane-title-height);
   left: -5px;
   right: -5px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--orca-pane-title-separator, rgb(255 255 255 / 0.06));
   z-index: 6;
   pointer-events: none;
 }

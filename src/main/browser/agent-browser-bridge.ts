@@ -3,9 +3,10 @@ import { execFile, type ChildProcess } from 'child_process'
 import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'fs'
 import { join } from 'path'
 import { platform, arch } from 'os'
-import { app } from 'electron'
+import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
+import { acquireElectronDebugger } from './electron-debugger-lease'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
 import type {
@@ -83,6 +84,10 @@ type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
   timeoutError?: BrowserError
+}
+
+type AgentBrowserBridgeOptions = {
+  onTabsChanged?: (worktreeId?: string) => void
 }
 
 function agentBrowserNativeName(): string {
@@ -183,6 +188,170 @@ function pageUnavailableMessageForSession(sessionName: string): string {
     : 'Browser tab is no longer available'
 }
 
+type CdpMouseButton = 'left' | 'middle' | 'right'
+
+type BrowserClickPoint = {
+  x: number
+  y: number
+  adjusted: boolean
+  handled: boolean
+}
+
+function normalizeCdpMouseButton(button?: string): CdpMouseButton {
+  return button === 'middle' || button === 'right' ? button : 'left'
+}
+
+function cdpMouseButtonMask(button: CdpMouseButton): number {
+  if (button === 'right') {
+    return 2
+  }
+  if (button === 'middle') {
+    return 4
+  }
+  return 1
+}
+
+function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserClickPoint {
+  const point = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const x = point?.x
+  const y = point?.y
+  if (
+    typeof x !== 'number' ||
+    !Number.isFinite(x) ||
+    typeof y !== 'number' ||
+    !Number.isFinite(y)
+  ) {
+    return fallback
+  }
+  return { x, y, adjusted: point?.adjusted === true, handled: point?.handled === true }
+}
+
+function mobileTouchClickExpression(x: number, y: number, radius: number): string {
+  return `(() => {
+    const inputX = ${JSON.stringify(x)};
+    const inputY = ${JSON.stringify(y)};
+    const radius = ${JSON.stringify(radius)};
+    const selector = [
+      'a[href]',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'summary',
+      'label',
+      '[role="button"]',
+      '[role="link"]',
+      '[role="menuitem"]',
+      '[role="tab"]',
+      '[role="checkbox"]',
+      '[role="radio"]',
+      '[role="switch"]',
+      '[onclick]',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    const isUsable = (el) => {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+        style.visibility !== 'hidden' && style.pointerEvents !== 'none';
+    };
+    const dispatchClick = (target, clickX, clickY) => {
+      try {
+        if (typeof target.focus === 'function') {
+          target.focus({ preventScroll: true });
+        }
+      } catch {
+        try { target.focus(); } catch {}
+      }
+      if (typeof target.click === 'function') {
+        target.click();
+        return true;
+      }
+      const init = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: clickX,
+        clientY: clickY,
+        screenX: clickX,
+        screenY: clickY,
+        button: 0,
+        buttons: 1
+      };
+      try {
+        if (typeof PointerEvent === 'function') {
+          target.dispatchEvent(new PointerEvent('pointerdown', { ...init, pointerType: 'touch', pointerId: 1 }));
+          target.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0, pointerType: 'touch', pointerId: 1 }));
+        }
+      } catch {}
+      target.dispatchEvent(new MouseEvent('mousedown', init));
+      target.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+      target.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+      return true;
+    };
+    const clickableFor = (el) => {
+      for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+        if (node.matches(selector)) return node;
+        if (window.getComputedStyle(node).cursor === 'pointer') return node;
+      }
+      return null;
+    };
+    const offsets = [[0, 0]];
+    for (const distance of [radius * 0.45, radius, radius * 1.35]) {
+      for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI * 3 / 4, Math.PI,
+        Math.PI * 5 / 4, Math.PI * 3 / 2, Math.PI * 7 / 4]) {
+        offsets.push([Math.cos(angle) * distance, Math.sin(angle) * distance]);
+      }
+    }
+    let best = null;
+    for (const [dx, dy] of offsets) {
+      const px = inputX + dx;
+      const py = inputY + dy;
+      if (px < 0 || py < 0 || px > window.innerWidth || py > window.innerHeight) continue;
+      for (const el of document.elementsFromPoint(px, py)) {
+        const target = clickableFor(el);
+        if (!target || !isUsable(target)) continue;
+        const rect = target.getBoundingClientRect();
+        const clickX = clamp(inputX, rect.left + 1, rect.right - 1);
+        const clickY = clamp(inputY, rect.top + 1, rect.bottom - 1);
+        const score = Math.hypot(clickX - inputX, clickY - inputY) + Math.hypot(dx, dy) * 0.25;
+        if (!best || score < best.score) best = { score, x: clickX, y: clickY, target };
+        break;
+      }
+    }
+    if (best && dispatchClick(best.target, best.x, best.y)) {
+      return { x: best.x, y: best.y, adjusted: true, handled: true };
+    }
+    return { x: inputX, y: inputY, adjusted: false, handled: false };
+  })()`
+}
+
+async function resolveMobileTouchClickPoint(
+  dbg: WebContents['debugger'],
+  x: number,
+  y: number,
+  radius?: number
+): Promise<BrowserClickPoint> {
+  const fallback = { x, y, adjusted: false, handled: false }
+  if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
+    return fallback
+  }
+  try {
+    const result = await dbg.sendCommand('Runtime.evaluate', {
+      expression: mobileTouchClickExpression(x, y, radius),
+      returnByValue: true,
+      silent: true
+    })
+    const raw = result && typeof result === 'object' ? (result as Record<string, unknown>) : null
+    const evaluated = raw?.result && typeof raw.result === 'object' ? raw.result : null
+    return readClickPoint((evaluated as Record<string, unknown> | null)?.value, fallback)
+  } catch {
+    return fallback
+  }
+}
+
 function translateResult(
   stdout: string
 ): { ok: true; result: unknown } | { ok: false; error: { code: string; message: string } } {
@@ -238,7 +407,10 @@ export class AgentBrowserBridge {
   private readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   private readonly cancelledProcesses = new WeakSet<ChildProcess>()
 
-  constructor(private readonly browserManager: BrowserManager) {
+  constructor(
+    private readonly browserManager: BrowserManager,
+    private readonly options: AgentBrowserBridgeOptions = {}
+  ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
   }
 
@@ -249,6 +421,7 @@ export class AgentBrowserBridge {
     if (worktreeId) {
       this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
     }
+    this.options.onTabsChanged?.(worktreeId)
   }
 
   private selectFallbackActiveWebContents(
@@ -297,6 +470,7 @@ export class AgentBrowserBridge {
     if (worktreeId) {
       this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
     }
+    this.options.onTabsChanged?.(worktreeId)
   }
 
   async onTabClosed(webContentsId: number): Promise<void> {
@@ -320,6 +494,7 @@ export class AgentBrowserBridge {
     if (browserPageId) {
       await this.destroySession(`orca-tab-${browserPageId}`)
     }
+    this.options.onTabsChanged?.(owningWorktreeId)
   }
 
   async onProcessSwap(
@@ -349,6 +524,7 @@ export class AgentBrowserBridge {
     ) {
       this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
     }
+    this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
 
   // ── Worktree-scoped tab queries ──
@@ -449,6 +625,7 @@ export class AgentBrowserBridge {
       if (owningWorktreeId) {
         this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
       }
+      this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
       return { switched: switchedIndex, browserPageId: tabId }
     })
   }
@@ -629,6 +806,74 @@ export class AgentBrowserBridge {
       }
       return await this.execAgentBrowser(sessionName, args)
     })
+  }
+
+  async mouseClick(
+    x: number,
+    y: number,
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    radius?: number
+  ): Promise<unknown> {
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.getWebContents(target.webContentsId)
+        if (!wc || wc.isDestroyed()) {
+          throw new BrowserError(
+            'browser_tab_not_found',
+            `Browser page ${target.browserPageId} is no longer available`
+          )
+        }
+        const cdpButton = normalizeCdpMouseButton(button)
+        const buttons = cdpMouseButtonMask(cdpButton)
+        const lease = acquireElectronDebugger(wc)
+        try {
+          wc.focus()
+          const point =
+            cdpButton === 'left'
+              ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
+              : { x, y, adjusted: false, handled: false }
+          // Why: mobile taps should land as one atomic input operation. Sending
+          // move/down/up through separate CLI calls visibly hovers targets and can
+          // miss small controls before the click lands.
+          // Runtime may already activate DOM controls because mobile-emulated
+          // BrowserViews can ignore CDP mouse clicks for regular page taps.
+          if (!point.handled) {
+            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+              type: 'mousePressed',
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              buttons,
+              clickCount: 1
+            })
+            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+              type: 'mouseReleased',
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              buttons: 0,
+              clickCount: 1
+            })
+          }
+          return {
+            clicked: {
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              adjusted: point.adjusted,
+              handled: point.handled
+            }
+          }
+        } finally {
+          lease.release()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
@@ -1266,6 +1511,11 @@ export class AgentBrowserBridge {
         deviceScaleFactor: scale,
         mobile
       })
+      // Why: BrowserView's compositor surface can keep the previous host size
+      // after metrics-only resize, which crops remote screencast clients.
+      await Promise.resolve(dbg.sendCommand('Emulation.setVisibleSize', { width, height })).catch(
+        () => {}
+      )
 
       return {
         width,
@@ -1449,12 +1699,15 @@ export class AgentBrowserBridge {
   private async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
-    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: { ensureSession?: boolean } = {}
   ): Promise<T> {
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
     const sessionName = `orca-tab-${target.browserPageId}`
 
-    await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+    if (options.ensureSession !== false) {
+      await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+    }
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)

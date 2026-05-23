@@ -19,12 +19,15 @@ describe('terminalOutputPrefersDomRenderer', () => {
     expect(terminalOutputPrefersDomRenderer('Fullwidth: ＡＢＣ１２３')).toBe(true)
   })
 
-  it('detects glyph classes common in agent terminal UIs', () => {
-    expect(terminalOutputPrefersDomRenderer('⠋ Working')).toBe(true)
-    expect(terminalOutputPrefersDomRenderer('├─ file.ts')).toBe(true)
-    expect(terminalOutputPrefersDomRenderer('█ progress')).toBe(true)
-    expect(terminalOutputPrefersDomRenderer('◆ status')).toBe(true)
-    expect(terminalOutputPrefersDomRenderer('\uE0B0 prompt')).toBe(true)
+  it('keeps terminal drawing glyphs on WebGL', () => {
+    expect(terminalOutputPrefersDomRenderer('⠋ Working')).toBe(false)
+    expect(terminalOutputPrefersDomRenderer('├─ file.ts')).toBe(false)
+    expect(terminalOutputPrefersDomRenderer('█ progress')).toBe(false)
+    expect(terminalOutputPrefersDomRenderer('◆ status')).toBe(false)
+    expect(terminalOutputPrefersDomRenderer('\uE0B0 prompt')).toBe(false)
+  })
+
+  it('detects malformed replacement characters', () => {
     expect(terminalOutputPrefersDomRenderer('bad replacement �')).toBe(true)
   })
 

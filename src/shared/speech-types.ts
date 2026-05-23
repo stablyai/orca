@@ -28,6 +28,20 @@ export type SpeechModelState = {
   error?: string
 }
 
+export type SpeechTranscriptEvent = {
+  text: string
+  sessionId: string
+}
+
+export type SpeechLifecycleEvent = {
+  sessionId: string
+}
+
+export type SpeechErrorEvent = {
+  error: string
+  sessionId: string
+}
+
 export type DictationState = 'idle' | 'starting' | 'listening' | 'stopping' | 'error'
 
 export type UserModelConfig = {

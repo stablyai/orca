@@ -1,6 +1,10 @@
+/* oxlint-disable max-lines -- Why: content loading, retry, and external-change
+   subscriptions share in-flight caches and state setters; splitting them would
+   make the hook coordination harder to audit. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -72,9 +76,18 @@ export function useEditorPanelContentState({
   openFilesRef.current = openFiles
   const editorViewModeRef = useRef(editorViewMode)
   editorViewModeRef.current = editorViewMode
+  const selectedConflictReviewFile =
+    activeFile?.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
+      ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
+      : null
 
   const loadFileContent = useCallback(
-    async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
+    async (
+      filePath: string,
+      id: string,
+      worktreeId?: string,
+      relativePath?: string
+    ): Promise<void> => {
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
@@ -101,7 +114,7 @@ export function useEditorPanelContentState({
           pending = readRuntimeFileContent({
             settings: readSettings,
             filePath,
-            relativePath: restoredOpenFile?.relativePath,
+            relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
             connectionId
           }) as Promise<FileContent>
@@ -149,7 +162,7 @@ export function useEditorPanelContentState({
       const compareAgainstHead = file.mode === 'edit'
       const key = inFlightDiffKey(
         { ...file, diffSource: effectiveDiffSource },
-        gitScope,
+        gitScope ?? undefined,
         compareAgainstHead
       )
       let pending = inFlightDiffReads.get(key)
@@ -239,36 +252,72 @@ export function useEditorPanelContentState({
         delete next[file.id]
         return next
       })
-      void loadFileContent(file.filePath, file.id, file.worktreeId)
+      void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
     },
     [loadFileContent]
   )
 
   useEffect(() => {
-    if (!activeFile || activeFile.mode === 'conflict-review') {
-      return
-    }
-    if (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview') {
-      if (activeFile.conflict?.kind === 'conflict-placeholder') {
+    if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
+      const snapshotEntries = activeFile.conflictReview?.entries ?? []
+      if (snapshotEntries.length === 0) {
         return
       }
-      if (!fileContents[activeFile.id]) {
-        void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
+
+      const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
+      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      for (const entry of liveEntries) {
+        if (
+          !snapshotPaths.has(entry.path) ||
+          entry.conflictStatus !== 'unresolved' ||
+          !entry.conflictKind ||
+          entry.status === 'deleted'
+        ) {
+          continue
+        }
+
+        const absolutePath = joinPath(activeFile.filePath, entry.path)
+        if (!fileContents[absolutePath]) {
+          void loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path)
+        }
       }
-      if (isChangesMode && !diffContents[activeFile.id]) {
-        void loadDiffContent(activeFile)
+      return
+    }
+
+    const fileToLoad = selectedConflictReviewFile ?? activeFile
+    if (!fileToLoad || (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile)) {
+      return
+    }
+    if (fileToLoad.mode === 'edit' || fileToLoad.mode === 'markdown-preview') {
+      if (fileToLoad.conflict?.kind === 'conflict-placeholder') {
+        return
+      }
+      if (!fileContents[fileToLoad.id]) {
+        void loadFileContent(fileToLoad.filePath, fileToLoad.id, fileToLoad.worktreeId)
+      }
+      if (isChangesMode && !diffContents[fileToLoad.id]) {
+        void loadDiffContent(fileToLoad)
       }
     } else if (
-      activeFile.mode === 'diff' &&
-      activeFile.diffSource !== undefined &&
-      activeFile.diffSource !== 'combined-uncommitted' &&
-      activeFile.diffSource !== 'combined-branch' &&
-      activeFile.diffSource !== 'combined-commit' &&
-      !diffContents[activeFile.id]
+      fileToLoad.mode === 'diff' &&
+      fileToLoad.diffSource !== undefined &&
+      fileToLoad.diffSource !== 'combined-uncommitted' &&
+      fileToLoad.diffSource !== 'combined-branch' &&
+      fileToLoad.diffSource !== 'combined-commit' &&
+      !diffContents[fileToLoad.id]
     ) {
-      void loadDiffContent(activeFile)
+      void loadDiffContent(fileToLoad)
     }
-  }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeFile?.id,
+    activeFile?.mode,
+    activeFile?.conflictReview?.selectedFileId,
+    activeFile?.conflictReview?.snapshotTimestamp,
+    selectedConflictReviewFile?.id,
+    isChangesMode,
+    gitStatusByWorktree
+  ])
 
   useEditorPanelFileLoadRetry({
     activeFile,

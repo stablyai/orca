@@ -890,6 +890,7 @@ export async function analyzeWorkspaceSpace(
   const worktrees = repoResults
     .flatMap((result) => result.worktrees)
     .sort((a, b) => b.sizeBytes - a.sizeBytes || a.displayName.localeCompare(b.displayName))
+  throwIfAborted(options.signal)
 
   return {
     scannedAt,

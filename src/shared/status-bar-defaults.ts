@@ -6,5 +6,6 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'gemini',
   'opencode-go',
   'ssh',
-  'resource-usage'
+  'resource-usage',
+  'ports'
 ]

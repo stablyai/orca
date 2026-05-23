@@ -26,6 +26,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
+  private tempDirPromise: Promise<string> | null = null
   // Why: relays from a previous build may not implement fs.readFileStream.
   // We log the fallback once per session at warn level so users on stale
   // relays get diagnosed quickly without per-read log spam.
@@ -90,6 +91,20 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       }
       throw err
     }
+  }
+
+  async getTempDir(): Promise<string> {
+    this.tempDirPromise ??= this.mux.request('fs.tempDir', {}).then(
+      (result) => result as string,
+      (err) => {
+        this.tempDirPromise = null
+        if (isMethodNotFoundError(err)) {
+          return '/tmp'
+        }
+        throw err
+      }
+    )
+    return this.tempDirPromise
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {

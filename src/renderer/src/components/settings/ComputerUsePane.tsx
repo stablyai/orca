@@ -1,14 +1,28 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Accessibility, Camera, Copy, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
+import {
+  Accessibility,
+  Camera,
+  ExternalLink,
+  MonitorCog,
+  RefreshCw,
+  ShieldCheck
+} from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
 } from '../../../../shared/computer-use-permissions-types'
-import { COMPUTER_USE_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  COMPUTER_USE_SKILL_INSTALL_COMMAND,
+  COMPUTER_USE_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import type { SettingsSearchEntry } from './settings-search'
 
 export const COMPUTER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
@@ -73,6 +87,14 @@ export function ComputerUsePane(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
+  const {
+    installed: computerUseSkillDetected,
+    loading: computerUseSkillLoading,
+    error: computerUseSkillError,
+    refresh: refreshComputerUseSkill
+  } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
 
   const stateById = useMemo(
     () => new Map(states.map((state) => [state.id, state.status] as const)),
@@ -124,15 +146,6 @@ export function ComputerUsePane(): React.JSX.Element {
       )
     } finally {
       setPendingId(null)
-    }
-  }
-
-  const copySkillInstallCommand = async (): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(COMPUTER_USE_SKILL_INSTALL_COMMAND)
-      toast.success('Copied skill install command.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
     }
   }
 
@@ -209,36 +222,21 @@ export function ComputerUsePane(): React.JSX.Element {
         </>
       ) : null}
 
-      <div className="space-y-2 rounded-lg border border-border/60 px-4 py-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Install Computer Use Skill</p>
-          <p className="text-xs text-muted-foreground">
-            Run this once on your computer so agents know how to use Orca&apos;s computer controls.
-          </p>
-        </div>
-        <div className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
-          <code className="flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-            {COMPUTER_USE_SKILL_INSTALL_COMMAND}
-          </code>
-          <TooltipProvider delayDuration={250}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => void copySkillInstallCommand()}
-                  aria-label="Copy Computer Use skill install command"
-                >
-                  <Copy className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Copy
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
+      <AgentSkillSetupPanel
+        title="Computer Use skill"
+        detectedDescription="Detected on this machine. Agents can use Orca's computer controls."
+        missingDescription="Agents need this skill before they can use Orca's computer controls. If you already installed it, click Re-check instead of running the installer again."
+        command={COMPUTER_USE_SKILL_INSTALL_COMMAND}
+        terminalTitle="Computer Use setup"
+        terminalAriaLabel="Computer Use skill install terminal"
+        terminalWorktreeId="settings-computer-use-skill-terminal"
+        installed={computerUseSkillDetected}
+        detected={computerUseSkillDetected}
+        loading={computerUseSkillLoading}
+        error={computerUseSkillError}
+        icon={<MonitorCog className="size-5" />}
+        onRecheck={refreshComputerUseSkill}
+      />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import React from 'react'
+import { cn } from '@/lib/utils'
 
 function KeyCap({ label }: { label: string }): React.JSX.Element {
   return (
@@ -10,17 +11,19 @@ function KeyCap({ label }: { label: string }): React.JSX.Element {
 
 type ShortcutKeyComboProps = {
   keys: string[]
+  className?: string
   separatorClassName?: string
 }
 
 export function ShortcutKeyCombo({
   keys,
+  className,
   separatorClassName
 }: ShortcutKeyComboProps): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', className)}>
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
           <KeyCap label={key} />

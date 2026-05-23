@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Restart persistence E2E covers separate lifecycle regressions that need real relaunches. */
 /**
  * E2E tests for terminal scrollback persistence across clean app restarts.
  *
@@ -34,12 +35,14 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput,
   waitForPaneCount,
-  getTerminalContent
+  getTerminalContent,
+  splitActiveTerminalPane
 } from './helpers/terminal'
 import {
   waitForSessionReady,
   waitForActiveWorktree,
   getActiveWorktreeId,
+  getActiveTabId,
   getWorktreeTabs,
   ensureTerminalVisible
 } from './helpers/store'
@@ -101,6 +104,89 @@ async function bootstrapRestoredLaunch(page: Page, expectedWorktreeId: string): 
   await waitForPaneCount(page, 1, 30_000)
 }
 
+async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {
+  const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] =
+    process.platform === 'win32' ? ['Control'] : []
+  await page
+    .locator('.xterm:visible')
+    .first()
+    .click({ button: 'right', position: { x: 40, y: 40 }, modifiers })
+  await page.getByText('Set Title…', { exact: true }).click()
+  const titleInput = page.locator('.pane-title-input').first()
+  await expect(titleInput).toBeVisible()
+  await titleInput.fill(title)
+  await titleInput.press('Enter')
+}
+
+async function getTabCustomTitle(
+  page: Page,
+  worktreeId: string,
+  tabId: string
+): Promise<string | null> {
+  return page.evaluate(
+    ({ targetWorktreeId, targetTabId }) => {
+      const state = window.__store!.getState()
+      const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
+        (entry) => entry.id === targetTabId
+      )
+      return tab?.customTitle ?? null
+    },
+    { targetWorktreeId: worktreeId, targetTabId: tabId }
+  )
+}
+
+async function readTerminalActiveLine(page: Page): Promise<string | null> {
+  const tabId = await getActiveTabId(page)
+  if (!tabId) {
+    return null
+  }
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const buffer = pane?.terminal?.buffer.active
+    if (!buffer) {
+      return null
+    }
+    const cursorLine = buffer.baseY + buffer.cursorY
+    return buffer.getLine(cursorLine)?.translateToString(true) ?? null
+  }, tabId)
+}
+
+async function waitForTerminalActiveLine(page: Page, expectedText: string): Promise<string> {
+  await expect
+    .poll(async () => (await readTerminalActiveLine(page))?.includes(expectedText), {
+      timeout: 15_000,
+      message: `Terminal cursor line did not contain "${expectedText}"`
+    })
+    .toBe(true)
+
+  const activeLine = await readTerminalActiveLine(page)
+  if (activeLine === null) {
+    throw new Error('Terminal cursor line disappeared after settling')
+  }
+  return activeLine
+}
+
+async function expectSavedLayoutToContainTitle(
+  page: Page,
+  tabId: string,
+  title: string
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ targetTabId, title }) => {
+            const layout = window.__store!.getState().terminalLayoutsByTabId[targetTabId]
+            return Object.values(layout?.titlesByLeafId ?? {}).includes(title)
+          },
+          { targetTabId: tabId, title }
+        ),
+      { timeout: 3_000 }
+    )
+    .toBe(true)
+}
+
 test.describe('Terminal restart persistence', () => {
   test('scrollback survives clean quit and relaunch', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
@@ -150,6 +236,70 @@ test.describe('Terminal restart persistence', () => {
           timeout: 15_000,
           message: 'Restored terminal did not contain the pre-quit scrollback marker'
         })
+        .toBe(true)
+    } finally {
+      if (secondApp) {
+        await session.close(secondApp)
+      }
+      if (firstApp) {
+        await session.close(firstApp)
+      }
+      await session.dispose()
+    }
+  })
+
+  test('daemon snapshot relaunch preserves the cursor on the shell prompt', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+  {}, testInfo) => {
+    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+    if (!repoPath || !existsSync(repoPath)) {
+      test.skip(true, 'Global setup did not produce a seeded test repo')
+      return
+    }
+
+    const session = createRestartSession(testInfo)
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+
+    try {
+      const firstLaunch = await session.launch()
+      firstApp = firstLaunch.app
+      const { worktreeId, ptyId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
+      expect(ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
+
+      const prompt = `ORCA_RESTART_PROMPT_${Date.now()}_GT `
+      const marker = `ORCA_CURSOR_RESTART_${Date.now()}`
+      await execInTerminal(firstLaunch.page, ptyId, `export PS1='${prompt}'; PROMPT='${prompt}'`)
+      await waitForTerminalActiveLine(firstLaunch.page, prompt.trim())
+      await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
+      await waitForTerminalOutput(firstLaunch.page, marker)
+
+      const beforeActiveLine = await waitForTerminalActiveLine(firstLaunch.page, prompt.trim())
+      await session.close(firstApp)
+      firstApp = null
+
+      const secondLaunch = await session.launch()
+      secondApp = secondLaunch.app
+      await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
+      await waitForTerminalOutput(secondLaunch.page, marker, 15_000)
+
+      await expect
+        .poll(
+          async () => {
+            const activeLine = await readTerminalActiveLine(secondLaunch.page)
+            if (!activeLine || activeLine.includes(marker)) {
+              return false
+            }
+            // Why: daemon reattach may preserve the live shell process, or the
+            // restored scrollback can land before a fresh shell prompt repaints.
+            // The cursor-regression contract is that we settle on a prompt line,
+            // not that the temporary PS1 assignment itself survives relaunch.
+            return activeLine === beforeActiveLine || /[$#%>]\s*$/.test(activeLine)
+          },
+          {
+            timeout: 10_000,
+            message: 'Restored terminal cursor did not settle on a shell prompt line'
+          }
+        )
         .toBe(true)
     } finally {
       if (secondApp) {
@@ -216,6 +366,79 @@ test.describe('Terminal restart persistence', () => {
           timeout: 10_000
         })
         .toBe(tabsBefore.length)
+    } finally {
+      if (secondApp) {
+        await session.close(secondApp)
+      }
+      if (firstApp) {
+        await session.close(firstApp)
+      }
+      await session.dispose()
+    }
+  })
+
+  test('restored Set Title pane label survives agent title churn', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+  {}, testInfo) => {
+    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+    if (!repoPath || !existsSync(repoPath)) {
+      test.skip(true, 'Global setup did not produce a seeded test repo')
+      return
+    }
+
+    const session = createRestartSession(testInfo)
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+
+    try {
+      const firstLaunch = await session.launch()
+      firstApp = firstLaunch.app
+      const { worktreeId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
+      const title = `Restored pane label ${Date.now()}`
+      const firstTabId = (await getActiveTabId(firstLaunch.page))!
+
+      await setPaneTitleFromTerminalMenu(firstLaunch.page, title)
+      await expect
+        .poll(() => getTabCustomTitle(firstLaunch.page, worktreeId, firstTabId), {
+          timeout: 3_000
+        })
+        .toBe(null)
+
+      await session.close(firstApp)
+      firstApp = null
+
+      const secondLaunch = await session.launch()
+      secondApp = secondLaunch.app
+      await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
+      const restoredTabId = (await getActiveTabId(secondLaunch.page))!
+
+      await expect(secondLaunch.page.locator('.pane-title-text', { hasText: title })).toBeVisible()
+      await expect
+        .poll(() => getTabCustomTitle(secondLaunch.page, worktreeId, restoredTabId), {
+          timeout: 3_000
+        })
+        .toBe(null)
+      await expectSavedLayoutToContainTitle(secondLaunch.page, restoredTabId, title)
+
+      const runtimeTitle = '⠋ Codex restored working'
+      await secondLaunch.page.evaluate(
+        ({ targetTabId, title }) => {
+          window.__store!.getState().updateTabTitle(targetTabId, title)
+        },
+        { targetTabId: restoredTabId, title: runtimeTitle }
+      )
+      await expect(
+        secondLaunch.page.locator(`[data-testid="sortable-tab"][data-tab-id="${restoredTabId}"]`)
+      ).toHaveAttribute('data-tab-title', runtimeTitle)
+      await expect(secondLaunch.page.locator('.pane-title-text', { hasText: title })).toBeVisible()
+      await expect
+        .poll(() => getTabCustomTitle(secondLaunch.page, worktreeId, restoredTabId), {
+          timeout: 3_000
+        })
+        .toBe(null)
+
+      await splitActiveTerminalPane(secondLaunch.page, 'vertical')
+      await waitForPaneCount(secondLaunch.page, 2)
+      await expect(secondLaunch.page.locator('.pane-title-text', { hasText: title })).toBeVisible()
     } finally {
       if (secondApp) {
         await session.close(secondApp)
