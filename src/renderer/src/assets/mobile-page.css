@@ -140,6 +140,13 @@
   font-weight: 600;
 }
 
+.mobile-page-root .mp-platform-brand-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: currentColor;
+}
+
 .mobile-page-root .mp-paired-list {
   list-style: none;
   margin: 18px 0 0;
@@ -440,6 +447,9 @@
 }
 
 .mobile-page-root .mp-platform-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 0;
   padding: 5px 12px;
   border-radius: 999px;
