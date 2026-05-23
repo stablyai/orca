@@ -109,7 +109,7 @@ export function LightTerminalThemeSection({
         title="Use Separate Theme In Light Mode"
         description="When disabled, light mode reuses the dark terminal theme."
         keywords={['terminal', 'light mode', 'theme']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <p className="text-sm font-medium">Use Separate Theme In Light Mode</p>

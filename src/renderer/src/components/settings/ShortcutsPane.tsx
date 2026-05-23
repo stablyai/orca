@@ -18,10 +18,10 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { useAppStore } from '../../store'
-import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
 import { ShortcutBindingRow, type ShortcutTerminalStatus } from './ShortcutBindingRow'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
@@ -287,78 +287,80 @@ export function ShortcutsPane(): React.JSX.Element {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
   }
 
+  const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
+  const showCtrlTab = matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY)
+
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
-          <p className="text-xs text-muted-foreground">
-            Customize shortcuts visually or edit the file directly.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <SettingsSubsectionHeader
+          title="Keyboard Shortcuts"
+          description="Customize shortcuts visually or edit the file directly."
+        />
 
-        {matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY) ? (
-          <SearchableSetting
-            id="terminal-shortcut-policy"
-            title="Shortcuts in Terminal"
-            description="Choose whether Orca or the focused terminal wins when shortcuts overlap."
-            keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
-            className="flex items-center justify-between gap-4 px-1 py-2"
-          >
-            <div className="space-y-0.5">
-              <Label>Shortcuts in Terminal</Label>
-              <p className="text-xs text-muted-foreground">
-                Orca first keeps app shortcuts active in TUIs. Terminal first lets shell shortcuts
-                win unless a shortcut is marked terminal-active.
-              </p>
-            </div>
-            <Select
-              value={terminalShortcutPolicy}
-              onValueChange={(value) =>
-                void updateSettings({
-                  terminalShortcutPolicy: value as TerminalShortcutPolicy
-                })
-              }
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="orca-first">Orca first</SelectItem>
-                <SelectItem value="terminal-first">Terminal first</SelectItem>
-              </SelectContent>
-            </Select>
-          </SearchableSetting>
-        ) : null}
+        {showPolicy || showCtrlTab ? (
+          <div className="divide-y divide-border/40">
+            {showPolicy ? (
+              <SearchableSetting
+                id="terminal-shortcut-policy"
+                title="Shortcuts in Terminal"
+                description="Choose whether Orca or the focused terminal wins when shortcuts overlap."
+                keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+              >
+                <SettingsRow
+                  label="Shortcuts in Terminal"
+                  description="Orca first keeps app shortcuts active in TUIs. Terminal first lets shell shortcuts win unless marked terminal-active."
+                  control={
+                    <Select
+                      value={terminalShortcutPolicy}
+                      onValueChange={(value) =>
+                        void updateSettings({
+                          terminalShortcutPolicy: value as TerminalShortcutPolicy
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="orca-first">Orca first</SelectItem>
+                        <SelectItem value="terminal-first">Terminal first</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+              </SearchableSetting>
+            ) : null}
 
-        {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY) ? (
-          <SearchableSetting
-            title="Recent Tab Order"
-            description="Choose recent or sequential tab switching."
-            keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRY.keywords}
-            className="flex items-center justify-between gap-4 px-1 py-2"
-          >
-            <div className="space-y-0.5">
-              <Label>Recent Tab Order</Label>
-              <p className="text-xs text-muted-foreground">
-                Choose whether recent tab switching follows recent use or the tab strip order.
-              </p>
-            </div>
-            <Select
-              value={ctrlTabOrderMode}
-              onValueChange={(value) =>
-                void updateSettings({ ctrlTabOrderMode: value as CtrlTabOrderMode })
-              }
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mru">Most recent</SelectItem>
-                <SelectItem value="sequential">Tab strip order</SelectItem>
-              </SelectContent>
-            </Select>
-          </SearchableSetting>
+            {showCtrlTab ? (
+              <SearchableSetting
+                title="Recent Tab Order"
+                description="Choose recent or sequential tab switching."
+                keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRY.keywords}
+              >
+                <SettingsRow
+                  label="Recent Tab Order"
+                  description="Choose whether recent tab switching follows recent use or the tab strip order."
+                  control={
+                    <Select
+                      value={ctrlTabOrderMode}
+                      onValueChange={(value) =>
+                        void updateSettings({ ctrlTabOrderMode: value as CtrlTabOrderMode })
+                      }
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mru">Most recent</SelectItem>
+                        <SelectItem value="sequential">Tab strip order</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+              </SearchableSetting>
+            ) : null}
+          </div>
         ) : null}
 
         <KeybindingsFileActions />

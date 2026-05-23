@@ -184,7 +184,7 @@ export function QuickCommandsPane({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 py-2">
         <div className="space-y-1">
           <Label>Saved Commands</Label>
           <p className="text-xs text-muted-foreground">
@@ -284,7 +284,7 @@ export function QuickCommandsPane({
         </Popover>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
         {visibleCommands.length === 0 ? (
           <div className="px-3 py-6 text-sm text-muted-foreground">
             {commands.length === 0
@@ -292,11 +292,14 @@ export function QuickCommandsPane({
               : 'No commands in the selected scopes.'}
           </div>
         ) : (
-          <div className="max-h-[60vh] divide-y divide-border/50 overflow-y-auto scrollbar-sleek">
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
             {visibleCommands.map((command) => {
               const scope = getTerminalQuickCommandScope(command)
               return (
-                <div key={command.id} className="flex items-center gap-3 px-3 py-2">
+                <div
+                  key={command.id}
+                  className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="truncate text-sm font-medium">
@@ -319,11 +322,11 @@ export function QuickCommandsPane({
                         )}
                       </Badge>
                     </div>
-                    <div className="truncate font-mono text-xs text-muted-foreground">
+                    <div className="truncate font-mono text-xs text-foreground/80">
                       {command.command || 'No command text'}
                     </div>
                   </div>
-                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                  <div className="shrink-0 text-[11px] font-medium text-foreground/75">
                     {command.appendEnter ? 'Enter' : 'Insert'}
                   </div>
                   <Button

@@ -241,7 +241,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <div className="space-y-2 px-1 py-2">
+      <div className="space-y-2 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <FileAudio className="size-4" />
@@ -330,7 +330,7 @@ export function NotificationsPane({
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 px-1 pt-3">
+      <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button
           variant="outline"
           size="sm"
@@ -364,7 +364,7 @@ function SettingToggle({
   icon
 }: SettingToggleProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 px-1 py-2">
+    <div className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           {icon}
