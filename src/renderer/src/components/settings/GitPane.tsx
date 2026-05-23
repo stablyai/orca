@@ -79,7 +79,7 @@ export function GitPane({
         title="Refresh Local Base Ref"
         description="Optionally fast-forward local main or master when creating worktrees."
         keywords={['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Refresh Local Base Ref</Label>
@@ -136,7 +136,7 @@ export function GitPane({
         title="Orca Attribution"
         description="Add Orca attribution to commits, PRs, and issues."
         keywords={['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Orca Attribution</Label>

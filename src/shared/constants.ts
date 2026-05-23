@@ -31,7 +31,7 @@ export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 6
+export const ONBOARDING_FINAL_STEP = 7
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -120,6 +120,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     agentTaskComplete: true,
     terminalBell: false,
     suppressWhenFocused: true,
+    customSoundId: 'system',
     customSoundPath: null,
     customSoundVolume: 100
   }
@@ -151,6 +152,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: `${homedir}/orca/workspaces`,
     nestWorkspaces: true,
+    workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
@@ -216,6 +218,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
+    showMobileButton: true,
     ctrlTabOrderMode: 'mru',
     // Why: switching worktrees and opening command surfaces from a focused
     // terminal is a core Orca workflow; users who prefer TUI ownership opt in.
@@ -350,7 +353,7 @@ export function getDefaultUIState(): PersistedUIState {
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
     rightSidebarWidth: 350,
-    groupBy: 'workspace-status',
+    groupBy: 'repo',
     sortBy: 'recent',
     showActiveOnly: false,
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,

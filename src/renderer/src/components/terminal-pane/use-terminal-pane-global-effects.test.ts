@@ -1,6 +1,10 @@
+/* oxlint-disable max-lines -- Why: these tests exercise one hook's visibility,
+hydration, scroll, paste, and file-drop effects against a shared mocked React
+ref harness; splitting would duplicate brittle setup. */
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
+import { queueHiddenTerminalOutput } from './hidden-terminal-output-state'
 
 const mocks = vi.hoisted(() => ({
   captureScrollState: vi.fn(),
@@ -118,6 +122,7 @@ function useMountForFileDrop(
     managerRef: { current: manager as never },
     containerRef: { current: null },
     paneTransportsRef: { current: paneTransports },
+    replayingPanesRef: { current: new Map() },
     isActiveRef: { current: false },
     isVisibleRef: { current: false },
     toggleExpandPane: vi.fn()
@@ -136,6 +141,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       api: {
         ui: {
           onFileDrop: vi.fn(() => vi.fn())
+        },
+        pty: {
+          serializeHeadlessBuffer: vi.fn().mockResolvedValue(null)
         }
       }
     }
@@ -186,6 +194,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
+      replayingPanesRef: { current: new Map() },
       isActiveRef,
       isVisibleRef,
       toggleExpandPane: vi.fn()
@@ -204,6 +213,111 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
+  })
+
+  it('hydrates hidden terminal output from the headless snapshot when becoming visible', async () => {
+    const terminal = {
+      name: 'terminal-a',
+      options: { scrollback: 1000 },
+      write: vi.fn((_data: string, callback?: () => void) => callback?.())
+    }
+    const pane = { id: 1, terminal }
+    const transport = { getPtyId: vi.fn(() => 'pty-1') }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    const replayingPanesRef = { current: new Map<number, number>() }
+    const isVisibleRef = { current: false }
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'fallback-hidden-output')
+    window.api.pty.serializeHeadlessBuffer = vi.fn().mockResolvedValue({
+      data: 'headless-current-output',
+      cols: 120,
+      rows: 40
+    })
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[1, transport]]) as never },
+      replayingPanesRef,
+      isActiveRef: { current: false },
+      isVisibleRef,
+      toggleExpandPane: vi.fn()
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(window.api.pty.serializeHeadlessBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(terminal.write).toHaveBeenCalledWith('headless-current-output', expect.any(Function))
+    expect(terminal.write).not.toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
+  })
+
+  it('keeps reveal-time output queued until the headless hydration completes', async () => {
+    const terminal = {
+      name: 'terminal-a',
+      options: { scrollback: 1000 },
+      write: vi.fn((_data: string, callback?: () => void) => callback?.())
+    }
+    const pane = { id: 1, terminal }
+    const transport = { getPtyId: vi.fn(() => 'pty-1') }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    let resolveSnapshot!: (snapshot: { data: string; cols: number; rows: number } | null) => void
+    const snapshotPromise = new Promise<{ data: string; cols: number; rows: number } | null>(
+      (resolve) => {
+        resolveSnapshot = resolve
+      }
+    )
+    window.api.pty.serializeHeadlessBuffer = vi.fn(
+      () => snapshotPromise
+    ) as typeof window.api.pty.serializeHeadlessBuffer
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'fallback-hidden-output')
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[1, transport]]) as never },
+      replayingPanesRef: { current: new Map<number, number>() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'arrived-during-hydration')
+
+    resolveSnapshot({ data: 'headless-current-output', cols: 120, rows: 40 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(terminal.write).toHaveBeenCalledWith('headless-current-output', expect.any(Function))
+    expect(terminal.write).toHaveBeenCalledWith('arrived-during-hydration', expect.any(Function))
+    expect(terminal.write).not.toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
   })
 
   it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {
@@ -228,6 +342,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
+      replayingPanesRef: { current: new Map() },
       isActiveRef: { current: false },
       isVisibleRef: { current: false },
       paneCount: 1,

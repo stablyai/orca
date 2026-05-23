@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -40,6 +41,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     sparsePresetsLoadStatusByRepo: {},
     sparsePresetsErrorByRepo: {},
     worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
     worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},
@@ -78,6 +80,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     deferredSshReconnectTargets: [],
     deferredSshSessionIdsByTabId: {},
     cacheTimerByKey: {},
+    recentQuickCommandIdByGroup: {},
     expandedDirs: {},
     pendingExplorerReveal: null,
     openFiles: [],

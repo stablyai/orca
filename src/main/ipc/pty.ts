@@ -598,6 +598,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
+  ipcMain.removeHandler('pty:serializeHeadlessBuffer')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -1816,6 +1817,27 @@ export function registerPtyHandlers(
       return ''
     }
   })
+
+  ipcMain.handle(
+    'pty:serializeHeadlessBuffer',
+    async (
+      _event,
+      args: { id?: unknown; scrollbackRows?: unknown }
+    ): Promise<{ data: string; cols: number; rows: number } | null> => {
+      if (!runtime || typeof args?.id !== 'string') {
+        return null
+      }
+      const opts: { scrollbackRows?: number } = {}
+      if (
+        typeof args.scrollbackRows === 'number' &&
+        Number.isFinite(args.scrollbackRows) &&
+        args.scrollbackRows >= 0
+      ) {
+        opts.scrollbackRows = Math.floor(args.scrollbackRows)
+      }
+      return runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
+    }
+  )
 
   // Why: pre-signal handshake handlers. See
   // docs/mobile-prefer-renderer-scrollback.md and the rationale on

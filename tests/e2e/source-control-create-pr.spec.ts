@@ -110,9 +110,7 @@ async function seedCreatePREligibleBranch(
       blockedReason: null,
       nextAction: null,
       defaultBaseRef: 'origin/main',
-      head: branch,
-      title: 'Create PR from E2E',
-      body: '- Initial commit for E2E'
+      head: branch
     }
 
     ;(window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads = []
@@ -187,16 +185,19 @@ test.describe('Source Control create pull request', () => {
 
     const createButton = orcaPage.getByRole('button', { name: 'Create PR' })
     await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeEnabled()
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
-      'Create PR from E2E'
-    )
+    await expect(createButton).toBeDisabled()
+    const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
+    const descriptionInput = orcaPage.getByRole('textbox', {
+      name: 'Pull request description'
+    })
+    await expect(titleInput).toHaveValue('')
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
       'main'
     )
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
-      '- Initial commit for E2E'
-    )
+    await expect(descriptionInput).toHaveValue('')
+    await titleInput.fill('Create PR from E2E')
+    await descriptionInput.fill('- Initial commit for E2E')
+    await expect(createButton).toBeEnabled()
     await createButton.click()
 
     await expect

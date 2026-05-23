@@ -190,6 +190,10 @@ function sanitizeHydratedEntry(
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
+    hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
+    toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
+    toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
+    toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -217,6 +221,65 @@ function trackEmptyPaneKeyHook(body: unknown): void {
     return
   }
   track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+}
+
+function shouldKeepClaudePermissionVisible(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): boolean {
+  if (
+    previous?.payload.agentType !== 'claude' ||
+    previous.payload.state !== 'waiting' ||
+    next.payload.agentType !== 'claude' ||
+    next.payload.state !== 'working'
+  ) {
+    return false
+  }
+  if (next.hasExplicitPrompt === true) {
+    return false
+  }
+  if (isClaudePermissionResumingApprovedTool(previous, next)) {
+    return false
+  }
+  // Why: Claude can run subagents concurrently in one pane. Keep permission
+  // sticky unless the next hook has a source-level execution id that the
+  // PermissionRequest event itself does not expose.
+  return true
+}
+
+function isClaudePermissionResumingApprovedTool(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): boolean {
+  const previousAgentId = previous.toolAgentId?.trim() || undefined
+  const nextAgentId = next.toolAgentId?.trim() || undefined
+  const hasAgentId = previousAgentId !== undefined || nextAgentId !== undefined
+  const previousAgentType = previous.toolAgentType?.trim() || undefined
+  const nextAgentType = next.toolAgentType?.trim() || undefined
+  const hasMatchingConcreteAgentId =
+    previousAgentId !== undefined && previousAgentId === nextAgentId
+  const hasSameExplicitAgentType =
+    !hasAgentId && previousAgentType !== undefined && previousAgentType === nextAgentType
+  const sameToolName =
+    previous.payload.toolName !== undefined && previous.payload.toolName === next.payload.toolName
+  const sameKnownToolInput =
+    previous.payload.toolInput !== undefined &&
+    previous.payload.toolInput === next.payload.toolInput
+  const sameUnknownInputFromConcreteAgent =
+    hasMatchingConcreteAgentId &&
+    previous.payload.toolInput === undefined &&
+    next.payload.toolInput === undefined
+
+  return (
+    next.hookEventName === 'PreToolUse' &&
+    typeof next.toolUseId === 'string' &&
+    next.toolUseId.trim().length > 0 &&
+    // Why: subagents can share `agent_type`; a concrete agent id is the
+    // strongest available signal that the permission owner resumed execution.
+    (hasMatchingConcreteAgentId || hasSameExplicitAgentType) &&
+    sameToolName &&
+    (sameKnownToolInput || sameUnknownInputFromConcreteAgent)
+  )
 }
 
 export class AgentHookServer {
@@ -403,6 +466,9 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    if (previous && shouldKeepClaudePermissionVisible(previous, payload)) {
+      return previous
+    }
     // Why: some TUIs can emit a delayed tool/working hook after Ctrl+C already
     // stopped the turn. Do not let that stale same-turn event resurrect the row.
     if (
@@ -626,6 +692,10 @@ export class AgentHookServer {
       env?: string
       version?: string
       hasExplicitPrompt?: boolean
+      hookEventName?: string
+      toolUseId?: string
+      toolAgentId?: string
+      toolAgentType?: string
       isReplay?: boolean
       payload: unknown
     },
@@ -679,6 +749,22 @@ export class AgentHookServer {
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
         : undefined
+    const hookEventName =
+      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
+        ? envelope.hookEventName.trim()
+        : undefined
+    const toolUseId =
+      typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
+        ? envelope.toolUseId.trim()
+        : undefined
+    const toolAgentId =
+      typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
+        ? envelope.toolAgentId.trim()
+        : undefined
+    const toolAgentType =
+      typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
+        ? envelope.toolAgentType.trim()
+        : undefined
     // Why: the relay is across a trust boundary; re-run the canonical
     // normalizer on the inner payload so prompt/agentType/toolName/toolInput
     // length caps, embedded-newline collapse, and the `interrupted`-only-on-
@@ -703,6 +789,10 @@ export class AgentHookServer {
       worktreeId,
       connectionId: trimmedConnectionId,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+      hookEventName,
+      toolUseId,
+      toolAgentId,
+      toolAgentType,
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }

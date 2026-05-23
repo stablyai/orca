@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
 
@@ -77,6 +78,26 @@ Host myserver
     expect(hosts[0].identityFile).toBe('/home/testuser/.ssh/id_ed25519')
   })
 
+  it('parses IdentityAgent with ~ expansion', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentityAgent ~/.1password/agent.sock
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identityAgent).toBe('/home/testuser/.1password/agent.sock')
+  })
+
+  it('parses IdentitiesOnly', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentitiesOnly yes
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identitiesOnly).toBe(true)
+  })
+
   it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
     const config = `
 Host internal
@@ -139,14 +160,37 @@ Host other
     expect(parseSshConfig('')).toEqual([])
   })
 
-  it('uses first pattern from multi-pattern Host line', () => {
+  it('creates one parsed host per concrete alias on a multi-pattern Host line', () => {
     const config = `
-Host staging stage
+Host staging stage *.example.com
   HostName staging.example.com
 `
     const hosts = parseSshConfig(config)
-    expect(hosts).toHaveLength(1)
-    expect(hosts[0].host).toBe('staging')
+    expect(hosts).toEqual([
+      { host: 'staging', hostname: 'staging.example.com' },
+      { host: 'stage', hostname: 'staging.example.com' }
+    ])
+  })
+
+  it('applies identity agent settings to every concrete alias on a multi-pattern Host line', () => {
+    const config = `
+Host staging stage
+  IdentityAgent ~/.1password/agent.sock
+  IdentitiesOnly yes
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts).toEqual([
+      {
+        host: 'staging',
+        identityAgent: '/home/testuser/.1password/agent.sock',
+        identitiesOnly: true
+      },
+      {
+        host: 'stage',
+        identityAgent: '/home/testuser/.1password/agent.sock',
+        identitiesOnly: true
+      }
+    ])
   })
 
   it('defaults port to 22 for invalid port values', () => {
@@ -195,12 +239,14 @@ describe('sshConfigHostsToTargets', () => {
     expect(targets[0].username).toBe('')
   })
 
-  it('carries through identityFile, proxyCommand, and jumpHost', () => {
+  it('carries through identityFile, identityAgent, identitiesOnly, proxyCommand, and jumpHost', () => {
     const hosts = [
       {
         host: 'internal',
         hostname: '10.0.0.5',
         identityFile: '/home/user/.ssh/id_rsa',
+        identityAgent: '/home/user/.1password/agent.sock',
+        identitiesOnly: true,
         proxyCommand: 'ssh -W %h:%p bastion',
         proxyUseFdpass: true,
         proxyJump: 'bastion.example.com'
@@ -208,8 +254,25 @@ describe('sshConfigHostsToTargets', () => {
     ]
     const targets = sshConfigHostsToTargets(hosts, new Set())
     expect(targets[0].identityFile).toBe('/home/user/.ssh/id_rsa')
+    expect(targets[0].identityAgent).toBe('/home/user/.1password/agent.sock')
+    expect(targets[0].identitiesOnly).toBe(true)
     expect(targets[0].proxyCommand).toBe('ssh -W %h:%p bastion')
     expect(targets[0].jumpHost).toBe('bastion.example.com')
+  })
+
+  it('imports duplicate aliases only once and keeps the first concrete host', () => {
+    const hosts = [
+      { host: 'dup', hostname: 'first.example.com', user: 'first' },
+      { host: 'dup', hostname: 'second.example.com', user: 'second' }
+    ]
+    const targets = sshConfigHostsToTargets(hosts, new Set())
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toMatchObject({
+      label: 'dup',
+      host: 'first.example.com',
+      username: 'first'
+    })
   })
 })
 
@@ -321,6 +384,22 @@ describe('parseSshGOutput', () => {
     const result = parseSshGOutput(output)
     expect(result.identityFile).toEqual(['/home/testuser/custom_key'])
   })
-})
 
-// Why: resolveWithSshG tests are in ssh-config-resolver.test.ts (max-lines).
+  it('parses identityagent with ~ expansion', () => {
+    const output = 'hostname example.com\nidentityagent ~/.1password/agent.sock\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identityAgent).toBe('/home/testuser/.1password/agent.sock')
+  })
+
+  it('preserves identityagent none so auth can disable agent fallback', () => {
+    const output = 'hostname example.com\nidentityagent none\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identityAgent).toBe('none')
+  })
+
+  it('parses identitiesonly yes', () => {
+    const output = 'hostname example.com\nidentitiesonly yes\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.identitiesOnly).toBe(true)
+  })
+})

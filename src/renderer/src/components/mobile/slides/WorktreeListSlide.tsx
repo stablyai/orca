@@ -33,12 +33,12 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
             Filter
           </button>
           <button type="button" className="mp-wl-button">
-            <SmartIcon />
-            Smart
+            <SortIcon />
+            Recent
           </button>
           <button type="button" className="mp-wl-button">
             <GroupIcon />
-            Group
+            Repo
           </button>
           <span className="mp-wl-spacer" />
           <span className="mp-wl-icon">
@@ -218,7 +218,7 @@ function FilterIcon(): React.JSX.Element {
   )
 }
 
-function SmartIcon(): React.JSX.Element {
+function SortIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <line x1="21" y1="4" x2="14" y2="4" />

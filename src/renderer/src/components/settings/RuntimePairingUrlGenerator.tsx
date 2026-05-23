@@ -276,17 +276,17 @@ export function RuntimePairingUrlGenerator({
       {showGeneratorForm ? (
         <>
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
               <div className="space-y-1">
                 <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
                   Connection address
                 </Label>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Select value={selectedAddress} onValueChange={updateSelectedAddress}>
                     <SelectTrigger
                       id="runtime-pairing-address"
                       size="sm"
-                      className="min-w-[220px]"
+                      className="min-w-0 flex-1"
                       aria-labelledby="runtime-pairing-address-label"
                     >
                       <SelectValue />

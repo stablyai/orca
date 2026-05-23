@@ -122,8 +122,10 @@ export function useCreatePullRequestDialogFields({
     initializedFromEligibilityRef.current = initializationKey
     const initialBase = eligibility.defaultBaseRef ?? ''
     setBase(stripBaseRef(initialBase))
-    setTitle(eligibility.title ?? '')
-    setBody(eligibility.body ?? '')
+    // Why: PR reviewer-facing copy should be explicit or AI-generated on
+    // request; commit-subject summaries were too noisy as automatic defaults.
+    setTitle('')
+    setBody('')
     setDraft(false)
     setBaseQuery('')
     setBaseResults([])

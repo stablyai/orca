@@ -4,6 +4,7 @@
 import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
+  DetectedWorktreeListResult,
   DirEntry,
   GlobalSettings,
   MemorySnapshot,
@@ -68,15 +69,208 @@ let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntime
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
+let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
+
+function invalidateRuntimeWorktreeCaches(): void {
+  cachedWorktrees = null
+  cachedDetectedWorktrees = null
+}
 
 type WebSettingsApi = NonNullable<PreloadApi['settings']>
 type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
+type WebGitHubApi = NonNullable<PreloadApi['gh']>
+type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
+type WebGitHubRouteKey =
+  | 'repoSlug'
+  | 'prForBranch'
+  | 'issue'
+  | 'workItem'
+  | 'workItemByOwnerRepo'
+  | 'workItemDetails'
+  | 'prFileContents'
+  | 'listIssues'
+  | 'createIssue'
+  | 'countWorkItems'
+  | 'listWorkItems'
+  | 'prChecks'
+  | 'prCheckDetails'
+  | 'rerunPRChecks'
+  | 'prComments'
+  | 'resolveReviewThread'
+  | 'setPRFileViewed'
+  | 'updatePRTitle'
+  | 'mergePR'
+  | 'updatePRState'
+  | 'requestPRReviewers'
+  | 'removePRReviewers'
+  | 'updateIssue'
+  | 'addIssueComment'
+  | 'addPRReviewCommentReply'
+  | 'addPRReviewComment'
+  | 'listLabels'
+  | 'listAssignableUsers'
+  | 'rateLimit'
+  | 'listAccessibleProjects'
+  | 'resolveProjectRef'
+  | 'listProjectViews'
+  | 'getProjectViewTable'
+  | 'projectWorkItemDetailsBySlug'
+  | 'updateProjectItemField'
+  | 'clearProjectItemField'
+  | 'updateIssueBySlug'
+  | 'updatePullRequestBySlug'
+  | 'addIssueCommentBySlug'
+  | 'updateIssueCommentBySlug'
+  | 'deleteIssueCommentBySlug'
+  | 'listLabelsBySlug'
+  | 'listAssignableUsersBySlug'
+  | 'listIssueTypesBySlug'
+  | 'updateIssueTypeBySlug'
+type WebGitHubRuntimeMethod =
+  | 'github.repoSlug'
+  | 'github.prForBranch'
+  | 'github.issue'
+  | 'github.workItem'
+  | 'github.workItemByOwnerRepo'
+  | 'github.workItemDetails'
+  | 'github.prFileContents'
+  | 'github.listIssues'
+  | 'github.createIssue'
+  | 'github.countWorkItems'
+  | 'github.listWorkItems'
+  | 'github.prChecks'
+  | 'github.prCheckDetails'
+  | 'github.rerunPRChecks'
+  | 'github.prComments'
+  | 'github.resolveReviewThread'
+  | 'github.setPRFileViewed'
+  | 'github.updatePRTitle'
+  | 'github.mergePR'
+  | 'github.updatePRState'
+  | 'github.requestPRReviewers'
+  | 'github.removePRReviewers'
+  | 'github.updateIssue'
+  | 'github.addIssueComment'
+  | 'github.addPRReviewCommentReply'
+  | 'github.addPRReviewComment'
+  | 'github.listLabels'
+  | 'github.listAssignableUsers'
+  | 'github.rateLimit'
+  | 'github.project.listAccessible'
+  | 'github.project.resolveRef'
+  | 'github.project.listViews'
+  | 'github.project.viewTable'
+  | 'github.project.workItemDetailsBySlug'
+  | 'github.project.updateItemField'
+  | 'github.project.clearItemField'
+  | 'github.project.updateIssueBySlug'
+  | 'github.project.updatePullRequestBySlug'
+  | 'github.project.addIssueCommentBySlug'
+  | 'github.project.updateIssueCommentBySlug'
+  | 'github.project.deleteIssueCommentBySlug'
+  | 'github.project.listLabelsBySlug'
+  | 'github.project.listAssignableUsersBySlug'
+  | 'github.project.listIssueTypesBySlug'
+  | 'github.project.updateIssueTypeBySlug'
+type WebGitLabApi = NonNullable<PreloadApi['gl']>
+type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
+type WebGitLabRouteKey =
+  | 'listMRs'
+  | 'listWorkItems'
+  | 'listIssues'
+  | 'createIssue'
+  | 'updateIssue'
+  | 'addIssueComment'
+  | 'todos'
+  | 'workItemDetails'
+  | 'closeMR'
+  | 'reopenMR'
+  | 'mergeMR'
+  | 'addMRComment'
+  | 'workItemByPath'
+type WebGitLabRuntimeMethod =
+  | 'gitlab.listMRs'
+  | 'gitlab.listWorkItems'
+  | 'gitlab.listIssues'
+  | 'gitlab.createIssue'
+  | 'gitlab.updateIssue'
+  | 'gitlab.addIssueComment'
+  | 'gitlab.todos'
+  | 'gitlab.workItemDetails'
+  | 'gitlab.updateMRState'
+  | 'gitlab.mergeMR'
+  | 'gitlab.addMRComment'
+  | 'gitlab.workItemByPath'
 type WebKeybindingDocument = {
   version: 1
   keybindings: KeybindingOverrides
   platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
 }
+
+export const GITHUB_WEB_RPC_METHODS = {
+  repoSlug: 'github.repoSlug',
+  prForBranch: 'github.prForBranch',
+  issue: 'github.issue',
+  workItem: 'github.workItem',
+  workItemByOwnerRepo: 'github.workItemByOwnerRepo',
+  workItemDetails: 'github.workItemDetails',
+  prFileContents: 'github.prFileContents',
+  listIssues: 'github.listIssues',
+  createIssue: 'github.createIssue',
+  countWorkItems: 'github.countWorkItems',
+  listWorkItems: 'github.listWorkItems',
+  prChecks: 'github.prChecks',
+  prCheckDetails: 'github.prCheckDetails',
+  rerunPRChecks: 'github.rerunPRChecks',
+  prComments: 'github.prComments',
+  resolveReviewThread: 'github.resolveReviewThread',
+  setPRFileViewed: 'github.setPRFileViewed',
+  updatePRTitle: 'github.updatePRTitle',
+  mergePR: 'github.mergePR',
+  updatePRState: 'github.updatePRState',
+  requestPRReviewers: 'github.requestPRReviewers',
+  removePRReviewers: 'github.removePRReviewers',
+  updateIssue: 'github.updateIssue',
+  addIssueComment: 'github.addIssueComment',
+  addPRReviewCommentReply: 'github.addPRReviewCommentReply',
+  addPRReviewComment: 'github.addPRReviewComment',
+  listLabels: 'github.listLabels',
+  listAssignableUsers: 'github.listAssignableUsers',
+  rateLimit: 'github.rateLimit',
+  listAccessibleProjects: 'github.project.listAccessible',
+  resolveProjectRef: 'github.project.resolveRef',
+  listProjectViews: 'github.project.listViews',
+  getProjectViewTable: 'github.project.viewTable',
+  projectWorkItemDetailsBySlug: 'github.project.workItemDetailsBySlug',
+  updateProjectItemField: 'github.project.updateItemField',
+  clearProjectItemField: 'github.project.clearItemField',
+  updateIssueBySlug: 'github.project.updateIssueBySlug',
+  updatePullRequestBySlug: 'github.project.updatePullRequestBySlug',
+  addIssueCommentBySlug: 'github.project.addIssueCommentBySlug',
+  updateIssueCommentBySlug: 'github.project.updateIssueCommentBySlug',
+  deleteIssueCommentBySlug: 'github.project.deleteIssueCommentBySlug',
+  listLabelsBySlug: 'github.project.listLabelsBySlug',
+  listAssignableUsersBySlug: 'github.project.listAssignableUsersBySlug',
+  listIssueTypesBySlug: 'github.project.listIssueTypesBySlug',
+  updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
+} as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
+
+export const GITLAB_WEB_RPC_METHODS = {
+  listMRs: 'gitlab.listMRs',
+  listWorkItems: 'gitlab.listWorkItems',
+  listIssues: 'gitlab.listIssues',
+  createIssue: 'gitlab.createIssue',
+  updateIssue: 'gitlab.updateIssue',
+  addIssueComment: 'gitlab.addIssueComment',
+  todos: 'gitlab.todos',
+  workItemDetails: 'gitlab.workItemDetails',
+  closeMR: 'gitlab.updateMRState',
+  reopenMR: 'gitlab.updateMRState',
+  mergeMR: 'gitlab.mergeMR',
+  addMRComment: 'gitlab.addMRComment',
+  workItemByPath: 'gitlab.workItemByPath'
+} as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
 
 const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
@@ -206,6 +400,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     git: createGitApi(),
     browser: createBrowserApi(),
     gh: createGitHubApi(),
+    gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     hooks: createHooksApi(),
@@ -592,21 +787,28 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
-    add: async ({ path, kind }) => callRuntimeResult('repo.add', { path, kind }),
+    add: async ({ path, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.add', { path, kind })
+    },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
     },
     reorder: async ({ orderedIds }) => callRuntimeResult('repo.reorder', { orderedIds }),
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
     pickDirectory: () => Promise.resolve(null),
-    clone: async ({ url, destination }) =>
-      (await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000))
-        .repo,
+    clone: async ({ url, destination }) => {
+      invalidateRuntimeWorktreeCaches()
+      return (
+        await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
+      ).repo
+    },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
@@ -620,8 +822,10 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           }
         : result
     },
-    create: async ({ parentPath, name, kind }) =>
-      callRuntimeResult('repo.create', { parentPath, name, kind }),
+    create: async ({ parentPath, name, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.create', { parentPath, name, kind })
+    },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
@@ -658,9 +862,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
         })
       ).worktrees,
+    listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('worktree.create', {
         repo: args.repoId,
         name: args.name,
@@ -695,7 +900,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         isCrossRepository
       }),
     remove: async ({ worktreeId, force }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
     },
     updateMeta: async ({ worktreeId, updates }) =>
@@ -712,7 +917,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         )
       ).lineage,
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
@@ -1015,17 +1220,18 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 
-function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
-  const direct = (method: string) => (args?: unknown) =>
-    callRuntimeResult(method, mapRepoPathArg(args))
-  return {
+function createGitHubApi(): WebGitHubApi {
+  const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
+    callRuntimeResult<Result>(method, mapRepoPathArg(args))
+  const githubApi = {
     viewer: () => Promise.resolve(null),
-    repoSlug: direct('github.repoSlug'),
-    prForBranch: direct('github.prForBranch'),
+    repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
+    prForBranch: (args) =>
+      route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
-      const pr = await callRuntimeResult('github.prForBranch', {
-        repo: candidate.repoId || candidate.repoPath,
+      const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
+        repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null
@@ -1037,55 +1243,189 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     enqueuePRRefresh: () => Promise.resolve(false),
     reportVisiblePRRefreshCandidates: () => Promise.resolve(false),
     onPRRefreshEvent: () => noopUnsubscribe,
-    issue: direct('github.issue'),
-    workItem: direct('github.workItem'),
-    workItemByOwnerRepo: direct('github.workItemByOwnerRepo'),
-    workItemDetails: direct('github.workItemDetails'),
-    prFileContents: direct('github.prFileContents'),
-    listIssues: async () => [],
-    createIssue: direct('github.createIssue'),
-    countWorkItems: direct('github.countWorkItems'),
-    listWorkItems: direct('github.listWorkItems'),
-    prChecks: direct('github.prChecks'),
-    prCheckDetails: direct('github.prCheckDetails'),
-    rerunPRChecks: direct('github.rerunPRChecks'),
-    prComments: direct('github.prComments'),
-    resolveReviewThread: direct('github.resolveReviewThread'),
-    setPRFileViewed: direct('github.setPRFileViewed'),
-    updatePRTitle: direct('github.updatePRTitle'),
-    mergePR: direct('github.mergePR'),
-    updatePRState: direct('github.updatePRState'),
-    requestPRReviewers: direct('github.requestPRReviewers'),
-    removePRReviewers: direct('github.removePRReviewers'),
-    updateIssue: direct('github.updateIssue'),
-    addIssueComment: direct('github.addIssueComment'),
-    addPRReviewCommentReply: direct('github.addPRReviewCommentReply'),
-    addPRReviewComment: direct('github.addPRReviewComment'),
-    listLabels: direct('github.listLabels'),
-    listAssignableUsers: direct('github.listAssignableUsers'),
+    issue: (args) => route<WebGitHubResult<'issue'>>(GITHUB_WEB_RPC_METHODS.issue, args),
+    workItem: (args) => route<WebGitHubResult<'workItem'>>(GITHUB_WEB_RPC_METHODS.workItem, args),
+    workItemByOwnerRepo: ({ repo: ownerRepo, ...args }) =>
+      route<WebGitHubResult<'workItemByOwnerRepo'>>(GITHUB_WEB_RPC_METHODS.workItemByOwnerRepo, {
+        ...args,
+        ownerRepo
+      }),
+    workItemDetails: (args) =>
+      route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    prFileContents: (args) =>
+      route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
+    listIssues: (args) =>
+      route<WebGitHubResult<'listIssues'>>(GITHUB_WEB_RPC_METHODS.listIssues, args),
+    createIssue: (args) =>
+      route<WebGitHubResult<'createIssue'>>(GITHUB_WEB_RPC_METHODS.createIssue, args),
+    countWorkItems: (args) =>
+      route<WebGitHubResult<'countWorkItems'>>(GITHUB_WEB_RPC_METHODS.countWorkItems, args),
+    listWorkItems: (args) =>
+      route<WebGitHubResult<'listWorkItems'>>(GITHUB_WEB_RPC_METHODS.listWorkItems, args),
+    prChecks: (args) => route<WebGitHubResult<'prChecks'>>(GITHUB_WEB_RPC_METHODS.prChecks, args),
+    prCheckDetails: (args) =>
+      route<WebGitHubResult<'prCheckDetails'>>(GITHUB_WEB_RPC_METHODS.prCheckDetails, args),
+    rerunPRChecks: (args) =>
+      route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
+    prComments: (args) =>
+      route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    resolveReviewThread: (args) =>
+      route<WebGitHubResult<'resolveReviewThread'>>(
+        GITHUB_WEB_RPC_METHODS.resolveReviewThread,
+        args
+      ),
+    setPRFileViewed: (args) =>
+      route<WebGitHubResult<'setPRFileViewed'>>(GITHUB_WEB_RPC_METHODS.setPRFileViewed, args),
+    updatePRTitle: (args) =>
+      route<WebGitHubResult<'updatePRTitle'>>(GITHUB_WEB_RPC_METHODS.updatePRTitle, args),
+    mergePR: (args) => route<WebGitHubResult<'mergePR'>>(GITHUB_WEB_RPC_METHODS.mergePR, args),
+    updatePRState: (args) =>
+      route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
+    requestPRReviewers: (args) =>
+      route<WebGitHubResult<'requestPRReviewers'>>(GITHUB_WEB_RPC_METHODS.requestPRReviewers, args),
+    removePRReviewers: (args) =>
+      route<WebGitHubResult<'removePRReviewers'>>(GITHUB_WEB_RPC_METHODS.removePRReviewers, args),
+    updateIssue: (args) =>
+      route<WebGitHubResult<'updateIssue'>>(GITHUB_WEB_RPC_METHODS.updateIssue, args),
+    addIssueComment: (args) =>
+      route<WebGitHubResult<'addIssueComment'>>(GITHUB_WEB_RPC_METHODS.addIssueComment, args),
+    addPRReviewCommentReply: (args) =>
+      route<WebGitHubResult<'addPRReviewCommentReply'>>(
+        GITHUB_WEB_RPC_METHODS.addPRReviewCommentReply,
+        args
+      ),
+    addPRReviewComment: (args) =>
+      route<WebGitHubResult<'addPRReviewComment'>>(GITHUB_WEB_RPC_METHODS.addPRReviewComment, args),
+    listLabels: (args) =>
+      route<WebGitHubResult<'listLabels'>>(GITHUB_WEB_RPC_METHODS.listLabels, args),
+    listAssignableUsers: (args) =>
+      route<WebGitHubResult<'listAssignableUsers'>>(
+        GITHUB_WEB_RPC_METHODS.listAssignableUsers,
+        args
+      ),
     onWorkItemMutated: () => noopUnsubscribe,
     checkOrcaStarred: () => Promise.resolve(null),
     starOrca: () => Promise.resolve(false),
-    rateLimit: direct('github.rateLimit'),
+    rateLimit: (args) =>
+      route<WebGitHubResult<'rateLimit'>>(GITHUB_WEB_RPC_METHODS.rateLimit, args),
     diagnoseAuth: () =>
       Promise.resolve({ ok: false, message: 'Unavailable in the web client.' } as never),
-    listAccessibleProjects: direct('github.project.listAccessible'),
-    resolveProjectRef: direct('github.project.resolveRef'),
-    listProjectViews: direct('github.project.listViews'),
-    getProjectViewTable: direct('github.project.viewTable'),
-    projectWorkItemDetailsBySlug: direct('github.project.workItemDetailsBySlug'),
-    updateProjectItemField: direct('github.project.updateItemField'),
-    clearProjectItemField: direct('github.project.clearItemField'),
-    updateIssueBySlug: direct('github.project.updateIssueBySlug'),
-    updatePullRequestBySlug: direct('github.project.updatePullRequestBySlug'),
-    addIssueCommentBySlug: direct('github.project.addIssueCommentBySlug'),
-    updateIssueCommentBySlug: direct('github.project.updateIssueCommentBySlug'),
-    deleteIssueCommentBySlug: direct('github.project.deleteIssueCommentBySlug'),
-    listLabelsBySlug: direct('github.project.listLabelsBySlug'),
-    listAssignableUsersBySlug: direct('github.project.listAssignableUsersBySlug'),
-    listIssueTypesBySlug: direct('github.project.listIssueTypesBySlug'),
-    updateIssueTypeBySlug: direct('github.project.updateIssueTypeBySlug')
-  } as NonNullable<Partial<PreloadApi>['gh']>
+    listAccessibleProjects: () =>
+      route<WebGitHubResult<'listAccessibleProjects'>>(
+        GITHUB_WEB_RPC_METHODS.listAccessibleProjects
+      ),
+    resolveProjectRef: (args) =>
+      route<WebGitHubResult<'resolveProjectRef'>>(GITHUB_WEB_RPC_METHODS.resolveProjectRef, args),
+    listProjectViews: (args) =>
+      route<WebGitHubResult<'listProjectViews'>>(GITHUB_WEB_RPC_METHODS.listProjectViews, args),
+    getProjectViewTable: (args) =>
+      route<WebGitHubResult<'getProjectViewTable'>>(
+        GITHUB_WEB_RPC_METHODS.getProjectViewTable,
+        args
+      ),
+    projectWorkItemDetailsBySlug: (args) =>
+      route<WebGitHubResult<'projectWorkItemDetailsBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.projectWorkItemDetailsBySlug,
+        args
+      ),
+    updateProjectItemField: (args) =>
+      route<WebGitHubResult<'updateProjectItemField'>>(
+        GITHUB_WEB_RPC_METHODS.updateProjectItemField,
+        args
+      ),
+    clearProjectItemField: (args) =>
+      route<WebGitHubResult<'clearProjectItemField'>>(
+        GITHUB_WEB_RPC_METHODS.clearProjectItemField,
+        args
+      ),
+    updateIssueBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueBySlug'>>(GITHUB_WEB_RPC_METHODS.updateIssueBySlug, args),
+    updatePullRequestBySlug: (args) =>
+      route<WebGitHubResult<'updatePullRequestBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updatePullRequestBySlug,
+        args
+      ),
+    addIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'addIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.addIssueCommentBySlug,
+        args
+      ),
+    updateIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updateIssueCommentBySlug,
+        args
+      ),
+    deleteIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'deleteIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.deleteIssueCommentBySlug,
+        args
+      ),
+    listLabelsBySlug: (args) =>
+      route<WebGitHubResult<'listLabelsBySlug'>>(GITHUB_WEB_RPC_METHODS.listLabelsBySlug, args),
+    listAssignableUsersBySlug: (args) =>
+      route<WebGitHubResult<'listAssignableUsersBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.listAssignableUsersBySlug,
+        args
+      ),
+    listIssueTypesBySlug: (args) =>
+      route<WebGitHubResult<'listIssueTypesBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.listIssueTypesBySlug,
+        args
+      ),
+    updateIssueTypeBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueTypeBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updateIssueTypeBySlug,
+        args
+      )
+  } satisfies WebGitHubApi
+
+  return githubApi
+}
+
+function createGitLabApi(): WebGitLabApi {
+  const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
+    callRuntimeResult<Result>(method, mapRepoPathArg(args))
+
+  const gitLabApi = {
+    viewer: () => Promise.resolve(null),
+    projectSlug: () => Promise.resolve(null),
+    mrForBranch: () => Promise.resolve(null),
+    mr: () => Promise.resolve(null),
+    listMRs: (args) => route<WebGitLabResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
+    listWorkItems: (args) =>
+      route<WebGitLabResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
+    issue: () => Promise.resolve(null),
+    listIssues: (args) =>
+      route<WebGitLabResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
+    createIssue: (args) =>
+      route<WebGitLabResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
+    updateIssue: (args) =>
+      route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
+    addIssueComment: (args) =>
+      route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
+    listLabels: () => Promise.resolve([]),
+    listAssignableUsers: () => Promise.resolve([]),
+    todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
+    workItemDetails: (args) =>
+      route<WebGitLabResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
+    closeMR: (args) =>
+      route<WebGitLabResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
+        ...args,
+        state: 'closed'
+      }),
+    reopenMR: (args) =>
+      route<WebGitLabResult<'reopenMR'>>(GITLAB_WEB_RPC_METHODS.reopenMR, {
+        ...args,
+        state: 'opened'
+      }),
+    mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
+    addMRComment: (args) =>
+      route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
+    workItemByPath: (args) =>
+      route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
+  } satisfies WebGitLabApi
+
+  return gitLabApi
 }
 
 function createRuntimeNamespaceApi(prefix: string): never {
@@ -1460,6 +1800,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    serializeHeadlessBuffer: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
@@ -1569,7 +1910,7 @@ function closeActiveRuntimeClients(): void {
   activeClient?.close()
   activeClient = null
   activeClientEnvironmentId = null
-  cachedWorktrees = null
+  invalidateRuntimeWorktreeCaches()
 }
 
 function disconnectActiveRuntimeEnvironment(): void {
@@ -1724,8 +2065,62 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   return result.worktrees
 }
 
+async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
+  if (cachedDetectedWorktrees && Date.now() - cachedDetectedWorktrees.loadedAt < 5_000) {
+    return cachedDetectedWorktrees.worktrees
+  }
+
+  const repos = (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos
+  const detectedLists = await Promise.all(
+    repos.map((repo) => callRuntimeDetectedWorktrees(repo.id))
+  )
+  const worktrees = detectedLists.flatMap((result) => result.worktrees)
+  cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  return worktrees
+}
+
+async function callRuntimeDetectedWorktrees(repoId: string): Promise<DetectedWorktreeListResult> {
+  const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
+    'worktree.detectedList',
+    { repo: repoId },
+    15_000
+  )
+  if (response.ok) {
+    return response.result
+  }
+  if (response.error.code !== 'method_not_found') {
+    throw new Error(response.error.message)
+  }
+
+  const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
+    'worktree.list',
+    { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
+    15_000
+  )
+  return toLegacyDetectedWorktreeResult(repoId, legacy.worktrees)
+}
+
+function toLegacyDetectedWorktreeResult(
+  repoId: string,
+  worktrees: Worktree[]
+): DetectedWorktreeListResult {
+  return {
+    repoId,
+    authoritative: true,
+    source: 'session-fallback',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
+  }
+}
+
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
-  const worktrees = await listAllRuntimeWorktrees()
+  // Why: hidden-but-open worktrees must still resolve for git/file operations.
+  // `worktree.list` is sidebar-visible only, so path resolution uses detected rows.
+  const worktrees = await listAllRuntimeDetectedWorktrees()
   const match = worktrees
     .map((worktree) => ({
       worktree,

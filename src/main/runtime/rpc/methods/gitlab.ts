@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -18,6 +19,12 @@ const WorkItemsList = RepoSelector.extend({
   page: OptionalFiniteNumber,
   perPage: OptionalFiniteNumber,
   query: OptionalString
+})
+
+const IssuesList = RepoSelector.extend({
+  state: z.unknown().optional(),
+  assignee: OptionalString,
+  limit: OptionalFiniteNumber
 })
 
 const CreateIssue = RepoSelector.extend({
@@ -82,7 +89,26 @@ const WorkItemDetails = RepoSelector.extend({
   projectRef: GitLabProjectRef
 })
 
+const WorkItemByPath = RepoSelector.extend({
+  host: requiredString('Missing GitLab host'),
+  path: requiredString('Missing GitLab project path'),
+  iid: z.number().int().positive(),
+  type: z.enum(['issue', 'mr'])
+})
+
 export const GITLAB_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'gitlab.listMRs',
+    params: WorkItemsList,
+    handler: async (params, { runtime }) =>
+      runtime.listGitLabRepoMRs(
+        params.repo,
+        params.state,
+        params.page,
+        params.perPage,
+        params.query
+      )
+  }),
   defineMethod({
     name: 'gitlab.listWorkItems',
     params: WorkItemsList,
@@ -94,6 +120,19 @@ export const GITLAB_METHODS: RpcMethod[] = [
         params.perPage,
         params.query
       )
+  }),
+  defineMethod({
+    name: 'gitlab.listIssues',
+    params: IssuesList,
+    handler: async (params, { runtime }) => {
+      const normalized = normalizeGitLabIssueListArgs(params)
+      return runtime.listGitLabRepoIssues(
+        params.repo,
+        normalized.state,
+        normalized.assignee,
+        normalized.limit
+      )
+    }
   }),
   defineMethod({
     name: 'gitlab.todos',
@@ -147,5 +186,16 @@ export const GITLAB_METHODS: RpcMethod[] = [
     params: WorkItemDetails,
     handler: async (params, { runtime }) =>
       runtime.getGitLabRepoWorkItemDetails(params.repo, params.iid, params.type, params.projectRef)
+  }),
+  defineMethod({
+    name: 'gitlab.workItemByPath',
+    params: WorkItemByPath,
+    handler: async (params, { runtime }) =>
+      runtime.getGitLabRepoWorkItemByPath(
+        params.repo,
+        { host: params.host, path: params.path },
+        params.iid,
+        params.type
+      )
   })
 ]

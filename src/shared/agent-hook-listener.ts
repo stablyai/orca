@@ -141,6 +141,14 @@ export type AgentHookEventPayload = {
   /** True when this hook event carried prompt text directly, instead of using
    *  the listener's cached prompt from an earlier event in the same pane. */
   hasExplicitPrompt?: boolean
+  /** Raw agent hook event name, used by main-process transition guards. */
+  hookEventName?: string
+  /** Claude tool-use identifier when the hook source exposes one. */
+  toolUseId?: string
+  /** Claude agent/subagent identifier when the hook source exposes one. */
+  toolAgentId?: string
+  /** Agent/subagent type from the source hook payload, when present. */
+  toolAgentType?: string
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   payload: ParsedAgentStatusPayload
@@ -283,6 +291,8 @@ function resolvePrompt(
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
+  hasToolUpdate?: boolean
+  hasToolInputField?: boolean
   lastAssistantMessage?: string
   clearLastAssistantMessage?: boolean
 }
@@ -297,9 +307,25 @@ function resolveToolState(
     state.lastToolByPaneKey.delete(paneKey)
   }
   const previous = state.lastToolByPaneKey.get(paneKey) ?? {}
+  // Why: `undefined` can mean "no update" or "explicit input was not
+  // previewable"; extractor metadata decides whether stale input is inherited.
+  const clearsUnpreviewableInput =
+    update.hasToolInputField === true && update.toolInput === undefined
+  const clearsUnidentifiedTool =
+    update.hasToolUpdate === true &&
+    update.toolName === undefined &&
+    update.hasToolInputField === true
+  const toolName = clearsUnidentifiedTool ? undefined : (update.toolName ?? previous.toolName)
+  const toolInput =
+    clearsUnpreviewableInput ||
+    (update.toolName !== undefined &&
+      update.toolName !== previous.toolName &&
+      update.toolInput === undefined)
+      ? undefined
+      : (update.toolInput ?? previous.toolInput)
   const merged: ToolSnapshot = {
-    toolName: update.toolName ?? previous.toolName,
-    toolInput: update.toolInput ?? previous.toolInput,
+    toolName,
+    toolInput,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
@@ -448,6 +474,25 @@ function deriveFallbackToolInputPreview(toolInput: unknown): string | undefined 
 function readString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function hasOwnField(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.some((key) => hasOwnField(record, key))
+}
+
+function toolUpdate(
+  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput'>,
+  options?: { hasToolInputField?: boolean }
+): ToolSnapshot {
+  return {
+    ...fields,
+    hasToolUpdate: true,
+    hasToolInputField: options?.hasToolInputField === true
+  }
 }
 
 function readFirstString(
@@ -788,11 +833,17 @@ function extractClaudeToolFields(
   if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
+    eventName === 'PostToolUseFailure' ||
+    eventName === 'PermissionRequest'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
-    update.toolName = toolName
-    update.toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+    Object.assign(
+      update,
+      toolUpdate(
+        { toolName, toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input) },
+        { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+      )
+    )
   }
   if (eventName === 'PostToolUse') {
     const responseText = extractToolResponseText(hookPayload.tool_response)
@@ -837,7 +888,10 @@ function extractCodexToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    return { toolName, toolInput }
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+    )
   }
   if (eventName === 'Stop') {
     const message = readString(hookPayload, 'last_assistant_message')
@@ -858,7 +912,10 @@ function extractGeminiToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.args) ??
       deriveToolInputPreview(toolName, hookPayload.input)
-    return { toolName, toolInput }
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'args', 'input']) }
+    )
   }
   if (eventName === 'AfterAgent') {
     const message = readString(hookPayload, 'prompt_response')
@@ -894,7 +951,10 @@ function extractAntigravityToolFields(
     const toolInput =
       deriveToolInputPreview(toolName, toolCall.toolInputSource) ??
       deriveFallbackToolInputPreview(toolCall.toolInputSource)
-    return { toolName, toolInput }
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: toolCall.toolInputSource !== undefined }
+    )
   }
   if (eventName === 'Stop') {
     const message =
@@ -931,7 +991,10 @@ function extractCursorToolFields(
   ) {
     const toolName = readString(hookPayload, 'tool_name')
     const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    const update: ToolSnapshot = { toolName, toolInput }
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
     if (eventName === 'postToolUse') {
       const responseText = extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
@@ -951,7 +1014,10 @@ function extractCursorToolFields(
   }
   if (eventName === 'beforeShellExecution') {
     const command = readString(hookPayload, 'command')
-    return { toolName: 'Shell', toolInput: command }
+    return toolUpdate(
+      { toolName: 'Shell', toolInput: command },
+      { hasToolInputField: hasOwnField(hookPayload, 'command') }
+    )
   }
   if (eventName === 'beforeMCPExecution') {
     const toolName = readString(hookPayload, 'tool_name') ?? 'MCP'
@@ -959,7 +1025,10 @@ function extractCursorToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       readString(hookPayload, 'command') ??
       readString(hookPayload, 'url')
-    return { toolName, toolInput }
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'command', 'url']) }
+    )
   }
   if (eventName === 'afterAgentResponse') {
     const text = readString(hookPayload, 'text')
@@ -1086,8 +1155,22 @@ function extractCopilotToolFields(
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments) ??
       deriveToolInputPreview(toolName, copilotToolCall.toolInputSource)
-    update.toolName = toolName
-    update.toolInput = toolInput
+    Object.assign(
+      update,
+      toolUpdate(
+        { toolName, toolInput },
+        {
+          hasToolInputField:
+            hasAnyOwnField(hookPayload, [
+              'tool_input',
+              'toolInput',
+              'toolArgs',
+              'input',
+              'arguments'
+            ]) || copilotToolCall.toolInputSource !== undefined
+        }
+      )
+    )
     if (isAskUserTool(toolName) && toolInput) {
       update.lastAssistantMessage = toolInput
     }
@@ -1155,7 +1238,10 @@ function extractPiToolFields(
   ) {
     const toolName = readString(hookPayload, 'tool_name')
     const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    return { toolName, toolInput }
+    return toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
   }
   if (eventName === 'message_end' && hookPayload.role === 'assistant') {
     const text = readString(hookPayload, 'text')
@@ -1229,7 +1315,10 @@ function extractDroidToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    const update: ToolSnapshot = { toolName, toolInput }
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+    )
     if (eventName === 'PostToolUse') {
       const responseText =
         extractToolResponseText(hookPayload.tool_response) ??
@@ -1283,7 +1372,17 @@ function extractGrokToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    const update: ToolSnapshot = { toolName, toolInput }
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      {
+        hasToolInputField: hasAnyOwnField(hookPayload, [
+          'toolInput',
+          'tool_input',
+          'input',
+          'arguments'
+        ])
+      }
+    )
     if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
       const responseText =
         extractToolResponseText(hookPayload.toolResponse) ??
@@ -1346,7 +1445,18 @@ function extractHermesToolFields(
       deriveFallbackToolInputPreview(hookPayload.input) ??
       readString(hookPayload, 'command') ??
       readString(hookPayload, 'description')
-    const update: ToolSnapshot = { toolName, toolInput }
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      {
+        hasToolInputField: hasAnyOwnField(hookPayload, [
+          'tool_input',
+          'args',
+          'input',
+          'command',
+          'description'
+        ])
+      }
+    )
     if (eventName === 'post_tool_call') {
       const responseText =
         extractToolResponseText(hookPayload.result) ??
@@ -2196,6 +2306,10 @@ export function normalizeHookPayload(
         worktreeId,
         connectionId: null,
         hasExplicitPrompt: promptText.length > 0,
+        hookEventName: typeof eventName === 'string' ? eventName : undefined,
+        toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+        toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
+        toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         payload
       }
     : null

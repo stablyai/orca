@@ -884,6 +884,12 @@ export async function createRemoteWorktree(
     // max(lastActivityAt, createdAt + GRACE_MS) to keep it on top until the
     // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: 'ssh',
+    orcaCreationWorkspaceLayout: {
+      path: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -1267,6 +1273,12 @@ export async function createLocalWorktree(
     // See createRemoteWorktree above: createdAt protects the newly-created
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: 'desktop',
+    orcaCreationWorkspaceLayout: {
+      path: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),

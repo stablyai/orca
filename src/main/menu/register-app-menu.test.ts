@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { registerAppMenu } from './register-app-menu'
+import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 
 const isMac = process.platform === 'darwin'
 
@@ -38,6 +38,7 @@ function buildMenuOptions() {
     onToggleAppearance: vi.fn(),
     getAppearanceState: vi.fn(() => ({
       showTasksButton: true,
+      showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     }))
@@ -57,6 +58,12 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('toggles missing default-on appearance settings from visible to hidden', () => {
+    expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(false)).toBe(true)
+  })
+
   beforeEach(() => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
@@ -247,6 +254,7 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     options.getAppearanceState.mockReturnValue({
       showTasksButton: false,
+      showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     })
@@ -261,6 +269,10 @@ describe('registerAppMenu', () => {
     const tasksItem = appearanceSubmenu.find((item) => item.label === 'Show Tasks Button')
     expect(tasksItem?.type).toBe('checkbox')
     expect(tasksItem?.checked).toBe(false)
+
+    const mobileItem = appearanceSubmenu.find((item) => item.label === 'Show Orca Mobile Button')
+    expect(mobileItem?.type).toBe('checkbox')
+    expect(mobileItem?.checked).toBe(true)
 
     const titlebarItem = appearanceSubmenu.find((item) => item.label === 'Show Titlebar App Name')
     expect(titlebarItem?.checked).toBe(true)
@@ -281,10 +293,14 @@ describe('registerAppMenu', () => {
       .find((item) => item.label === 'Show Tasks Button')
       ?.click?.({} as never, {} as never, {} as never)
     appearanceSubmenu
+      .find((item) => item.label === 'Show Orca Mobile Button')
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
       .find((item) => item.label === 'Show Titlebar App Name')
       ?.click?.({} as never, {} as never, {} as never)
 
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTasksButton')
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showMobileButton')
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTitlebarAppName')
   })
 

@@ -818,6 +818,42 @@
   animation: settings-shell-enter 180ms ease-out;
 }
 
+.collapsible-height-content {
+  overflow: hidden;
+}
+
+.collapsible-height-content[data-state='open'] {
+  animation: collapsible-down 200ms ease-out;
+}
+
+.collapsible-height-content[data-state='closed'] {
+  animation: collapsible-up 180ms ease-out;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
 .sidebar.collapsed {
   width: 0;
   border-right: none;

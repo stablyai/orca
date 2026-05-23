@@ -26,14 +26,19 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import {
   discardTerminalOutput,
   flushTerminalOutput,
+  suppressTerminalCursorUntilOutputSettles,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { isLocalNativeWindowsPty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  ParsedAgentStatusPayload
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -45,6 +50,11 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import {
+  clearHiddenTerminalOutput,
+  isHiddenTerminalHydrating,
+  queueHiddenTerminalOutput
+} from './hidden-terminal-output-state'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -53,6 +63,7 @@ const PTY_CONNECT_DIAG_LIMIT = 200
 const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
+const HIDDEN_TERMINAL_METADATA_FLUSH_MS = 100
 let codexRestartNoticePresenceSource: Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
@@ -476,6 +487,9 @@ export function connectPanePty(
 
   const onExit = (ptyId: string): void => {
     agentCompletionCoordinator.dispose()
+    clearHiddenMetadataFlushTimer()
+    pendingHiddenTitle = null
+    pendingHiddenAgentStatus = null
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -514,8 +528,11 @@ export function connectPanePty(
   // Claude launches also start idle, but they have no prompt cache yet.
   let hasConsideredInitialCacheTimerSeed = false
   let allowInitialIdleCacheSeed = false
+  let pendingHiddenTitle: { title: string; rawTitle: string } | null = null
+  let pendingHiddenAgentStatus: ParsedAgentStatusPayload | null = null
+  let hiddenMetadataFlushTimer: ReturnType<typeof setTimeout> | null = null
 
-  const onTitleChange = (title: string, rawTitle: string): void => {
+  const applyTitleChangeNow = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
     if (syncAgentTaskCompleteNotificationEnabled()) {
@@ -544,6 +561,75 @@ export function connectPanePty(
         deps.setCacheTimerStartedAt(cacheKey, Date.now())
       }
     }
+  }
+
+  const applyAgentStatusNow = (payload: ParsedAgentStatusPayload): void => {
+    // Why: capture the store snapshot once so the title lookup and the
+    // setAgentStatus call observe the same state. Re-reading getState()
+    // between the two lines opens a brief window where the title could
+    // shift (OSC title update landing in between) and the status would be
+    // stored against a title that was never paired with it.
+    const currentState = useAppStore.getState()
+    const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    currentState.setAgentStatus(cacheKey, payload, title)
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeHookStatus(payload)
+    }
+  }
+
+  const clearHiddenMetadataFlushTimer = (): void => {
+    if (hiddenMetadataFlushTimer !== null) {
+      clearTimeout(hiddenMetadataFlushTimer)
+      hiddenMetadataFlushTimer = null
+    }
+  }
+
+  const flushHiddenMetadata = (): void => {
+    clearHiddenMetadataFlushTimer()
+    const title = pendingHiddenTitle
+    const agentStatus = pendingHiddenAgentStatus
+    pendingHiddenTitle = null
+    pendingHiddenAgentStatus = null
+    if (title) {
+      applyTitleChangeNow(title.title, title.rawTitle)
+    }
+    if (agentStatus) {
+      applyAgentStatusNow(agentStatus)
+    }
+  }
+
+  const scheduleHiddenMetadataFlush = (): void => {
+    if (hiddenMetadataFlushTimer !== null) {
+      return
+    }
+    hiddenMetadataFlushTimer = setTimeout(() => {
+      hiddenMetadataFlushTimer = null
+      flushHiddenMetadata()
+    }, HIDDEN_TERMINAL_METADATA_FLUSH_MS)
+  }
+
+  const hiddenTitleNeedsImmediateApply = (title: string): boolean => {
+    const currentTitle = useAppStore.getState().runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    return detectAgentStatusFromTitle(currentTitle ?? '') !== detectAgentStatusFromTitle(title)
+  }
+
+  const hiddenAgentStatusNeedsImmediateApply = (payload: ParsedAgentStatusPayload): boolean => {
+    const existing = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    return !existing || existing.state !== payload.state || payload.state === 'done'
+  }
+
+  const onTitleChange = (title: string, rawTitle: string): void => {
+    if (deps.isVisibleRef.current || hiddenTitleNeedsImmediateApply(title)) {
+      flushHiddenMetadata()
+      applyTitleChangeNow(title, rawTitle)
+      return
+    }
+    // Why: hidden Codex panes can emit decorative title frames faster than a
+    // user can observe them. Keep state transitions immediate, but coalesce
+    // same-class hidden frames so background agents don't steal the renderer
+    // thread from the focused xterm during typing.
+    pendingHiddenTitle = { title, rawTitle }
+    scheduleHiddenMetadataFlush()
   }
 
   const onPtySpawn = (ptyId: string): void => {
@@ -787,6 +873,12 @@ export function connectPanePty(
   const connectionId = repo?.connectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
+  const shouldSuppressForegroundCursor = isLocalNativeWindowsPty({
+    userAgent: navigator.userAgent,
+    connectionId,
+    cwd: deps.cwd,
+    shellOverride
+  })
 
   const restoredPtyIdForTransport =
     deps.restoredLeafId && deps.restoredPtyIdByLeafId
@@ -824,17 +916,13 @@ export function connectPanePty(
     // Without this, the OSC parser in pty-transport strips sequences from xterm
     // output but the status never reaches the store or dashboard/hover UI.
     onAgentStatus: (payload) => {
-      // Why: capture the store snapshot once so the title lookup and the
-      // setAgentStatus call observe the same state. Re-reading getState()
-      // between the two lines opens a brief window where the title could
-      // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it.
-      const currentState = useAppStore.getState()
-      const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-      currentState.setAgentStatus(cacheKey, payload, title)
-      if (syncAgentTaskCompleteNotificationEnabled()) {
-        agentCompletionCoordinator.observeHookStatus(payload)
+      if (deps.isVisibleRef.current || hiddenAgentStatusNeedsImmediateApply(payload)) {
+        flushHiddenMetadata()
+        applyAgentStatusNow(payload)
+        return
       }
+      pendingHiddenAgentStatus = payload
+      scheduleHiddenMetadataFlush()
     }
   }
   const transport = runtimeEnvironmentId
@@ -888,6 +976,12 @@ export function connectPanePty(
     // auto-replies never count as interaction.
     deps.clearTerminalTabUnread(deps.tabId)
     deps.clearWorktreeUnread(deps.worktreeId)
+    if (shouldSuppressForegroundCursor) {
+      // Why: native Windows ConPTY can leave the old visual cursor painted
+      // until the shell echoes the next frame; other PTY hosts should keep
+      // normal cursor visibility when commands intentionally produce no echo.
+      suppressTerminalCursorUntilOutputSettles(pane.terminal)
+    }
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -1057,6 +1151,7 @@ export function connectPanePty(
         },
         () => {
           discardTerminalOutput(pane.terminal)
+          clearHiddenTerminalOutput(pane.terminal)
           pane.terminal.clear()
         }
       )
@@ -1141,6 +1236,7 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
+      clearHiddenTerminalOutput(pane.terminal)
       if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
@@ -1157,6 +1253,16 @@ export function connectPanePty(
 
     const dataCallback = (data: string): void => {
       commandLifecycle.handlePtyData(data)
+      if (!deps.isVisibleRef.current || isHiddenTerminalHydrating(pane.terminal)) {
+        const ptyId = transport.getPtyId()
+        if (ptyId) {
+          if (terminalOutputPrefersDomRenderer(data)) {
+            manager.markPaneHasComplexScriptOutput(pane.id)
+          }
+          queueHiddenTerminalOutput(pane.terminal, ptyId, data)
+          return
+        }
+      }
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only
       // hidden panes (background tabs) should be throttled.
@@ -1777,6 +1883,9 @@ export function connectPanePty(
       pendingTerminalInputWrite = null
       interruptInference.dispose()
       clearTitleOnlyInterruptTimer()
+      clearHiddenMetadataFlushTimer()
+      pendingHiddenTitle = null
+      pendingHiddenAgentStatus = null
       // Why: actively resolve any in-flight passphrase-gate waits so their
       // zustand subscribers + async IIFEs don't hang for the rest of the
       // session when the pane is torn down before SSH state changes.
@@ -1792,6 +1901,7 @@ export function connectPanePty(
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       discardTerminalOutput(pane.terminal)
+      clearHiddenTerminalOutput(pane.terminal)
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
         agentTaskCompleteSettingsUnsubscribe = null

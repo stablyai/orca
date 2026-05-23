@@ -1,11 +1,22 @@
+/* eslint-disable max-lines -- Why: notification IPC keeps permission, dispatch, custom sound asset, and sound-loading handlers colocated so renderer/main contracts stay auditable. */
 import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute, normalize } from 'node:path'
+import beepSoundPath from '../../../resources/notification-sounds/beep.mp3?asset'
+import blipSoundPath from '../../../resources/notification-sounds/blip.mp3?asset'
+import blopSoundPath from '../../../resources/notification-sounds/blop.mp3?asset'
+import bongSoundPath from '../../../resources/notification-sounds/bong.mp3?asset'
+import clackSoundPath from '../../../resources/notification-sounds/clack.mp3?asset'
+import dingSoundPath from '../../../resources/notification-sounds/ding.mp3?asset'
+import sonarSoundPath from '../../../resources/notification-sounds/sonar.mp3?asset'
+import thumpSoundPath from '../../../resources/notification-sounds/thump.mp3?asset'
+import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp3?asset'
 import type { Store } from '../persistence'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
+  NotificationSettings,
   NotificationSoundDataResult
 } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
@@ -27,6 +38,18 @@ const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Ma
   ['.aac', 'audio/aac'],
   ['.flac', 'audio/flac']
 ])
+const BUILT_IN_NOTIFICATION_SOUNDS: ReadonlyMap<string, string> = new Map([
+  ['two-tone', twoToneSoundPath],
+  ['bong', bongSoundPath],
+  ['thump', thumpSoundPath],
+  ['blip', blipSoundPath],
+  ['sonar', sonarSoundPath],
+  ['blop', blopSoundPath],
+  ['ding', dingSoundPath],
+  ['clack', clackSoundPath],
+  ['beep', beepSoundPath]
+])
+type NotificationSoundId = NotificationSettings['customSoundId']
 
 // Why: Electron Notification objects are normal JS objects — if the only
 // reference is a local variable inside the ipcMain handler, the GC can
@@ -46,6 +69,35 @@ function openNotificationSystemSettings(): void {
   } else if (process.platform === 'win32') {
     void shell.openExternal('ms-settings:notifications')
   }
+}
+
+function getEffectiveNotificationSoundId(settings: NotificationSettings): NotificationSoundId {
+  return settings.customSoundId ?? (settings.customSoundPath ? 'custom' : 'system')
+}
+
+function getSelectedNotificationSoundPath(settings: NotificationSettings): {
+  path: string | null
+  reason?: 'missing-path' | 'invalid-path' | 'unsupported-type'
+} {
+  const customSoundId = getEffectiveNotificationSoundId(settings)
+  if (customSoundId === 'system') {
+    return { path: null, reason: 'missing-path' }
+  }
+  if (customSoundId !== 'custom') {
+    const builtInPath = BUILT_IN_NOTIFICATION_SOUNDS.get(customSoundId)
+    return builtInPath ? { path: builtInPath } : { path: null, reason: 'missing-path' }
+  }
+  if (!settings.customSoundPath) {
+    return { path: null, reason: 'missing-path' }
+  }
+  const normalizedPath = normalize(settings.customSoundPath)
+  if (!isAbsolute(normalizedPath)) {
+    return { path: null, reason: 'invalid-path' }
+  }
+  if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
+    return { path: null, reason: 'unsupported-type' }
+  }
+  return { path: normalizedPath }
 }
 
 function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
@@ -171,7 +223,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
 
       const notificationOptions = buildNotificationOptions(args)
-      if (settings.customSoundPath) {
+      if (getEffectiveNotificationSoundId(settings) !== 'system') {
         notificationOptions.silent = true
       } else if (process.platform === 'darwin') {
         // Why: macOS treats an unset notification sound as silent. When Orca is
@@ -262,14 +314,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     ():
       | { ok: true; path: string }
       | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' } => {
-      const pathValue = store.getSettings().notifications.customSoundPath
-      if (!pathValue) {
-        return { ok: false, reason: 'missing-path' }
+      const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
+      if (!selectedSound.path) {
+        return { ok: false, reason: selectedSound.reason ?? 'missing-path' }
       }
-      const normalizedPath = normalize(pathValue)
-      if (!isAbsolute(normalizedPath)) {
-        return { ok: false, reason: 'invalid-path' }
-      }
+      const normalizedPath = normalize(selectedSound.path)
       if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
         return { ok: false, reason: 'unsupported-type' }
       }
@@ -279,15 +328,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   ipcMain.removeHandler('notifications:loadSound')
   ipcMain.handle('notifications:loadSound', async (): Promise<NotificationSoundDataResult> => {
-    const pathValue = store.getSettings().notifications.customSoundPath
-    if (!pathValue) {
-      return { ok: false, reason: 'missing-path' }
+    const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
+    if (!selectedSound.path) {
+      return { ok: false, reason: selectedSound.reason ?? 'missing-path' }
     }
 
-    const normalizedPath = normalize(pathValue)
-    if (!isAbsolute(normalizedPath)) {
-      return { ok: false, reason: 'invalid-path' }
-    }
+    const normalizedPath = normalize(selectedSound.path)
 
     const mimeType = NOTIFICATION_SOUND_MIME_BY_EXTENSION.get(extname(normalizedPath).toLowerCase())
     if (!mimeType) {

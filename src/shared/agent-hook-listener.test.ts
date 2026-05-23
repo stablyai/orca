@@ -750,6 +750,72 @@ describe('shared agent-hook-listener', () => {
     expect(pluginTool?.payload.toolInput).toBe('agent hooks')
   })
 
+  it('clears stale Codex tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
+  })
+
+  it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
+  })
+
   it('normalizes Hermes post_llm_call to done with assistant text', () => {
     normalizeHookPayload(
       state,

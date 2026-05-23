@@ -136,6 +136,40 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(execResult)
   })
 
+  it('execNonInteractive forwards environment variables to the relay', async () => {
+    const execResult = {
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    await provider.execNonInteractive(
+      '/bin/bash',
+      ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+      '/home/user/repo',
+      120_000,
+      undefined,
+      {
+        ORCA_ROOT_PATH: '/home/user/repo',
+        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+      }
+    )
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: '/bin/bash',
+      args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 120_000,
+      env: {
+        ORCA_ROOT_PATH: '/home/user/repo',
+        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+      }
+    })
+  })
+
   it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
     await provider.cancelNonInteractiveExec('/home/user/repo')
 

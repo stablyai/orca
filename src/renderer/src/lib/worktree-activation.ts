@@ -10,7 +10,6 @@ import {
   activateWebRuntimeSessionWorktree,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
@@ -127,7 +126,7 @@ export function activateAndRevealWorktree(
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = findWorktreeById(state.worktreesByRepo, worktreeId)
+  const wt = state.getKnownWorktreeById(worktreeId)
   if (!wt) {
     return false
   }

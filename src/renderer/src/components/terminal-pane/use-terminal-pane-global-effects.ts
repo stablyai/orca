@@ -1,4 +1,7 @@
-import { useEffect, useRef } from 'react'
+/* oxlint-disable max-lines -- Why: this hook owns global terminal-pane effects
+that share the same visibility, focus, and manager refs. Splitting the effect
+coordination would make resume/hydration ordering harder to audit. */
+import { useCallback, useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   PASTE_TERMINAL_TEXT_EVENT,
@@ -17,6 +20,14 @@ import { useAppStore } from '@/store'
 import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
+import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import {
+  cancelHiddenTerminalHydration,
+  clearHiddenTerminalOutput,
+  consumeHiddenTerminalHydration,
+  markHiddenTerminalFallbackReplayed,
+  markHiddenTerminalHydrated
+} from './hidden-terminal-output-state'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -28,6 +39,7 @@ type UseTerminalPaneGlobalEffectsArgs = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   toggleExpandPane: (paneId: number) => void
@@ -43,6 +55,7 @@ export function useTerminalPaneGlobalEffects({
   managerRef,
   containerRef,
   paneTransportsRef,
+  replayingPanesRef,
   isActiveRef,
   isVisibleRef,
   toggleExpandPane
@@ -68,6 +81,83 @@ export function useTerminalPaneGlobalEffects({
     paneCount
   })
   useTerminalContainerFitSync({ isVisible, managerRef, containerRef })
+
+  const hydrateHiddenPane = useCallback(
+    (pane: ReturnType<PaneManager['getPanes']>[number]): void => {
+      const hydration = consumeHiddenTerminalHydration(pane.terminal)
+      if (!hydration) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(pane.id)
+      if (transport?.getPtyId() !== hydration.ptyId) {
+        clearHiddenTerminalOutput(pane.terminal)
+        return
+      }
+      const scrollbackRows =
+        typeof pane.terminal.options?.scrollback === 'number'
+          ? pane.terminal.options.scrollback
+          : undefined
+      void window.api.pty
+        .serializeHeadlessBuffer(hydration.ptyId, { scrollbackRows })
+        .then((snapshot) => {
+          if (!isVisibleRef.current) {
+            cancelHiddenTerminalHydration(pane.terminal, hydration)
+            return
+          }
+          if (transport.getPtyId() !== hydration.ptyId) {
+            clearHiddenTerminalOutput(pane.terminal)
+            return
+          }
+          if (snapshot?.data) {
+            // Why: hidden output no longer painted into the visible xterm.
+            // Rehydrate from the runtime headless model once, under the replay
+            // guard, so terminal query replies do not leak into the shell.
+            replayIntoTerminal(pane, replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+            replayIntoTerminal(pane, replayingPanesRef, snapshot.data)
+            const queuedDuringHydration = markHiddenTerminalHydrated(pane.terminal, hydration)
+            if (queuedDuringHydration) {
+              replayIntoTerminal(pane, replayingPanesRef, queuedDuringHydration)
+            }
+            return
+          }
+          if (hydration.fallbackData) {
+            replayIntoTerminal(pane, replayingPanesRef, hydration.fallbackData)
+            const queuedDuringHydration = markHiddenTerminalFallbackReplayed(
+              pane.terminal,
+              hydration
+            )
+            if (queuedDuringHydration) {
+              replayIntoTerminal(pane, replayingPanesRef, queuedDuringHydration)
+            }
+            return
+          }
+          markHiddenTerminalFallbackReplayed(pane.terminal, hydration)
+        })
+        .catch(() => {
+          if (!isVisibleRef.current) {
+            cancelHiddenTerminalHydration(pane.terminal, hydration)
+            return
+          }
+          if (transport.getPtyId() !== hydration.ptyId) {
+            clearHiddenTerminalOutput(pane.terminal)
+            return
+          }
+          if (hydration.fallbackData) {
+            replayIntoTerminal(pane, replayingPanesRef, hydration.fallbackData)
+            const queuedDuringHydration = markHiddenTerminalFallbackReplayed(
+              pane.terminal,
+              hydration
+            )
+            if (queuedDuringHydration) {
+              replayIntoTerminal(pane, replayingPanesRef, queuedDuringHydration)
+            }
+            return
+          }
+          markHiddenTerminalFallbackReplayed(pane.terminal, hydration)
+        })
+    },
+    [isVisibleRef, paneTransportsRef, replayingPanesRef]
+  )
 
   useEffect(() => {
     const manager = managerRef.current
@@ -106,6 +196,7 @@ export function useTerminalPaneGlobalEffects({
           if (position) {
             restoreScrollStateAfterLayout(pane.terminal, position)
           }
+          hydrateHiddenPane(pane)
         }
       })
       wasVisibleRef.current = true

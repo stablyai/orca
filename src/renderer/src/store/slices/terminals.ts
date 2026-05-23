@@ -183,6 +183,11 @@ export type TerminalSlice = {
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Most recently run quick-command id per tab group. In-memory only; resets
+   *  on app restart so a stale id from a deleted command can't surface as the
+   *  split-button label across sessions. */
+  recentQuickCommandIdByGroup: Record<string, string>
+  setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
   pendingStartupByTabId: Record<
     string,
     {
@@ -376,6 +381,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   deferredSshReconnectTargets: [],
   deferredSshSessionIdsByTabId: {},
   cacheTimerByKey: {},
+  recentQuickCommandIdByGroup: {},
+
+  setRecentQuickCommandForGroup: (groupId, quickCommandId) => {
+    set((s) => ({
+      recentQuickCommandIdByGroup: {
+        ...s.recentQuickCommandIdByGroup,
+        [groupId]: quickCommandId
+      }
+    }))
+  },
 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {

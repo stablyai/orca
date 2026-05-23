@@ -23,7 +23,10 @@ import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { buildResolveConflictsPrompt, pickDefaultSourceControlAgent } from './SourceControl'
+import {
+  buildResolvePullRequestConflictsPrompt,
+  pickDefaultSourceControlAgent
+} from './SourceControl'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-prompt'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
@@ -779,10 +782,9 @@ export default function ChecksPanel(): React.JSX.Element {
     [repo, prNumber, pr?.prRepo, resolveReviewThread]
   )
 
-  // Why: PR conflict files come from GitHub (paths only, no per-file conflict
-  // kind), so we hand them to the same prompt builder used by Source Control
-  // with conflictKind left undefined. The agent picks up the rest from
-  // `git status` once it lands in the worktree.
+  // Why: PR conflict files come from the host mergeability check, not a local
+  // MERGE_HEAD, so the prompt must tell the agent how to reproduce the merge
+  // locally instead of reusing the live Source Control conflict prompt.
   const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
     if (isResolvingConflictsWithAI || !activeWorktreeId || !pr) {
       return
@@ -805,8 +807,8 @@ export default function ChecksPanel(): React.JSX.Element {
         toast.error('No AI agents detected. Configure a default agent in Settings.')
         return
       }
-      const prompt = buildResolveConflictsPrompt({
-        conflictOperation: 'merge',
+      const prompt = buildResolvePullRequestConflictsPrompt({
+        baseRef: pr.conflictSummary?.baseRef,
         entries: conflictFiles.map((path) => ({ path })),
         worktreePath: activeWorktreePath ?? null
       })

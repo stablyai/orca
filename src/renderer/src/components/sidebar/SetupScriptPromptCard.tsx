@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, LoaderCircle, Settings, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { track } from '@/lib/telemetry'
@@ -324,12 +323,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     <div className="px-3 pb-2">
       <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 text-sidebar-accent-foreground shadow-xs">
         <div className="flex items-center justify-between gap-2">
-          <Badge
-            variant="outline"
-            className="h-5 border-transparent bg-foreground/10 px-1.5 text-[11px] text-foreground"
-          >
-            Setup
-          </Badge>
+          <p className="text-sm font-semibold leading-snug">{title}</p>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -349,7 +343,6 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           </Tooltip>
         </div>
 
-        <p className="mt-2 text-sm font-semibold leading-snug">{title}</p>
         <p className="mt-1 text-xs leading-snug text-muted-foreground">
           {candidateSource ? (
             <>

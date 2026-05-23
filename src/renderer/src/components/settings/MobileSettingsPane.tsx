@@ -6,7 +6,7 @@ import { useAppStore } from '../../store'
 import { MobilePane, MOBILE_PANE_SEARCH_ENTRIES } from './MobilePane'
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.8'
+const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.9'
 
 const MOBILE_ENABLE_SEARCH_ENTRY: SettingsSearchEntry = {
   title: 'Mobile',
@@ -51,7 +51,7 @@ export function MobileSettingsPane({
           title="Mobile"
           description="Control terminals and agents from your phone."
           keywords={MOBILE_ENABLE_SEARCH_ENTRY.keywords}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-1.5">

@@ -99,7 +99,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-4 px-1 py-2">
+      <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>Enable Voice Dictation</Label>
           <p className="text-xs text-muted-foreground">
@@ -127,7 +127,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
       <Separator />
 
-      <div className="flex items-center justify-between gap-4 px-1 py-2">
+      <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>Dictation Mode</Label>
           <p className="text-xs text-muted-foreground">
@@ -155,7 +155,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
       <Separator />
 
-      <div className="flex items-center justify-between gap-4 px-1 py-2">
+      <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>Speech Model</Label>
           <p className="text-xs text-muted-foreground">

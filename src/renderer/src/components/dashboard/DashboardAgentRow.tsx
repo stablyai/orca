@@ -185,6 +185,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
+  const lineage = agent.lineage
+  const isLineageChild = lineage?.depth === 1
+  const lineageChildCount = lineage?.childCount ?? 0
+  const participatesInLineage = isLineageChild || lineageChildCount > 0
+  const identityTitle =
+    lineageChildCount > 0
+      ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
+          lineageChildCount === 1 ? 'agent' : 'agents'
+        }`
+      : formatAgentTypeLabel(agent.agentType)
   // Why: interrupted is a terminal outcome the user needs to scan in the
   // leading state column; the secondary-line text below provides the
   // explanation without competing with the prompt or timestamp.
@@ -218,7 +228,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       className={cn(
         // Why: this row owns the timestamp/X hover boundary; anonymous
         // ancestor groups from workspace cards must not reveal every row's X.
-        'group/agent-row relative flex flex-col -ml-2 px-2 py-1',
+        'group/agent-row relative flex flex-col -ml-2 py-1',
+        isLineageChild ? 'pl-5 pr-2' : 'px-2',
         // Why: hover tints have to go in opposite directions per theme —
         // dark mode adds light on dark (bg-accent/30), light mode needs to
         // add *dark* on white. Alpha-on-accent in light mode collapses to
@@ -228,7 +239,36 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30'
       )}
       title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}
+      role={participatesInLineage ? 'treeitem' : undefined}
+      aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
     >
+      {lineageChildCount > 0 ? (
+        <span
+          aria-hidden
+          data-agent-lineage-parent-connector
+          className="pointer-events-none absolute bottom-[-0.75rem] left-[13px] top-[1.05rem] border-l-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35"
+        />
+      ) : null}
+      {isLineageChild ? (
+        <span
+          aria-hidden
+          data-agent-lineage-connector={lineage?.isLastSibling === false ? 'branch' : 'last'}
+          className="pointer-events-none absolute bottom-[-1px] left-[13px] top-[-1px] w-3"
+        >
+          <span
+            className={cn(
+              'absolute left-0 border-l-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35',
+              lineage?.isFirstSibling ? 'top-[-0.9rem]' : 'top-[-1px]',
+              lineage?.isLastSibling
+                ? lineage?.isFirstSibling
+                  ? 'h-[1.6rem]'
+                  : 'h-[calc(0.7rem+1px)]'
+                : 'bottom-[-1px]'
+            )}
+          />
+          <span className="absolute left-0 top-[0.7rem] w-1.5 border-t-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35" />
+        </span>
+      ) : null}
       <div className="flex items-center gap-1.5">
         {/* Why: state indicator lives in the leading gutter so the user's
             eye can sweep one column and know which rows are working,
@@ -257,7 +297,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
         {!hideIdentityIcon && (
-          <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+          <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
           </span>
         )}

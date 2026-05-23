@@ -19,6 +19,7 @@ import {
   CONNECT_TIMEOUT_MS,
   isTransientError,
   isAuthError,
+  isAgentFallbackError,
   isPassphraseError,
   sleep,
   buildConnectConfig,
@@ -238,27 +239,87 @@ export class SshConnection {
     try {
       await this.doSsh2Connect(config, connectGeneration)
     } catch (err) {
-      if (!(err instanceof Error) || !this.callbacks.onCredentialRequest) {
+      if (!(err instanceof Error)) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw err
       }
+
+      let authError = err
+      let passphrasePromptHandled = false
+      let credentialRetryConfig = config
+
+      // Why: ssh2 parses encrypted privateKey values before it tries agent
+      // auth. When an agent is available, give it the first attempt and only
+      // fall back to direct key parsing after agent auth fails.
+      if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
+        const keyConfig = buildConnectConfig(this.target, resolved, {
+          includeAgent: false,
+          includePrivateKey: true
+        })
+        // Why: if the agent path failed, password/passphrase retries should not
+        // go back through the same agent-only config.
+        credentialRetryConfig = keyConfig
+        if (this.cachedPassphrase) {
+          keyConfig.passphrase = this.cachedPassphrase
+        }
+        if (this.cachedPassword) {
+          keyConfig.password = this.cachedPassword
+        }
+        if (keyConfig.privateKey || keyConfig.password) {
+          this.respawnProxy(keyConfig, effectiveProxy)
+          try {
+            await this.doSsh2Connect(keyConfig, connectGeneration)
+            return
+          } catch (keyErr) {
+            if (!(keyErr instanceof Error)) {
+              this.proxyProcess?.kill()
+              this.proxyProcess = null
+              throw keyErr
+            }
+            authError = keyErr
+            if (isPassphraseError(authError) && !this.cachedPassphrase) {
+              passphrasePromptHandled = true
+              const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+              const val = await this.callbacks.onCredentialRequest?.(
+                this.target.id,
+                'passphrase',
+                detail
+              )
+              if (val) {
+                this.cachedPassphrase = val
+                keyConfig.passphrase = val
+                this.respawnProxy(keyConfig, effectiveProxy)
+                await this.doSsh2Connect(keyConfig, connectGeneration)
+                return
+              }
+            }
+          }
+        }
+      }
+
+      if (!this.callbacks.onCredentialRequest) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw authError
+      }
+
       // Why: prompt for passphrase on encrypted-key error, then retry with
       // a fresh proxy socket (ssh2 may have destroyed the original).
-      if (isPassphraseError(err) && !this.cachedPassphrase) {
+      if (isPassphraseError(authError) && !this.cachedPassphrase && !passphrasePromptHandled) {
         const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
         const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
         if (val) {
           this.cachedPassphrase = val
-          config.passphrase = val
-          this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config, connectGeneration)
+          credentialRetryConfig.passphrase = val
+          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
-      // Why: prompt for password on auth failure. Check the original error
-      // (not a retry error) to avoid conflating passphrase vs password failures.
-      if (isAuthError(err) && !this.cachedPassword) {
+      // Why: an agent socket failure can still be recovered by password auth,
+      // but the retry must use the no-agent config selected above.
+      if (isAgentFallbackError(authError) && !this.cachedPassword) {
         const val = await this.callbacks.onCredentialRequest(
           this.target.id,
           'password',
@@ -266,15 +327,15 @@ export class SshConnection {
         )
         if (val) {
           this.cachedPassword = val
-          config.password = val
-          this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config, connectGeneration)
+          credentialRetryConfig.password = val
+          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
       this.proxyProcess?.kill()
       this.proxyProcess = null
-      throw err
+      throw authError
     }
   }
 

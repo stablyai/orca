@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CircleX,
   Ellipsis,
+  Eye,
   Palette,
   Plus,
   SlidersHorizontal,
@@ -128,6 +129,7 @@ import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { getRepositoryBadgeColorSectionId } from '@/components/settings/repository-settings-targets'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -217,6 +219,7 @@ type VirtualizedWorktreeViewportProps = {
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
   handleOpenRepoSettings: (repoId: string, sectionId?: string) => void
+  handleOpenWorktreeVisibility: (repoId: string) => void
   handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
@@ -508,6 +511,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   collapsedGroups,
   handleCreateForRepo,
   handleOpenRepoSettings,
+  handleOpenWorktreeVisibility,
   handleRemoveRepo,
   activeModal,
   pendingRevealWorktree,
@@ -1959,6 +1963,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             <Palette className="size-3.5" />
                             Change Repo Color
                           </DropdownMenuItem>
+                          {row.repo && isGitRepoKind(row.repo) ? (
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.repo) {
+                                  handleOpenWorktreeVisibility(row.repo.id)
+                                }
+                              }}
+                            >
+                              <Eye className="size-3.5" />
+                              Import Worktrees
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             variant="destructive"
@@ -2829,6 +2845,13 @@ const WorktreeList = React.memo(function WorktreeList({
     [openSettingsPage, openSettingsTarget]
   )
 
+  const handleOpenWorktreeVisibility = useCallback(
+    (repoId: string) => {
+      openModal('worktree-visibility', { repoId })
+    },
+    [openModal]
+  )
+
   const handleRemoveRepo = useCallback(
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
@@ -2987,6 +3010,7 @@ const WorktreeList = React.memo(function WorktreeList({
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
       handleOpenRepoSettings={handleOpenRepoSettings}
+      handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       handleRemoveRepo={handleRemoveRepo}
       activeModal={activeModal}
       pendingRevealWorktree={pendingRevealWorktree}

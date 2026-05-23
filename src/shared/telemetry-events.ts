@@ -470,6 +470,7 @@ const onboardingValueKindSchema = z.enum([
   'agent',
   'theme',
   'notifications',
+  'agent_setup',
   'integrations',
   'tour',
   'repo'

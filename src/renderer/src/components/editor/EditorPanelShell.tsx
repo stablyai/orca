@@ -19,7 +19,6 @@ type EditorPanelShellProps = {
   model: EditorPanelRenderModel
   copiedPathVisible: boolean
   showMarkdownTableOfContents: boolean
-  markdownReviewToolsEnabled: boolean
   sideBySide: boolean
   openFiles: OpenFile[]
   fileContents: Record<string, FileContent>
@@ -56,7 +55,6 @@ export function EditorPanelShell({
   model,
   copiedPathVisible,
   showMarkdownTableOfContents,
-  markdownReviewToolsEnabled,
   sideBySide,
   openFiles,
   fileContents,
@@ -144,7 +142,6 @@ export function EditorPanelShell({
           handleSaveForFile={onSaveForFile}
           reloadFileContent={onReloadFileContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
-          markdownReviewToolsEnabled={markdownReviewToolsEnabled}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
         />
       </Suspense>

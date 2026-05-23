@@ -96,13 +96,14 @@ export async function sendNotificationSettingsTestNotification(
     // Why: the Test button must always play through, even if the user clicks
     // it twice in quick succession — the in-flight dedupe is for incidental
     // bursts of real notifications, not for an explicit user action.
-    const soundResult = notificationSettings.customSoundPath
-      ? await window.api.notifications.playSound({
-          force: true,
-          volume: volumeDraft
-        })
-      : null
-    if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
+    const soundResult =
+      notificationSettings.customSoundId !== 'system'
+        ? await window.api.notifications.playSound({
+            force: true,
+            volume: volumeDraft
+          })
+        : null
+    if (notificationSettings.customSoundId !== 'system' && soundResult && !soundResult.played) {
       toast.error('Custom notification sound could not be played')
       return
     }
@@ -193,7 +194,7 @@ export function NotificationsPane({
     try {
       const soundPath = await window.api.shell.pickAudio()
       if (soundPath) {
-        updateNotificationSettings({ customSoundPath: soundPath })
+        updateNotificationSettings({ customSoundId: 'custom', customSoundPath: soundPath })
       }
     } finally {
       setIsPickingSound(false)
@@ -241,7 +242,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <div className="space-y-2 px-1 py-2">
+      <div className="space-y-2 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <FileAudio className="size-4" />
@@ -287,7 +288,7 @@ export function NotificationsPane({
               variant="ghost"
               size="sm"
               disabled={!notificationSettings.enabled}
-              onClick={() => updateNotificationSettings({ customSoundPath: null })}
+              onClick={() => updateNotificationSettings({ customSoundId: 'system' })}
               className="gap-2"
             >
               <X className="size-3.5" />
@@ -295,7 +296,7 @@ export function NotificationsPane({
             </Button>
           ) : null}
         </div>
-        {selectedSoundPath ? (
+        {notificationSettings.customSoundId !== 'system' ? (
           <div className="flex items-center gap-3 pt-1">
             <Volume2 className="size-4 text-muted-foreground" />
             <Slider
@@ -330,7 +331,7 @@ export function NotificationsPane({
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 px-1 pt-3">
+      <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button
           variant="outline"
           size="sm"
@@ -364,7 +365,7 @@ export function SettingToggle({
   icon
 }: SettingToggleProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 px-1 py-2">
+    <div className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           {icon}

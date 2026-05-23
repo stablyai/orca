@@ -100,6 +100,18 @@ let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
 
+function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
+  const detected = state.detectedWorktreesByRepo[repoId]
+  if (detected?.authoritative !== true) {
+    return null
+  }
+  return new Set(detected.worktrees.map((worktree) => worktree.id))
+}
+
+function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
+  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+}
+
 type TerminalSplitDirection = 'horizontal' | 'vertical'
 
 function insertLeafAfterSource(
@@ -544,11 +556,16 @@ export function useIpcEvents(): void {
         // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
         // misclassifying the zombie as bound (design §2c, §4.4).
         const state = useAppStore.getState()
-        const before = new Set((state.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const before =
+          getAuthoritativeDetectedWorktreeIds(state, data.repoId) ??
+          getVisibleWorktreeIdsForRepo(state, data.repoId)
         await state.fetchWorktrees(data.repoId)
         await useAppStore.getState().fetchWorktreeLineage()
         const afterState = useAppStore.getState()
-        const after = new Set((afterState.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const after = getAuthoritativeDetectedWorktreeIds(afterState, data.repoId)
+        if (!after) {
+          return
+        }
         const removed: string[] = []
         for (const id of before) {
           if (!after.has(id)) {
@@ -1977,7 +1994,10 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
-      store.setAgentStatus(data.paneKey, payload, title, {
+      const statusPayload = data.orchestration
+        ? { ...payload, orchestration: data.orchestration }
+        : payload
+      store.setAgentStatus(data.paneKey, statusPayload, title, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
       })

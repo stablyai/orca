@@ -7,6 +7,7 @@ import {
   isShellProcess
 } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
@@ -24,6 +25,8 @@ import type {
 import type {
   BaseRefSearchResult,
   CreateWorktreeResult,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
   GitPushTarget,
   GitWorktreeInfo,
   GitHubOwnerRepo,
@@ -64,6 +67,11 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import {
+  buildKnownOrcaWorkspaceLayouts,
+  isLegacyRepoForExternalWorktreeVisibility,
+  toDetectedWorktree
+} from '../../shared/worktree-ownership'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
@@ -134,6 +142,7 @@ import {
   getPRForBranch,
   getRepoSlug,
   getWorkItem,
+  listIssues as listGitHubIssues,
   listWorkItems,
   countWorkItems,
   getPRChecks,
@@ -169,6 +178,8 @@ import {
   addIssueComment as addGitLabIssueComment,
   addMRComment as addGitLabMRComment,
   listTodos as listGitLabTodos,
+  listIssues as listGitLabIssues,
+  listMergeRequests as listGitLabMergeRequests,
   listWorkItems as listGitLabWorkItems,
   mergeMR as mergeGitLabMR,
   reopenMR as reopenGitLabMR,
@@ -177,6 +188,13 @@ import {
 } from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import { getWorkItemDetails as getGitLabWorkItemDetails } from '../gitlab/work-item-details'
+import {
+  normalizeGitLabIssueListArgs,
+  normalizeGitLabMRListState,
+  normalizeGitLabPositiveInteger,
+  type GitLabIssueListState
+} from '../gitlab/gitlab-preload-args'
+import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
 import type {
   GitHubIssueUpdate,
   GitHubPullRequestStateUpdate,
@@ -184,6 +202,7 @@ import type {
   GitHubPRReviewCommentInput,
   GitLabIssueUpdate,
   GitLabProjectRef,
+  GitLabWorkItem,
   MRListState
 } from '../../shared/types'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
@@ -298,7 +317,7 @@ import {
   writeIssueCommand
 } from '../hooks'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { createFolderWorktree, listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -325,7 +344,8 @@ import {
 } from '../ipc/worktree-logic'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
-  getRegisteredDeletableWorktree
+  findRegisteredDeletableWorktree,
+  isWorktreePathMissing
 } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -405,6 +425,7 @@ type RuntimeStore = {
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
+    gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     voice?: VoiceSettings
@@ -653,6 +674,47 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+async function isRuntimeWorktreePathMissing(repo: Repo, worktreePath: string): Promise<boolean> {
+  if (!repo.connectionId) {
+    return isWorktreePathMissing(worktreePath)
+  }
+
+  const fsProvider = getSshFilesystemProvider(repo.connectionId)
+  if (!fsProvider) {
+    return false
+  }
+  return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+}
+
+type RuntimeWorktreeRemovalTarget = {
+  id: string
+  repoId: string
+  path: string
+  pushTarget?: GitPushTarget
+}
+
+type RuntimeWorktreeRemovalInFlight = {
+  optionsKey: string
+  promise: Promise<{ warning?: string }>
+}
+
+function getRuntimeWorktreeRemovalOptionsKey(force: boolean, runHooks: boolean): string {
+  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}`
+}
+
+function parseExactWorktreeIdSelector(selector: string): RuntimeWorktreeRemovalTarget | null {
+  const worktreeId = selector.startsWith('id:') ? selector.slice(3) : selector
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return null
+  }
+  return {
+    id: worktreeId,
+    repoId: parsed.repoId,
+    path: parsed.worktreePath
+  }
 }
 
 async function resolveCreateBranchName(
@@ -1083,6 +1145,7 @@ export class OrcaRuntimeService {
   // canonical key is resolved at most once per repo+remote in the process.
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
+  private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
@@ -2162,6 +2225,13 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{ data: string; cols: number; rows: number } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
+  }
+
+  serializeHeadlessTerminalBufferForRenderer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{ data: string; cols: number; rows: number } | null> {
+    return this.serializeHeadlessTerminalBuffer(ptyId, opts)
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
@@ -4880,7 +4950,13 @@ export class OrcaRuntimeService {
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind
+      kind,
+      ...(kind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false
+          }
+        : {})
     }
     this.store.addRepo(repo)
     this.invalidateResolvedWorktreeCache()
@@ -4988,7 +5064,13 @@ export class OrcaRuntimeService {
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind: repoKind
+      kind: repoKind,
+      ...(repoKind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false
+          }
+        : {})
     }
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
@@ -5055,7 +5137,9 @@ export class OrcaRuntimeService {
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
-      kind: 'git'
+      kind: 'git',
+      externalWorktreeVisibility: 'hide',
+      externalWorktreeVisibilityLegacy: false
     }
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
@@ -5097,6 +5181,8 @@ export class OrcaRuntimeService {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'externalWorktreeVisibility'
+        | 'externalWorktreeVisibilityPromptDismissedAt'
       >
     >
   ): Promise<Repo> {
@@ -5301,6 +5387,20 @@ export class OrcaRuntimeService {
     )
   }
 
+  async listRepoIssues(
+    repoSelector: string,
+    limit?: number
+  ): Promise<Awaited<ReturnType<typeof listGitHubIssues>>['items']> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const result = await listGitHubIssues(
+      repo.path,
+      limit,
+      repo.issueSourcePreference,
+      repo.connectionId ?? null
+    )
+    return result.items
+  }
+
   async getRepoWorkItem(
     repoSelector: string,
     number: number,
@@ -5472,6 +5572,61 @@ export class OrcaRuntimeService {
     )
   }
 
+  async listGitLabRepoMRs(
+    repoSelector: string,
+    state?: MRListState,
+    page?: number,
+    perPage?: number,
+    query?: string
+  ): Promise<Awaited<ReturnType<typeof listGitLabMergeRequests>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return listGitLabMergeRequests(
+      repo.path,
+      normalizeGitLabMRListState(state),
+      normalizeGitLabPositiveInteger(page, 1, 10_000),
+      normalizeGitLabPositiveInteger(perPage, 20, 100),
+      repo.issueSourcePreference,
+      query,
+      repo.connectionId ?? null
+    )
+  }
+
+  async listGitLabRepoIssues(
+    repoSelector: string,
+    state?: GitLabIssueListState,
+    assignee?: string,
+    limit?: number
+  ): Promise<{
+    items: GitLabWorkItem[]
+    error?: Awaited<ReturnType<typeof listGitLabIssues>>['error']
+  }> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit })
+    const result = await listGitLabIssues(
+      repo.path,
+      normalized.limit,
+      repo.issueSourcePreference,
+      normalized.state,
+      normalized.assignee,
+      repo.connectionId ?? null
+    )
+    // Why: web runtime mirrors the desktop preload contract, where GitLab
+    // issue rows share the GitLabWorkItem shape with MRs on TaskPage.
+    const items: GitLabWorkItem[] = result.items.map((issue) => ({
+      id: `gitlab-issue-${repo.id}-${issue.number}`,
+      type: 'issue' as const,
+      number: issue.number,
+      title: issue.title,
+      state: issue.state,
+      url: issue.url,
+      labels: issue.labels,
+      updatedAt: issue.updatedAt ?? '',
+      author: issue.author ?? null,
+      repoId: repo.id
+    }))
+    return { items, ...(result.error ? { error: result.error } : {}) }
+  }
+
   async listGitLabRepoTodos(
     repoSelector: string
   ): Promise<Awaited<ReturnType<typeof listGitLabTodos>>> {
@@ -5618,6 +5773,36 @@ export class OrcaRuntimeService {
       repo.connectionId ?? null,
       projectRef
     )
+  }
+
+  async getGitLabRepoWorkItemByPath(
+    repoSelector: string,
+    projectRef: GitLabProjectRef,
+    iid: number,
+    type: 'issue' | 'mr'
+  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemByProjectRef>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const result = await getGitLabWorkItemByProjectRef(
+      repo.path,
+      projectRef,
+      iid,
+      type,
+      repo.connectionId ?? null
+    )
+    // Why: remote pasted-URL lookups should update GitLab recents exactly
+    // like the desktop IPC path, but only after a successful lookup.
+    if (result && this.store?.updateSettings) {
+      const store = this.store
+      recordGitLabProjectRecent(
+        {
+          getSettings: () => store.getSettings(),
+          updateSettings: (updates) => store.updateSettings?.(updates)
+        },
+        projectRef.host,
+        projectRef.path
+      )
+    }
+    return result
   }
 
   async getRepoIssue(
@@ -6217,12 +6402,80 @@ export class OrcaRuntimeService {
     }
     const resolved = await this.listResolvedWorktrees()
     const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const worktrees = resolved.filter((worktree) => !repoId || worktree.repoId === repoId)
+    const worktrees = resolved.filter((worktree) => {
+      if (repoId && worktree.repoId !== repoId) {
+        return false
+      }
+      return this.isRuntimeWorktreeVisible(worktree)
+    })
     return {
       worktrees: worktrees.slice(0, limit),
       totalCount: worktrees.length,
       truncated: worktrees.length > limit
     }
+  }
+
+  async listDetectedManagedWorktrees(repoSelector: string): Promise<DetectedWorktreeListResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    let scan: RuntimeWorktreeScanResult
+    try {
+      scan = isFolderRepo(repo)
+        ? { ok: true, worktrees: [createFolderWorktree(repo)] }
+        : await this.listRepoWorktreesForResolution(repo)
+    } catch {
+      scan = { ok: false, worktrees: [] }
+    }
+    if (scan.ok) {
+      this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
+    }
+    const detected = scan.worktrees.map((gitWorktree) => {
+      const worktreeId = `${repo.id}::${gitWorktree.path}`
+      const meta = this.store?.getWorktreeMeta(worktreeId)
+      const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+      const detectedWorktree = this.toRuntimeDetectedWorktree(repo, worktree)
+      if (scan.ok) {
+        return detectedWorktree
+      }
+      return {
+        ...detectedWorktree,
+        visible: true,
+        ownership: detectedWorktree.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+      } satisfies DetectedWorktree
+    })
+    return {
+      repoId: repo.id,
+      authoritative: scan.ok,
+      source: scan.ok ? 'git' : 'metadata-fallback',
+      worktrees: detected
+    }
+  }
+
+  private isRuntimeWorktreeVisible(worktree: Worktree): boolean {
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo || !this.store) {
+      return true
+    }
+    return this.toRuntimeDetectedWorktree(repo, worktree).visible
+  }
+
+  private toRuntimeDetectedWorktree(repo: Repo, worktree: Worktree): DetectedWorktree {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      return {
+        ...worktree,
+        ownership: 'unknown-legacy',
+        selectedCheckout: false,
+        visible: true
+      }
+    }
+    return toDetectedWorktree({
+      repo,
+      worktree,
+      meta: this.store?.getWorktreeMeta(worktree.id),
+      settings,
+      knownOrcaLayouts: repo.connectionId ? [] : buildKnownOrcaWorkspaceLayouts(settings, repo),
+      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo)
+    })
   }
 
   async showManagedWorktree(worktreeSelector: string) {
@@ -6851,6 +7104,12 @@ export class OrcaRuntimeService {
       // push it down before the user has had a chance to notice it. Smart-sort
       // uses max(lastActivityAt, createdAt + CREATE_GRACE_MS).
       createdAt: now,
+      orcaCreatedAt: now,
+      orcaCreationSource: 'runtime',
+      orcaCreationWorkspaceLayout: {
+        path: settings.workspaceDir,
+        nestWorkspaces: settings.nestWorkspaces
+      },
       ...displayNameMeta,
       baseRef: baseBranch,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
@@ -7943,6 +8202,36 @@ export class OrcaRuntimeService {
     return getDefaultRemote(repoPath)
   }
 
+  private async resolveWorktreeRemovalTarget(
+    worktreeSelector: string,
+    force: boolean
+  ): Promise<RuntimeWorktreeRemovalTarget> {
+    try {
+      const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+      const removalTarget = {
+        id: worktree.id,
+        repoId: worktree.repoId,
+        path: worktree.path
+      }
+      return worktree.pushTarget
+        ? { ...removalTarget, pushTarget: worktree.pushTarget }
+        : removalTarget
+    } catch (error) {
+      if (!force || !(error instanceof Error) || error.message !== 'selector_not_found') {
+        throw error
+      }
+      const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
+      const meta = removalTarget ? this.store?.getWorktreeMeta(removalTarget.id) : undefined
+      if (!removalTarget || !meta) {
+        throw error
+      }
+      // Why: force-delete retries can arrive after Git no longer lists the
+      // worktree. Only exact IDs with persisted Orca metadata are accepted here
+      // so branch/path selectors cannot resolve to an arbitrary missing path.
+      return meta.pushTarget ? { ...removalTarget, pushTarget: meta.pushTarget } : removalTarget
+    }
+  }
+
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
@@ -7951,144 +8240,197 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = this.store.getRepo(worktree.repoId)
-    if (!repo) {
-      throw new Error('repo_not_found')
+    const store = this.store
+    const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, force)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
+    const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
+    if (inFlightRemoval) {
+      if (inFlightRemoval.optionsKey === optionsKey) {
+        return inFlightRemoval.promise
+      }
+      throw new Error(`Worktree deletion already in progress: ${removalTarget.id}`)
     }
-    if (isFolderRepo(repo)) {
-      throw new Error('Folder mode does not support deleting worktrees.')
-    }
-    const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-    const registeredWorktrees = repo.connectionId
-      ? await provider!.listWorktrees(repo.path)
-      : await listWorktrees(repo.path)
-    const canonicalWorktreePath = getRegisteredDeletableWorktree(
-      repo.path,
-      worktree.path,
-      registeredWorktrees
-    ).path
-    const deleteBranch = this.store.getWorktreeMeta(worktree.id)?.preserveBranchOnDelete !== true
-    if (repo.connectionId) {
-      await (deleteBranch
-        ? provider!.removeWorktree(canonicalWorktreePath, force)
-        : provider!.removeWorktree(canonicalWorktreePath, force, { deleteBranch }))
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider!,
+
+    // Why: runtime callers can race the same workspace through CLI/mobile
+    // retries. Share one destructive Git/filesystem operation per worktree ID.
+    const removal = (async (): Promise<{ warning?: string }> => {
+      const repo = store.getRepo(removalTarget.repoId)
+      if (!repo) {
+        throw new Error('repo_not_found')
+      }
+      if (isFolderRepo(repo)) {
+        throw new Error('Folder mode does not support deleting worktrees.')
+      }
+      const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
+      const registeredWorktrees = repo.connectionId
+        ? await provider!.listWorktrees(repo.path)
+        : await listWorktrees(repo.path)
+      const removedMeta = store.getWorktreeMeta(removalTarget.id)
+      const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
+      const registeredWorktree = findRegisteredDeletableWorktree(
         repo.path,
-        worktree.id,
-        worktree.pushTarget,
-        this.store
+        removalTarget.path,
+        registeredWorktrees
       )
-      this.clearOptimisticReconcileToken(worktree.id)
-      this.store.removeWorktreeMeta(worktree.id)
-      this.invalidateResolvedWorktreeCache()
-      invalidateAuthorizedRootsCache()
-      this.notifier?.worktreesChanged(repo.id)
-      return {}
-    }
-
-    const hooks = getEffectiveHooks(repo)
-    let warning: string | undefined
-    if (hooks?.scripts.archive && runHooks) {
-      const result = await runHook('archive', canonicalWorktreePath, repo)
-      if (!result.success) {
-        console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
-      }
-    } else if (hooks?.scripts.archive) {
-      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
-      warning = `orca.yaml archive hook skipped for ${canonicalWorktreePath}; pass --run-hooks to run it.`
-      console.warn(`[hooks] ${warning}`)
-    }
-
-    let shouldTearDownPtys = true
-    try {
-      await assertWorktreeCleanForRemoval(canonicalWorktreePath, force)
-    } catch (error) {
-      if (!isOrphanCompatiblePreflightError(error)) {
-        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
-      }
-      // Why: orphan cleanup does not need live shells to be killed first,
-      // and preflight did not prove the worktree is cleanly removable.
-      shouldTearDownPtys = false
-    }
-
-    const localProvider = this.getLocalProvider()
-    if (localProvider && shouldTearDownPtys) {
-      // Why: once preflight proves normal deletion is clean, kill PTYs before
-      // git-level removal so shells cannot keep the directory busy. This also
-      // closes the headless-CLI leak for confirmed-removable worktrees.
-      await killAllProcessesForWorktree(worktree.id, {
-        runtime: this,
-        localProvider
-      })
-        .then((r) => {
-          const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-          if (total > 0) {
-            // Why (design §4.4 observability): breadcrumb lets ops
-            // distinguish a renderer-state-induced leak (diff-path purge
-            // non-empty) from a backend-induced one (nothing to kill but
-            // memory still pinned). Emit only when the sweep actually did
-            // work so steady-state logs stay quiet.
-            console.info(
-              `[worktree-teardown] ${worktree.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-            )
-          }
-        })
-        .catch((err) => {
-          console.warn(`[worktree-teardown] failed for ${worktree.id}:`, err)
-        })
-    }
-
-    try {
-      await (deleteBranch
-        ? removeWorktree(repo.path, canonicalWorktreePath, force)
-        : removeWorktree(repo.path, canonicalWorktreePath, force, { deleteBranch }))
-    } catch (error) {
-      if (isOrphanedWorktreeError(error)) {
-        if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
-          await rm(canonicalWorktreePath, { recursive: true, force: true }).catch(() => {})
-        } else {
-          console.warn(
-            `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
-          )
+      if (!registeredWorktree) {
+        if (force && (await isRuntimeWorktreePathMissing(repo, removalTarget.path))) {
+          // Why: runtime clients can retry a force delete after another surface
+          // already removed the worktree. Finish Orca cleanup without touching
+          // any unregistered path that still exists.
+          await (repo.connectionId
+            ? cleanupUnusedWorktreePushTargetRemoteSsh(
+                provider!,
+                repo.path,
+                removalTarget.id,
+                removedPushTarget,
+                store
+              )
+            : cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                removalTarget.id,
+                removedPushTarget,
+                store
+              ))
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          store.removeWorktreeMeta(removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifier?.worktreesChanged(repo.id)
+          return {}
         }
-        // Why: `git worktree remove` failed, so git's internal worktree tracking
-        // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
-        // list` continues to show the stale entry and the branch it had checked out
-        // remains locked — other worktrees cannot check it out.
-        await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
-        await cleanupUnusedWorktreePushTargetRemote(
+        throw new Error(`Refusing to delete unregistered worktree path: ${removalTarget.path}`)
+      }
+      const canonicalWorktreePath = registeredWorktree.path
+      const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+      if (repo.connectionId) {
+        await (deleteBranch
+          ? provider!.removeWorktree(canonicalWorktreePath, force)
+          : provider!.removeWorktree(canonicalWorktreePath, force, { deleteBranch }))
+        await cleanupUnusedWorktreePushTargetRemoteSsh(
+          provider!,
           repo.path,
-          worktree.id,
-          worktree.pushTarget,
-          this.store
+          removalTarget.id,
+          removedPushTarget,
+          store
         )
-        this.clearOptimisticReconcileToken(worktree.id)
-        this.store.removeWorktreeMeta(worktree.id)
+        this.clearOptimisticReconcileToken(removalTarget.id)
+        store.removeWorktreeMeta(removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
         this.notifier?.worktreesChanged(repo.id)
-        return {
-          ...(warning ? { warning } : {})
-        }
+        return {}
       }
-      throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
-    }
 
-    await cleanupUnusedWorktreePushTargetRemote(
-      repo.path,
-      worktree.id,
-      worktree.pushTarget,
-      this.store
-    )
-    this.clearOptimisticReconcileToken(worktree.id)
-    this.store.removeWorktreeMeta(worktree.id)
-    this.invalidateResolvedWorktreeCache()
-    invalidateAuthorizedRootsCache()
-    this.notifier?.worktreesChanged(repo.id)
-    return {
-      ...(warning ? { warning } : {})
+      const hooks = getEffectiveHooks(repo)
+      let warning: string | undefined
+      if (hooks?.scripts.archive && runHooks) {
+        const result = await runHook('archive', canonicalWorktreePath, repo)
+        if (!result.success) {
+          console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
+        }
+      } else if (hooks?.scripts.archive) {
+        // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+        warning = `orca.yaml archive hook skipped for ${canonicalWorktreePath}; pass --run-hooks to run it.`
+        console.warn(`[hooks] ${warning}`)
+      }
+
+      let shouldTearDownPtys = true
+      try {
+        await assertWorktreeCleanForRemoval(canonicalWorktreePath, force)
+      } catch (error) {
+        if (!isOrphanCompatiblePreflightError(error)) {
+          throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+        }
+        // Why: orphan cleanup does not need live shells to be killed first,
+        // and preflight did not prove the worktree is cleanly removable.
+        shouldTearDownPtys = false
+      }
+
+      const localProvider = this.getLocalProvider()
+      if (localProvider && shouldTearDownPtys) {
+        // Why: once preflight proves normal deletion is clean, kill PTYs before
+        // git-level removal so shells cannot keep the directory busy. This also
+        // closes the headless-CLI leak for confirmed-removable worktrees.
+        await killAllProcessesForWorktree(removalTarget.id, {
+          runtime: this,
+          localProvider
+        })
+          .then((r) => {
+            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+            if (total > 0) {
+              // Why (design §4.4 observability): breadcrumb lets ops
+              // distinguish a renderer-state-induced leak (diff-path purge
+              // non-empty) from a backend-induced one (nothing to kill but
+              // memory still pinned). Emit only when the sweep actually did
+              // work so steady-state logs stay quiet.
+              console.info(
+                `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+              )
+            }
+          })
+          .catch((err) => {
+            console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
+          })
+      }
+
+      try {
+        await (deleteBranch
+          ? removeWorktree(repo.path, canonicalWorktreePath, force)
+          : removeWorktree(repo.path, canonicalWorktreePath, force, { deleteBranch }))
+      } catch (error) {
+        if (isOrphanedWorktreeError(error)) {
+          if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
+            await rm(canonicalWorktreePath, { recursive: true, force: true }).catch(() => {})
+          } else {
+            console.warn(
+              `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
+            )
+          }
+          // Why: `git worktree remove` failed, so git's internal worktree tracking
+          // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
+          // list` continues to show the stale entry and the branch it had checked out
+          // remains locked — other worktrees cannot check it out.
+          await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
+          await cleanupUnusedWorktreePushTargetRemote(
+            repo.path,
+            removalTarget.id,
+            removedPushTarget,
+            store
+          )
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          store.removeWorktreeMeta(removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifier?.worktreesChanged(repo.id)
+          return {
+            ...(warning ? { warning } : {})
+          }
+        }
+        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+      }
+
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        removalTarget.id,
+        removedPushTarget,
+        store
+      )
+      this.clearOptimisticReconcileToken(removalTarget.id)
+      store.removeWorktreeMeta(removalTarget.id)
+      this.invalidateResolvedWorktreeCache()
+      invalidateAuthorizedRootsCache()
+      this.notifier?.worktreesChanged(repo.id)
+      return {
+        ...(warning ? { warning } : {})
+      }
+    })()
+    this.removeManagedWorktreeInFlight.set(removalTarget.id, { optionsKey, promise: removal })
+    try {
+      return await removal
+    } finally {
+      if (this.removeManagedWorktreeInFlight.get(removalTarget.id)?.promise === removal) {
+        this.removeManagedWorktreeInFlight.delete(removalTarget.id)
+      }
     }
   }
 
@@ -9944,6 +10286,67 @@ export class OrcaRuntimeService {
     } catch {
       return null
     }
+  }
+
+  getAgentStatusOrchestrationContextForPaneKey(
+    paneKey: string
+  ): AgentStatusOrchestrationContext | undefined {
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    if (!handle) {
+      return undefined
+    }
+    const db = this.getOrchestrationDbIfAvailable()
+    const dispatch = db?.getActiveDispatchForTerminal(handle)
+    if (!dispatch) {
+      return undefined
+    }
+    const task = db?.getTask(dispatch.task_id)
+    const activeRun = db?.getActiveCoordinatorRun()
+    const parentTerminalHandle =
+      task?.created_by_terminal_handle ??
+      (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
+        ? activeRun.coordinator_handle
+        : undefined)
+    const parentPaneKey = parentTerminalHandle
+      ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
+      : undefined
+
+    return {
+      taskId: dispatch.task_id,
+      dispatchId: dispatch.id,
+      ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
+      ...(parentPaneKey ? { parentPaneKey } : {}),
+      ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
+      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+    }
+  }
+
+  private getTerminalHandleForPaneKey(paneKey: string): string | null {
+    const parsed = parsePaneKey(paneKey)
+    if (parsed) {
+      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
+      if (leaf?.ptyId) {
+        return this.issueHandle(leaf)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.paneKey === paneKey) {
+        return this.issuePtyHandle(pty)
+      }
+    }
+    return null
+  }
+
+  private getPaneKeyForTerminalHandle(handle: string): string | null {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty?.pty.paneKey) {
+      return livePty.pty.paneKey
+    }
+    const record = this.handles.get(handle)
+    if (!record || record.runtimeId !== this.runtimeId) {
+      return null
+    }
+    return makePaneKey(record.tabId, record.leafId)
   }
 
   // Why: OSC title detection via onPtyData is the tightest signal for agent

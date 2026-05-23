@@ -13,6 +13,10 @@ const WorkItemsList = RepoSelector.extend({
   before: OptionalString
 })
 
+const IssuesList = RepoSelector.extend({
+  limit: OptionalFiniteNumber
+})
+
 const WorkItem = RepoSelector.extend({
   number: z.number().int().positive(),
   type: z.enum(['issue', 'pr']).optional()
@@ -280,6 +284,11 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
       runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
+  }),
+  defineMethod({
+    name: 'github.listIssues',
+    params: IssuesList,
+    handler: async (params, { runtime }) => runtime.listRepoIssues(params.repo, params.limit)
   }),
   defineMethod({
     name: 'github.countWorkItems',

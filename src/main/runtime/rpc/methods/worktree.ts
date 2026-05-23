@@ -1,6 +1,7 @@
 import { defineMethod, type RpcMethod } from '../core'
 import {
   WorktreeCreate,
+  WorktreeDetectedListParams,
   WorktreeListParams,
   WorktreePsParams,
   WorktreeRemove,
@@ -21,6 +22,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.list',
     params: WorktreeListParams,
     handler: async (params, { runtime }) => runtime.listManagedWorktrees(params.repo, params.limit)
+  }),
+  defineMethod({
+    name: 'worktree.detectedList',
+    params: WorktreeDetectedListParams,
+    handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
   }),
   defineMethod({
     name: 'worktree.lineageList',

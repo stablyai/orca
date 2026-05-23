@@ -32,7 +32,11 @@ import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
-import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
+import {
+  getNextDefaultOnAppearanceSettingValue,
+  registerAppMenu,
+  rebuildAppMenu
+} from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
@@ -449,6 +453,7 @@ function openMainWindow(): BrowserWindow {
       if (mainWindow?.isDestroyed()) {
         return
       }
+      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
@@ -456,7 +461,8 @@ function openMainWindow(): BrowserWindow {
         worktreeId,
         connectionId,
         receivedAt,
-        stateStartedAt
+        stateStartedAt,
+        ...(orchestration ? { orchestration } : {})
       })
       recordCrashBreadcrumb('agent_state_changed', {
         agentType: payload.agentType ?? 'unknown',
@@ -1086,11 +1092,14 @@ app.whenReady().then(async () => {
         return
       }
       const current = store.getSettings()
-      store.updateSettings({ [key]: !current[key] })
+      // Why: these appearance settings are default-on for older profiles, so
+      // a missing persisted value must toggle from visible -> hidden.
+      const next = getNextDefaultOnAppearanceSettingValue(current[key])
+      store.updateSettings({ [key]: next })
       // Why: settings:get returns the current snapshot; renderer tracks
       // settings through window.api.settings.get(). Push the new value so
       // the sidebar/titlebar re-render without waiting for a round-trip.
-      mainWindow?.webContents.send('settings:changed', { [key]: !current[key] })
+      mainWindow?.webContents.send('settings:changed', { [key]: next })
       rebuildAppMenu()
     },
     getAppearanceState: () => {
@@ -1098,6 +1107,7 @@ app.whenReady().then(async () => {
       const ui = store?.getUI()
       return {
         showTasksButton: settings?.showTasksButton !== false,
+        showMobileButton: settings?.showMobileButton !== false,
         showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }

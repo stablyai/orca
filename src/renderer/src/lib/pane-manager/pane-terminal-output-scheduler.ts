@@ -1,8 +1,12 @@
 import { e2eConfig } from '@/lib/e2e-config'
+import {
+  discardForegroundRenderSettle,
+  suppressTerminalCursorUntilOutputSettles,
+  writeForegroundTerminalChunk,
+  type ForegroundTerminalOutputTarget
+} from './pane-terminal-foreground-render-settle'
 
-type TerminalOutputTarget = {
-  write(data: string, callback?: () => void): void
-}
+type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
 type TerminalOutputBeforeWrite = (data: string) => void
 
@@ -12,10 +16,10 @@ type QueueEntry = {
   beforeWrite?: TerminalOutputBeforeWrite
 }
 
-const BACKGROUND_FLUSH_DELAY_MS = 50
-const BACKGROUND_DRAIN_INTERVAL_MS = 16
+const BACKGROUND_FLUSH_DELAY_MS = 100
+const BACKGROUND_DRAIN_INTERVAL_MS = 50
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
-const MAX_WRITES_PER_DRAIN = 2
+const MAX_WRITES_PER_DRAIN = 1
 const PARSE_SETTLE_TIMEOUT_MS = 250
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
@@ -172,7 +176,7 @@ export function writeTerminalOutput(
       debugState.foregroundWriteCount++
     }
     options.beforeWrite?.(data)
-    terminal.write(data)
+    writeForegroundTerminalChunk(terminal, data)
     return
   }
 
@@ -247,6 +251,8 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   queuedByTerminal.delete(terminal)
+  discardForegroundRenderSettle(terminal)
 }
 
 exposeDebugApi()
+export { suppressTerminalCursorUntilOutputSettles }

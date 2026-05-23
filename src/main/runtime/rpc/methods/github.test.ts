@@ -54,6 +54,21 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { items: [] } })
   })
 
+  it('lists issues on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listRepoIssues: vi.fn().mockResolvedValue([{ number: 7, title: 'Bug' }])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.listIssues', { repo: 'repo-1', limit: 10 })
+    )
+
+    expect(runtime.listRepoIssues).toHaveBeenCalledWith('repo-1', 10)
+    expect(response).toMatchObject({ ok: true, result: [{ number: 7, title: 'Bug' }] })
+  })
+
   it('looks up a single work item on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

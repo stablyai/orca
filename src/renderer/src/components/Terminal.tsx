@@ -9,7 +9,6 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
-import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { getConnectionId } from '../lib/connection-context'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
@@ -755,7 +754,7 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
-    const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, activeWorktreeId)
+    const worktree = useAppStore.getState().getKnownWorktreeById(activeWorktreeId)
     if (!worktree) {
       return
     }

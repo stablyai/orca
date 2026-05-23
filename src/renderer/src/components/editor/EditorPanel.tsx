@@ -53,7 +53,6 @@ function EditorPanelInner({
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
-  const markdownReviewToolsEnabled = settings?.markdownReviewToolsEnabled ?? true
 
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
@@ -285,7 +284,6 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
-      markdownReviewToolsEnabled={markdownReviewToolsEnabled}
       sideBySide={sideBySide}
       openFiles={openFiles}
       fileContents={fileContents}

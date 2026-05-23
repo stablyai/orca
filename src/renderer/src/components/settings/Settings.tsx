@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   Network,
   PanelsTopLeft,
+  Play,
   ShieldCheck,
   Palette,
   Server,
@@ -65,6 +66,8 @@ import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
 import { TasksPane } from './TasksPane'
 import { TASKS_PANE_SEARCH_ENTRIES } from './tasks-search'
+import { QuickCommandsPane } from './QuickCommandsPane'
+import { QUICK_COMMANDS_PANE_SEARCH_ENTRIES } from './quick-commands-search'
 import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
@@ -103,6 +106,7 @@ type SettingsNavTarget =
   | 'input'
   | 'floating-workspace'
   | 'terminal'
+  | 'quick-commands'
   | 'notifications'
   | 'computer-use'
   | 'developer-permissions'
@@ -520,9 +524,17 @@ function Settings(): React.JSX.Element {
       {
         id: 'terminal',
         title: 'Terminal',
-        description: 'Shells, terminal appearance, quick commands, and pane behavior.',
+        description: 'Shells, terminal appearance, and pane behavior.',
         icon: SquareTerminal,
         searchEntries: terminalPaneSearchEntries,
+        group: 'workflows'
+      },
+      {
+        id: 'quick-commands',
+        title: 'Quick Commands',
+        description: 'Saved terminal commands, scoped globally or per project.',
+        icon: Play,
+        searchEntries: QUICK_COMMANDS_PANE_SEARCH_ENTRIES,
         group: 'workflows'
       },
       ...(showDesktopOnlySettings
@@ -973,7 +985,7 @@ function Settings(): React.JSX.Element {
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div ref={contentScrollRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-          <div className="flex w-full max-w-5xl flex-col gap-10 px-8 py-10">
+          <div className="flex w-full max-w-4xl flex-col gap-10 px-8 pb-24 pt-10">
             {visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
                 No settings found for &quot;{settingsSearchQuery.trim()}&quot;
@@ -1075,7 +1087,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Shells, terminal appearance, quick commands, and pane behavior."
+                  description="Shells, terminal appearance, and pane behavior."
                   searchEntries={terminalPaneSearchEntries}
                   headerAction={
                     <Button
@@ -1103,6 +1115,17 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
                     />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="quick-commands"
+                  title="Quick Commands"
+                  description="Saved terminal commands, scoped globally or per project."
+                  searchEntries={QUICK_COMMANDS_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('quick-commands') ? (
+                    <QuickCommandsPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 
