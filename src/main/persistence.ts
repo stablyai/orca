@@ -93,7 +93,6 @@ import {
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
-import { sanitizeRepoIcon } from '../shared/repo-icon'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -414,21 +413,6 @@ function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boole
 
 function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
-}
-
-function sanitizeRepoUpdatesForPersistence<T extends Partial<Pick<Repo, 'repoIcon'>>>(
-  updates: T
-): T {
-  const sanitized = { ...updates }
-  if ('repoIcon' in sanitized) {
-    const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
-    if (repoIcon === undefined) {
-      delete sanitized.repoIcon
-    } else {
-      sanitized.repoIcon = repoIcon
-    }
-  }
-  return sanitized
 }
 
 function expandFloatingWorkspaceHomePath(input: string, home: string): string {
@@ -2073,10 +2057,8 @@ export class Store {
     if (!repo) {
       return null
     }
-    const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     const externalWorktreeVisibilityLegacy =
-      'externalWorktreeVisibility' in sanitizedUpdates &&
-      repo.externalWorktreeVisibilityLegacy === undefined
+      'externalWorktreeVisibility' in updates && repo.externalWorktreeVisibilityLegacy === undefined
         ? isLegacyRepoForExternalWorktreeVisibility(repo)
         : undefined
     // Why: `issueSourcePreference === undefined` in the patch means "reset to
@@ -2084,18 +2066,15 @@ export class Store {
     // stale explicit value via Object.assign's skip-on-undefined behavior).
     // Without this delete branch, toggling explicit → auto would silently
     // leave the old preference in place on disk.
-    if (
-      'issueSourcePreference' in sanitizedUpdates &&
-      sanitizedUpdates.issueSourcePreference === undefined
-    ) {
+    if ('issueSourcePreference' in updates && updates.issueSourcePreference === undefined) {
       delete repo.issueSourcePreference
-      const { issueSourcePreference: _drop, ...rest } = sanitizedUpdates
+      const { issueSourcePreference: _drop, ...rest } = updates
       Object.assign(repo, rest)
     } else {
-      Object.assign(repo, sanitizedUpdates)
+      Object.assign(repo, updates)
     }
     if (
-      'externalWorktreeVisibility' in sanitizedUpdates &&
+      'externalWorktreeVisibility' in updates &&
       repo.externalWorktreeVisibilityLegacy === undefined
     ) {
       // Why: old persisted repos have no explicit marker. Stamp it the first
@@ -2107,8 +2086,6 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, ...repoWithoutIcon } = repo
-    const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2119,8 +2096,7 @@ export class Store {
         })())
 
     return {
-      ...repoWithoutIcon,
-      ...(repoIcon !== undefined ? { repoIcon } : {}),
+      ...repo,
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

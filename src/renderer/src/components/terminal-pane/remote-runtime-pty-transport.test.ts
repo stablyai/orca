@@ -515,13 +515,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07after\x1b]0;. Claude working\x07\x07'
     )
 
-    await vi.waitFor(() =>
-      expect(onAgentStatus).toHaveBeenCalledWith({
-        state: 'working',
-        prompt: 'ship it',
-        agentType: 'codex'
-      })
-    )
+    expect(onAgentStatus).toHaveBeenCalledWith({
+      state: 'working',
+      prompt: 'ship it',
+      agentType: 'codex'
+    })
     expect(onData).toHaveBeenCalledWith('beforeafter\x1b]0;. Claude working\x07\x07')
     expect(onTitleChange).toHaveBeenCalledWith('. Claude working', '. Claude working')
     expect(onBell).toHaveBeenCalledTimes(1)
@@ -548,13 +546,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07after'
     )
 
-    await vi.waitFor(() =>
-      expect(onAgentStatus).toHaveBeenCalledWith({
-        state: 'working',
-        prompt: 'ship it',
-        agentType: 'codex'
-      })
-    )
+    expect(onAgentStatus).toHaveBeenCalledWith({
+      state: 'working',
+      prompt: 'ship it',
+      agentType: 'codex'
+    })
     expect(onData).toHaveBeenCalledWith('beforeafter')
   })
 
@@ -856,9 +852,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
 
     expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07')
-    await vi.waitFor(() =>
-      expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
-    )
+    expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
   })
