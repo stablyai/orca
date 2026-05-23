@@ -26,6 +26,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import {
   discardTerminalOutput,
   flushTerminalOutput,
+  suppressTerminalCursorUntilOutputSettles,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -888,6 +889,9 @@ export function connectPanePty(
     // auto-replies never count as interaction.
     deps.clearTerminalTabUnread(deps.tabId)
     deps.clearWorktreeUnread(deps.worktreeId)
+    // Why: Windows can leave the old visual cursor painted until the shell
+    // echoes the next frame; hide it immediately while that foreground output settles.
+    suppressTerminalCursorUntilOutputSettles(pane.terminal)
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to

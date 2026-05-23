@@ -2158,7 +2158,10 @@ describe('connectPanePty', () => {
     expect(capturedDataCallback.current).not.toBeNull()
     capturedDataCallback.current?.('visible split output\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('visible split output\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'visible split output\r\n',
+      expect.any(Function)
+    )
   })
 
   it('marks panes that receive Arabic output for DOM rendering', async () => {
@@ -2181,7 +2184,10 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
 
     expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
-    expect(pane.terminal.write).toHaveBeenCalledWith('Arabic: السلام عليكم\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'Arabic: السلام عليكم\r\n',
+      expect.any(Function)
+    )
   })
 
   it('keeps panes on WebGL for terminal UI drawing glyphs', async () => {
@@ -2205,7 +2211,8 @@ describe('connectPanePty', () => {
 
     expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n'
+      '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n',
+      expect.any(Function)
     )
   })
 
