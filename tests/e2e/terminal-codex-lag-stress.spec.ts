@@ -16,9 +16,33 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-const EXTRA_WORKTREE_COUNT = 36
-const BACKGROUND_CODEX_TERMINALS = 4
-const KEY_LATENCY_SAMPLES = 'abcdefghijklmnopqrstuvwxyz012345'
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) {
+    return fallback
+  }
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer, received ${JSON.stringify(raw)}`)
+  }
+  return parsed
+}
+
+const EXTRA_WORKTREE_COUNT = readPositiveIntegerEnv('ORCA_E2E_CODEX_LAG_WORKTREES', 36)
+const BACKGROUND_CODEX_TERMINALS = readPositiveIntegerEnv(
+  'ORCA_E2E_CODEX_LAG_BACKGROUND_TERMINALS',
+  4
+)
+const BACKGROUND_OUTPUT_INTERVAL_MS = readPositiveIntegerEnv(
+  'ORCA_E2E_CODEX_LAG_BACKGROUND_INTERVAL_MS',
+  10
+)
+const BACKGROUND_OUTPUT_PAYLOAD_CHARS = readPositiveIntegerEnv(
+  'ORCA_E2E_CODEX_LAG_BACKGROUND_PAYLOAD_CHARS',
+  220
+)
+const KEY_LATENCY_SAMPLES =
+  process.env.ORCA_E2E_CODEX_LAG_KEY_SAMPLES ?? 'abcdefghijklmnopqrstuvwxyz012345'
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
 const MAX_WORST_KEY_LATENCY_MS = 1_000
 const MAX_RENDERER_FRAME_GAP_MS = 500
@@ -65,12 +89,12 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
-function backgroundCodexScript(runId: string): string {
+function backgroundCodexScript(runId: string, intervalMs: number, payloadChars: number): string {
   return `
 const id = process.argv[2] ?? 'bg'
 let seq = 0
 process.stdout.write('BG_READY_${runId}_' + id + '\\n')
-setInterval(() => {
+const emit = () => {
   seq += 1
   const spinner = ['|','/','-','\\\\'][seq % 4]
   const state = seq % 40 === 0 ? 'waiting' : 'working'
@@ -84,8 +108,9 @@ setInterval(() => {
   }
   process.stdout.write('\\x1b]0;' + spinner + ' Codex ' + id + ' ' + seq + '\\x07')
   process.stdout.write('\\x1b]9999;' + JSON.stringify(payload) + '\\x07')
-  process.stdout.write('\\r\\x1b[2K' + spinner + ' codex ' + id + ' thinking ' + seq + ' ' + 'x'.repeat(220) + '\\n')
-}, 10)
+  process.stdout.write('\\r\\x1b[2K' + spinner + ' codex ' + id + ' thinking ' + seq + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
+}
+setTimeout(() => setInterval(emit, ${intervalMs}), 250)
 `
 }
 
@@ -251,6 +276,26 @@ async function waitForMarkerLatency(
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
+async function waitForShellCommandReady(
+  page: Page,
+  ptyId: string,
+  markerPrefix: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const marker = `${markerPrefix}_${attempt}`
+    await sendToTerminal(page, ptyId, `printf '${marker}\\n'\r`)
+    try {
+      await waitForTerminalOutput(page, marker, 3_000)
+      return
+    } catch {
+      // Retry: a freshly spawned PTY can have an id before the login shell is
+      // ready to accept its first command, especially when many worktrees
+      // mount terminals in sequence.
+    }
+  }
+  throw new Error(`Timed out waiting for shell command readiness at ${markerPrefix}`)
+}
+
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)] ?? 0
@@ -324,7 +369,10 @@ test.describe('Terminal Codex lag stress', () => {
     const foregroundScriptPath = path.join(testRepoPath, `.orca-typing-stress-${runId}.mjs`)
     const backgroundScriptPath = path.join(testRepoPath, `.orca-bg-codex-stress-${runId}.mjs`)
     writeFileSync(foregroundScriptPath, interactivePromptScript(runId))
-    writeFileSync(backgroundScriptPath, backgroundCodexScript(runId))
+    writeFileSync(
+      backgroundScriptPath,
+      backgroundCodexScript(runId, BACKGROUND_OUTPUT_INTERVAL_MS, BACKGROUND_OUTPUT_PAYLOAD_CHARS)
+    )
 
     const backgroundPtyIds: string[] = []
     const createdWorktreeIds: string[] = []
@@ -341,6 +389,7 @@ test.describe('Terminal Codex lag stress', () => {
       for (let index = 0; index < BACKGROUND_CODEX_TERMINALS; index++) {
         const ptyId = await activateWorktreeTerminal(orcaPage, syntheticWorktrees[index].id)
         backgroundPtyIds.push(ptyId)
+        await waitForShellCommandReady(orcaPage, ptyId, `SHELL_READY_${runId}_bg_${index}`)
         await sendToTerminal(
           orcaPage,
           ptyId,
@@ -350,6 +399,7 @@ test.describe('Terminal Codex lag stress', () => {
       }
 
       foregroundPtyId = await activateWorktreeTerminal(orcaPage, foregroundWorktreeId)
+      await waitForShellCommandReady(orcaPage, foregroundPtyId, `SHELL_READY_${runId}_fg`)
       await sendToTerminal(
         orcaPage,
         foregroundPtyId,
@@ -378,7 +428,7 @@ test.describe('Terminal Codex lag stress', () => {
       const worstLongTask = Math.max(0, ...probe.longTasks.map((entry) => entry.duration))
       const worstRafGap = probe.maxRafGapMs
 
-      const summary = `median=${medianLatency.toFixed(1)}ms worst=${worstLatency.toFixed(
+      const summary = `worktrees=${EXTRA_WORKTREE_COUNT} backgroundTerminals=${BACKGROUND_CODEX_TERMINALS} backgroundIntervalMs=${BACKGROUND_OUTPUT_INTERVAL_MS} backgroundPayloadChars=${BACKGROUND_OUTPUT_PAYLOAD_CHARS} median=${medianLatency.toFixed(1)}ms worst=${worstLatency.toFixed(
         1
       )}ms worstRafGap=${worstRafGap.toFixed(1)}ms worstLongTask=${worstLongTask.toFixed(
         1
