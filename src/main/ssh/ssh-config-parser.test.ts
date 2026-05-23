@@ -139,14 +139,16 @@ Host other
     expect(parseSshConfig('')).toEqual([])
   })
 
-  it('uses first pattern from multi-pattern Host line', () => {
+  it('creates one parsed host per concrete alias on a multi-pattern Host line', () => {
     const config = `
-Host staging stage
+Host staging stage *.example.com
   HostName staging.example.com
 `
     const hosts = parseSshConfig(config)
-    expect(hosts).toHaveLength(1)
-    expect(hosts[0].host).toBe('staging')
+    expect(hosts).toEqual([
+      { host: 'staging', hostname: 'staging.example.com' },
+      { host: 'stage', hostname: 'staging.example.com' }
+    ])
   })
 
   it('defaults port to 22 for invalid port values', () => {
@@ -210,6 +212,21 @@ describe('sshConfigHostsToTargets', () => {
     expect(targets[0].identityFile).toBe('/home/user/.ssh/id_rsa')
     expect(targets[0].proxyCommand).toBe('ssh -W %h:%p bastion')
     expect(targets[0].jumpHost).toBe('bastion.example.com')
+  })
+
+  it('imports duplicate aliases only once and keeps the first concrete host', () => {
+    const hosts = [
+      { host: 'dup', hostname: 'first.example.com', user: 'first' },
+      { host: 'dup', hostname: 'second.example.com', user: 'second' }
+    ]
+    const targets = sshConfigHostsToTargets(hosts, new Set())
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toMatchObject({
+      label: 'dup',
+      host: 'first.example.com',
+      username: 'first'
+    })
   })
 })
 
@@ -322,5 +339,3 @@ describe('parseSshGOutput', () => {
     expect(result.identityFile).toEqual(['/home/testuser/custom_key'])
   })
 })
-
-// Why: resolveWithSshG tests are in ssh-config-resolver.test.ts (max-lines).
