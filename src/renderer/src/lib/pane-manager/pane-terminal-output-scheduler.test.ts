@@ -36,7 +36,7 @@ describe('pane terminal output scheduler', () => {
     writeTerminalOutput(terminal, 'b', { foreground: false })
 
     expect(terminal.write).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(100)
 
     expect(terminal.write).toHaveBeenCalledTimes(1)
     expect(terminal.write).toHaveBeenCalledWith('ab')
@@ -52,7 +52,7 @@ describe('pane terminal output scheduler', () => {
     writeTerminalOutput(terminal, 'b', { foreground: false, beforeWrite })
 
     expect(beforeWrite).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(100)
 
     expect(beforeWrite).toHaveBeenCalledTimes(1)
     expect(beforeWrite).toHaveBeenCalledWith('ab')
@@ -84,12 +84,16 @@ describe('pane terminal output scheduler', () => {
       writeTerminalOutput(terminal, `pane-${index}`, { foreground: false })
     })
 
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(100)
     expect(terminals[0].write).toHaveBeenCalledWith('pane-0')
+    expect(terminals[1].write).not.toHaveBeenCalled()
+    expect(terminals[2].write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(50)
     expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
     expect(terminals[2].write).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(16)
+    vi.advanceTimersByTime(50)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
   })
 
@@ -103,16 +107,23 @@ describe('pane terminal output scheduler', () => {
     writeTerminalOutput(terminals[1], 'pane-1', { foreground: false })
     writeTerminalOutput(terminals[2], 'pane-2', { foreground: false })
 
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(100)
     expect(terminals[0].write).toHaveBeenCalledTimes(1)
-    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[1].write).not.toHaveBeenCalled()
     expect(terminals[2].write).not.toHaveBeenCalled()
 
     // Why: a terminal with leftover bytes is deleted/re-set after each drain
     // chunk, moving it to the back of the Map so a big burst cannot starve
     // other queued panes.
-    vi.advanceTimersByTime(16)
+    vi.advanceTimersByTime(50)
+    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[0].write).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(50)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
+    expect(terminals[0].write).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(50)
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
   })
 
@@ -134,7 +145,7 @@ describe('pane terminal output scheduler', () => {
 
     writeTerminalOutput(terminal, 'stale', { foreground: false })
     discardTerminalOutput(terminal)
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(100)
 
     expect(terminal.write).not.toHaveBeenCalled()
   })
@@ -152,7 +163,7 @@ describe('pane terminal output scheduler', () => {
 
     // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
     // it would crash the timer callback and leave the scheduler poisoned.
-    expect(() => vi.advanceTimersByTime(50)).not.toThrow()
+    expect(() => vi.advanceTimersByTime(100)).not.toThrow()
     expect(throwing.write).toHaveBeenCalledTimes(1)
 
     // Advancing further must not rediscover the dead entry.
