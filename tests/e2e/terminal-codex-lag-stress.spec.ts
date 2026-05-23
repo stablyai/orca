@@ -43,6 +43,14 @@ const BACKGROUND_OUTPUT_PAYLOAD_CHARS = readPositiveIntegerEnv(
 )
 const KEY_LATENCY_SAMPLES =
   process.env.ORCA_E2E_CODEX_LAG_KEY_SAMPLES ?? 'abcdefghijklmnopqrstuvwxyz012345'
+const BACKGROUND_MODE = process.env.ORCA_E2E_CODEX_LAG_BACKGROUND_MODE ?? 'synthetic'
+if (BACKGROUND_MODE !== 'synthetic' && BACKGROUND_MODE !== 'real-codex') {
+  throw new Error(
+    `ORCA_E2E_CODEX_LAG_BACKGROUND_MODE must be "synthetic" or "real-codex", received ${JSON.stringify(
+      BACKGROUND_MODE
+    )}`
+  )
+}
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
 const MAX_WORST_KEY_LATENCY_MS = 1_000
 const MAX_RENDERER_FRAME_GAP_MS = 500
@@ -111,6 +119,72 @@ const emit = () => {
   process.stdout.write('\\r\\x1b[2K' + spinner + ' codex ' + id + ' thinking ' + seq + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
 }
 setTimeout(() => setInterval(emit, ${intervalMs}), 250)
+`
+}
+
+function realCodexBackgroundScript(
+  runId: string,
+  intervalMs: number,
+  payloadChars: number
+): string {
+  return `
+import { spawn } from 'node:child_process'
+
+const id = process.argv[2] ?? 'bg'
+process.stdout.write('BG_READY_${runId}_' + id + '\\n')
+
+let seq = 0
+const emit = () => {
+  seq += 1
+  const spinner = ['|','/','-','\\\\'][seq % 4]
+  const payload = {
+    state: 'working',
+    prompt: 'real codex stress prompt ' + id,
+    agentType: 'codex',
+    toolName: 'Codex',
+    toolInput: 'real background codex process heartbeat ' + seq,
+    lastAssistantMessage: 'real codex process still active ' + seq
+  }
+  process.stdout.write('\\x1b]0;' + spinner + ' Real Codex ' + id + ' ' + seq + '\\x07')
+  process.stdout.write('\\x1b]9999;' + JSON.stringify(payload) + '\\x07')
+  process.stdout.write('\\r\\x1b[2K' + spinner + ' real codex ' + id + ' active ' + seq + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
+}
+const heartbeat = setInterval(emit, ${intervalMs})
+
+const progressPrefix = 'ORCA_REAL_CODEX_PROGRESS_${runId}_' + id
+const progressProgram =
+  "let i=0; const t=setInterval(() => { i += 1; console.log('" +
+  progressPrefix +
+  " ' + i + ' ' + 'x'.repeat(180)); if (i >= 40) { clearInterval(t); } }, 250)"
+const prompt = [
+  'This is an Orca terminal performance test.',
+  'Before your final answer, run this exact read-only shell command:',
+  'node -e ' + JSON.stringify(progressProgram),
+  'After the command finishes, answer exactly: ORCA_REAL_CODEX_DONE_${runId}_' + id
+].join(' ')
+
+const child = spawn(
+  'codex',
+  ['-a', 'never', 'exec', '--sandbox', 'read-only', '--ephemeral', '--json', prompt],
+  {
+    stdio: ['ignore', 'inherit', 'inherit'],
+    env: process.env
+  }
+)
+
+child.on('error', (error) => {
+  clearInterval(heartbeat)
+  console.error('BG_CODEX_ERROR_${runId}_' + id + ' ' + error.message)
+  process.exit(1)
+})
+
+child.on('exit', (code, signal) => {
+  clearInterval(heartbeat)
+  process.stdout.write(
+    'BG_CODEX_EXIT_${runId}_' + id + ' ' + (code === null ? signal : code) + '\\n'
+  )
+  process.exit(code ?? 0)
+})
 `
 }
 
@@ -371,7 +445,17 @@ test.describe('Terminal Codex lag stress', () => {
     writeFileSync(foregroundScriptPath, interactivePromptScript(runId))
     writeFileSync(
       backgroundScriptPath,
-      backgroundCodexScript(runId, BACKGROUND_OUTPUT_INTERVAL_MS, BACKGROUND_OUTPUT_PAYLOAD_CHARS)
+      BACKGROUND_MODE === 'real-codex'
+        ? realCodexBackgroundScript(
+            runId,
+            BACKGROUND_OUTPUT_INTERVAL_MS,
+            BACKGROUND_OUTPUT_PAYLOAD_CHARS
+          )
+        : backgroundCodexScript(
+            runId,
+            BACKGROUND_OUTPUT_INTERVAL_MS,
+            BACKGROUND_OUTPUT_PAYLOAD_CHARS
+          )
     )
 
     const backgroundPtyIds: string[] = []
@@ -428,7 +512,7 @@ test.describe('Terminal Codex lag stress', () => {
       const worstLongTask = Math.max(0, ...probe.longTasks.map((entry) => entry.duration))
       const worstRafGap = probe.maxRafGapMs
 
-      const summary = `worktrees=${EXTRA_WORKTREE_COUNT} backgroundTerminals=${BACKGROUND_CODEX_TERMINALS} backgroundIntervalMs=${BACKGROUND_OUTPUT_INTERVAL_MS} backgroundPayloadChars=${BACKGROUND_OUTPUT_PAYLOAD_CHARS} median=${medianLatency.toFixed(1)}ms worst=${worstLatency.toFixed(
+      const summary = `worktrees=${EXTRA_WORKTREE_COUNT} backgroundTerminals=${BACKGROUND_CODEX_TERMINALS} backgroundMode=${BACKGROUND_MODE} backgroundIntervalMs=${BACKGROUND_OUTPUT_INTERVAL_MS} backgroundPayloadChars=${BACKGROUND_OUTPUT_PAYLOAD_CHARS} median=${medianLatency.toFixed(1)}ms worst=${worstLatency.toFixed(
         1
       )}ms worstRafGap=${worstRafGap.toFixed(1)}ms worstLongTask=${worstLongTask.toFixed(
         1
