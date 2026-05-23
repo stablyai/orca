@@ -136,8 +136,8 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
           <div
             key={ws.id}
             data-ws-id={ws.id}
-            className={`rounded-[10px] px-2 py-2.5 transition-[background,box-shadow,transform] duration-[1100ms] [transition-timing-function:cubic-bezier(.2,.8,.2,1)] ${
-              isSelected ? 'bg-foreground/[0.05] shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]' : ''
+            className={`relative rounded-[10px] px-2 py-2.5 transition-[background,box-shadow,transform] duration-[1100ms] [transition-timing-function:cubic-bezier(.2,.8,.2,1)] ${
+              isSelected ? 'bg-accent shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]' : 'bg-card'
             } [&+[data-ws-id]]:mt-1`}
           >
             <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
