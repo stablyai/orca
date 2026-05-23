@@ -433,6 +433,101 @@ describe('connectPanePty', () => {
     delete (globalThis as Record<string, unknown>).__ptyConnectDiag
   })
 
+  it('coalesces same-class hidden title frames', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport('pty-1'))
+    const pane = createPane(1)
+    const manager = {
+      ...createManager(1),
+      getActivePane: vi.fn(() => ({ id: 1 }))
+    }
+    const setRuntimePaneTitle = vi.fn((tabId: string, paneId: number, title: string) => {
+      mockStoreState.runtimePaneTitlesByTabId[tabId] = {
+        ...mockStoreState.runtimePaneTitlesByTabId[tabId],
+        [paneId]: title
+      }
+    })
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      setRuntimePaneTitle
+    })
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    const options = createdTransportOptions[0] as {
+      onTitleChange: (title: string, rawTitle: string) => void
+    }
+
+    options.onTitleChange('Codex working one', 'Codex working one')
+    options.onTitleChange('Codex working two', 'Codex working two')
+
+    expect(setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(99)
+    expect(setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+    expect(setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'Codex working two')
+
+    binding.dispose()
+  })
+
+  it('coalesces same-state hidden agent status pings', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport('pty-1'))
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    const options = createdTransportOptions[0] as {
+      onAgentStatus: (payload: { state: 'working'; prompt: string; toolInput?: string }) => void
+    }
+
+    options.onAgentStatus({ state: 'working', prompt: 'p', toolInput: 'first' })
+    options.onAgentStatus({ state: 'working', prompt: 'p', toolInput: 'second' })
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(100)
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(2)
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      { state: 'working', prompt: 'p', toolInput: 'second' },
+      undefined
+    )
+
+    binding.dispose()
+  })
+
+  it('keeps hidden agent status transitions immediate', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport('pty-1'))
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    const options = createdTransportOptions[0] as {
+      onAgentStatus: (payload: {
+        state: 'working' | 'waiting' | 'done'
+        prompt: string
+        toolInput?: string
+      }) => void
+    }
+
+    options.onAgentStatus({ state: 'working', prompt: 'p', toolInput: 'first' })
+    options.onAgentStatus({ state: 'waiting', prompt: 'p', toolInput: 'blocked' })
+    options.onAgentStatus({ state: 'done', prompt: 'p', toolInput: 'complete' })
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(3)
+    vi.advanceTimersByTime(100)
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(3)
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      { state: 'done', prompt: 'p', toolInput: 'complete' },
+      undefined
+    )
+
+    binding.dispose()
+  })
+
   it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -2158,7 +2253,10 @@ describe('connectPanePty', () => {
     expect(capturedDataCallback.current).not.toBeNull()
     capturedDataCallback.current?.('visible split output\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('visible split output\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'visible split output\r\n',
+      expect.any(Function)
+    )
   })
 
   it('marks panes that receive Arabic output for DOM rendering', async () => {
@@ -2181,7 +2279,10 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
 
     expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
-    expect(pane.terminal.write).toHaveBeenCalledWith('Arabic: السلام عليكم\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'Arabic: السلام عليكم\r\n',
+      expect.any(Function)
+    )
   })
 
   it('keeps panes on WebGL for terminal UI drawing glyphs', async () => {
@@ -2205,7 +2306,8 @@ describe('connectPanePty', () => {
 
     expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n'
+      '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n',
+      expect.any(Function)
     )
   })
 

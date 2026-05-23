@@ -7,6 +7,7 @@ import {
   isShellProcess
 } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
@@ -10181,6 +10182,67 @@ export class OrcaRuntimeService {
     } catch {
       return null
     }
+  }
+
+  getAgentStatusOrchestrationContextForPaneKey(
+    paneKey: string
+  ): AgentStatusOrchestrationContext | undefined {
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    if (!handle) {
+      return undefined
+    }
+    const db = this.getOrchestrationDbIfAvailable()
+    const dispatch = db?.getActiveDispatchForTerminal(handle)
+    if (!dispatch) {
+      return undefined
+    }
+    const task = db?.getTask(dispatch.task_id)
+    const activeRun = db?.getActiveCoordinatorRun()
+    const parentTerminalHandle =
+      task?.created_by_terminal_handle ??
+      (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
+        ? activeRun.coordinator_handle
+        : undefined)
+    const parentPaneKey = parentTerminalHandle
+      ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
+      : undefined
+
+    return {
+      taskId: dispatch.task_id,
+      dispatchId: dispatch.id,
+      ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
+      ...(parentPaneKey ? { parentPaneKey } : {}),
+      ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
+      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+    }
+  }
+
+  private getTerminalHandleForPaneKey(paneKey: string): string | null {
+    const parsed = parsePaneKey(paneKey)
+    if (parsed) {
+      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
+      if (leaf?.ptyId) {
+        return this.issueHandle(leaf)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.paneKey === paneKey) {
+        return this.issuePtyHandle(pty)
+      }
+    }
+    return null
+  }
+
+  private getPaneKeyForTerminalHandle(handle: string): string | null {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty?.pty.paneKey) {
+      return livePty.pty.paneKey
+    }
+    const record = this.handles.get(handle)
+    if (!record || record.runtimeId !== this.runtimeId) {
+      return null
+    }
+    return makePaneKey(record.tabId, record.leafId)
   }
 
   // Why: OSC title detection via onPtyData is the tightest signal for agent

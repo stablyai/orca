@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { Check, ExternalLink } from 'lucide-react'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { TuiAgent } from '../../../../shared/types'
 
 type AgentStepProps = {
@@ -33,6 +34,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
   // disclosure once it's open; controlling `open` directly off the prop would
   // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
   const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
+  const fallbackRestLabel = openState ? 'Hide agents' : `Show ${fallbackRest.length} more agents→`
   useEffect(() => {
     if (selectedEntryIsCollapsed) {
       setOpenState(true)
@@ -79,25 +81,23 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
         </div>
       </section>
       {fallbackRest.length > 0 && (
-        <details
-          className="group space-y-3"
-          open={openState}
-          onToggle={(e) => setOpenState(e.currentTarget.open)}
-        >
-          <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground group-open:mb-3">
-            Show {fallbackRest.length} more {hasDetected ? 'agents' : ''}→
-          </summary>
-          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-            {fallbackRest.map((agent) => (
-              <AgentButton
-                key={agent.id}
-                agent={agent}
-                selected={selectedAgent === agent.id}
-                onClick={() => onSelect(agent.id, true)}
-              />
-            ))}
-          </div>
-        </details>
+        <Collapsible className="space-y-3" open={openState} onOpenChange={setOpenState}>
+          <CollapsibleTrigger className="cursor-pointer text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:mb-3">
+            {fallbackRestLabel}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="collapsible-height-content">
+            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+              {fallbackRest.map((agent) => (
+                <AgentButton
+                  key={agent.id}
+                  agent={agent}
+                  selected={selectedAgent === agent.id}
+                  onClick={() => onSelect(agent.id, true)}
+                />
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   )
@@ -129,12 +129,17 @@ function AgentButton({
       className={cn(
         'group relative overflow-hidden rounded-xl border p-3.5 text-left transition-all',
         selected
-          ? 'border-foreground/50 bg-muted ring-2 ring-foreground/20'
+          ? 'border-violet-500/60 bg-violet-500/10 ring-2 ring-violet-500/30'
           : 'border-border bg-muted/30 hover:bg-muted/60'
       )}
       onClick={onClick}
     >
-      <div className="flex min-w-0 items-start gap-2.5">
+      {selected ? (
+        <div className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-violet-500 text-white shadow-sm">
+          <Check className="size-3" strokeWidth={3} />
+        </div>
+      ) : null}
+      <div className="flex min-w-0 items-start gap-2.5 pr-6">
         <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-foreground">
           <AgentIcon agent={agent.id} size={16} />
         </span>

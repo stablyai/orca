@@ -6,6 +6,7 @@ import {
   AGENT_STATE_HISTORY_MAX,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
+  type AgentStatusOrchestrationContext,
   type AgentType,
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
@@ -54,7 +55,7 @@ export type AgentStatusSlice = {
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
-    payload: ParsedAgentStatusPayload,
+    payload: ParsedAgentStatusPayload & { orchestration?: AgentStatusOrchestrationContext },
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number }
   ) => void
@@ -252,6 +253,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           toolName: payload.toolName,
           toolInput: payload.toolInput,
           lastAssistantMessage: payload.lastAssistantMessage,
+          // Why: orchestration dispatch metadata may disappear after the
+          // worker completes and the active dispatch closes. Preserve the last
+          // known parent-child link so done/retained rows stay grouped.
+          orchestration: payload.orchestration ?? existing?.orchestration,
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets
@@ -289,6 +294,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolName !== existing.toolName ||
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
+            entry.orchestration !== existing.orchestration ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange = sortRelevantChange || doneRetentionFieldsChanged
         // Why: a new status event means the agent is live again — lift any

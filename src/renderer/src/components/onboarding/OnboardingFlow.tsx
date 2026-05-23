@@ -1,5 +1,16 @@
 import { useEffect } from 'react'
-import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
+import {
+  Bell,
+  Bot,
+  ChevronLeft,
+  CornerDownLeft,
+  FolderOpen,
+  Loader2,
+  Palette,
+  Plug,
+  Wrench,
+  type LucideIcon
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -8,6 +19,7 @@ import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
+import { AgentFeatureSetupStep } from './AgentFeatureSetupStep'
 import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
@@ -24,9 +36,12 @@ const stepCopy = {
     subtitle: 'Pick the look you want to stare at for hours.'
   },
   notifications: {
+    title: 'Set up notifications',
+    subtitle: 'Allow desktop alerts and choose the sound Orca uses when work needs attention.'
+  },
+  agentSetup: {
     title: 'Set up Orca for agents',
-    subtitle:
-      'Get notifications when agents need you, and choose the capabilities Orca should enable on this computer.'
+    subtitle: 'Choose the capabilities Orca should enable on this computer.'
   },
   integrations: {
     title: 'Connect your task sources',
@@ -41,10 +56,20 @@ const stepCopy = {
 const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
-  notifications: 'Agent tools',
+  notifications: 'Notifications',
+  agentSetup: 'Agent setup',
   integrations: 'Integrations',
   repo: 'Create project'
 } as const
+
+const stepIcons = {
+  agent: Bot,
+  theme: Palette,
+  notifications: Bell,
+  agentSetup: Wrench,
+  integrations: Plug,
+  repo: FolderOpen
+} satisfies Record<keyof typeof stepCopy, LucideIcon>
 
 type OnboardingFlowProps = {
   onboarding: OnboardingState
@@ -61,8 +86,9 @@ export default function OnboardingFlow({
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
+  const StepIcon = stepIcons[currentStep.id]
   const shouldShowSetupAction =
-    currentStep.id === 'notifications' &&
+    currentStep.id === 'agentSetup' &&
     flow.hasSelectedFeatureSetup &&
     !flow.featureSetupTerminalCommand
   const primaryActionLabel = busyLabel ?? (shouldShowSetupAction ? 'Set up' : 'Continue')
@@ -137,7 +163,7 @@ export default function OnboardingFlow({
                           ? 'w-10 bg-foreground'
                           : isDone
                             ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                            : 'w-6 bg-muted hover:bg-muted-foreground/60'
+                            : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                       )}
                       aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
                       aria-current={isActive ? 'step' : undefined}
@@ -162,12 +188,17 @@ export default function OnboardingFlow({
               Welcome to Orca
             </div>
           )}
-          <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-            {copy.title}
-          </h1>
-          <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
-            {copy.subtitle}
-          </p>
+          <div className="flex items-start justify-between gap-6">
+            <div className="min-w-0">
+              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+                {copy.title}
+              </h1>
+              <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
+                {copy.subtitle}
+              </p>
+            </div>
+            <StepIcon aria-hidden className="mt-1 size-8 shrink-0 text-muted-foreground/70" />
+          </div>
         </div>
 
         <div className="mt-10 flex-1">
@@ -188,9 +219,10 @@ export default function OnboardingFlow({
             />
           )}
           {currentStep.id === 'notifications' && (
-            <NotificationStep
-              value={flow.notifications}
-              onChange={flow.setNotifications}
+            <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
+          )}
+          {currentStep.id === 'agentSetup' && (
+            <AgentFeatureSetupStep
               featureSetup={flow.featureSetupSelection}
               onFeatureSetupChange={flow.setFeatureSetupSelection}
               featureSetupCommand={flow.featureSetupTerminalCommand}

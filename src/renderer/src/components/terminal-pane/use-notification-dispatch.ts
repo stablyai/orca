@@ -165,7 +165,7 @@ export function dispatchTerminalNotification(
   // itself is the source of truth for its owning repo.
   const worktree = getWorktreeMapFromState(state).get(worktreeId)
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const customSoundPath = state.settings?.notifications?.customSoundPath ?? null
+  const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
   const agentStatus =
     event.source === 'agent-task-complete' && event.paneKey
@@ -201,7 +201,7 @@ export function dispatchTerminalNotification(
     })
     .then((result) => {
       if (result.delivered) {
-        void playDesktopNotificationSound(customSoundPath, customSoundVolume)
+        void playDesktopNotificationSound(customSoundId, customSoundVolume)
       }
     })
     .catch((err) => {

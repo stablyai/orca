@@ -70,7 +70,7 @@ export function FeatureSetupChecklist({
                 'flex min-h-40 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 selected
-                  ? 'border-foreground/40 bg-card text-foreground'
+                  ? 'border-violet-500/60 bg-violet-500/10 text-foreground ring-2 ring-violet-500/30'
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'
               )}
               onClick={() => onChange({ ...value, [row.id]: !selected })}
@@ -91,11 +91,11 @@ export function FeatureSetupChecklist({
                   className={cn(
                     'flex size-5 items-center justify-center rounded-full border transition-colors',
                     selected
-                      ? 'border-primary bg-primary text-primary-foreground'
+                      ? 'border-violet-500 bg-violet-500 text-white'
                       : 'border-border bg-background'
                   )}
                 >
-                  {selected ? <Check className="size-3.5" /> : null}
+                  {selected ? <Check className="size-3" strokeWidth={3} /> : null}
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>

@@ -34,15 +34,6 @@ function stripRefPrefix(ref: string): string {
   return normalizeHostedReviewHeadRef(ref)
 }
 
-function branchToTitle(branch: string): string {
-  const lastSegment = branch.split('/').filter(Boolean).at(-1) ?? branch
-  return lastSegment
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-}
-
 async function detectHostedReviewProvider(
   repoPath: string,
   connectionId?: string | null
@@ -98,44 +89,6 @@ async function runGitForHostedReview(
     return provider.exec(args, repoPath)
   }
   return gitExecFileAsync(args, { cwd: repoPath })
-}
-
-async function getLatestCommitSubject(
-  repoPath: string,
-  connectionId?: string | null
-): Promise<string | null> {
-  try {
-    const { stdout } = await runGitForHostedReview(
-      repoPath,
-      ['log', '-1', '--pretty=%s'],
-      connectionId
-    )
-    const subject = stdout.trim()
-    return subject || null
-  } catch {
-    return null
-  }
-}
-
-async function getCommitSummaryBody(
-  repoPath: string,
-  base: string | null,
-  connectionId?: string | null
-): Promise<string | null> {
-  if (!base) {
-    return null
-  }
-  try {
-    const { stdout } = await runGitForHostedReview(
-      repoPath,
-      ['log', '--pretty=format:- %s', '--max-count=20', `${base}..HEAD`],
-      connectionId
-    )
-    const body = stdout.trim()
-    return body || null
-  } catch {
-    return null
-  }
 }
 
 async function getDefaultBaseRef(
@@ -340,16 +293,11 @@ export async function getHostedReviewCreationEligibility(
     connectionId: args.connectionId ?? null
   })
 
-  const title =
-    (await getLatestCommitSubject(args.repoPath, args.connectionId)) ?? branchToTitle(branch)
-  const body = await getCommitSummaryBody(args.repoPath, defaultBaseRef ?? null, args.connectionId)
   const baseResult = {
     provider,
     review: review ? { number: review.number, url: review.url } : null,
     defaultBaseRef,
-    head: branch || null,
-    title,
-    body
+    head: branch || null
   }
 
   if (!branch || branch === 'HEAD') {

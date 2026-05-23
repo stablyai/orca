@@ -121,7 +121,8 @@ export class SshGitProvider implements IGitProvider {
     args: string[],
     cwd: string,
     timeoutMs: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    env?: Record<string, string>
   ): Promise<RemoteCommitMessageExecResult> {
     return this.runQueuedNonInteractiveExec(
       cwd,
@@ -130,7 +131,8 @@ export class SshGitProvider implements IGitProvider {
         args,
         cwd,
         stdin: null,
-        timeoutMs
+        timeoutMs,
+        ...(env ? { env } : {})
       },
       signal
     )
@@ -168,6 +170,7 @@ export class SshGitProvider implements IGitProvider {
       cwd: string
       stdin: string | null
       timeoutMs: number
+      env?: Record<string, string>
     },
     signal?: AbortSignal
   ): Promise<RemoteCommitMessageExecResult> {

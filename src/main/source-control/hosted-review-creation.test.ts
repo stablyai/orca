@@ -358,23 +358,13 @@ describe('getHostedReviewCreationEligibility', () => {
       blockedReason: null,
       nextAction: null,
       defaultBaseRef: 'origin/main',
-      head: 'feature/create-pr',
-      title: 'Feature title',
-      body: 'Feature title'
+      head: 'feature/create-pr'
     })
   })
 
-  it('resolves remote eligibility through SSH repo metadata', async () => {
+  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
     const remoteGit = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'log' && args.includes('--pretty=%s')) {
-          return { stdout: 'Remote title\n', stderr: '' }
-        }
-        if (args[0] === 'log') {
-          return { stdout: '- Remote title\n', stderr: '' }
-        }
-        return { stdout: '', stderr: '' }
-      })
+      exec: vi.fn(async () => ({ stdout: '', stderr: '' }))
     }
     getSshGitProviderMock.mockReturnValue(remoteGit)
 
@@ -392,8 +382,7 @@ describe('getHostedReviewCreationEligibility', () => {
     ).resolves.toMatchObject({
       provider: 'github',
       canCreate: true,
-      title: 'Remote title',
-      body: '- Remote title'
+      head: 'feature/create-pr'
     })
 
     expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
@@ -401,7 +390,7 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/remote/repo', connectionId: 'ssh-1' })
     )
-    expect(remoteGit.exec).toHaveBeenCalledWith(['log', '-1', '--pretty=%s'], '/remote/repo')
+    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

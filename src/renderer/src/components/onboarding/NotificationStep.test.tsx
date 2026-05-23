@@ -1,33 +1,36 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/types'
 import { NotificationStep } from './NotificationStep'
 
+function createSettings(): GlobalSettings {
+  return {
+    notifications: {
+      enabled: true,
+      agentTaskComplete: true,
+      terminalBell: true,
+      suppressWhenFocused: false,
+      customSoundId: 'system',
+      customSoundPath: null,
+      customSoundVolume: 80
+    }
+  } as GlobalSettings
+}
+
 describe('NotificationStep', () => {
-  it('renders feature setup in the notification step', () => {
+  it('renders sound setup without the old notification source switches', () => {
     const html = renderToStaticMarkup(
-      <NotificationStep
-        value={{
-          agentTaskComplete: true,
-          terminalBell: true,
-          notifyWhenFocused: true
-        }}
-        onChange={vi.fn()}
-        featureSetup={{
-          browserUse: true,
-          computerUse: true,
-          orchestration: true
-        }}
-        onFeatureSetupChange={vi.fn()}
-        featureSetupCommand={null}
-        featureSetupCommandSelection={null}
-      />
+      <NotificationStep settings={createSettings()} updateSettings={vi.fn()} />
     )
 
-    expect(html).toContain('Set up agent features')
-    expect(html).toContain('Agent Browser Use')
-    expect(html).toContain('Computer Use')
-    expect(html).toContain('Agent Orchestration')
-    expect(html).toContain('role="checkbox"')
+    expect(html).toContain('System Default')
+    expect(html).toContain('Two Tone')
+    expect(html).toContain('Sonar')
+    expect(html).toContain('Ding')
+    expect(html).toContain('Send Test Notification')
+    expect(html).not.toContain('Agent task complete')
+    expect(html).not.toContain('Terminal bell')
+    expect(html).not.toContain('Set up agent features')
     expect(html).not.toContain('Connect task sources')
   })
 })

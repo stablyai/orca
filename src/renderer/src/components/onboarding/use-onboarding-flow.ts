@@ -11,7 +11,6 @@ import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, Repo, TuiAgent } from '../../../../shared/types'
-import type { NotificationDraft } from './NotificationStep'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   ONBOARDING_FEATURE_SETUP_IDS,
@@ -91,15 +90,6 @@ export function useOnboardingFlow(
   // Why: hydrate theme from saved settings instead of hardcoding 'dark' so users
   // who already configured a theme see their choice preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  // Why: wizard force-defaults every toggle on (ignoring stored settings) so
-  // first-run users land in the most attentive state and choose what to dial
-  // back. Positive framing ("Notify when focused") inverts back to the
-  // persisted `suppressWhenFocused` field at save time.
-  const [notifications, setNotifications] = useState<NotificationDraft>({
-    agentTaskComplete: true,
-    terminalBell: true,
-    notifyWhenFocused: true
-  })
   const [featureSetupSelection, setFeatureSetupSelection] =
     useState<OnboardingFeatureSetupSelection>(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
   const [featureSetupTerminalCommand, setFeatureSetupTerminalCommand] = useState<string | null>(
@@ -243,12 +233,12 @@ export function useOnboardingFlow(
       return
     }
     startedTrackedRef.current = true
-    // Why: `resumed_from_step` is the step the user finished (1..3), not the
+    // Why: `resumed_from_step` is the step the user finished, not the
     // step we resume into.
     const lastCompleted = onboarding.lastCompletedStep
     track(
       'onboarding_started',
-      lastCompleted >= 1 && lastCompleted <= 3
+      lastCompleted >= 1 && lastCompleted < ONBOARDING_FINAL_STEP
         ? { resumed_from_step: lastCompleted as StepNumber }
         : {}
     )
@@ -364,7 +354,6 @@ export function useOnboardingFlow(
     currentStepId: currentStep.id,
     selectedAgent,
     theme,
-    notifications,
     featureSetupSelection,
     settings,
     updateSettings,
@@ -396,30 +385,30 @@ export function useOnboardingFlow(
   // the first call's setStepIndex has run, advancing twice and skipping a
   // step. A ref flips synchronously so re-entries bail immediately.
   const nextInFlightRef = useRef(false)
-  const notificationsStepCompletedTrackedRef = useRef(false)
+  const featureSetupStepCompletedTrackedRef = useRef(false)
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
         return
       }
-      if (currentStep.id === 'notifications' && featureSetupTerminalCommand) {
+      if (currentStep.id === 'agentSetup' && featureSetupTerminalCommand) {
         setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         return
       }
       nextInFlightRef.current = true
-      if (currentStep.id === 'notifications' && hasSelectedFeatureSetup) {
+      if (currentStep.id === 'agentSetup' && hasSelectedFeatureSetup) {
         setBusyLabel('Setting up features…')
       }
       try {
         const trackCurrentStepCompleted = (): void => {
-          if (currentStep.id === 'notifications') {
-            if (notificationsStepCompletedTrackedRef.current) {
+          if (currentStep.id === 'agentSetup') {
+            if (featureSetupStepCompletedTrackedRef.current) {
               return
             }
             // Why: feature setup can keep the user on this already-persisted
             // step to review a terminal command; later checklist edits must
             // not double-count the same step completion.
-            notificationsStepCompletedTrackedRef.current = true
+            featureSetupStepCompletedTrackedRef.current = true
           }
           const durationMs = consumeStepDurationMs()
           track('onboarding_step_completed', {
@@ -434,7 +423,7 @@ export function useOnboardingFlow(
         }
         const result = await persistCurrentStep()
         const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
-        if (currentStep.id === 'notifications' && nextCommand) {
+        if (currentStep.id === 'agentSetup' && nextCommand) {
           trackCurrentStepCompleted()
           setFeatureSetupTerminalSelection(featureSetupSelection)
           setFeatureSetupTerminalCommand(nextCommand)
@@ -445,7 +434,7 @@ export function useOnboardingFlow(
           setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         }
       } finally {
-        if (currentStep.id === 'notifications') {
+        if (currentStep.id === 'agentSetup') {
           setBusyLabel(null)
         }
         nextInFlightRef.current = false
@@ -623,14 +612,14 @@ export function useOnboardingFlow(
   ])
 
   const skipAgentSetup = useCallback(async () => {
-    if (busyLabel || currentStep.id !== 'notifications') {
+    if (busyLabel || currentStep.id !== 'agentSetup') {
       return
     }
     setError(null)
     const durationMs = consumeStepDurationMs()
     try {
-      // Why: this step's primary action can request notification permission and
-      // run selected feature setup. Skip is the explicit "not now" path.
+      // Why: this step's primary action can run selected feature setup. Skip is
+      // the explicit "not now" path.
       const nextState = await persistStep(currentStep.stepNumber)
       onOnboardingChange(nextState)
       track('onboarding_step_skipped', {
@@ -696,8 +685,6 @@ export function useOnboardingFlow(
     setSelectedAgent: setSelectedAgentInteractive,
     theme,
     setTheme: setThemeInteractive,
-    notifications,
-    setNotifications,
     featureSetupSelection,
     setFeatureSetupSelection: setFeatureSetupSelectionInteractive,
     featureSetupTerminalCommand,

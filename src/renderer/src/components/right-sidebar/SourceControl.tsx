@@ -4475,22 +4475,25 @@ function PullRequestComposer({
               aria-hidden="true"
             />
           </div>
-          <label
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 text-[11px]',
-              fieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer text-foreground'
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={draft}
-              disabled={fieldsLocked}
-              onChange={(event) => setDraft(event.target.checked)}
-              className="size-3.5 rounded border-border accent-primary"
-            />
-            Draft
-          </label>
         </div>
+
+        <label
+          className={cn(
+            'flex h-7 items-center gap-2 rounded-md border border-border bg-background px-2 text-xs text-foreground transition-colors',
+            fieldsLocked
+              ? 'cursor-not-allowed opacity-60'
+              : 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={draft}
+            disabled={fieldsLocked}
+            onChange={(event) => setDraft(event.target.checked)}
+            className="size-3.5 shrink-0 rounded border-border accent-primary"
+          />
+          <span className="min-w-0 flex-1 truncate">Create as draft</span>
+        </label>
 
         {baseResults.length > 0 ? (
           <div className="max-h-28 overflow-auto rounded-md border border-border p-1 scrollbar-sleek">

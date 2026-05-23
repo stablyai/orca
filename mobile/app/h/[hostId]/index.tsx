@@ -322,12 +322,12 @@ export default function HostScreen() {
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
-  const [sortMode, setSortMode] = useState<SortMode>('smart')
+  const [sortMode, setSortMode] = useState<SortMode>('recent')
   const [filters, setFilters] = useState<FilterState>({
     activeOnly: false,
     selectedRepos: new Set()
   })
-  const [groupMode, setGroupMode] = useState<GroupMode>('none')
+  const [groupMode, setGroupMode] = useState<GroupMode>('repo')
 
   // Modals
   const [showSortPicker, setShowSortPicker] = useState(false)

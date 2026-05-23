@@ -8,8 +8,8 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  Play,
   Plus,
-  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -141,7 +141,7 @@ export default function TerminalContextMenu({
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <SquareTerminal />
+            <Play fill="currentColor" strokeWidth={0} />
             Quick Commands
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-60">

@@ -35,7 +35,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
-    markdownReviewToolsEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
@@ -74,6 +73,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
       agentTaskComplete: true,
       terminalBell: false,
       suppressWhenFocused: true,
+      customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 100
     },

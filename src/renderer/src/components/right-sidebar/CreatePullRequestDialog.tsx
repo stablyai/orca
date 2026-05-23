@@ -306,6 +306,7 @@ export function CreatePullRequestDialog({
               id="create-pr-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
+              placeholder="Title"
               aria-invalid={!title.trim()}
             />
           </div>
@@ -317,18 +318,19 @@ export function CreatePullRequestDialog({
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={6}
+              placeholder="Description (optional)"
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-foreground">
+          <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
             <input
               type="checkbox"
               checked={draft}
               onChange={(event) => setDraft(event.target.checked)}
-              className="size-4 rounded border-border accent-primary"
+              className="size-4 shrink-0 rounded border-border accent-primary"
             />
-            Draft
+            <span className="min-w-0 flex-1 truncate">Create as draft</span>
           </label>
 
           {stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase() ? (

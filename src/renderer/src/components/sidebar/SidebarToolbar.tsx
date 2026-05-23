@@ -9,7 +9,8 @@ import {
   HardDrive,
   MessageSquareText,
   School,
-  Settings
+  Settings,
+  Smartphone
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -254,6 +255,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
+  const openMobilePage = useAppStore((s) => s.openMobilePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
 
@@ -313,6 +315,10 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               <DropdownMenuItem onSelect={openSpacePage}>
                 <HardDrive className="size-3.5" />
                 Space Analyzer
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={openMobilePage}>
+                <Smartphone className="size-3.5" />
+                Orca Mobile
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

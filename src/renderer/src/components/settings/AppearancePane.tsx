@@ -139,6 +139,11 @@ const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
     title: 'Show Tasks Button',
     description: 'Show the Tasks button at the top of the left sidebar.',
     keywords: ['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']
+  },
+  {
+    title: 'Show Orca Mobile Button',
+    description: 'Show the Orca Mobile button at the top of the left sidebar.',
+    keywords: ['mobile', 'phone', 'sidebar', 'button', 'hide', 'show', 'toolbox']
   }
 ]
 
@@ -372,6 +377,21 @@ export function AppearancePane({
               description="Show the Tasks button at the top of the left sidebar."
               checked={settings.showTasksButton}
               onChange={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title="Show Orca Mobile Button"
+            description="Show the Orca Mobile button at the top of the left sidebar."
+            keywords={['mobile', 'phone', 'sidebar', 'button', 'hide', 'show', 'toolbox']}
+          >
+            <SettingsSwitchRow
+              label="Show Orca Mobile Button"
+              description="Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox."
+              checked={settings.showMobileButton !== false}
+              onChange={() =>
+                updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+              }
             />
           </SearchableSetting>
         </div>
