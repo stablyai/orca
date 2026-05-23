@@ -53,6 +53,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
+  const clearRemovedSshTargetState = useAppStore((s) => s.clearRemovedSshTargetState)
 
   const loadTargets = useCallback(
     async (opts?: { signal?: AbortSignal }) => {
@@ -152,6 +153,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleRemove = async (id: string): Promise<void> => {
     try {
       await removeSshTargetWithBestEffortCleanup(window.api.ssh, id)
+      // Why: a deleted passphrase-gated target may still have deferred
+      // reconnect metadata; clear it so focused SSH tabs stop retrying it.
+      clearRemovedSshTargetState(id)
       toast.success('Target removed')
       await loadTargets()
     } catch (err) {

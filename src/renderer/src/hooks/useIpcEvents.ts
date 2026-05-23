@@ -1692,93 +1692,124 @@ export function useIpcEvents(): void {
       })
     )
 
+    const applySshConnectionStateChange = (targetId: string, state: SshConnectionState): void => {
+      const store = useAppStore.getState()
+      store.setSshConnectionState(targetId, state)
+      const remoteRepos = store.repos.filter((r) => r.connectionId === targetId)
+
+      if (['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)) {
+        // Why: the remote agent list is tied to a live SSH connection. On
+        // disconnect the relay is gone, so clear the cached list and dedup
+        // promise. When the user reconnects and opens the quick-launch menu,
+        // ensureRemoteDetectedAgents will re-detect against the new relay.
+        store.clearRemoteDetectedAgents(targetId)
+
+        // Why: defensive — clear port forward and detected port state in case
+        // the broadcast from removeAllForwards races with the state change.
+        store.clearPortForwards(targetId)
+        store.setDetectedPorts(targetId, [])
+
+        // Why: an explicit disconnect or terminal failure tears down the SSH
+        // PTY provider without emitting per-PTY exit events. Clear the stale
+        // PTY ids in renderer state so a later reconnect remounts TerminalPane
+        // instead of keeping a dead remote PTY attached to the tab.
+        const remoteWorktreeIds = new Set(
+          Object.values(store.worktreesByRepo)
+            .flat()
+            .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
+            .map((w) => w.id)
+        )
+        for (const worktreeId of remoteWorktreeIds) {
+          const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+          for (const tab of tabs) {
+            if (tab.ptyId) {
+              useAppStore.getState().clearTabPtyId(tab.id)
+            }
+          }
+        }
+      }
+
+      if (state.status === 'connected') {
+        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
+          await useAppStore.getState().fetchWorktreeLineage()
+          // Why: terminal panes that failed to spawn (no PTY provider on cold
+          // start) sit inert. Bumping generation forces TerminalPane to remount
+          // and retry pty:spawn. Only bump tabs with no live ptyId.
+          const freshStore = useAppStore.getState()
+          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
+          const worktreeIds = Object.values(freshStore.worktreesByRepo)
+            .flat()
+            .filter((w) => remoteRepoIds.has(w.repoId))
+            .map((w) => w.id)
+
+          for (const worktreeId of worktreeIds) {
+            const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
+            const hasDead = tabs.some((t) => !t.ptyId)
+            if (hasDead) {
+              useAppStore.setState((s) => ({
+                tabsByWorktree: {
+                  ...s.tabsByWorktree,
+                  [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
+                    t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
+                  )
+                }
+              }))
+            }
+          }
+          void syncRemoteWorkspaceAfterConnect(targetId).catch((err) => {
+            useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+              phase: 'error',
+              message: err instanceof Error ? err.message : 'Workspace sync failed'
+            })
+          })
+        })
+      }
+    }
+
+    let sshTargetStateEventId = 0
+    const latestSshTargetStateEventByTargetId = new Map<string, number>()
+
     unsubs.push(
       window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
         const store = useAppStore.getState()
         const state = data.state as SshConnectionState
-        store.setSshConnectionState(data.targetId, state)
-        const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
-
-        // Why: targets added after boot aren't in the labels map. Re-fetch
-        // so the status bar popover shows the new target immediately.
+        const stateEventId = ++sshTargetStateEventId
+        latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
         if (!store.sshTargetLabels.has(data.targetId)) {
+          // Why: targets added after boot aren't in the labels map, while
+          // removed targets can still race a final disconnect event. Confirm
+          // with main before mutating renderer state for an unknown target id.
           window.api.ssh
             .listTargets()
+            // Why: this refresh is now a deletion guard, not just a label fetch.
+            // Retry once so a transient IPC failure does not drop a real added-target event.
+            .catch(() => window.api.ssh.listTargets())
             .then((targets) => {
-              useAppStore.getState().setSshTargetsMetadata(targets)
-            })
-            .catch(() => {})
-        }
-
-        if (
-          ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)
-        ) {
-          // Why: the remote agent list is tied to a live SSH connection. On
-          // disconnect the relay is gone, so clear the cached list and dedup
-          // promise. When the user reconnects and opens the quick-launch menu,
-          // ensureRemoteDetectedAgents will re-detect against the new relay.
-          store.clearRemoteDetectedAgents(data.targetId)
-
-          // Why: defensive — clear port forward and detected port state in case
-          // the broadcast from removeAllForwards races with the state change.
-          store.clearPortForwards(data.targetId)
-          store.setDetectedPorts(data.targetId, [])
-
-          // Why: an explicit disconnect or terminal failure tears down the SSH
-          // PTY provider without emitting per-PTY exit events. Clear the stale
-          // PTY ids in renderer state so a later reconnect remounts TerminalPane
-          // instead of keeping a dead remote PTY attached to the tab.
-          const remoteWorktreeIds = new Set(
-            Object.values(store.worktreesByRepo)
-              .flat()
-              .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
-              .map((w) => w.id)
-          )
-          for (const worktreeId of remoteWorktreeIds) {
-            const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-            for (const tab of tabs) {
-              if (tab.ptyId) {
-                useAppStore.getState().clearTabPtyId(tab.id)
+              if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
+                return
               }
-            }
-          }
-        }
-
-        if (state.status === 'connected') {
-          void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
-            await useAppStore.getState().fetchWorktreeLineage()
-            // Why: terminal panes that failed to spawn (no PTY provider on cold
-            // start) sit inert. Bumping generation forces TerminalPane to remount
-            // and retry pty:spawn. Only bump tabs with no live ptyId.
-            const freshStore = useAppStore.getState()
-            const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
-            const worktreeIds = Object.values(freshStore.worktreesByRepo)
-              .flat()
-              .filter((w) => remoteRepoIds.has(w.repoId))
-              .map((w) => w.id)
-
-            for (const worktreeId of worktreeIds) {
-              const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
-              const hasDead = tabs.some((t) => !t.ptyId)
-              if (hasDead) {
-                useAppStore.setState((s) => ({
-                  tabsByWorktree: {
-                    ...s.tabsByWorktree,
-                    [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                      t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
-                    )
-                  }
-                }))
+              latestSshTargetStateEventByTargetId.delete(data.targetId)
+              const latestStore = useAppStore.getState()
+              if (!targets.some((target) => target.id === data.targetId)) {
+                // Why: disconnect/state events can race after target removal.
+                // Treat absence from main's target list as deletion, not a new target.
+                latestStore.clearRemovedSshTargetState(data.targetId)
+                return
               }
-            }
-            void syncRemoteWorkspaceAfterConnect(data.targetId).catch((err) => {
-              useAppStore.getState().setRemoteWorkspaceSyncStatus(data.targetId, {
-                phase: 'error',
-                message: err instanceof Error ? err.message : 'Workspace sync failed'
-              })
+              latestStore.setSshTargetsMetadata(targets)
+              applySshConnectionStateChange(data.targetId, state)
             })
-          })
+            .catch(() => {
+              if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
+                latestSshTargetStateEventByTargetId.delete(data.targetId)
+                applySshConnectionStateChange(data.targetId, state)
+              }
+            })
+          return
         }
+
+        latestSshTargetStateEventByTargetId.delete(data.targetId)
+        applySshConnectionStateChange(data.targetId, state)
       })
     )
 

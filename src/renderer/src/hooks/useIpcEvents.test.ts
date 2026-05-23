@@ -329,6 +329,22 @@ describe('useIpcEvents updater integration', () => {
   it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
     const clearTabPtyId = vi.fn()
     const setSshConnectionState = vi.fn()
+    const setSshTargetsMetadata = vi.fn()
+    const clearRemovedSshTargetState = vi.fn()
+    const pendingListTargets: {
+      resolve: (targets: { id: string; label: string }[]) => void
+      reject: (err: unknown) => void
+    }[] = []
+    let listTargetsCallCount = 0
+    const listTargets = vi.fn(() => {
+      listTargetsCallCount += 1
+      if (listTargetsCallCount === 1) {
+        return Promise.resolve([{ id: 'conn-1', label: 'Remote' }])
+      }
+      return new Promise<{ id: string; label: string }[]>((resolve, reject) => {
+        pendingListTargets.push({ resolve, reject })
+      })
+    })
     const sshStateListenerRef: {
       current: ((data: { targetId: string; state: unknown }) => void) | null
     } = {
@@ -355,12 +371,14 @@ describe('useIpcEvents updater integration', () => {
       setRateLimitsFromPush: vi.fn(),
       setSshConnectionState,
       setSshTargetLabels: vi.fn(),
+      setSshTargetsMetadata,
       setPortForwards: vi.fn(),
       clearPortForwards: vi.fn(),
       setDetectedPorts: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearRemoteDetectedAgents: vi.fn(),
+      clearRemovedSshTargetState,
       clearTabPtyId,
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
@@ -500,7 +518,7 @@ describe('useIpcEvents updater integration', () => {
           onBrowserDriverChanged: () => () => {}
         },
         ssh: {
-          listTargets: () => Promise.resolve([]),
+          listTargets,
           listPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
@@ -538,6 +556,116 @@ describe('useIpcEvents updater integration', () => {
     expect(clearTabPtyId).toHaveBeenCalledWith('tab-1')
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
+
+    setSshConnectionState.mockClear()
+    sshStateListenerRef.current({
+      targetId: 'conn-removed',
+      state: { status: 'disconnected', error: null, reconnectAttempt: 0 }
+    })
+    expect(pendingListTargets).toHaveLength(1)
+    pendingListTargets.shift()!.resolve([])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setSshConnectionState).not.toHaveBeenCalled()
+    expect(clearRemovedSshTargetState).toHaveBeenCalledWith('conn-removed')
+
+    clearRemovedSshTargetState.mockClear()
+    setSshConnectionState.mockClear()
+
+    const connectingState = {
+      targetId: 'conn-new',
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 0
+    }
+    const errorState = {
+      targetId: 'conn-new',
+      status: 'error',
+      error: 'Connection failed',
+      reconnectAttempt: 0
+    }
+    sshStateListenerRef.current({
+      targetId: 'conn-new',
+      state: connectingState
+    })
+    sshStateListenerRef.current({
+      targetId: 'conn-new',
+      state: errorState
+    })
+
+    expect(pendingListTargets).toHaveLength(2)
+    const resolveConnectingTargets = pendingListTargets.shift()!.resolve
+    const resolveErrorTargets = pendingListTargets.shift()!.resolve
+    const targets = [{ id: 'conn-new', label: 'New remote' }]
+    resolveErrorTargets(targets)
+    await Promise.resolve()
+    await Promise.resolve()
+    resolveConnectingTargets(targets)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(clearRemovedSshTargetState).not.toHaveBeenCalled()
+    expect(setSshTargetsMetadata).toHaveBeenCalledWith(targets)
+    expect(setSshConnectionState).toHaveBeenCalledTimes(1)
+    expect(setSshConnectionState).toHaveBeenCalledWith('conn-new', errorState)
+
+    setSshTargetsMetadata.mockClear()
+    setSshConnectionState.mockClear()
+
+    const staleState = {
+      targetId: 'conn-known-late',
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 0
+    }
+    const latestState = {
+      targetId: 'conn-known-late',
+      status: 'error',
+      error: 'Connection failed',
+      reconnectAttempt: 1
+    }
+    sshStateListenerRef.current({
+      targetId: 'conn-known-late',
+      state: staleState
+    })
+    expect(pendingListTargets).toHaveLength(1)
+    storeState.sshTargetLabels.set('conn-known-late', 'Late remote')
+    sshStateListenerRef.current({
+      targetId: 'conn-known-late',
+      state: latestState
+    })
+    pendingListTargets.shift()!.resolve([{ id: 'conn-known-late', label: 'Late remote' }])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setSshTargetsMetadata).not.toHaveBeenCalled()
+    expect(setSshConnectionState).toHaveBeenCalledTimes(1)
+    expect(setSshConnectionState).toHaveBeenCalledWith('conn-known-late', latestState)
+
+    setSshConnectionState.mockClear()
+    const refreshFailureState = {
+      targetId: 'conn-refresh-failure',
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 0
+    }
+    sshStateListenerRef.current({
+      targetId: 'conn-refresh-failure',
+      state: refreshFailureState
+    })
+    expect(pendingListTargets).toHaveLength(1)
+    pendingListTargets.shift()!.reject(new Error('first refresh failed'))
+    await Promise.resolve()
+    expect(pendingListTargets).toHaveLength(1)
+    pendingListTargets.shift()!.reject(new Error('second refresh failed'))
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setSshConnectionState).toHaveBeenCalledTimes(1)
+    expect(setSshConnectionState).toHaveBeenCalledWith('conn-refresh-failure', refreshFailureState)
   })
 
   it('activates the target worktree when CLI creates a terminal there', async () => {
