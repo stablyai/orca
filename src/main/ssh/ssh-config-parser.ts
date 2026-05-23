@@ -94,10 +94,14 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         }
         break
       case 'identityagent':
-        current.identityAgent = resolveHomePath(value)
+        for (const host of current) {
+          host.identityAgent = resolveHomePath(value)
+        }
         break
       case 'identitiesonly':
-        current.identitiesOnly = value.toLowerCase() === 'yes'
+        for (const host of current) {
+          host.identitiesOnly = value.toLowerCase() === 'yes'
+        }
         break
       case 'proxycommand':
         for (const host of current) {

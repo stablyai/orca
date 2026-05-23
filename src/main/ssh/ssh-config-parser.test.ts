@@ -172,6 +172,27 @@ Host staging stage *.example.com
     ])
   })
 
+  it('applies identity agent settings to every concrete alias on a multi-pattern Host line', () => {
+    const config = `
+Host staging stage
+  IdentityAgent ~/.1password/agent.sock
+  IdentitiesOnly yes
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts).toEqual([
+      {
+        host: 'staging',
+        identityAgent: '/home/testuser/.1password/agent.sock',
+        identitiesOnly: true
+      },
+      {
+        host: 'stage',
+        identityAgent: '/home/testuser/.1password/agent.sock',
+        identitiesOnly: true
+      }
+    ])
+  })
+
   it('defaults port to 22 for invalid port values', () => {
     const config = `
 Host myserver
