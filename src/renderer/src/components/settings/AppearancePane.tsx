@@ -10,41 +10,13 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FontAutocomplete } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
+import { SettingsToggleSwitchButton as ToggleSwitchButton } from './SettingsToggleSwitchButton'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
-}
-
-function ToggleSwitchButton({
-  checked,
-  onToggle,
-  ariaLabel
-}: {
-  checked: boolean
-  onToggle: () => void
-  ariaLabel?: string
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
-      onClick={onToggle}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
-      }`}
-    >
-      <span
-        className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
 }
 
 const STATUS_BAR_TOGGLES: readonly {
@@ -162,6 +134,11 @@ const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
     title: 'Show Tasks Button',
     description: 'Show the Tasks button at the top of the left sidebar.',
     keywords: ['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']
+  },
+  {
+    title: 'Show Orca Mobile Button',
+    description: 'Show the Orca Mobile button at the top of the left sidebar.',
+    keywords: ['mobile', 'phone', 'sidebar', 'button', 'hide', 'show', 'toolbox']
   }
 ]
 
@@ -401,6 +378,26 @@ export function AppearancePane({
           <ToggleSwitchButton
             checked={settings.showTasksButton}
             onToggle={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Show Orca Mobile Button"
+          description="Show the Orca Mobile button at the top of the left sidebar."
+          keywords={['mobile', 'phone', 'sidebar', 'button', 'hide', 'show', 'toolbox']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Show Orca Mobile Button</Label>
+            <p className="text-xs text-muted-foreground">
+              Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.
+            </p>
+          </div>
+          <ToggleSwitchButton
+            checked={settings.showMobileButton !== false}
+            onToggle={() =>
+              updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+            }
           />
         </SearchableSetting>
       </section>

@@ -2,11 +2,14 @@
    1:1 design spec for the in-app Mobile page; styles are scoped under
    .mobile-page-root so they don't leak into the rest of the app shell. */
 
-.mobile-page-root .mp-close-button {
+.mobile-page-root .mp-page-toolbar {
   position: absolute;
   top: 12px;
   left: 12px;
-  z-index: 2;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .mobile-page-root {
@@ -38,85 +41,36 @@
 .mobile-page-root .mp-hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 660px) minmax(0, 470px);
+  grid-template-columns: minmax(360px, 560px) minmax(300px, 420px);
   justify-content: center;
   align-items: center;
-  gap: clamp(40px, 4.5vw, 70px);
-  padding: clamp(44px, 5.5vw, 72px) clamp(36px, 4.5vw, 64px);
+  gap: 56px;
+  padding: 56px;
   width: 100%;
   height: 100%;
-  overflow: auto;
-  scrollbar-width: thin;
-  /* Why: layer four large soft radial blobs across the whole hero so the
-     blue/indigo glow fills the dead space the corner-pinned blobs used to
-     leave empty. Each blob is animated below for slow drift. */
+  overflow: hidden;
   background-color: transparent;
-  background-image:
-    radial-gradient(
-      ellipse 40% 35% at 90% 10%,
-      rgba(99, 102, 241, 0.28) 0%,
-      rgba(99, 102, 241, 0.08) 30%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 38% 32% at 10% 95%,
-      rgba(59, 130, 246, 0.22) 0%,
-      rgba(59, 130, 246, 0.06) 35%,
-      transparent 60%
-    ),
-    /* Why: theme-aware so dots are visible in light mode too — hardcoded
-       white dots disappear on the light background. */
-    radial-gradient(
-        circle,
-        color-mix(in srgb, var(--foreground) 8%, transparent) 1px,
-        transparent 1.2px
-      );
-  background-size:
-    200% 200%,
-    200% 200%,
-    5px 5px;
-  background-position:
-    90% 10%,
-    10% 95%,
-    0 0;
-  background-repeat: no-repeat, no-repeat, repeat;
-  /* Why: animating background-position drifts the four blobs slowly across
-     the hero. The dot grid (last layer) stays fixed at 0 0. */
-  animation: mp-hero-bg-drift 32s ease-in-out infinite alternate;
-  will-change: background-position;
-}
-
-@keyframes mp-hero-bg-drift {
-  0% {
-    background-position:
-      90% 10%,
-      10% 95%,
-      0 0;
-  }
-  100% {
-    background-position:
-      75% 25%,
-      25% 80%,
-      0 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mobile-page-root .mp-hero {
-    animation: none;
-  }
+  /* Why: the page should feel branded without putting copy over decorative
+     blobs; a token-based dot texture stays quiet in both themes. */
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 8%, transparent) 1px,
+    transparent 1.2px
+  );
+  background-size: 5px 5px;
+  background-repeat: repeat;
 }
 
 .mobile-page-root .mp-hero-copy {
   position: relative;
   z-index: 1;
-  max-width: 660px;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
   /* Why: min-height (rather than fixed height) keeps the intro/flow
      screens at a uniform 420px box for centering, while letting the
      paired view grow when the device list needs more room. */
-  min-height: 420px;
+  min-height: 390px;
 }
 
 .mobile-page-root .mp-hero-copy > * {
@@ -136,26 +90,54 @@
   color: var(--muted-foreground);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .mobile-page-root .mp-h1 {
   margin: 0;
   color: var(--foreground);
-  font-size: clamp(46px, 5vw, 72px);
+  font-size: 60px;
   font-weight: 650;
-  letter-spacing: -0.04em;
-  line-height: 1.04;
+  letter-spacing: 0;
+  line-height: 1.06;
 }
 
 .mobile-page-root .mp-lead {
   max-width: 580px;
-  margin: 24px 0 38px;
+  margin: 20px 0 22px;
   color: var(--muted-foreground);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 450;
   line-height: 1.55;
+}
+
+.mobile-page-root .mp-platform-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+
+.mobile-page-root .mp-platform-label {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-page-root .mp-platform-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .mobile-page-root .mp-paired-list {
@@ -172,7 +154,11 @@
      at ~64px each plus 8px gap, so 4 × 64 + 3 × 8 ≈ 280px. */
   max-height: 288px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.mobile-page-root .mp-paired-list::-webkit-scrollbar {
+  display: none;
 }
 
 .mobile-page-root .mp-paired-row {
@@ -182,7 +168,7 @@
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+  background: var(--card);
 }
 
 .mobile-page-root .mp-paired-icon {
@@ -283,6 +269,30 @@
 .mobile-page-root .mp-primary-action svg {
   width: 13px;
   height: 13px;
+}
+
+.mobile-page-root .mp-secondary-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.mobile-page-root .mp-secondary-action:hover {
+  background: var(--accent);
 }
 
 /* Step flow ─────────────────────────────────────────────────────── */
@@ -539,7 +549,7 @@
 .mobile-page-root .mp-step2-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 32px;
+  gap: 28px;
   align-items: start;
 }
 
@@ -549,7 +559,7 @@
    so push the QR down by roughly that combined height. */
 .mobile-page-root .mp-step2-layout > .mp-qr,
 .mobile-page-root .mp-step2-layout > .mp-qr-stack {
-  margin-top: 88px;
+  margin-top: 72px;
 }
 
 .mobile-page-root .mp-step2-copy {
@@ -559,9 +569,9 @@
 .mobile-page-root .mp-h2 {
   margin: 0;
   color: var(--foreground);
-  font-size: clamp(28px, 3vw, 38px);
+  font-size: 34px;
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.08;
 }
 
@@ -581,6 +591,9 @@
 }
 
 .mobile-page-root .mp-tab-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 0;
   background: transparent;
   padding: 0 0 6px;
@@ -809,12 +822,13 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  min-height: 830px;
+  min-height: 0;
+  height: min(100%, calc(100vh - 112px));
 }
 
 .mobile-page-root .mp-phone-frame {
   position: relative;
-  width: min(100%, 470px);
+  width: min(100%, 420px, calc((100vh - 112px) * 9 / 19.5));
   aspect-ratio: 9 / 19.5;
   border-radius: 48px;
   background: #0a0a0a;
@@ -891,9 +905,10 @@
     'Segoe UI',
     sans-serif;
   font-size: 13px;
-  /* Why: phone-frame grew 50% but slide content uses fixed px tokens; zoom
-     scales children in layout space so they fill the bigger frame proportionally. */
-  zoom: 1.35;
+  box-sizing: border-box;
+  /* Why: the phone frame is viewport-fit now; the preview content must stay
+     legible without reintroducing the clipped, over-zoomed mobile mock. */
+  zoom: 1.08;
 }
 
 .mobile-page-root .mp-wl-chrome,
@@ -906,7 +921,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 26px 11px 12px;
+  padding: 26px 16px 12px;
 }
 
 .mobile-page-root .mp-app-brand {
@@ -947,7 +962,7 @@
 .mobile-page-root .mp-scroll-region {
   flex: 1;
   overflow: hidden;
-  padding: 0 11px;
+  padding: 0 16px 16px;
 }
 
 .mobile-page-root .mp-greeting {
@@ -958,7 +973,7 @@
   color: var(--m-text-primary);
   font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .mobile-page-root .mp-stat-row {
@@ -979,7 +994,7 @@
   color: var(--m-text-primary);
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .mobile-page-root .mp-stat-label {
@@ -1610,7 +1625,7 @@
   color: var(--m-text-primary);
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .mobile-page-root .mp-session-meta-row {
@@ -1749,13 +1764,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.mobile-page-root .mp-accessory-content::-webkit-scrollbar {
-  display: none;
+  padding: 4px 7px;
+  overflow: hidden;
 }
 
 .mobile-page-root .mp-accessory-key {
@@ -1763,12 +1773,12 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  min-width: 36px;
-  padding: 4px 10px;
+  min-width: 24px;
+  padding: 4px 6px;
   border-radius: 6px;
   background: var(--m-bg-raised);
   color: var(--m-text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-family: var(--m-mono);
 }
 
@@ -1834,6 +1844,56 @@
 @media (max-width: 920px) {
   .mobile-page-root .mp-hero {
     grid-template-columns: 1fr;
-    padding: 56px 32px 48px;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    padding: 52px 28px 28px;
+  }
+
+  .mobile-page-root .mp-hero-copy {
+    min-height: 0;
+  }
+
+  .mobile-page-root .mp-h1 {
+    font-size: 44px;
+  }
+
+  .mobile-page-root .mp-stage {
+    height: min(420px, 42vh);
+  }
+
+  .mobile-page-root .mp-phone-frame {
+    width: min(290px, 100%);
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 921px) {
+  .mobile-page-root .mp-hero {
+    grid-template-columns: minmax(330px, 520px) minmax(280px, 360px);
+    gap: 40px;
+    padding: 52px 40px 40px;
+  }
+
+  .mobile-page-root .mp-h1 {
+    font-size: 52px;
+  }
+}
+
+@media (max-height: 840px) and (min-width: 921px) {
+  .mobile-page-root .mp-hero {
+    padding: 48px;
+  }
+
+  .mobile-page-root .mp-hero-copy {
+    min-height: 350px;
+  }
+
+  .mobile-page-root .mp-h1 {
+    font-size: 50px;
+  }
+
+  .mobile-page-root .mp-lead {
+    margin-bottom: 16px;
+    font-size: 17px;
   }
 }

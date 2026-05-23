@@ -115,10 +115,6 @@ export function TerminalSlide(): React.JSX.Element {
           <div className="mp-accessory-key">←</div>
           <div className="mp-accessory-key">→</div>
           <div className="mp-accessory-key">Ctrl+C</div>
-          <div className="mp-accessory-key">Ctrl+L</div>
-          <div className="mp-accessory-key is-icon is-add" aria-label="Add custom shortcut">
-            <PlusIcon />
-          </div>
         </div>
       </div>
 

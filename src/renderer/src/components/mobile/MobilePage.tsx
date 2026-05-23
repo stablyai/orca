@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
-import { X } from 'lucide-react'
+import { Eye, EyeOff, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -70,6 +70,8 @@ export default function MobilePage(): React.JSX.Element {
   // change while already in paired view.
   const lastStageRef = useRef<FlowStage | null>(null)
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
+  const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
 
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
     try {
@@ -334,6 +336,10 @@ export default function MobilePage(): React.JSX.Element {
     }
   }
 
+  const toggleMobileSidebarButton = useCallback(() => {
+    void updateSettings({ showMobileButton: !showMobileButton })
+  }, [showMobileButton, updateSettings])
+
   // Why: mirror Automations/Tasks — Esc first exits field focus, then closes the page.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -365,7 +371,7 @@ export default function MobilePage(): React.JSX.Element {
 
   return (
     <div className="mobile-page-root">
-      <div className="mp-close-button">
+      <div className="mp-page-toolbar">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -382,6 +388,15 @@ export default function MobilePage(): React.JSX.Element {
             Close · Esc
           </TooltipContent>
         </Tooltip>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-2 rounded-md bg-card px-3 text-xs font-medium shadow-xs"
+          onClick={toggleMobileSidebarButton}
+        >
+          {showMobileButton ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+          {showMobileButton ? 'Hide from sidebar' : 'Show in sidebar'}
+        </Button>
       </div>
       <section className="mp-hero">
         <div className="mp-hero-copy">

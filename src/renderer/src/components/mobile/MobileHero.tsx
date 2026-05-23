@@ -1,3 +1,4 @@
+import { Apple, ArrowLeft, ArrowRight, Copy, RefreshCw, Smartphone, Trash2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -35,10 +36,21 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
         Control Orca from your phone. Check on agents, review changes, and kick off tasks while
         you&apos;re away from your desk.
       </p>
+      <div className="mp-platform-badges" aria-label="Supported mobile platforms">
+        <span className="mp-platform-label">Available on</span>
+        <span className="mp-platform-badge">
+          <Apple className="size-4" aria-hidden />
+          iOS
+        </span>
+        <span className="mp-platform-badge">
+          <AndroidLogo />
+          Android
+        </span>
+      </div>
       <div className="mp-cta-row">
         <button type="button" className="mp-primary-action" onClick={onStart}>
           Get started
-          <ArrowRightIcon />
+          <ArrowRight className="size-3.5" />
         </button>
       </div>
     </div>
@@ -75,7 +87,7 @@ export function HeroPaired({
           return (
             <li key={device.deviceId} className="mp-paired-row">
               <div className="mp-paired-icon">
-                <PhoneSmallIcon />
+                <Smartphone className="size-4" />
               </div>
               <div className="mp-paired-main">
                 <div className="mp-paired-name">{device.name}</div>
@@ -91,15 +103,15 @@ export function HeroPaired({
                 aria-label={`Revoke ${device.name}`}
                 title="Revoke device"
               >
-                <TrashIcon />
+                <Trash2 className="size-3.5" />
               </button>
             </li>
           )
         })}
       </ul>
       <div className="mp-flow-actions">
-        <button type="button" className="mp-flow-back" onClick={onPairAnother}>
-          <ArrowLeftIcon />
+        <button type="button" className="mp-secondary-action" onClick={onPairAnother}>
+          <Smartphone className="size-3.5" />
           Pair another device
         </button>
         <span />
@@ -176,6 +188,7 @@ export function HeroFlow({
                   aria-pressed={platform === 'ios'}
                   onClick={() => onPlatformChange('ios')}
                 >
+                  <Apple className="size-3.5" aria-hidden />
                   iOS
                 </button>
                 <button
@@ -184,6 +197,7 @@ export function HeroFlow({
                   aria-pressed={platform === 'android'}
                   onClick={() => onPlatformChange('android')}
                 >
+                  <AndroidLogo />
                   Android
                 </button>
               </div>
@@ -192,7 +206,7 @@ export function HeroFlow({
                   {installCopy.ctaLabel}
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
-                  <CopyIcon />
+                  <Copy className="size-3.5" />
                   Copy install link
                 </button>
               </div>
@@ -245,7 +259,7 @@ export function HeroFlow({
                   aria-label="Refresh network interfaces"
                   title="Refresh network interfaces"
                 >
-                  <RefreshIcon />
+                  <RefreshCw className="size-3.5" />
                 </button>
               </div>
 
@@ -257,7 +271,7 @@ export function HeroFlow({
                   onClick={onCopyPairingCode}
                   disabled={!pairingUrl || pairLoading}
                 >
-                  <CopyIcon />
+                  <Copy className="size-3.5" />
                   Copy pairing code
                 </button>
               </div>
@@ -289,14 +303,14 @@ export function HeroFlow({
 
       <div className="mp-flow-actions">
         <button type="button" className="mp-flow-back" onClick={onBack}>
-          <ArrowLeftIcon />
+          <ArrowLeft className="size-3" />
           Back
         </button>
         {isLast ? (
           onDone ? (
             <button type="button" className="mp-primary-action" onClick={onDone}>
               Done
-              <ArrowRightIcon />
+              <ArrowRight className="size-3.5" />
             </button>
           ) : (
             <span />
@@ -304,7 +318,7 @@ export function HeroFlow({
         ) : (
           <button type="button" className="mp-flow-continue" onClick={onContinue}>
             Continue
-            <ArrowRightIcon />
+            <ArrowRight className="size-3.5" />
           </button>
         )}
       </div>
@@ -312,58 +326,26 @@ export function HeroFlow({
   )
 }
 
-function ArrowRightIcon(): React.JSX.Element {
+function AndroidLogo(): React.JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-      <path d="M5 12h14" />
-      <path d="m13 6 6 6-6 6" />
-    </svg>
-  )
-}
-
-function ArrowLeftIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  )
-}
-
-function CopyIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  )
-}
-
-function PhoneSmallIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <rect x="6" y="3" width="12" height="18" rx="2.5" />
-      <line x1="11" y1="18" x2="13" y2="18" />
-    </svg>
-  )
-}
-
-function TrashIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <path d="M3 6h18" />
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    </svg>
-  )
-}
-
-function RefreshIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 12a9 9 0 1 1-3-6.7" />
-      <path d="M21 4v5h-5" />
-      <path d="M3 12a9 9 0 0 0 15 6.7" />
-      <path d="M3 20v-5h5" />
+    <svg
+      className="size-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M7 9h10v7.5a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9Z" />
+      <path d="M9 5 7.5 2.8" />
+      <path d="m15 5 1.5-2.2" />
+      <path d="M8 9a4 4 0 0 1 8 0" />
+      <path d="M5 10v5" />
+      <path d="M19 10v5" />
+      <path d="M10 13h.01" />
+      <path d="M14 13h.01" />
     </svg>
   )
 }
