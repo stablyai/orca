@@ -45,7 +45,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         hosts.push(...current)
       }
 
-      const patterns = value.split(/\s+/)
+      const patterns = splitHostPatterns(value)
       const concretePatterns = patterns.filter(
         (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
       )
@@ -113,6 +113,52 @@ export function parseSshConfig(content: string): SshConfigHost[] {
     hosts.push(...current)
   }
   return hosts
+}
+
+function splitHostPatterns(input: string): string[] {
+  const patterns: string[] = []
+  let current = ''
+  let inQuotes = false
+  let escaped = false
+
+  for (const char of input) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+
+    if (inQuotes && char === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes
+      continue
+    }
+
+    // Why: multi-alias import must not turn OpenSSH inline comments into targets.
+    if (!inQuotes && char === '#') {
+      break
+    }
+
+    if (!inQuotes && /\s/.test(char)) {
+      if (current) {
+        patterns.push(current)
+        current = ''
+      }
+      continue
+    }
+
+    current += char
+  }
+
+  if (current) {
+    patterns.push(current)
+  }
+
+  return patterns
 }
 
 function resolveHomePath(filepath: string): string {
