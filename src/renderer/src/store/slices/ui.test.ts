@@ -2,7 +2,12 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { GitHubWorkItem, PersistedUIState, Worktree } from '../../../../shared/types'
+import type {
+  GitHubWorkItem,
+  PersistedUIState,
+  Worktree,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
@@ -180,7 +185,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
-  it('restores retired card properties during hydration', () => {
+  it('restores fixed card properties during hydration', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -189,14 +194,7 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment',
-      'inline-agents'
-    ])
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
   it('adds the default-on Ports status item once for older persisted UI', () => {
@@ -537,7 +535,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
 
-  it('keeps retired card properties enabled when toggling Agent activity', () => {
+  it('keeps fixed card properties when toggling Agent activity', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -545,7 +543,7 @@ describe('createUISlice hydratePersistedUI', () => {
     store.setState({ worktreeCardProperties: ['inline-agents'] })
     store.getState().toggleWorktreeCardProperty('inline-agents')
 
-    const expected = ['status', 'unread', 'issue', 'pr', 'comment']
+    const expected: WorktreeCardProperty[] = ['status', 'unread']
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })

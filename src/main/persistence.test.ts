@@ -1670,18 +1670,11 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
-  it('updateUI restores retired card properties from direct UI writes', async () => {
+  it('updateUI restores fixed card properties from direct UI writes', async () => {
     const store = await createStore()
     store.updateUI({ worktreeCardProperties: ['inline-agents'] })
 
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment',
-      'inline-agents'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
   it('persists updater reminder metadata in UI state', async () => {
@@ -2083,8 +2076,11 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
   it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
@@ -2108,7 +2104,10 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
   it('respects a deliberate post-migration uncheck', async () => {
@@ -2129,9 +2128,11 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
   })
 
-  it('leaves cardProps alone when inline-agents is already present', async () => {
+  it('adds split-out default card properties without duplicating inline-agents', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2154,10 +2155,12 @@ describe('Store', () => {
     const store = await createStore()
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
+    expect(props.filter((p) => p === 'linear-issue')).toHaveLength(1)
+    expect(props.filter((p) => p === 'ports')).toHaveLength(1)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('restores retired card properties when loading old user choices', async () => {
+  it('adds split-out default card properties when loading old user choices', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2174,14 +2177,12 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).toEqual([
       'status',
       'unread',
-      'issue',
-      'pr',
-      'comment',
+      'ports',
       'inline-agents'
     ])
   })
 
-  it('keeps Agent activity opt-out while restoring retired card properties', async () => {
+  it('keeps Agent activity opt-out while adding split-out default card properties', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2195,13 +2196,26 @@ describe('Store', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'ports'])
+  })
+
+  it('preserves deliberate Linear and Ports opt-outs after split-out migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).not.toContain('ports')
   })
 
   it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
@@ -2226,6 +2240,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
@@ -2249,6 +2265,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
   })
 
   it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
@@ -2272,6 +2290,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 

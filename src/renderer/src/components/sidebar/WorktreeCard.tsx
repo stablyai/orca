@@ -254,7 +254,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const showPR = cardProps.includes('pr')
   const showIssue = cardProps.includes('issue')
+  const showLinearIssue = cardProps.includes('linear-issue')
   const showComment = cardProps.includes('comment')
+  const showPorts = cardProps.includes('ports')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
@@ -331,7 +333,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
-    if (!worktree.linkedLinearIssue || !showIssue) {
+    if (!worktree.linkedLinearIssue || !showLinearIssue) {
       return
     }
     const linearIssueId = worktree.linkedLinearIssue
@@ -348,7 +350,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
     }
-  }, [worktree.linkedLinearIssue, fetchLinearIssue, showIssue])
+  }, [worktree.linkedLinearIssue, fetchLinearIssue, showLinearIssue])
 
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
@@ -478,7 +480,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
   const showUnreadEmphasis = cardProps.includes('unread') && worktree.isUnread
   const metaIssue = showIssue ? issueDisplay : null
-  const metaLinearIssue = showIssue ? linearIssueDisplay : null
+  const metaLinearIssue = showLinearIssue ? linearIssueDisplay : null
   const metaReview = showPR ? prDisplay : null
   const metaComment = showComment ? worktree.comment : null
   const handleOpenGitHubIssueInOrca = useCallback(
@@ -543,7 +545,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     review: metaReview,
     comment: metaComment
   })
-  const hasPorts = workspacePorts.length > 0
+  const hasPorts = showPorts && workspacePorts.length > 0
 
   const cardBody = (
     <div

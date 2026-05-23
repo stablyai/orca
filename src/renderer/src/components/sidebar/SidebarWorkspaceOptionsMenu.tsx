@@ -35,6 +35,11 @@ const GROUP_BY_OPTIONS = [
 ] as const
 
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
+  { id: 'issue', label: 'GitHub ticket' },
+  { id: 'linear-issue', label: 'Linear issue' },
+  { id: 'pr', label: 'PR/MR link' },
+  { id: 'comment', label: 'Notes' },
+  { id: 'ports', label: 'Ports' },
   // Why: toggles the inline "Agent activity" list rendered below each
   // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
   // the list; there is no alternate surface.

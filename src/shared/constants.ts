@@ -19,7 +19,6 @@ import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
-  ALWAYS_VISIBLE_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'

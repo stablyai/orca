@@ -12,8 +12,10 @@ const WorktreeCardProperty = z.enum([
   'unread',
   'ci',
   'issue',
+  'linear-issue',
   'pr',
   'comment',
+  'ports',
   'inline-agents'
 ])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])

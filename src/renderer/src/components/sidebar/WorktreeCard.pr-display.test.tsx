@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
@@ -12,6 +13,7 @@ const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['pr']
 let hostedReviewCache: Record<string, unknown> = {}
+let workspacePortScan: WorkspacePortScanResult | null = null
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -30,6 +32,7 @@ vi.mock('@/store', () => ({
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       updateWorktreeMeta,
+      workspacePortScan,
       worktreeCardProperties
     })
 }))
@@ -123,6 +126,7 @@ describe('WorktreeCard linked PR display', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['pr']
     hostedReviewCache = {}
+    workspacePortScan = null
   })
 
   it('keeps an icon-only linked GH PR badge visible before hosted review details are cached', async () => {
@@ -137,7 +141,7 @@ describe('WorktreeCard linked PR display', () => {
   })
 
   it('renders issue, Linear issue, PR, and notes as icon-only metadata in the closed card', async () => {
-    worktreeCardProperties = ['issue', 'pr', 'comment']
+    worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -162,6 +166,67 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
     expect(markup.indexOf('Workspace notes')).toBeLessThan(markup.indexOf('Linked issue #123'))
+  })
+
+  it('hides individual metadata surfaces when their card properties are disabled', async () => {
+    worktreeCardProperties = []
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          linkedIssue: 123,
+          linkedLinearIssue: 'ENG-123',
+          linkedPR: 456,
+          comment: 'Reviewer handoff note'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked issue #123')
+    expect(markup).not.toContain('Linked Linear ENG-123')
+    expect(markup).not.toContain('Linked PR #456')
+    expect(markup).not.toContain('Workspace notes')
+    expect(markup).not.toContain('Reviewer handoff note')
+  })
+
+  it('hides live port metadata when the Ports card property is disabled', async () => {
+    const worktree = makeWorktree()
+    workspacePortScan = {
+      platform: 'darwin',
+      scannedAt: 1,
+      ports: [
+        {
+          id: '127.0.0.1:58941:1234',
+          bindHost: '127.0.0.1',
+          connectHost: '127.0.0.1',
+          port: 58941,
+          pid: 1234,
+          processName: 'node',
+          protocol: 'http',
+          kind: 'workspace',
+          owner: {
+            worktreeId: worktree.id,
+            repoId: worktree.repoId,
+            displayName: worktree.displayName,
+            path: worktree.path,
+            confidence: 'cwd'
+          }
+        }
+      ]
+    }
+    worktreeCardProperties = []
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('live port')
+    expect(markup).not.toContain('Live Ports')
+    expect(markup).not.toContain('58941')
   })
 
   it('does not render the standalone CI badge and colors a failing linked PR icon red', async () => {

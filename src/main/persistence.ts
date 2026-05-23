@@ -1585,6 +1585,8 @@ export class Store {
             // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const expandedCardPropsMigrated =
+              parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
             const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
             const deliberateUncheck =
               hadExperimentOn &&
@@ -1602,16 +1604,33 @@ export class Store {
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
                 : rawCardProps
-              // Why: only Agent activity remains configurable; older hidden
-              // card fields must be restored because users can no longer
-              // toggle them back on from the sidebar menu.
-              const normalized = normalizeWorktreeCardProperties(candidate)
+              const expandedCandidate = (() => {
+                if (expandedCardPropsMigrated) {
+                  return candidate
+                }
+                const next = [...candidate]
+                // Why: Linear used to be controlled by the generic issue
+                // property and Ports were always visible. Add the split-out
+                // properties once so existing cards keep their prior surface.
+                if (candidate.includes('issue') && !candidate.includes('linear-issue')) {
+                  next.push('linear-issue' as const)
+                }
+                if (!candidate.includes('ports')) {
+                  next.push('ports' as const)
+                }
+                return next
+              })()
+              const normalized = normalizeWorktreeCardProperties(expandedCandidate)
               const changed =
                 normalized.length !== rawCardProps.length ||
                 normalized.some((property, index) => property !== rawCardProps[index])
               return changed ? normalized : undefined
             })()
-            if (migratedCardProps !== undefined || !inlineAgentsMigrated) {
+            if (
+              migratedCardProps !== undefined ||
+              !inlineAgentsMigrated ||
+              !expandedCardPropsMigrated
+            ) {
               this.loadNeedsSave = true
             }
             return {
@@ -1630,7 +1649,8 @@ export class Store {
               // a rollback to a pre-default-on build that still reads it.
               // The new flag is the one that actually gates the migration.
               _inlineAgentsDefaultedForExperiment: true,
-              _inlineAgentsDefaultedForAllUsers: true
+              _inlineAgentsDefaultedForAllUsers: true,
+              _expandedWorktreeCardPropertiesDefaulted: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
