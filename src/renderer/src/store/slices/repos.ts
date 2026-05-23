@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
@@ -28,6 +29,19 @@ type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
   >
 >
+
+function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
+  const sanitized = { ...updates }
+  if ('repoIcon' in sanitized) {
+    const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
+    if (repoIcon === undefined) {
+      delete sanitized.repoIcon
+    } else {
+      sanitized.repoIcon = repoIcon
+    }
+  }
+  return sanitized
+}
 
 const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
 
@@ -345,12 +359,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const updateRepoChains = getRepoUpdateChains(get)
     const applyRepoUpdate = async () => {
       try {
+        const sanitizedUpdates = sanitizeRepoUpdate(updates)
         const target = getActiveRuntimeTarget(get().settings)
         await (target.kind === 'local'
-          ? window.api.repos.update({ repoId, updates })
-          : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
+          ? window.api.repos.update({ repoId, updates: sanitizedUpdates })
+          : callRuntimeRpc(
+              target,
+              'repo.update',
+              { repo: repoId, updates: sanitizedUpdates },
+              { timeoutMs: 15_000 }
+            ))
         set((s) => ({
-          repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
+          repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...sanitizedUpdates } : r))
         }))
         return true
       } catch (err) {
