@@ -32,6 +32,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitError: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    isFixingCommitFailureWithAI: false,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -45,6 +46,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
+    onFixCommitFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
