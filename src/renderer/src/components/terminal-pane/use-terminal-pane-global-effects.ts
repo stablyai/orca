@@ -17,6 +17,7 @@ import { useAppStore } from '@/store'
 import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
+import { pasteTerminalText } from './terminal-bracketed-paste'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -178,7 +179,7 @@ export function useTerminalPaneGlobalEffects({
       if (!pane) {
         return
       }
-      pane.terminal.paste(detail.text)
+      pasteTerminalText(pane.terminal, detail.text)
       pane.terminal.focus()
     }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)

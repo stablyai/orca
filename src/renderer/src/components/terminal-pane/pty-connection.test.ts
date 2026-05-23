@@ -218,7 +218,14 @@ function createPane(paneId: number) {
     terminal: {
       cols: 120,
       rows: 40,
+      modes: {
+        bracketedPasteMode: false
+      },
+      options: {
+        ignoreBracketedPasteMode: false
+      },
       write: vi.fn(),
+      paste: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onResize: vi.fn(() => ({ dispose: vi.fn() })),
       onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
@@ -777,6 +784,35 @@ describe('connectPanePty', () => {
       baselineAgentType: 'codex',
       intent: 'ctrl-c'
     })
+  })
+
+  it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { pasteTerminalText } = await import('./terminal-bracketed-paste')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    pane.terminal.modes.bracketedPasteMode = true
+    const observedIgnoreValues: (boolean | undefined)[] = []
+    pane.terminal.paste.mockImplementation(() => {
+      observedIgnoreValues.push(pane.terminal.options.ignoreBracketedPasteMode)
+    })
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as unknown as (data: string) => void)('\x03')
+    await flushAsyncTicks()
+    pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
+
+    expect(observedIgnoreValues).toEqual([true])
+    expect(pane.terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
   it('infers captured Ctrl+C even when xterm emits an enhanced keyboard sequence', async () => {

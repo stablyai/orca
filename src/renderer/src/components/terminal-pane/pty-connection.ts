@@ -47,6 +47,10 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import {
+  markTerminalBracketedPasteInterrupted,
+  observeTerminalBracketedPasteModeOutput
+} from './terminal-bracketed-paste'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -390,6 +394,14 @@ export function connectPanePty(
     if (intent && inputMatchesIntent(intent, data)) {
       interruptInference.observeInputIntent(intent)
       observeTitleOnlyInterrupt()
+    }
+  }
+  const observeAcceptedTerminalInput = (
+    data: string,
+    intent: AgentInterruptInputIntent | null = null
+  ): void => {
+    if (intent === 'ctrl-c' || data === '\x03') {
+      markTerminalBracketedPasteInterrupted(pane.terminal)
     }
   }
   let pendingTerminalInputWrite: Promise<void> | null = null
@@ -914,6 +926,7 @@ export function connectPanePty(
         .sendInputAccepted(data)
         .then((accepted) => {
           if (accepted) {
+            observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
           }
@@ -925,11 +938,14 @@ export function connectPanePty(
       return
     }
     if (intent) {
-      transport.sendInput(data)
+      if (transport.sendInput(data)) {
+        observeAcceptedTerminalInput(data, intent)
+      }
       clearPendingTerminalInputIntent()
       return
     }
     if (transport.sendInput(data)) {
+      observeAcceptedTerminalInput(data)
       observeSentTerminalInputIntent(data)
     } else {
       clearPendingTerminalInputIntent()
@@ -1170,6 +1186,7 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
+      observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       commandLifecycle.handlePtyData(data)
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only
