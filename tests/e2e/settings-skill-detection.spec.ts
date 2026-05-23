@@ -107,7 +107,7 @@ test.describe('Settings skill detection', () => {
 
     await expect(section.getByText('Not installed', { exact: true })).toBeVisible()
     await expect(
-      section.getByText('Install this so agents can hand off context', { exact: false })
+      section.getByText('Enables agents to hand off context and coordinate work through Orca.')
     ).toBeVisible()
 
     await setMockSkillDiscovery(
@@ -118,9 +118,7 @@ test.describe('Settings skill detection', () => {
 
     await expect(section.getByText('Installed', { exact: true })).toBeVisible()
     await expect(
-      section.getByText(
-        'Agents can hand off context, ask questions, and coordinate work through Orca.'
-      )
+      section.getByText('Enables agents to hand off context and coordinate work through Orca.')
     ).toBeVisible()
   })
 })

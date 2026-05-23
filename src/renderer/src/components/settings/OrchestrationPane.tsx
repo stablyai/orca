@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Workflow } from 'lucide-react'
 import { Label } from '../ui/label'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -54,10 +57,6 @@ export function OrchestrationPane(): React.JSX.Element {
     notifyOrchestrationSetupStateChanged()
   }
 
-  const handleRecheckOrchestrationSkill = async (): Promise<void> => {
-    await refreshOrchestrationSkill()
-  }
-
   if (!showOrchestration) {
     return <div />
   }
@@ -96,21 +95,20 @@ export function OrchestrationPane(): React.JSX.Element {
       {orchestrationEnabled ? (
         <AgentSkillSetupPanel
           title="Orchestration skill"
-          detectedDescription="Agents can hand off context, ask questions, and coordinate work through Orca."
-          missingDescription="Install this so agents can hand off context, ask questions, and coordinate work through Orca. If you already installed it, click Re-check instead of running the installer again."
+          description="Enables agents to hand off context and coordinate work through Orca."
           command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
           terminalTitle="Orchestration setup"
           terminalAriaLabel="Orchestration skill install terminal"
           terminalWorktreeId="settings-orchestration-skill-terminal"
           installed={orchestrationSkillDetected}
-          detected={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={orchestrationSkillError}
           icon={<Workflow className="size-5" />}
+          preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
           onBeforeOpenTerminal={async () => {
             await ensureOrcaCliAvailableForAgentSkillTerminal()
           }}
-          onRecheck={handleRecheckOrchestrationSkill}
+          onRecheck={refreshOrchestrationSkill}
         />
       ) : null}
     </SearchableSetting>

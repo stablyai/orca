@@ -6,7 +6,10 @@ import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
-import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -226,16 +229,15 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               className="mt-3"
               variant="inline"
               title="CLI skill"
-              detectedDescription="Agents can inspect Orca workspaces, open terminals, and report progress from the command line."
-              missingDescription="Install this so agents can inspect Orca workspaces, open terminals, and report progress from the command line. If you already installed it, click Re-check instead of running the installer again."
+              description="Enables agents to use Orca workspace, terminal, and progress commands."
               command={ORCA_CLI_SKILL_INSTALL_COMMAND}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
               terminalWorktreeId="settings-cli-skill-terminal"
               installed={cliSkillDetected}
-              detected={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
+              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
               onBeforeOpenTerminal={async () => {
                 await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setStatus })
               }}

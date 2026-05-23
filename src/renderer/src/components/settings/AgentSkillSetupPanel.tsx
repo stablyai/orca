@@ -3,20 +3,19 @@ import { Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
 
 type AgentSkillSetupPanelProps = {
   title: string
-  detectedDescription: string
-  missingDescription: string
+  description: ReactNode
   command: string
   terminalTitle: string
   terminalAriaLabel: string
   terminalWorktreeId: string
   installed: boolean
-  detected: boolean
   loading: boolean
   error: string | null
   installDisabled?: boolean
@@ -25,6 +24,7 @@ type AgentSkillSetupPanelProps = {
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant
   className?: string
+  preInstallNotice?: ReactNode
   onBeforeOpenTerminal?: () => void | Promise<void>
   showRecheckWhenInstalled?: boolean
   onRecheck: () => void | Promise<void>
@@ -32,14 +32,12 @@ type AgentSkillSetupPanelProps = {
 
 export function AgentSkillSetupPanel({
   title,
-  detectedDescription,
-  missingDescription,
+  description,
   command,
   terminalTitle,
   terminalAriaLabel,
   terminalWorktreeId,
   installed,
-  detected,
   loading,
   error,
   installDisabled = false,
@@ -48,11 +46,13 @@ export function AgentSkillSetupPanel({
   icon,
   variant = 'card',
   className,
+  preInstallNotice,
   onBeforeOpenTerminal,
   showRecheckWhenInstalled = true,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
 
   useEffect(() => {
     if (installed) {
@@ -60,7 +60,45 @@ export function AgentSkillSetupPanel({
     }
   }, [installed])
 
-  const body = detected ? detectedDescription : missingDescription
+  useEffect(() => {
+    if (!preInstallNotice) {
+      setPreInstallNoticeVisible(false)
+      return
+    }
+
+    let canceled = false
+    const refreshCliNotice = async (): Promise<void> => {
+      try {
+        const status = await window.api.cli.getInstallStatus()
+        if (!canceled) {
+          setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+        }
+      } catch {
+        if (!canceled) {
+          setPreInstallNoticeVisible(true)
+        }
+      }
+    }
+
+    void refreshCliNotice()
+    window.addEventListener('focus', refreshCliNotice)
+    return () => {
+      canceled = true
+      window.removeEventListener('focus', refreshCliNotice)
+    }
+  }, [preInstallNotice])
+
+  const refreshPreInstallNotice = async (): Promise<void> => {
+    if (!preInstallNotice) {
+      return
+    }
+    try {
+      const status = await window.api.cli.getInstallStatus()
+      setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+    } catch {
+      setPreInstallNoticeVisible(true)
+    }
+  }
 
   return (
     <div
@@ -69,70 +107,81 @@ export function AgentSkillSetupPanel({
         className
       )}
     >
-      <div className={cn('flex items-start gap-4', variant === 'card' ? 'p-5' : null)}>
-        {leading}
-        {icon ? (
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-            {icon}
-          </div>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
-            {loading && !installed ? (
-              <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
-            ) : installed ? (
-              <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
-            ) : (
-              <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
-            )}
-          </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{body}</p>
-          {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!installed ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void (async () => {
-                  try {
-                    await onBeforeOpenTerminal?.()
-                  } finally {
-                    setTerminalOpen(true)
-                  }
-                })()
-              }}
-              disabled={terminalOpen || installDisabled}
-            >
-              <Terminal className="size-3.5" />
-              Install
-            </Button>
+      <div
+        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : undefined}
+      >
+        <div className="flex items-center gap-4">
+          {leading}
+          {icon ? (
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+              {icon}
+            </div>
           ) : null}
-          {!installed || showRecheckWhenInstalled ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => void onRecheck()}
-              disabled={loading}
-            >
-              Re-check
-            </Button>
+          <div className="min-w-0 flex-1 self-center">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
+              {loading && !installed ? (
+                <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
+              ) : installed ? (
+                <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+              ) : (
+                <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
+              )}
+            </div>
+            {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {!installed ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await onBeforeOpenTerminal?.()
+                      await refreshPreInstallNotice()
+                    } finally {
+                      setTerminalOpen(true)
+                    }
+                  })()
+                }}
+                disabled={terminalOpen || installDisabled}
+              >
+                <Terminal className="size-3.5" />
+                Install
+              </Button>
+            ) : null}
+            {!installed || showRecheckWhenInstalled ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void onRecheck()}
+                disabled={loading}
+              >
+                Re-check
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-3 max-w-none space-y-1.5">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+          {!installed && preInstallNotice && preInstallNoticeVisible ? (
+            <p className="text-[12px] leading-relaxed text-muted-foreground">{preInstallNotice}</p>
           ) : null}
         </div>
       </div>
       {!installed && terminalOpen ? (
-        <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-3')}>
+        <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-2')}>
           <OnboardingInlineCommandTerminal
             worktreeId={terminalWorktreeId}
             command={command}
             title={terminalTitle}
             ariaLabel={terminalAriaLabel}
-            description="Press Enter to run the installer. If you already installed this skill, skip this terminal and click Re-check instead."
             terminalHeightPx={terminalHeightPx}
+            terminalTopMarginPx={0}
+            autoScrollIntoView={false}
           />
         </div>
       ) : null}

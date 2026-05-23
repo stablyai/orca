@@ -1522,6 +1522,509 @@
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
 }
 
+/* ── Feature tour nudge: cycling preview ─────────────────────────── */
+
+/* Why: the bottom-right nudge cycles through 4 silhouette frames
+   (Workspace → Orchestration → Tasks → Terminal). Each frame is visible for
+   1/4 of the cycle. Holding fade-out late (24%–25%) gives the user dwell
+   time on the resolved state before swapping. Uses CSS-driven timing rather
+   than React state so we stay cheap when the popup is mounted but idle. */
+:root {
+  --feature-tour-cycle: 16s;
+}
+
+.feature-tour-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-frame[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-frame[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-frame[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-frame[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+@keyframes feature-tour-frame-fade {
+  0% {
+    opacity: 0;
+  }
+  1.5% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.feature-tour-copy-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-copy-slide[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-copy-slide[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-copy-slide[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-copy-slide[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+.feature-tour-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  animation: feature-tour-dot-pulse var(--feature-tour-cycle) linear infinite;
+}
+.feature-tour-dot[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-dot[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-dot[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-dot[data-frame='4'] {
+  animation-delay: 12s;
+}
+@keyframes feature-tour-dot-pulse {
+  0%,
+  24% {
+    background: var(--primary);
+    transform: scale(1.05);
+  }
+  25%,
+  100% {
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+    transform: scale(1);
+  }
+}
+
+/* Frame 1 — Workspace: agent-state dot pulses while a "fix login race"
+   workspace shows two agent rows working in parallel. */
+.feature-tour-ws-status {
+  animation: feature-tour-status-pulse 1.6s ease-in-out infinite;
+}
+@keyframes feature-tour-status-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+/* Frame 2 — Orchestration: child cards flash as bubbles land along the
+   dashed paths fanning down from the coordinator. */
+.feature-tour-orch-bubble {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  offset-rotate: 0deg;
+  z-index: 4;
+  animation: feature-tour-orch-travel var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+}
+.feature-tour-orch-bubble.left {
+  offset-path: path('M 168 36 C 132 56, 102 66, 72 86');
+  offset-anchor: center;
+  animation-delay: 4s;
+}
+.feature-tour-orch-bubble.right {
+  offset-path: path('M 168 36 C 204 56, 234 66, 264 86');
+  offset-anchor: center;
+  animation-delay: 4s;
+}
+.feature-tour-orch-bubble.left.b2 {
+  animation-delay: calc(4s + 0.55s);
+}
+.feature-tour-orch-bubble.right.b2 {
+  animation-delay: calc(4s + 0.75s);
+}
+@keyframes feature-tour-orch-travel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  2% {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+  6.5% {
+    offset-distance: 100%;
+    opacity: 1;
+  }
+  7.5% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+.feature-tour-orch-child {
+  animation: feature-tour-orch-child-flash var(--feature-tour-cycle) linear infinite;
+  animation-delay: 4s;
+}
+.feature-tour-orch-child.right {
+  animation-delay: calc(4s + 0.2s);
+}
+@keyframes feature-tour-orch-child-flash {
+  0%,
+  6% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  7% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+  9% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  25%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+}
+
+/* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
+   to a dark "Start workspace →" pill, then a workspace card slides in. */
+.feature-tour-tasks-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 8;
+  transform: translate(20px, 8px);
+  opacity: 0;
+  animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
+    infinite;
+  animation-delay: 8s;
+}
+.feature-tour-tasks-cursor svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+@keyframes feature-tour-tasks-cursor {
+  0% {
+    transform: translate(20px, 8px);
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  5% {
+    transform: translate(120px, 60px);
+    opacity: 1;
+  }
+  8% {
+    transform: translate(238px, 60px);
+    opacity: 1;
+  }
+  23.5% {
+    transform: translate(238px, 60px);
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    transform: translate(238px, 60px);
+    opacity: 0;
+  }
+}
+
+.feature-tour-tasks-row {
+  animation: feature-tour-tasks-row-hover var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-row-hover {
+  0%,
+  4% {
+    background: transparent;
+    box-shadow: none;
+  }
+  6% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  23.5% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  25%,
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.feature-tour-tasks-pill {
+  animation: feature-tour-tasks-pill-morph var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-morph {
+  0%,
+  6% {
+    width: 36px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+  }
+  8% {
+    width: 110px;
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  23.5% {
+    width: 110px;
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  25%,
+  100% {
+    width: 36px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+  }
+}
+
+.feature-tour-tasks-pill-label {
+  opacity: 0;
+  animation: feature-tour-tasks-pill-label var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-label {
+  0%,
+  7% {
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  23.5% {
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Click ring fires when the cursor "clicks" the morphed pill on the tasks
+   row. Positioned to overlay the right-side pill of the second task. */
+.feature-tour-tasks-click-ring {
+  position: absolute;
+  right: 14px;
+  top: 50px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  opacity: 0;
+  z-index: 7;
+  pointer-events: none;
+  animation: feature-tour-tasks-click-ring var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-click-ring {
+  0%,
+  7% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  8% {
+    opacity: 0.85;
+    transform: scale(0.6);
+  }
+  10% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* Newly-created workspace card slides in beneath the task row once the
+   user clicks "Start workspace" — sells the "task → workspace" jump. */
+.feature-tour-tasks-workspace {
+  opacity: 0;
+  transform: translateY(-6px);
+  animation: feature-tour-tasks-workspace var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-workspace {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Frame 4 — Terminal: caret blinks while a command types out, then output
+   bars stream in beneath it. */
+.feature-tour-terminal-line {
+  width: 0;
+  animation: feature-tour-terminal-type var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: 12s;
+}
+@keyframes feature-tour-terminal-type {
+  0%,
+  3% {
+    width: 0;
+  }
+  9% {
+    width: 70%;
+  }
+  23.5% {
+    width: 70%;
+  }
+  25%,
+  100% {
+    width: 70%;
+  }
+}
+
+.feature-tour-terminal-caret {
+  animation: feature-tour-terminal-caret-blink 0.9s steps(1) infinite;
+}
+@keyframes feature-tour-terminal-caret-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.feature-tour-terminal-output {
+  opacity: 0;
+  transform: translateY(2px);
+  animation: feature-tour-terminal-output var(--feature-tour-cycle) linear infinite;
+  animation-delay: 12s;
+}
+.feature-tour-terminal-output[data-line='1'] {
+  animation-delay: calc(12s + 0.05s);
+}
+.feature-tour-terminal-output[data-line='2'] {
+  animation-delay: calc(12s + 0.25s);
+}
+.feature-tour-terminal-output[data-line='3'] {
+  animation-delay: calc(12s + 0.45s);
+}
+@keyframes feature-tour-terminal-output {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-tour-frame,
+  .feature-tour-copy-slide,
+  .feature-tour-dot,
+  .feature-tour-ws-status,
+  .feature-tour-orch-bubble,
+  .feature-tour-orch-child,
+  .feature-tour-tasks-cursor,
+  .feature-tour-tasks-row,
+  .feature-tour-tasks-pill,
+  .feature-tour-tasks-pill-label,
+  .feature-tour-tasks-click-ring,
+  .feature-tour-tasks-workspace,
+  .feature-tour-terminal-line,
+  .feature-tour-terminal-caret,
+  .feature-tour-terminal-output {
+    animation: none !important;
+  }
+  .feature-tour-frame[data-frame='1'],
+  .feature-tour-copy-slide[data-frame='1'] {
+    opacity: 1;
+  }
+  .feature-tour-dot[data-frame='1'] {
+    background: var(--primary);
+  }
+}
+
 /* ── Diff comment decorations ────────────────────────────────────── */
 
 /* Why: the "+" button is appended into Monaco's editor DOM node by

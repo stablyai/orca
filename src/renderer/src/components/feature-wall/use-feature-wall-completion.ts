@@ -47,7 +47,7 @@ export function getFeatureWallCompletionProgress(input: {
   isCheckingTaskSources: boolean
   hasUsageAccount: boolean
   orchestrationSkillInstalled: boolean
-  notificationsConfigured: boolean
+  browserUseSkillInstalled: boolean
   githubConfigured: boolean
   aiCommitPrConfigured: boolean
 }): FeatureWallCompletionProgress {
@@ -61,19 +61,17 @@ export function getFeatureWallCompletionProgress(input: {
   const usageDone = input.visitedAgentSteps.has('usage') && input.hasUsageAccount
   const orchestrationDone =
     input.visitedAgentSteps.has('orchestration') && input.orchestrationSkillInstalled
-  const notificationsDone =
-    input.visitedAgentSteps.has('notifications') && input.notificationsConfigured
   // Why: the keep-awake setting surfaced on Visibility is optional; viewing
   // the step should complete the tour item even when the setting stays off.
   const statusesDone = input.visitedAgentSteps.has('statuses')
 
-  const agentsWorkflowDone =
-    agentsVisited && usageDone && orchestrationDone && notificationsDone && statusesDone
+  const agentsWorkflowDone = agentsVisited && usageDone && orchestrationDone && statusesDone
   // Workbench is "done" once the user has viewed every sub-step — same shape
-  // as agents but each step is purely informational (no setup gate).
+  // as agents, with Browser gated by the Browser Use skill.
   const workbenchTerminalDone = input.visitedWorkbenchSteps.has('terminal')
   const workbenchEditorDone = input.visitedWorkbenchSteps.has('editor')
-  const workbenchBrowserDone = input.visitedWorkbenchSteps.has('browser')
+  const workbenchBrowserDone =
+    input.visitedWorkbenchSteps.has('browser') && input.browserUseSkillInstalled
   const workbenchAllStepsDone =
     workbenchVisited && workbenchTerminalDone && workbenchEditorDone && workbenchBrowserDone
   // Review mixes informational and setup-backed steps, but every checked state
@@ -94,8 +92,7 @@ export function getFeatureWallCompletionProgress(input: {
     agentStepDone: {
       statuses: statusesDone,
       usage: usageDone,
-      orchestration: orchestrationDone,
-      notifications: notificationsDone
+      orchestration: orchestrationDone
     },
     workbenchStepDone: {
       terminal: workbenchTerminalDone,
@@ -114,14 +111,13 @@ export function useFeatureWallCompletion(
   isOpen: boolean,
   hasConnectedTaskSource: boolean,
   isCheckingTaskSources: boolean,
-  orchestrationSkillInstalled: boolean
+  orchestrationSkillInstalled: boolean,
+  browserUseSkillInstalled: boolean
 ): FeatureWallCompletionState {
   const settings = useAppStore((s) => s.settings)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const rateLimits = useAppStore((s) => s.rateLimits)
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
-  const notificationsConfigured =
-    settings?.notifications.enabled === true && settings?.notifications.agentTaskComplete === true
   const githubConfigured =
     preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true
   const commitMessageAi = settings?.commitMessageAi
@@ -209,7 +205,7 @@ export function useFeatureWallCompletion(
     }
   }, [isOpen, readUsageAccountState])
 
-  const markWorkflowVisited = (id: FeatureWallWorkflowId): void => {
+  const markWorkflowVisited = useCallback((id: FeatureWallWorkflowId): void => {
     persistVisitedWorkflow(id)
     setVisitedWorkflows((prev) => {
       if (prev.has(id)) {
@@ -219,8 +215,8 @@ export function useFeatureWallCompletion(
       next.add(id)
       return next
     })
-  }
-  const markAgentStepVisited = (id: AgentsStepId): void => {
+  }, [])
+  const markAgentStepVisited = useCallback((id: AgentsStepId): void => {
     persistVisitedAgentStep(id)
     setVisitedAgentSteps((prev) => {
       if (prev.has(id)) {
@@ -230,8 +226,8 @@ export function useFeatureWallCompletion(
       next.add(id)
       return next
     })
-  }
-  const markWorkbenchStepVisited = (id: WorkbenchStepId): void => {
+  }, [])
+  const markWorkbenchStepVisited = useCallback((id: WorkbenchStepId): void => {
     persistVisitedWorkbenchStep(id)
     setVisitedWorkbenchSteps((prev) => {
       if (prev.has(id)) {
@@ -241,8 +237,8 @@ export function useFeatureWallCompletion(
       next.add(id)
       return next
     })
-  }
-  const markReviewStepVisited = (id: ReviewStepId): void => {
+  }, [])
+  const markReviewStepVisited = useCallback((id: ReviewStepId): void => {
     persistVisitedReviewStep(id)
     setVisitedReviewSteps((prev) => {
       if (prev.has(id)) {
@@ -252,7 +248,7 @@ export function useFeatureWallCompletion(
       next.add(id)
       return next
     })
-  }
+  }, [])
 
   const { workflowDone, agentStepDone, workbenchStepDone, reviewStepDone } =
     getFeatureWallCompletionProgress({
@@ -264,7 +260,7 @@ export function useFeatureWallCompletion(
       isCheckingTaskSources,
       hasUsageAccount,
       orchestrationSkillInstalled,
-      notificationsConfigured,
+      browserUseSkillInstalled,
       githubConfigured,
       aiCommitPrConfigured
     })

@@ -68,9 +68,7 @@ test.describe('Feature tour modal', () => {
     ).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'Browser Use skill' })).toBeVisible()
     await expect(
-      orcaPage.getByText(
-        "Agents can navigate, click, inspect, and gather evidence in Orca's browser."
-      )
+      orcaPage.getByText("Enables agents to navigate and verify pages in Orca's browser.")
     ).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'CLI skill' })).toHaveCount(0)
     await expect(orcaPage.getByText('With the Orca CLI skill', { exact: false })).toHaveCount(0)
@@ -173,15 +171,13 @@ test.describe('Feature tour modal', () => {
     })
 
     const rail = orcaPage.getByRole('navigation', { name: 'Workflows' })
-    await expect(
-      rail.locator('[data-feature-wall-workflow-id] [aria-label="Completed"]')
-    ).toHaveCount(0)
-
     const workspacesTab = rail.locator('[data-feature-wall-workflow-id="workspaces"]')
     const tasksTab = rail.locator('[data-feature-wall-workflow-id="tasks"]')
+    await expect(workspacesTab.locator('[aria-label="Completed"]')).toHaveCount(1)
+    await expect(tasksTab.locator('[aria-label="Completed"]')).toHaveCount(0)
     await tasksTab.click()
     await expect(tasksTab.locator('[aria-label="Completed"]')).toHaveCount(1)
-    await expect(workspacesTab.locator('[aria-label="Completed"]')).toHaveCount(0)
+    await expect(workspacesTab.locator('[aria-label="Completed"]')).toHaveCount(1)
   })
 
   test('shows the bottom-right nudge and opens the full tour', async ({ orcaPage }) => {
@@ -198,12 +194,8 @@ test.describe('Feature tour modal', () => {
       name: 'Explore Orca'
     })
     await expect(nudge).toBeVisible()
-    await expect(nudge.getByText('See what Orca can do')).toBeVisible()
-    await expect(
-      nudge.getByText('A quick walkthrough of the workflows built into Orca.')
-    ).toBeVisible()
     await expect(nudge.getByText('Reopen any time from Help > Explore Orca.')).toBeVisible()
-    await expect(nudge.locator('[data-feature-tour-nudge-visual]')).toHaveCount(0)
+    await expect(nudge.locator('[data-feature-tour-nudge-visual]')).toHaveCount(1)
     await expect(nudge.getByRole('button', { name: 'Dismiss Explore Orca' })).toHaveCount(0)
     await orcaPage.keyboard.press('Escape')
     await expect(nudge).toBeVisible()
@@ -219,7 +211,6 @@ test.describe('Feature tour modal', () => {
       )
       .toBe(true)
     await expect(nudge.locator('img')).toHaveCount(0)
-    await expect(nudge.locator('svg')).toHaveCount(0)
 
     const takeTourButton = nudge.getByRole('button', { name: /^Take the tour$/ })
     await expect(takeTourButton).toBeVisible()

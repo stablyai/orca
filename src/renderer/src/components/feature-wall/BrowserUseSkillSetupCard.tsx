@@ -1,9 +1,12 @@
-import { type JSX } from 'react'
+import { useEffect, type JSX } from 'react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
-import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -14,8 +17,9 @@ import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel
 export function BrowserUseSkillSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
+  onInstalledChange?: (installed: boolean) => void
 }): JSX.Element {
-  const { compact, terminalHeightPx } = props
+  const { compact, terminalHeightPx, onInstalledChange } = props
   const {
     installed: skillInstalled,
     loading: skillLoading,
@@ -24,6 +28,10 @@ export function BrowserUseSkillSetupCard(props: {
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
+  useEffect(() => {
+    onInstalledChange?.(skillInstalled)
+  }, [onInstalledChange, skillInstalled])
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
     await ensureOrcaCliAvailableForAgentSkillTerminal()
@@ -34,17 +42,16 @@ export function BrowserUseSkillSetupCard(props: {
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
       title="Browser Use skill"
-      detectedDescription="Agents can navigate, click, inspect, and gather evidence in Orca's browser."
-      missingDescription="Install this so agents can navigate, click, inspect, and gather evidence in Orca's browser. If you already installed it, click Re-check instead of running the installer again."
+      description="Enables agents to navigate and verify pages in Orca's browser."
       command={ORCA_CLI_SKILL_INSTALL_COMMAND}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="feature-wall-browser-use-skill-terminal"
       installed={skillInstalled}
-      detected={skillInstalled}
       loading={skillLoading}
       error={skillError}
       terminalHeightPx={terminalHeightPx}
+      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={refreshSkillInstalled}

@@ -1,6 +1,9 @@
 import { useEffect, type JSX } from 'react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import { ensureOrcaCliAvailableForAgentSkillTerminal } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -31,17 +34,16 @@ export function OrchestrationSetupCard(props: {
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
       title="Orchestration skill"
-      detectedDescription="Agents can hand off context, ask questions, and coordinate work through Orca."
-      missingDescription="Install this so agents can hand off context, ask questions, and coordinate work through Orca. If you already installed it, click Re-check instead of running the installer again."
+      description="Enables agents to hand off context and coordinate work through Orca."
       command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
       terminalTitle="Orchestration setup"
       terminalAriaLabel="Orchestration skill install terminal"
       terminalWorktreeId="feature-wall-orchestration-skill-terminal"
       installed={skillInstalled}
-      detected={skillInstalled}
       loading={skillLoading}
       error={skillError}
       terminalHeightPx={terminalHeightPx}
+      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
       onBeforeOpenTerminal={async () => {
         await ensureOrcaCliAvailableForAgentSkillTerminal()
       }}
@@ -51,7 +53,7 @@ export function OrchestrationSetupCard(props: {
   )
 
   if (compact) {
-    return <div className="flex min-h-24 flex-1 items-center justify-center pt-3">{setupPanel}</div>
+    return <div className="flex min-h-24 flex-1 items-start justify-center pt-8">{setupPanel}</div>
   }
   return <div className="flex">{setupPanel}</div>
 }

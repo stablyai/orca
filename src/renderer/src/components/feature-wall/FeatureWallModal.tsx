@@ -79,11 +79,13 @@ export default function FeatureWallModal(): JSX.Element | null {
     () => reviewSteps[0]?.id ?? 'notes'
   )
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
+  const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
   const completion = useFeatureWallCompletion(
     isOpen,
     taskSourcePresentation.hasConnectedTaskSource,
     taskSourcePresentation.isCheckingTaskSources,
-    orchestrationSkillInstalled
+    orchestrationSkillInstalled,
+    browserUseSkillInstalled
   )
   // Reset to the first step whenever the visible step list changes so we never
   // land on an id that's been filtered out (e.g. user toggled notifications on
@@ -235,6 +237,9 @@ export default function FeatureWallModal(): JSX.Element | null {
   const handleOrchestrationSkillInstalledChange = useCallback((installed: boolean): void => {
     setOrchestrationSkillInstalled(installed)
   }, [])
+  const handleBrowserUseSkillInstalledChange = useCallback((installed: boolean): void => {
+    setBrowserUseSkillInstalled(installed)
+  }, [])
 
   const handleRailKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
     if (!NAVIGATION_KEYS.has(event.key)) {
@@ -384,6 +389,7 @@ export default function FeatureWallModal(): JSX.Element | null {
               workbenchActiveStep={workbenchActiveStep}
               reviewActiveStep={reviewActiveStep}
               onOrchestrationSkillInstalledChange={handleOrchestrationSkillInstalledChange}
+              onBrowserUseSkillInstalledChange={handleBrowserUseSkillInstalledChange}
               onUsageAccountStateChange={completion.refreshUsageAccountState}
             />
             {showKeepAwakeCard && settings ? (

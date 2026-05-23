@@ -4,7 +4,6 @@ import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps
 import { StatusesPage } from './agents-orchestration/StatusesPage'
 import { UsagePage } from './agents-orchestration/UsagePage'
 import { OrchestrationPage } from './agents-orchestration/OrchestrationPage'
-import { NotificationsPage } from './agents-orchestration/NotificationsPage'
 
 const PANEL_HEIGHT_PX = 392
 const PANEL_WIDTH_PX = 520
@@ -32,9 +31,6 @@ export function AgentsOrchestrationVisual(props: {
           active={activeStepId === 'orchestration'}
           reducedMotion={reducedMotion}
         />
-      </Page>
-      <Page active={activeStepId === 'notifications'}>
-        <NotificationsPage active={activeStepId === 'notifications'} />
       </Page>
     </div>
   )

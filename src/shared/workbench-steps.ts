@@ -40,6 +40,10 @@ export const WORKBENCH_STEPS: readonly WorkbenchStep[] = [
       {
         leadIn: 'Configurable.',
         body: 'Bring your own profile — fonts, theme, shell — same setup in every workspace.'
+      },
+      {
+        leadIn: 'Persistent sessions.',
+        body: 'Terminal sessions persist across restarts, so your tabs and splits are waiting when you reopen Orca.'
       }
     ]
   },

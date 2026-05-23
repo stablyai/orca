@@ -23,7 +23,7 @@ function completionInput(overrides: Partial<CompletionInput> = {}): CompletionIn
     isCheckingTaskSources: false,
     hasUsageAccount: false,
     orchestrationSkillInstalled: false,
-    notificationsConfigured: false,
+    browserUseSkillInstalled: false,
     githubConfigured: false,
     aiCommitPrConfigured: false,
     ...overrides
@@ -37,7 +37,7 @@ describe('getFeatureWallCompletionProgress', () => {
         hasConnectedTaskSource: true,
         hasUsageAccount: true,
         orchestrationSkillInstalled: true,
-        notificationsConfigured: true,
+        browserUseSkillInstalled: true,
         githubConfigured: true,
         aiCommitPrConfigured: true
       })
@@ -45,9 +45,10 @@ describe('getFeatureWallCompletionProgress', () => {
 
     expect(progress.workflowDone.tasks).toBe(false)
     expect(progress.workflowDone['agents-orchestration']).toBe(false)
+    expect(progress.workflowDone.workbench).toBe(false)
     expect(progress.workflowDone.review).toBe(false)
     expect(progress.agentStepDone.usage).toBe(false)
-    expect(progress.agentStepDone.notifications).toBe(false)
+    expect(progress.workbenchStepDone.browser).toBe(false)
     expect(progress.reviewStepDone['pr-view']).toBe(false)
     expect(progress.reviewStepDone.ship).toBe(false)
   })
@@ -101,14 +102,8 @@ describe('getFeatureWallCompletionProgress', () => {
   it('keeps the agents workflow incomplete until the orchestration skill is detected', () => {
     const otherwiseComplete = completionInput({
       visitedWorkflows: new Set<FeatureWallWorkflowId>(['agents-orchestration']),
-      visitedAgentSteps: new Set<AgentsStepId>([
-        'statuses',
-        'usage',
-        'orchestration',
-        'notifications'
-      ]),
-      hasUsageAccount: true,
-      notificationsConfigured: true
+      visitedAgentSteps: new Set<AgentsStepId>(['statuses', 'usage', 'orchestration']),
+      hasUsageAccount: true
     })
 
     expect(
@@ -127,14 +122,8 @@ describe('getFeatureWallCompletionProgress', () => {
       getFeatureWallCompletionProgress(
         completionInput({
           visitedWorkflows: new Set<FeatureWallWorkflowId>(['agents-orchestration']),
-          visitedAgentSteps: new Set<AgentsStepId>([
-            'statuses',
-            'usage',
-            'orchestration',
-            'notifications'
-          ]),
+          visitedAgentSteps: new Set<AgentsStepId>(['statuses', 'usage', 'orchestration']),
           hasUsageAccount: true,
-          notificationsConfigured: true,
           orchestrationSkillInstalled: true
         })
       ).workflowDone['agents-orchestration']
@@ -159,9 +148,33 @@ describe('getFeatureWallCompletionProgress', () => {
       getFeatureWallCompletionProgress(
         completionInput({
           visitedWorkflows: new Set<FeatureWallWorkflowId>(['workbench']),
-          visitedWorkbenchSteps: new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
+          visitedWorkbenchSteps: new Set<WorkbenchStepId>(['terminal', 'editor', 'browser']),
+          browserUseSkillInstalled: true
         })
       ).workflowDone.workbench
+    ).toBe(true)
+  })
+
+  it('requires the Browser Use skill before completing the workbench browser step', () => {
+    const browserVisited = completionInput({
+      visitedWorkflows: new Set<FeatureWallWorkflowId>(['workbench']),
+      visitedWorkbenchSteps: new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
+    })
+
+    expect(getFeatureWallCompletionProgress(browserVisited).workbenchStepDone.browser).toBe(false)
+    expect(getFeatureWallCompletionProgress(browserVisited).workflowDone.workbench).toBe(false)
+
+    expect(
+      getFeatureWallCompletionProgress({
+        ...browserVisited,
+        browserUseSkillInstalled: true
+      }).workbenchStepDone.browser
+    ).toBe(true)
+    expect(
+      getFeatureWallCompletionProgress({
+        ...browserVisited,
+        browserUseSkillInstalled: true
+      }).workflowDone.workbench
     ).toBe(true)
   })
 })
@@ -185,7 +198,7 @@ describe('normalizeFeatureWallVisitedAgentSteps', () => {
         'notifications',
         'bogus'
       ])
-    ).toEqual(['statuses', 'orchestration', 'usage', 'notifications'])
+    ).toEqual(['statuses', 'orchestration', 'usage'])
   })
 })
 

@@ -7,6 +7,7 @@ import {
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
@@ -320,6 +321,7 @@ export function BrowserUseSetup({
             skillLoading={skillLoading}
             skillError={skillError}
             disabled={!cliEnabled}
+            preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             onBeforeOpenTerminal={async () => {
               await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setCliStatus })
             }}

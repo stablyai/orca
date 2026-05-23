@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
 import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
@@ -186,6 +187,11 @@ export function FloatingTerminalOrchestrationDialog({
                   <p className="text-xs text-muted-foreground">
                     Paste this command into the terminal so agents can coordinate through Orca.
                   </p>
+                  {!cliInstalled ? (
+                    <p className="text-xs text-muted-foreground">
+                      {AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+                    </p>
+                  ) : null}
                 </div>
                 <Button
                   variant="outline"

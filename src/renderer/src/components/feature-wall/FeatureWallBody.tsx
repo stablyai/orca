@@ -200,6 +200,7 @@ export function FeatureWallBody(props: {
   workbenchActiveStep: WorkbenchStep | null
   reviewActiveStep: ReviewStep | null
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
+  onBrowserUseSkillInstalledChange: (installed: boolean) => void
   onUsageAccountStateChange: () => void | Promise<void>
 }): JSX.Element {
   const {
@@ -224,7 +225,6 @@ export function FeatureWallBody(props: {
   const isAgentsUsage = isAgents && agentsActiveStep?.id === 'usage'
   const isAgentsStatuses = isAgents && agentsActiveStep?.id === 'statuses'
   const isAgentsOrchestration = isAgents && agentsActiveStep?.id === 'orchestration'
-  const isAgentsNotifications = isAgents && agentsActiveStep?.id === 'notifications'
   const isWorkbenchEditor = isWorkbench && workbenchActiveStep?.id === 'editor'
   const isWorkbenchBrowser = isWorkbench && workbenchActiveStep?.id === 'browser'
   const isReviewPrView = isReview && reviewActiveStep?.id === 'pr-view'
@@ -331,6 +331,7 @@ export function FeatureWallBody(props: {
               className={cn(
                 'max-w-full',
                 centerSetupBelowAnimation ? 'flex h-full flex-col' : null,
+                isWorkbenchBrowser ? '-mt-6 gap-2' : null,
                 isWorkspaces
                   ? 'w-[440px]'
                   : isWorkbenchEditor
@@ -345,11 +346,9 @@ export function FeatureWallBody(props: {
                             ? 'w-[400px]'
                             : isAgentsStatuses
                               ? 'w-[420px]'
-                              : isAgentsNotifications
-                                ? 'w-[440px]'
-                                : isAgentsOrchestration
-                                  ? 'w-[480px]'
-                                  : 'w-[520px]'
+                              : isAgentsOrchestration
+                                ? 'w-[480px]'
+                                : 'w-[520px]'
               )}
             >
               {isWorkspaces ? (
@@ -367,7 +366,11 @@ export function FeatureWallBody(props: {
                 ) : isWorkbenchBrowser ? (
                   <>
                     <BrowserAnimatedVisual reducedMotion={prefersReducedMotion} />
-                    <BrowserUseSkillSetupCard compact terminalHeightPx={140} />
+                    <BrowserUseSkillSetupCard
+                      compact
+                      terminalHeightPx={140}
+                      onInstalledChange={props.onBrowserUseSkillInstalledChange}
+                    />
                   </>
                 ) : (
                   <WorkbenchAnimatedVisual reducedMotion={prefersReducedMotion} />
@@ -390,15 +393,7 @@ export function FeatureWallBody(props: {
                 <AgentsOrchestrationVisual
                   reducedMotion={prefersReducedMotion}
                   activeStepId={agentsActiveStep.id}
-                  widthPx={
-                    isAgentsUsage
-                      ? 400
-                      : isAgentsStatuses
-                        ? 420
-                        : isAgentsNotifications
-                          ? 440
-                          : undefined
-                  }
+                  widthPx={isAgentsUsage ? 400 : isAgentsStatuses ? 420 : undefined}
                 />
               ) : null}
             </div>

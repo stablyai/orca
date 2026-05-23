@@ -1,6 +1,6 @@
 // Per-step copy for the agents-orchestration tile in the Explore Orca modal.
 
-export type AgentsStepId = 'statuses' | 'usage' | 'orchestration' | 'notifications'
+export type AgentsStepId = 'statuses' | 'usage' | 'orchestration'
 
 // Bullets can be either a plain sentence or a {leadIn, body} pair so the UI
 // can render the bold "headline" lead-in pattern used on the orchestration
@@ -57,16 +57,6 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
         leadIn: 'Coordinate like an agent team.',
         body: 'Agents can dispatch tasks, share context, ask questions, wait on dependencies, and report results through Orca instead of relying on manual copy-paste.'
       }
-    ]
-  },
-  {
-    id: 'notifications',
-    name: 'Notifications',
-    subtitle: 'Notifications',
-    description: 'Orca pings you on the desktop the moment an agent finishes.',
-    bullets: [
-      'Step away from Orca and come back when an agent needs your attention.',
-      'Set a custom notification sound in Settings → Notifications.'
     ]
   },
   {

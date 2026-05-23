@@ -1,8 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import { CheckCircle2 } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { Button } from '@/components/ui/button'
 
 type ToastFeedItem = {
   readonly id: string
@@ -47,18 +44,9 @@ type ActiveToast = {
   readonly phase: 'in' | 'out'
 }
 
+// Why: kept for later use even though Notifications is no longer a tour substep.
 export function NotificationsPage(props: { active: boolean }): JSX.Element {
   const { active } = props
-  const closeModal = useAppStore((s) => s.closeModal)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const settings = useAppStore((s) => s.settings)
-
-  const notifications = settings?.notifications ?? null
-  const masterEnabled = notifications?.enabled ?? false
-  const agentTaskCompleteEnabled = notifications?.agentTaskComplete ?? false
-  const ready = masterEnabled && agentTaskCompleteEnabled
-
   const [toasts, setToasts] = useState<readonly ActiveToast[]>([])
   const cycleRef = useRef(0)
   const keyRef = useRef(0)
@@ -114,12 +102,6 @@ export function NotificationsPage(props: { active: boolean }): JSX.Element {
     }
   }, [active])
 
-  const openNotificationSettings = (): void => {
-    closeModal()
-    openSettingsTarget({ pane: 'notifications', repoId: null })
-    openSettingsPage()
-  }
-
   return (
     <div className="relative h-full w-full">
       {/* Stage clips toasts that overshoot so the slide reads as "from
@@ -130,43 +112,6 @@ export function NotificationsPage(props: { active: boolean }): JSX.Element {
             <ToastCard key={t.key} item={t.item} phase={t.phase} />
           ))}
         </div>
-      </div>
-
-      <div className="absolute bottom-2 left-2 flex w-fit max-w-[calc(100%-1rem)] items-center gap-2.5 rounded-lg border border-foreground/[0.08] bg-card px-2.5 py-2 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
-        {ready ? (
-          <>
-            <span
-              className="ml-0.5 inline-flex size-3.5 shrink-0 items-center justify-center text-emerald-500"
-              aria-hidden
-            >
-              <CheckCircle2 className="size-3.5" />
-            </span>
-            <span className="text-[12px] leading-tight">
-              <strong className="font-semibold">You&rsquo;re all set.</strong>{' '}
-              <span className="text-muted-foreground">Agent notifications are on.</span>
-            </span>
-          </>
-        ) : (
-          <>
-            <span
-              className="ml-0.5 inline-block size-[9px] shrink-0 rounded-full bg-red-500"
-              aria-hidden
-            />
-            <span className="text-[12px] leading-tight">
-              <strong className="font-semibold">Agent notifications are off.</strong>{' '}
-              <span className="text-muted-foreground">
-                Turn them on in Settings &rsaquo; Notifications.
-              </span>
-            </span>
-            <Button
-              size="sm"
-              className="ml-auto h-7 shrink-0 rounded-md text-[11px] font-semibold"
-              onClick={openNotificationSettings}
-            >
-              Enable
-            </Button>
-          </>
-        )}
       </div>
     </div>
   )
