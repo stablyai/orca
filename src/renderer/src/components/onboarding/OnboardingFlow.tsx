@@ -163,7 +163,7 @@ export default function OnboardingFlow({
                           ? 'w-10 bg-foreground'
                           : isDone
                             ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                            : 'w-6 bg-muted hover:bg-muted-foreground/60'
+                            : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                       )}
                       aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
                       aria-current={isActive ? 'step' : undefined}
