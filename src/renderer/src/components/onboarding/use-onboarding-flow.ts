@@ -570,12 +570,6 @@ export function useOnboardingFlow(
       return
     }
     const durationMs = consumeStepDurationMs()
-    // Why: theme step previews on the document without persisting. On skip,
-    // revert to the saved theme before advancing so the preview doesn't leak.
-    if (currentStep.id === 'theme' && settings) {
-      setTheme(settings.theme)
-      applyDocumentTheme(settings.theme)
-    }
     // Why: the repo step seeds folder terminals from saved settings. Preserve
     // the visible agent choice when optional preferences are skipped.
     if (currentStep.id === 'agent' && selectedAgent) {
@@ -608,7 +602,6 @@ export function useOnboardingFlow(
     currentStep.stepNumber,
     onOnboardingChange,
     selectedAgent,
-    settings,
     trackTaskSourcesSnapshot,
     updateSettings
   ])

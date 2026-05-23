@@ -452,9 +452,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByText('7 of 7')).toBeVisible()
   })
 
-  test('Skip from theme reverts preview without saving the skipped choice', async ({
-    orcaPage
-  }) => {
+  test('Skip from theme preserves the immediately saved choice', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -466,7 +464,6 @@ test.describe('Onboarding flow', () => {
         document.documentElement.classList.contains('dark') ||
         document.documentElement.classList.contains('light')
     )
-    const initialThemeSetting = (await getSettings(orcaPage)).theme
     const startingTheme = await getDocumentThemeClass(orcaPage)
     const oppositeTheme: 'dark' | 'light' = startingTheme === 'dark' ? 'light' : 'dark'
     const oppositeTileName = oppositeTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
@@ -480,10 +477,10 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
     await expect
       .poll(async () => (await getSettings(orcaPage)).theme, { timeout: 5_000 })
-      .toBe(initialThemeSetting)
+      .toBe(oppositeTheme)
     await expect
       .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
-      .toBe(startingTheme)
+      .toBe(oppositeTheme)
   })
 
   test('Skip preserves runtime server project setup UI', async ({ orcaPage }) => {
