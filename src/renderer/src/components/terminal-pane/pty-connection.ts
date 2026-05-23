@@ -33,7 +33,10 @@ import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  ParsedAgentStatusPayload
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -53,6 +56,7 @@ const PTY_CONNECT_DIAG_LIMIT = 200
 const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
+const HIDDEN_TERMINAL_METADATA_FLUSH_MS = 100
 let codexRestartNoticePresenceSource: Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
@@ -476,6 +480,9 @@ export function connectPanePty(
 
   const onExit = (ptyId: string): void => {
     agentCompletionCoordinator.dispose()
+    clearHiddenMetadataFlushTimer()
+    pendingHiddenTitle = null
+    pendingHiddenAgentStatus = null
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -514,8 +521,11 @@ export function connectPanePty(
   // Claude launches also start idle, but they have no prompt cache yet.
   let hasConsideredInitialCacheTimerSeed = false
   let allowInitialIdleCacheSeed = false
+  let pendingHiddenTitle: { title: string; rawTitle: string } | null = null
+  let pendingHiddenAgentStatus: ParsedAgentStatusPayload | null = null
+  let hiddenMetadataFlushTimer: ReturnType<typeof setTimeout> | null = null
 
-  const onTitleChange = (title: string, rawTitle: string): void => {
+  const applyTitleChangeNow = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
     if (syncAgentTaskCompleteNotificationEnabled()) {
@@ -544,6 +554,75 @@ export function connectPanePty(
         deps.setCacheTimerStartedAt(cacheKey, Date.now())
       }
     }
+  }
+
+  const applyAgentStatusNow = (payload: ParsedAgentStatusPayload): void => {
+    // Why: capture the store snapshot once so the title lookup and the
+    // setAgentStatus call observe the same state. Re-reading getState()
+    // between the two lines opens a brief window where the title could
+    // shift (OSC title update landing in between) and the status would be
+    // stored against a title that was never paired with it.
+    const currentState = useAppStore.getState()
+    const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    currentState.setAgentStatus(cacheKey, payload, title)
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeHookStatus(payload)
+    }
+  }
+
+  const clearHiddenMetadataFlushTimer = (): void => {
+    if (hiddenMetadataFlushTimer !== null) {
+      clearTimeout(hiddenMetadataFlushTimer)
+      hiddenMetadataFlushTimer = null
+    }
+  }
+
+  const flushHiddenMetadata = (): void => {
+    clearHiddenMetadataFlushTimer()
+    const title = pendingHiddenTitle
+    const agentStatus = pendingHiddenAgentStatus
+    pendingHiddenTitle = null
+    pendingHiddenAgentStatus = null
+    if (title) {
+      applyTitleChangeNow(title.title, title.rawTitle)
+    }
+    if (agentStatus) {
+      applyAgentStatusNow(agentStatus)
+    }
+  }
+
+  const scheduleHiddenMetadataFlush = (): void => {
+    if (hiddenMetadataFlushTimer !== null) {
+      return
+    }
+    hiddenMetadataFlushTimer = setTimeout(() => {
+      hiddenMetadataFlushTimer = null
+      flushHiddenMetadata()
+    }, HIDDEN_TERMINAL_METADATA_FLUSH_MS)
+  }
+
+  const hiddenTitleNeedsImmediateApply = (title: string): boolean => {
+    const currentTitle = useAppStore.getState().runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    return detectAgentStatusFromTitle(currentTitle ?? '') !== detectAgentStatusFromTitle(title)
+  }
+
+  const hiddenAgentStatusNeedsImmediateApply = (payload: ParsedAgentStatusPayload): boolean => {
+    const existing = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    return !existing || existing.state !== payload.state || payload.state === 'done'
+  }
+
+  const onTitleChange = (title: string, rawTitle: string): void => {
+    if (deps.isVisibleRef.current || hiddenTitleNeedsImmediateApply(title)) {
+      flushHiddenMetadata()
+      applyTitleChangeNow(title, rawTitle)
+      return
+    }
+    // Why: hidden Codex panes can emit decorative title frames faster than a
+    // user can observe them. Keep state transitions immediate, but coalesce
+    // same-class hidden frames so background agents don't steal the renderer
+    // thread from the focused xterm during typing.
+    pendingHiddenTitle = { title, rawTitle }
+    scheduleHiddenMetadataFlush()
   }
 
   const onPtySpawn = (ptyId: string): void => {
@@ -824,17 +903,13 @@ export function connectPanePty(
     // Without this, the OSC parser in pty-transport strips sequences from xterm
     // output but the status never reaches the store or dashboard/hover UI.
     onAgentStatus: (payload) => {
-      // Why: capture the store snapshot once so the title lookup and the
-      // setAgentStatus call observe the same state. Re-reading getState()
-      // between the two lines opens a brief window where the title could
-      // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it.
-      const currentState = useAppStore.getState()
-      const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-      currentState.setAgentStatus(cacheKey, payload, title)
-      if (syncAgentTaskCompleteNotificationEnabled()) {
-        agentCompletionCoordinator.observeHookStatus(payload)
+      if (deps.isVisibleRef.current || hiddenAgentStatusNeedsImmediateApply(payload)) {
+        flushHiddenMetadata()
+        applyAgentStatusNow(payload)
+        return
       }
+      pendingHiddenAgentStatus = payload
+      scheduleHiddenMetadataFlush()
     }
   }
   const transport = runtimeEnvironmentId
@@ -1777,6 +1852,9 @@ export function connectPanePty(
       pendingTerminalInputWrite = null
       interruptInference.dispose()
       clearTitleOnlyInterruptTimer()
+      clearHiddenMetadataFlushTimer()
+      pendingHiddenTitle = null
+      pendingHiddenAgentStatus = null
       // Why: actively resolve any in-flight passphrase-gate waits so their
       // zustand subscribers + async IIFEs don't hang for the rest of the
       // session when the pane is torn down before SSH state changes.

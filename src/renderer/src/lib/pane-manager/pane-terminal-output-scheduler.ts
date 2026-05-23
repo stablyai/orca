@@ -12,10 +12,10 @@ type QueueEntry = {
   beforeWrite?: TerminalOutputBeforeWrite
 }
 
-const BACKGROUND_FLUSH_DELAY_MS = 50
-const BACKGROUND_DRAIN_INTERVAL_MS = 16
+const BACKGROUND_FLUSH_DELAY_MS = 100
+const BACKGROUND_DRAIN_INTERVAL_MS = 50
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
-const MAX_WRITES_PER_DRAIN = 2
+const MAX_WRITES_PER_DRAIN = 1
 const PARSE_SETTLE_TIMEOUT_MS = 250
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
