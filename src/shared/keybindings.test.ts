@@ -118,6 +118,25 @@ describe('keybindings', () => {
     })
   })
 
+  it('keeps equalize pane sizes unassigned until users customize it', () => {
+    expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.equalizePaneSizes',
+        { key: '=', code: 'Equal', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'terminal.equalizePaneSizes',
+        { key: '=', code: 'Equal', control: false, meta: true, alt: false, shift: false },
+        'darwin',
+        { 'terminal.equalizePaneSizes': ['Mod+Equal'] }
+      )
+    ).toBe(true)
+  })
+
   it('reports customized renderer conflicts with native menu accelerators', () => {
     expect(findKeybindingConflicts('darwin')).toEqual([])
 

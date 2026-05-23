@@ -79,6 +79,7 @@ export type KeybindingActionId =
   | 'terminal.clear'
   | 'terminal.focusNextPane'
   | 'terminal.focusPreviousPane'
+  | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
   | 'terminal.closePane'
   | 'terminal.splitRight'
@@ -632,6 +633,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
     defaultBindings: platformBindings(['Mod+BracketLeft'])
+  },
+  {
+    id: 'terminal.equalizePaneSizes',
+    title: 'Equalize pane sizes',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.expandPane',
