@@ -2227,6 +2227,13 @@ export class OrcaRuntimeService {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
+  serializeHeadlessTerminalBufferForRenderer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{ data: string; cols: number; rows: number } | null> {
+    return this.serializeHeadlessTerminalBuffer(ptyId, opts)
+  }
+
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
     const leaf = this.resolveLeafForHandle(handle)
     if (!leaf?.ptyId) {

@@ -50,6 +50,11 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import {
+  clearHiddenTerminalOutput,
+  isHiddenTerminalHydrating,
+  queueHiddenTerminalOutput
+} from './hidden-terminal-output-state'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -1146,6 +1151,7 @@ export function connectPanePty(
         },
         () => {
           discardTerminalOutput(pane.terminal)
+          clearHiddenTerminalOutput(pane.terminal)
           pane.terminal.clear()
         }
       )
@@ -1230,6 +1236,7 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
+      clearHiddenTerminalOutput(pane.terminal)
       if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
@@ -1246,6 +1253,16 @@ export function connectPanePty(
 
     const dataCallback = (data: string): void => {
       commandLifecycle.handlePtyData(data)
+      if (!deps.isVisibleRef.current || isHiddenTerminalHydrating(pane.terminal)) {
+        const ptyId = transport.getPtyId()
+        if (ptyId) {
+          if (terminalOutputPrefersDomRenderer(data)) {
+            manager.markPaneHasComplexScriptOutput(pane.id)
+          }
+          queueHiddenTerminalOutput(pane.terminal, ptyId, data)
+          return
+        }
+      }
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only
       // hidden panes (background tabs) should be throttled.
@@ -1884,6 +1901,7 @@ export function connectPanePty(
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       discardTerminalOutput(pane.terminal)
+      clearHiddenTerminalOutput(pane.terminal)
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
         agentTaskCompleteSettingsUnsubscribe = null

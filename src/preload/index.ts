@@ -676,6 +676,15 @@ const api = {
      *  Returns `''` when the id is unknown or the platform cannot resolve one. */
     getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
 
+    serializeHeadlessBuffer: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ): Promise<{ data: string; cols: number; rows: number } | null> =>
+      ipcRenderer.invoke('pty:serializeHeadlessBuffer', {
+        id,
+        scrollbackRows: opts?.scrollbackRows
+      }),
+
     onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
         callback(data)

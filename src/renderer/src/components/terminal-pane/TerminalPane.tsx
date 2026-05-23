@@ -993,6 +993,7 @@ export default function TerminalPane({
     managerRef,
     containerRef,
     paneTransportsRef,
+    replayingPanesRef,
     isActiveRef,
     isVisibleRef,
     toggleExpandPane
