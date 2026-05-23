@@ -21,7 +21,7 @@ export function KeepAwakeCard(props: {
               Optional
             </span>
           </div>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-[13px] leading-snug text-muted-foreground">
             {getAgentAwakeDescription()}
           </p>
         </div>

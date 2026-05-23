@@ -371,7 +371,7 @@ export default function FeatureWallModal(): JSX.Element | null {
                 {selected.title}
               </h3>
               {bodyShowsSectionIntro ? null : (
-                <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
+                <p className="mt-3 text-lg leading-snug text-muted-foreground">
                   {selectedPresentation.lede}
                 </p>
               )}

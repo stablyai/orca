@@ -166,9 +166,9 @@ export function AgentSkillSetupPanel({
           </div>
         </div>
         <div className="mt-3 max-w-none space-y-1.5">
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+          <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
           {!installed && preInstallNotice && preInstallNoticeVisible ? (
-            <p className="text-[12px] leading-relaxed text-muted-foreground">{preInstallNotice}</p>
+            <p className="text-[12px] leading-snug text-muted-foreground">{preInstallNotice}</p>
           ) : null}
         </div>
       </div>

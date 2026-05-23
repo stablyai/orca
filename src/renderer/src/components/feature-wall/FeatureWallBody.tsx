@@ -33,8 +33,8 @@ const KBD_CLASS =
 
 function Bullet(props: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <li className={cn('flex items-start gap-2.5 text-[17px] leading-relaxed', props.className)}>
-      <span className="mt-[9px] inline-block size-1.5 shrink-0 rounded-full bg-foreground/40" />
+    <li className={cn('flex items-start gap-2.5 text-[17px] leading-snug', props.className)}>
+      <span className="mt-[7px] inline-block size-1.5 shrink-0 rounded-full bg-foreground/40" />
       <span>{props.children}</span>
     </li>
   )
@@ -120,7 +120,7 @@ function StepBulletList(props: {
   const { leadIn, bullets } = props
   return (
     <div className="flex flex-col gap-3">
-      {leadIn ? <p className="text-[17px] leading-relaxed">{leadIn}</p> : null}
+      {leadIn ? <p className="text-[17px] leading-snug">{leadIn}</p> : null}
       <ul className="flex flex-col gap-3" role="list">
         {bullets.map((bullet) => (
           <Bullet key={bulletKey(bullet)}>
@@ -161,7 +161,7 @@ function SectionIntro(props: {
       <p
         className={cn(
           props.title ? 'mt-1.5' : null,
-          'text-[15px] leading-relaxed text-muted-foreground'
+          'text-[15px] leading-snug text-muted-foreground'
         )}
       >
         {props.description}
