@@ -116,7 +116,10 @@ export default function OnboardingFlow({
 
   return (
     <div
-      className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground"
+      className={cn(
+        'scrollbar-sleek fixed inset-0 z-[100] bg-background text-foreground',
+        isInlineTourRunning ? 'overflow-hidden' : 'overflow-auto'
+      )}
       data-onboarding-overlay
     >
       <div
@@ -134,8 +137,10 @@ export default function OnboardingFlow({
 
       <div
         className={cn(
-          'relative mx-auto flex min-h-screen w-full flex-col px-8 pb-10 pt-16 transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-          isInlineTourRunning ? 'max-w-[1180px]' : 'max-w-[820px]'
+          'relative mx-auto flex w-full flex-col px-8 pb-10 pt-16 transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+          isInlineTourRunning
+            ? 'h-screen min-h-0 max-w-[1180px] overflow-hidden'
+            : 'min-h-screen max-w-[820px]'
         )}
       >
         <div className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
@@ -216,7 +221,7 @@ export default function OnboardingFlow({
         <div
           className={cn(
             'flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-            isInlineTourRunning ? 'mt-7' : 'mt-10'
+            isInlineTourRunning ? 'mt-7 min-h-0' : 'mt-10'
           )}
         >
           {currentStep.id === 'agent' && (

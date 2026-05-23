@@ -70,7 +70,7 @@ export function OnboardingTourStep({
         footerText={null}
         compactRail
         detachedFooter
-        className="h-[min(790px,calc(100vh-13.5rem))] min-h-[650px]"
+        className="h-full max-h-[790px] min-h-0"
         panelClassName="rounded-xl border border-border bg-card"
       />
     )

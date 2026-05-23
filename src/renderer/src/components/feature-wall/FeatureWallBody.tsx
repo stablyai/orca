@@ -129,13 +129,13 @@ export function FeatureWallBody(props: {
   ) : isAgentsOrchestration ? (
     <OrchestrationSetupCard
       compact
-      terminalHeightPx={140}
+      terminalHeightPx={240}
       onInstalledChange={onOrchestrationSkillInstalledChange}
     />
   ) : isWorkbenchBrowser ? (
     <BrowserUseSkillSetupCard
       compact
-      terminalHeightPx={140}
+      terminalHeightPx={240}
       onInstalledChange={onBrowserUseSkillInstalledChange}
     />
   ) : isReviewPrView ? (
@@ -256,7 +256,10 @@ export function FeatureWallBody(props: {
                         : isReviewSettingBesideVisual
                           ? isCompactBesideVisual
                             ? '@[800px]:grid-cols-[minmax(300px,320px)_minmax(460px,480px)] @[800px]:items-center'
-                            : '@[900px]:grid-cols-[minmax(380px,420px)_minmax(440px,480px)] @[900px]:items-center'
+                            : cn(
+                                '@[840px]:grid-cols-[minmax(380px,420px)_minmax(440px,480px)]',
+                                isReviewShip ? '@[840px]:items-start' : '@[840px]:items-center'
+                              )
                           : isCompactBesideVisual
                             ? '@[700px]:grid-cols-[minmax(300px,340px)_minmax(320px,340px)] @[700px]:items-center'
                             : isAgentsOrchestration
@@ -266,7 +269,8 @@ export function FeatureWallBody(props: {
               >
                 <div
                   className={cn(
-                    'w-full self-center',
+                    'w-full',
+                    isReviewShip ? 'translate-y-0.5 self-start' : 'self-center',
                     isAgentsUsage
                       ? isOnboardingUsage
                         ? 'max-w-[400px]'

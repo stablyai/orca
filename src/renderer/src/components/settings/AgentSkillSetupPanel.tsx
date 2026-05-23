@@ -99,6 +99,43 @@ export function AgentSkillSetupPanel({
       setPreInstallNoticeVisible(true)
     }
   }
+  const actionRow =
+    !installed || showRecheckWhenInstalled ? (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {!installed ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void (async () => {
+                try {
+                  await onBeforeOpenTerminal?.()
+                  await refreshPreInstallNotice()
+                } finally {
+                  setTerminalOpen(true)
+                }
+              })()
+            }}
+            disabled={terminalOpen || installDisabled}
+          >
+            <Terminal className="size-3.5" />
+            Install
+          </Button>
+        ) : null}
+        {!installed || showRecheckWhenInstalled ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void onRecheck()}
+            disabled={loading}
+          >
+            Re-check
+          </Button>
+        ) : null}
+      </div>
+    ) : null
 
   return (
     <div
@@ -130,45 +167,14 @@ export function AgentSkillSetupPanel({
             </div>
             {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {!installed ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      await onBeforeOpenTerminal?.()
-                      await refreshPreInstallNotice()
-                    } finally {
-                      setTerminalOpen(true)
-                    }
-                  })()
-                }}
-                disabled={terminalOpen || installDisabled}
-              >
-                <Terminal className="size-3.5" />
-                Install
-              </Button>
-            ) : null}
-            {!installed || showRecheckWhenInstalled ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => void onRecheck()}
-                disabled={loading}
-              >
-                Re-check
-              </Button>
-            ) : null}
-          </div>
         </div>
-        <div className="mt-3 max-w-none space-y-1.5">
+        <div className="mt-3 max-w-none">
           <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+          {actionRow}
           {!installed && preInstallNotice && preInstallNoticeVisible ? (
-            <p className="text-[12px] leading-snug text-muted-foreground">{preInstallNotice}</p>
+            <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
+              {preInstallNotice}
+            </p>
           ) : null}
         </div>
       </div>
