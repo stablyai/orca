@@ -233,96 +233,6 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['old', 'new'])
   })
 
-  it('holds foreground output until a TUI wheel burst goes idle', async () => {
-    vi.useFakeTimers()
-    const { holdForegroundTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-    const beforeWrite = vi.fn()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'a', { foreground: true, beforeWrite })
-    writeTerminalOutput(terminal, 'b', { foreground: true, beforeWrite })
-
-    expect(beforeWrite).not.toHaveBeenCalled()
-    expect(terminal.write).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(79)
-    expect(terminal.write).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(beforeWrite).toHaveBeenCalledTimes(1)
-    expect(beforeWrite).toHaveBeenCalledWith('ab')
-    expect(terminal.write).toHaveBeenCalledWith('ab', expect.any(Function))
-  })
-
-  it('extends the foreground hold while TUI wheel events continue', async () => {
-    vi.useFakeTimers()
-    const { holdForegroundTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'a', { foreground: true })
-
-    vi.advanceTimersByTime(70)
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'b', { foreground: true })
-
-    vi.advanceTimersByTime(79)
-    expect(terminal.write).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['ab'])
-  })
-
-  it('flushes held foreground output at the maximum hold time during continuous wheel input', async () => {
-    vi.useFakeTimers()
-    const { holdForegroundTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'a', { foreground: true })
-
-    for (const chunk of ['b', 'c', 'd', 'e']) {
-      vi.advanceTimersByTime(70)
-      holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-      writeTerminalOutput(terminal, chunk, { foreground: true })
-    }
-
-    vi.advanceTimersByTime(19)
-    expect(terminal.write).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['abcde'])
-  })
-
-  it('flushes held foreground output before explicit terminal snapshots', async () => {
-    vi.useFakeTimers()
-    const { flushTerminalOutput, holdForegroundTerminalOutput, writeTerminalOutput } =
-      await loadScheduler()
-    const terminal = createTerminal()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'held', { foreground: true })
-    flushTerminalOutput(terminal)
-
-    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['held'])
-  })
-
-  it('keeps held foreground output before later background output', async () => {
-    vi.useFakeTimers()
-    const { holdForegroundTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'foreground', { foreground: true })
-    writeTerminalOutput(terminal, 'background', { foreground: false })
-
-    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['foreground'])
-
-    vi.advanceTimersByTime(50)
-    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['foreground', 'background'])
-  })
-
   it('discards queued output for disposed terminals', async () => {
     vi.useFakeTimers()
     const { discardTerminalOutput, writeTerminalOutput } = await loadScheduler()
@@ -354,19 +264,5 @@ describe('pane terminal output scheduler', () => {
     // Advancing further must not rediscover the dead entry.
     vi.advanceTimersByTime(100)
     expect(throwing.write).toHaveBeenCalledTimes(1)
-  })
-
-  it('discards held foreground output for disposed terminals', async () => {
-    vi.useFakeTimers()
-    const { discardTerminalOutput, holdForegroundTerminalOutput, writeTerminalOutput } =
-      await loadScheduler()
-    const terminal = createTerminal()
-
-    holdForegroundTerminalOutput(terminal, { idleMs: 80, maxMs: 300 })
-    writeTerminalOutput(terminal, 'stale', { foreground: true })
-    discardTerminalOutput(terminal)
-    vi.advanceTimersByTime(300)
-
-    expect(terminal.write).not.toHaveBeenCalled()
   })
 })

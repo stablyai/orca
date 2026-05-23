@@ -47,7 +47,6 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
-import { createTerminalWheelInputBatcher } from './terminal-wheel-input-batcher'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -851,26 +850,6 @@ export function connectPanePty(
     : createIpcPtyTransport(transportOptions)
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
-  const canSendTerminalInput = (): boolean => {
-    if (disposed || isPaneReplaying(deps.replayingPanesRef, pane.id)) {
-      return false
-    }
-    const currentPtyId = transport.getPtyId()
-    return (
-      !isCodexPaneStale({
-        tabId: deps.tabId,
-        worktreeId: deps.worktreeId,
-        panePtyId: currentPtyId
-      }) && !(currentPtyId && isPtyLocked(currentPtyId))
-    )
-  }
-  const wheelInputBatcher = createTerminalWheelInputBatcher({
-    terminal: pane.terminal,
-    sendInput: (data) => transport.sendInput(data),
-    // Why: wheel batches flush after a timer; replay/stale/mobile-lock state can
-    // change after the original onData guard accepted the first wheel report.
-    canSend: canSendTerminalInput
-  })
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -881,7 +860,6 @@ export function connectPanePty(
     // engage the guard via replayIntoTerminal; here we drop everything
     // xterm emits while the guard is active. See replay-guard.ts.
     if (isPaneReplaying(deps.replayingPanesRef, pane.id)) {
-      wheelInputBatcher.discard()
       return
     }
     const currentPtyId = transport.getPtyId()
@@ -898,7 +876,6 @@ export function connectPanePty(
         panePtyId: currentPtyId
       })
     ) {
-      wheelInputBatcher.discard()
       clearPendingTerminalInputIntent()
       return
     }
@@ -910,7 +887,6 @@ export function connectPanePty(
     // The pty:write IPC has a defense-in-depth twin. See
     // docs/mobile-presence-lock.md.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
-      wheelInputBatcher.discard()
       clearPendingTerminalInputIntent()
       return
     }
@@ -926,11 +902,6 @@ export function connectPanePty(
       // normal cursor visibility when commands intentionally produce no echo.
       suppressTerminalCursorUntilOutputSettles(pane.terminal)
     }
-    if (wheelInputBatcher.enqueueIfWheelInput(data)) {
-      clearPendingTerminalInputIntent()
-      return
-    }
-    wheelInputBatcher.flush()
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -1816,7 +1787,6 @@ export function connectPanePty(
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
-      wheelInputBatcher.discard()
       clearPendingTerminalInputIntent()
       pendingTerminalInputWrite = null
       interruptInference.dispose()

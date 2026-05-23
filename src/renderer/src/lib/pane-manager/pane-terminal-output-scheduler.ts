@@ -5,16 +5,10 @@ import {
   writeForegroundTerminalChunk,
   type ForegroundTerminalOutputTarget
 } from './pane-terminal-foreground-render-settle'
-import {
-  discardHeldForegroundOutput,
-  flushHeldForegroundOutput,
-  holdForegroundTerminalOutput as holdForegroundTerminalOutputForWriter,
-  queueForegroundOutputIfHeld,
-  type ForegroundOutputHoldOptions,
-  type TerminalOutputBeforeWrite
-} from './pane-terminal-foreground-output-hold'
 
 type TerminalOutputTarget = ForegroundTerminalOutputTarget
+
+type TerminalOutputBeforeWrite = (data: string) => void
 
 type QueueEntry = {
   terminal: TerminalOutputTarget
@@ -166,27 +160,45 @@ function drainQueuedOutput(): void {
   }
 }
 
-function writeForegroundOutput(
+export function writeTerminalOutput(
   terminal: TerminalOutputTarget,
   data: string,
-  beforeWrite?: TerminalOutputBeforeWrite
-): void {
-  if (debugEnabled) {
-    debugState.foregroundWriteCount++
-  }
-  beforeWrite?.(data)
-  writeForegroundTerminalChunk(terminal, data)
-}
-
-export function holdForegroundTerminalOutput(
-  terminal: TerminalOutputTarget,
-  options: ForegroundOutputHoldOptions
+  options: { foreground: boolean; beforeWrite?: TerminalOutputBeforeWrite }
 ): void {
   exposeDebugApi()
-  holdForegroundTerminalOutputForWriter(terminal, options, writeForegroundOutput)
+  if (!data) {
+    return
+  }
+
+  if (options.foreground) {
+    flushTerminalOutput(terminal)
+    if (debugEnabled) {
+      debugState.foregroundWriteCount++
+    }
+    options.beforeWrite?.(data)
+    writeForegroundTerminalChunk(terminal, data)
+    return
+  }
+
+  let entry = queuedByTerminal.get(terminal)
+  if (!entry) {
+    entry = { terminal, chunks: [], beforeWrite: options.beforeWrite }
+    queuedByTerminal.set(terminal, entry)
+  } else {
+    entry.beforeWrite = options.beforeWrite
+  }
+  entry.chunks.push(data)
+  if (debugEnabled) {
+    debugState.backgroundEnqueueCount++
+  }
+  // Why: non-focused panes can produce output continuously. Letting every
+  // pane call xterm.write immediately schedules one xterm WriteBuffer timer
+  // per pane, which starves the focused terminal on the shared renderer thread.
+  scheduleDrain(BACKGROUND_FLUSH_DELAY_MS)
 }
 
-function flushQueuedBackgroundOutput(terminal: TerminalOutputTarget): void {
+export function flushTerminalOutput(terminal: TerminalOutputTarget): void {
+  exposeDebugApi()
   const entry = queuedByTerminal.get(terminal)
   if (!entry) {
     return
@@ -209,49 +221,6 @@ function flushQueuedBackgroundOutput(terminal: TerminalOutputTarget): void {
     }
     data = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   }
-}
-
-export function writeTerminalOutput(
-  terminal: TerminalOutputTarget,
-  data: string,
-  options: { foreground: boolean; beforeWrite?: TerminalOutputBeforeWrite }
-): void {
-  exposeDebugApi()
-  if (!data) {
-    return
-  }
-
-  if (options.foreground) {
-    flushQueuedBackgroundOutput(terminal)
-    if (queueForegroundOutputIfHeld(terminal, data, options.beforeWrite, writeForegroundOutput)) {
-      return
-    }
-    writeForegroundOutput(terminal, data, options.beforeWrite)
-    return
-  }
-
-  flushHeldForegroundOutput(terminal, writeForegroundOutput)
-  let entry = queuedByTerminal.get(terminal)
-  if (!entry) {
-    entry = { terminal, chunks: [], beforeWrite: options.beforeWrite }
-    queuedByTerminal.set(terminal, entry)
-  } else {
-    entry.beforeWrite = options.beforeWrite
-  }
-  entry.chunks.push(data)
-  if (debugEnabled) {
-    debugState.backgroundEnqueueCount++
-  }
-  // Why: non-focused panes can produce output continuously. Letting every
-  // pane call xterm.write immediately schedules one xterm WriteBuffer timer
-  // per pane, which starves the focused terminal on the shared renderer thread.
-  scheduleDrain(BACKGROUND_FLUSH_DELAY_MS)
-}
-
-export function flushTerminalOutput(terminal: TerminalOutputTarget): void {
-  exposeDebugApi()
-  flushHeldForegroundOutput(terminal, writeForegroundOutput)
-  flushQueuedBackgroundOutput(terminal)
 }
 
 export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Promise<void> {
@@ -282,7 +251,6 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   queuedByTerminal.delete(terminal)
-  discardHeldForegroundOutput(terminal)
   discardForegroundRenderSettle(terminal)
 }
 
