@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { registerAppMenu } from './register-app-menu'
+import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 
 const isMac = process.platform === 'darwin'
 
@@ -58,6 +58,12 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('toggles missing default-on appearance settings from visible to hidden', () => {
+    expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(false)).toBe(true)
+  })
+
   beforeEach(() => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()

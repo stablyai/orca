@@ -15,6 +15,10 @@ export type AppearanceMenuState = {
 
 export type AppearanceMenuKey = keyof AppearanceMenuState
 
+export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefined): boolean {
+  return !(current !== false)
+}
+
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void

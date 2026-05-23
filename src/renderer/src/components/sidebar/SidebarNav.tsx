@@ -134,7 +134,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
-  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge()
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideMobileButton = React.useCallback(() => {
     void updateSettings({ showMobileButton: false })
   }, [updateSettings])
