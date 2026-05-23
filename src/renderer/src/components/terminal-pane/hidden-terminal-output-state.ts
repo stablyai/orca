@@ -215,4 +215,18 @@ export function clearHiddenTerminalOutput(terminal: TerminalOutputTarget): void 
   }
 }
 
+export function clearHiddenTerminalOutputForPty(
+  terminal: TerminalOutputTarget,
+  ptyId: string
+): void {
+  exposeDebugApi()
+  const state = hiddenStateByTerminal.get(terminal)
+  if (state?.ptyId !== ptyId) {
+    return
+  }
+  if (hiddenStateByTerminal.delete(terminal) && debugEnabled) {
+    debugState.clearedCount++
+  }
+}
+
 exposeDebugApi()

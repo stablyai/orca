@@ -23,7 +23,7 @@ import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import {
   cancelHiddenTerminalHydration,
-  clearHiddenTerminalOutput,
+  clearHiddenTerminalOutputForPty,
   consumeHiddenTerminalHydration,
   markHiddenTerminalFallbackReplayed,
   markHiddenTerminalHydrated
@@ -90,7 +90,7 @@ export function useTerminalPaneGlobalEffects({
       }
       const transport = paneTransportsRef.current.get(pane.id)
       if (transport?.getPtyId() !== hydration.ptyId) {
-        clearHiddenTerminalOutput(pane.terminal)
+        clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
         return
       }
       const scrollbackRows =
@@ -105,7 +105,7 @@ export function useTerminalPaneGlobalEffects({
             return
           }
           if (transport.getPtyId() !== hydration.ptyId) {
-            clearHiddenTerminalOutput(pane.terminal)
+            clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
             return
           }
           if (snapshot?.data) {
@@ -139,7 +139,7 @@ export function useTerminalPaneGlobalEffects({
             return
           }
           if (transport.getPtyId() !== hydration.ptyId) {
-            clearHiddenTerminalOutput(pane.terminal)
+            clearHiddenTerminalOutputForPty(pane.terminal, hydration.ptyId)
             return
           }
           if (hydration.fallbackData) {

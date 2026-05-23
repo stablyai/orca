@@ -320,6 +320,74 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(terminal.write).not.toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
   })
 
+  it('does not let stale hydration clear output queued for a rebound PTY', async () => {
+    const terminal = {
+      name: 'terminal-a',
+      options: { scrollback: 1000 },
+      write: vi.fn((_data: string, callback?: () => void) => callback?.())
+    }
+    const pane = { id: 1, terminal }
+    let currentPtyId = 'pty-1'
+    const transport = { getPtyId: vi.fn(() => currentPtyId) }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    let resolveSnapshot!: (snapshot: { data: string; cols: number; rows: number } | null) => void
+    const snapshotPromise = new Promise<{ data: string; cols: number; rows: number } | null>(
+      (resolve) => {
+        resolveSnapshot = resolve
+      }
+    )
+    window.api.pty.serializeHeadlessBuffer = vi.fn((id: string) => {
+      if (id === 'pty-1') {
+        return snapshotPromise
+      }
+      return Promise.resolve(null)
+    }) as typeof window.api.pty.serializeHeadlessBuffer
+    const baseArgs = {
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[1, transport]]) as never },
+      replayingPanesRef: { current: new Map<number, number>() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    }
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'old-output')
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects(baseArgs)
+
+    currentPtyId = 'pty-2'
+    queueHiddenTerminalOutput(terminal, 'pty-2', 'new-output')
+    resolveSnapshot({ data: 'stale-headless-output', cols: 120, rows: 40 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(terminal.write).not.toHaveBeenCalledWith('stale-headless-output', expect.any(Function))
+    terminal.write.mockClear()
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects(baseArgs)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(window.api.pty.serializeHeadlessBuffer).toHaveBeenCalledWith('pty-2', {
+      scrollbackRows: 1000
+    })
+    expect(terminal.write).toHaveBeenCalledWith('new-output', expect.any(Function))
+  })
+
   it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {
     const terminalA = { name: 'terminal-a' }
     const manager = {
