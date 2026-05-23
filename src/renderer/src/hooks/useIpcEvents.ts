@@ -621,12 +621,6 @@ export function useIpcEvents(): void {
       })
     )
 
-    unsubs.push(
-      window.api.ui.onShowFeatureTourNudge(() => {
-        useAppStore.getState().showFeatureTourNudge()
-      })
-    )
-
     // Why: the View > Appearance menu toggles settings directly in main (so
     // checkbox state reflects the persisted value without a round-trip) and
     // broadcasts the change. Merge it into the store so the sidebar and

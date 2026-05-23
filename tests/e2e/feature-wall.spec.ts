@@ -272,32 +272,4 @@ test.describe('Feature tour modal', () => {
       rail.getByRole('button', { name: /Browser/i }).locator('[aria-label="Completed"]')
     ).toHaveCount(1)
   })
-
-  test('shows the tour toast and opens the full tour', async ({ orcaPage }) => {
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      store.getState().closeModal()
-      store.getState().showFeatureTourNudge()
-    })
-
-    await expect(orcaPage.getByText('You can take the tour anytime')).toBeVisible()
-    await expect(
-      orcaPage.getByText('Open Help > Explore Orca when you want the tour.')
-    ).toBeVisible()
-    await expect(orcaPage.getByRole('complementary', { name: 'Explore Orca' })).toHaveCount(0)
-    await expect
-      .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))
-      .toBe(false)
-
-    const takeTourButton = orcaPage.getByRole('button', { name: /^Take the tour$/ })
-    await expect(takeTourButton).toBeVisible()
-    await takeTourButton.click()
-    await expect(orcaPage.getByRole('dialog', { name: 'Get to know Orca' })).toBeVisible()
-    await expect
-      .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))
-      .toBe(false)
-  })
 })

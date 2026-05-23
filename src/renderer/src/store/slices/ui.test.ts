@@ -730,30 +730,6 @@ describe('createUISlice page navigation history', () => {
   })
 })
 
-describe('createUISlice feature tour nudge', () => {
-  it('shows the feature tour nudge', () => {
-    const store = createUIStore()
-
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
-  })
-
-  it('keeps the nudge hidden while the full feature tour is open', () => {
-    const store = createUIStore()
-
-    store.getState().openModal('feature-wall')
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
-
-    store.getState().closeModal()
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
-
-    store.getState().openModal('feature-wall')
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
-  })
-})
-
 describe('createUISlice feature tips', () => {
   it('marks feature tips seen and persists them once', () => {
     const setMock = vi.fn(() => Promise.resolve())

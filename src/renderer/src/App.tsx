@@ -213,9 +213,6 @@ const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
-const FeatureTourNudge = lazy(async () => ({
-  default: (await import('./components/feature-wall/FeatureTourNudge')).FeatureTourNudge
-}))
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
@@ -1699,11 +1696,6 @@ function App(): React.JSX.Element {
             </Suspense>
           ) : null}
           <UpdateCard />
-          {FeatureTourNudge ? (
-            <Suspense fallback={null}>
-              <FeatureTourNudge />
-            </Suspense>
-          ) : null}
           <StarNagCard />
           {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates
