@@ -687,6 +687,18 @@ export function registerPtyHandlers(
     flushTimer = null
   }
 
+  const flushPendingDataForPty = (id: string): void => {
+    const data = pendingData.get(id)
+    if (!data) {
+      return
+    }
+    pendingData.delete(id)
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:data', { id, data })
+    }
+    clearFlushTimerIfIdle()
+  }
+
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
   // adapter after replaceDaemonProvider runs. Both the startup registration
   // and the post-restart rebind go through the same code path — no risk of
@@ -1835,7 +1847,14 @@ export function registerPtyHandlers(
       ) {
         opts.scrollbackRows = Math.floor(args.scrollbackRows)
       }
-      return runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
+      // Why: hidden-pane reveal uses the headless snapshot as the authoritative
+      // paint. Flush any ≤8ms main-process PTY batch before and after the
+      // snapshot so renderer-side hydration can drop its duplicate fallback
+      // queue without losing bytes that already reached the headless model.
+      flushPendingDataForPty(args.id)
+      const snapshot = await runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
+      flushPendingDataForPty(args.id)
+      return snapshot
     }
   )
 

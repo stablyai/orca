@@ -122,10 +122,10 @@ export function useTerminalPaneGlobalEffects({
             // guard, so terminal query replies do not leak into the shell.
             replayIntoTerminal(pane, replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
             replayIntoTerminal(pane, replayingPanesRef, snapshot.data)
-            const queuedDuringHydration = markHiddenTerminalHydrated(pane.terminal, hydration)
-            if (queuedDuringHydration) {
-              replayIntoTerminal(pane, replayingPanesRef, queuedDuringHydration)
-            }
+            // Why: the main serializer flushes pending PTY batches around the
+            // headless snapshot. Any renderer bytes queued during this window
+            // are already represented in the authoritative snapshot.
+            markHiddenTerminalHydrated(pane.terminal, hydration)
             return
           }
           if (hydration.fallbackData) {

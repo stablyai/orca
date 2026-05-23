@@ -267,7 +267,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(terminal.write).not.toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
   })
 
-  it('keeps reveal-time output queued until the headless hydration completes', async () => {
+  it('does not duplicate reveal-time output when the headless snapshot succeeds', async () => {
     const terminal = {
       name: 'terminal-a',
       options: { scrollback: 1000 },
@@ -311,13 +311,75 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     queueHiddenTerminalOutput(terminal, 'pty-1', 'arrived-during-hydration')
 
-    resolveSnapshot({ data: 'headless-current-output', cols: 120, rows: 40 })
+    resolveSnapshot({
+      data: 'headless-current-output arrived-during-hydration',
+      cols: 120,
+      rows: 40
+    })
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(terminal.write).toHaveBeenCalledWith('headless-current-output', expect.any(Function))
-    expect(terminal.write).toHaveBeenCalledWith('arrived-during-hydration', expect.any(Function))
+    expect(terminal.write).toHaveBeenCalledWith(
+      'headless-current-output arrived-during-hydration',
+      expect.any(Function)
+    )
+    expect(terminal.write).not.toHaveBeenCalledWith(
+      'arrived-during-hydration',
+      expect.any(Function)
+    )
     expect(terminal.write).not.toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
+  })
+
+  it('replays reveal-time output when the headless snapshot is unavailable', async () => {
+    const terminal = {
+      name: 'terminal-a',
+      options: { scrollback: 1000 },
+      write: vi.fn((_data: string, callback?: () => void) => callback?.())
+    }
+    const pane = { id: 1, terminal }
+    const transport = { getPtyId: vi.fn(() => 'pty-1') }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    let resolveSnapshot!: (snapshot: { data: string; cols: number; rows: number } | null) => void
+    const snapshotPromise = new Promise<{ data: string; cols: number; rows: number } | null>(
+      (resolve) => {
+        resolveSnapshot = resolve
+      }
+    )
+    window.api.pty.serializeHeadlessBuffer = vi.fn(
+      () => snapshotPromise
+    ) as typeof window.api.pty.serializeHeadlessBuffer
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'fallback-hidden-output')
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[1, transport]]) as never },
+      replayingPanesRef: { current: new Map<number, number>() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+    queueHiddenTerminalOutput(terminal, 'pty-1', 'arrived-during-hydration')
+
+    resolveSnapshot(null)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(terminal.write).toHaveBeenCalledWith('fallback-hidden-output', expect.any(Function))
+    expect(terminal.write).toHaveBeenCalledWith('arrived-during-hydration', expect.any(Function))
   })
 
   it('does not let stale hydration clear output queued for a rebound PTY', async () => {
