@@ -122,8 +122,8 @@ export default function OnboardingFlow({
   return (
     <div
       className={cn(
-        'scrollbar-sleek fixed inset-0 z-[100] bg-background text-foreground',
-        isInlineTourRunning ? 'overflow-hidden' : 'overflow-auto'
+        'fixed inset-0 z-[100] bg-background text-foreground',
+        isInlineTourRunning ? 'overflow-hidden' : 'scrollbar-sleek overflow-auto'
       )}
       data-onboarding-overlay
     >
