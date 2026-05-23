@@ -283,15 +283,15 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
-    let resolveSnapshot:
-      | ((snapshot: { data: string; cols: number; rows: number } | null) => void)
-      | null = null
-    window.api.pty.serializeHeadlessBuffer = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveSnapshot = resolve
-        })
+    let resolveSnapshot!: (snapshot: { data: string; cols: number; rows: number } | null) => void
+    const snapshotPromise = new Promise<{ data: string; cols: number; rows: number } | null>(
+      (resolve) => {
+        resolveSnapshot = resolve
+      }
     )
+    window.api.pty.serializeHeadlessBuffer = vi.fn(
+      () => snapshotPromise
+    ) as typeof window.api.pty.serializeHeadlessBuffer
     queueHiddenTerminalOutput(terminal, 'pty-1', 'fallback-hidden-output')
 
     beginHookRender()
@@ -311,7 +311,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     queueHiddenTerminalOutput(terminal, 'pty-1', 'arrived-during-hydration')
 
-    resolveSnapshot?.({ data: 'headless-current-output', cols: 120, rows: 40 })
+    resolveSnapshot({ data: 'headless-current-output', cols: 120, rows: 40 })
     await Promise.resolve()
     await Promise.resolve()
 
