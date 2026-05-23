@@ -283,8 +283,10 @@ test.describe('Feature tour modal', () => {
       store.getState().showFeatureTourNudge()
     })
 
-    await expect(orcaPage.getByText('Explore Orca anytime')).toBeVisible()
-    await expect(orcaPage.getByText('Take the tour from Help > Explore Orca.')).toBeVisible()
+    await expect(orcaPage.getByText('You can take the tour anytime')).toBeVisible()
+    await expect(
+      orcaPage.getByText('Open Help > Explore Orca when you want the tour.')
+    ).toBeVisible()
     await expect(orcaPage.getByRole('complementary', { name: 'Explore Orca' })).toHaveCount(0)
     await expect
       .poll(async () => getStoreState<boolean>(orcaPage, 'featureTourNudgeVisible'))

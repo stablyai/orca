@@ -132,6 +132,8 @@ async function continueFromFeatureSetupToRepo(page: Page): Promise<void> {
     page.getByRole('heading', { name: /Interested in Orca's advanced features/i })
   ).toBeVisible()
   await onboardingFooterButton(page, /^Skip the tour\b/).click()
+  await expect(page.getByText('You can take the tour anytime')).toHaveCount(0)
+  await expect(page.getByText('Open Help > Explore Orca when you want the tour.')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
   await expect(page.getByText('7 of 7')).toBeVisible()
 }

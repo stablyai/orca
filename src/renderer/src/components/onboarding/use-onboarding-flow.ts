@@ -673,9 +673,6 @@ export function useOnboardingFlow(
         duration_ms: durationMs,
         advanced_via: 'button'
       })
-      toast.message('You can take the tour anytime', {
-        description: 'Open Help > Explore Orca when you want the tour.'
-      })
       setTourStarted(false)
       setStepIndex(repoStepIndex)
     } catch (err) {

@@ -23,8 +23,8 @@ export function FeatureTourNudge(): JSX.Element | null {
       return
     }
     notifiedRef.current = true
-    toast.message('Explore Orca anytime', {
-      description: 'Take the tour from Help > Explore Orca.',
+    toast.message('You can take the tour anytime', {
+      description: 'Open Help > Explore Orca when you want the tour.',
       action: {
         label: 'Take the tour',
         onClick: handleOpenTour
