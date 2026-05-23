@@ -911,7 +911,9 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x1b[99;5u')
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5u')
     expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
       paneKey,
       baselineUpdatedAt: 1_000,
@@ -920,6 +922,90 @@ describe('connectPanePty', () => {
       baselineAgentType: 'codex',
       intent: 'ctrl-c'
     })
+  })
+
+  it('drops the matching enhanced Ctrl+C key-up after sending the interrupt byte', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5:3u')
+    await flushAsyncTicks()
+
+    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5:3u')
+  })
+
+  it('drops an enhanced Ctrl+C key-up that arrives before the press sequence', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5:3u')
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
+    await flushAsyncTicks()
+
+    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5:3u')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5u')
+  })
+
+  it('normalizes combined enhanced Ctrl+C press and release input to one interrupt byte', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5:3u\x1b[99;5u')
+    await flushAsyncTicks()
+
+    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5:3u\x1b[99;5u')
   })
 
   it('infers interrupt for an explicit working status even if the title is already non-agent', async () => {
@@ -1086,6 +1172,38 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+    expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('normalizes enhanced Ctrl+C input for transports that cannot acknowledge writes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    delete transport.sendInputAccepted
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5:3u')
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+
+    expect(transport.sendInput).toHaveBeenCalledTimes(1)
+    expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5u')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[99;5:3u')
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
 

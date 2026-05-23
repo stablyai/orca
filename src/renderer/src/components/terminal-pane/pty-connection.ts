@@ -64,6 +64,10 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const HIDDEN_TERMINAL_METADATA_FLUSH_MS = 100
+type CtrlCKeyProtocolInput = {
+  hasPressOrRepeat: boolean
+  hasRelease: boolean
+}
 let codexRestartNoticePresenceSource: Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
@@ -94,6 +98,48 @@ function recordPtyConnectDiagnostic(message: string): void {
   if (diag.length > PTY_CONNECT_DIAG_LIMIT) {
     diag.splice(0, diag.length - PTY_CONNECT_DIAG_LIMIT)
   }
+}
+
+function parseCtrlCKeyProtocolInput(data: string): CtrlCKeyProtocolInput | null {
+  let offset = 0
+  let hasPressOrRepeat = false
+  let hasRelease = false
+
+  while (offset < data.length) {
+    if (!data.startsWith('\x1b[99;5', offset)) {
+      return null
+    }
+    offset += '\x1b[99;5'.length
+    let eventType = '1'
+    if (data[offset] === ':') {
+      const next = data[offset + 1]
+      if (next !== '1' && next !== '2' && next !== '3') {
+        return null
+      }
+      eventType = next
+      offset += 2
+    }
+    if (data[offset] !== 'u') {
+      return null
+    }
+    offset += 1
+    if (eventType === '3') {
+      hasRelease = true
+    } else {
+      hasPressOrRepeat = true
+    }
+  }
+
+  return hasPressOrRepeat || hasRelease ? { hasPressOrRepeat, hasRelease } : null
+}
+
+function normalizeInputForInterruptIntent(intent: AgentInterruptInputIntent, data: string): string {
+  if (intent !== 'ctrl-c') {
+    return data
+  }
+  // Why: Codex enables kitty keyboard release reporting, and xterm then emits
+  // CSI-u for Ctrl+C. Shells echo those bytes if the mode leaks past the TUI.
+  return parseCtrlCKeyProtocolInput(data)?.hasPressOrRepeat ? '\x03' : data
 }
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
@@ -385,6 +431,10 @@ export function connectPanePty(
   }
   const inferIntentFromExactTerminalInput = (data: string): AgentInterruptInputIntent | null => {
     if (data === '\x03') {
+      return 'ctrl-c'
+    }
+    const ctrlCProtocolInput = parseCtrlCKeyProtocolInput(data)
+    if (ctrlCProtocolInput?.hasPressOrRepeat) {
       return 'ctrl-c'
     }
     if (data === '\x1b') {
@@ -982,6 +1032,12 @@ export function connectPanePty(
       // normal cursor visibility when commands intentionally produce no echo.
       suppressTerminalCursorUntilOutputSettles(pane.terminal)
     }
+    const ctrlCProtocolInput = parseCtrlCKeyProtocolInput(data)
+    if (ctrlCProtocolInput?.hasRelease && !ctrlCProtocolInput.hasPressOrRepeat) {
+      // Why: Ctrl+C key-up reports are protocol bookkeeping; forwarding them
+      // after the press leaks CSI-u text into shells and exited TUIs.
+      return
+    }
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -990,8 +1046,9 @@ export function connectPanePty(
     const acknowledgedIntent = intent ?? inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && transport.sendInputAccepted) {
       clearPendingTerminalInputIntent()
+      const inputData = normalizeInputForInterruptIntent(acknowledgedIntent, data)
       const writePromise = transport
-        .sendInputAccepted(data)
+        .sendInputAccepted(inputData)
         .then((accepted) => {
           if (accepted) {
             interruptInference.observeInputIntent(acknowledgedIntent)
@@ -1005,7 +1062,8 @@ export function connectPanePty(
       return
     }
     if (intent) {
-      transport.sendInput(data)
+      const inputData = normalizeInputForInterruptIntent(intent, data)
+      transport.sendInput(inputData)
       clearPendingTerminalInputIntent()
       return
     }
