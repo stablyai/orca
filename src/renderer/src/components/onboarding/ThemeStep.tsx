@@ -17,6 +17,17 @@ type ThemeStepProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
+export function applyOnboardingThemeSelection(
+  id: GlobalSettings['theme'],
+  onThemeChange: (theme: GlobalSettings['theme']) => void,
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
+): void {
+  onThemeChange(id)
+  // Why: later onboarding controls also save settings. Persist the theme at
+  // selection time so those unrelated writes cannot reapply the old theme.
+  void updateSettings({ theme: id })
+}
+
 // The two UI-only states (`'idle'`, `'detecting'`) never fire telemetry. The
 // remaining states are exactly `DiscoveryStatusEmitted`, which is the
 // schema-side enum the compile-time guard in
@@ -179,7 +190,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
                   ? 'border-violet-500/60 bg-violet-500/10 ring-2 ring-violet-500/30'
                   : 'border-border bg-muted/30 hover:bg-muted/60'
               )}
-              onClick={() => onThemeChange(id)}
+              onClick={() => applyOnboardingThemeSelection(id, onThemeChange, updateSettings)}
             >
               <div className="relative mb-3 h-24 overflow-hidden rounded-lg border border-border">
                 <ChromePreview variant={id} />
