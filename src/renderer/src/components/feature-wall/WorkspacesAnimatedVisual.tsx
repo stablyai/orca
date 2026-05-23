@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { ClaudeIcon, OpenCodeGoIcon } from '../status-bar/icons'
@@ -19,6 +19,15 @@ const WORKSPACES: readonly WorkspaceMock[] = [
 
 const SELECTED_ID = WORKSPACES[0].id
 const STEP_MS = 3600
+const CARD_GAP_PX = 4
+const CARD_HEIGHT_PX_BY_ID: Record<string, number> = {
+  a: 66,
+  b: 120,
+  c: 92
+}
+const VISUAL_HEIGHT_PX =
+  WORKSPACES.reduce((height, ws) => height + CARD_HEIGHT_PX_BY_ID[ws.id], 0) +
+  CARD_GAP_PX * (WORKSPACES.length - 1)
 
 function CodexInlineIcon(): JSX.Element {
   return (
@@ -50,127 +59,104 @@ function StatusIcon({ running }: { running: boolean }): JSX.Element {
 
 export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
-  const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const [order, setOrder] = useState<readonly WorkspaceMock[]>(() => WORKSPACES.slice())
-  const prevRectsRef = useRef<Map<string, DOMRect>>(new Map())
+  const [{ order, promotedWorkspaceId }, setVisualState] = useState<{
+    order: readonly WorkspaceMock[]
+    promotedWorkspaceId: string | null
+  }>(() => ({ order: WORKSPACES.slice(), promotedWorkspaceId: null }))
 
-  // Top card is idle; every other card has its first agent running.
-  const running = useMemo(() => {
+  const slotTopById = useMemo(() => {
     const map = new Map<string, number>()
-    order.forEach((ws, i) => map.set(ws.id, i === 0 ? -1 : 0))
+    let top = 0
+    order.forEach((ws) => {
+      map.set(ws.id, top)
+      top += CARD_HEIGHT_PX_BY_ID[ws.id] + CARD_GAP_PX
+    })
     return map
   }, [order])
 
-  // Why: capture each card's pre-mutation rect so we can run a FLIP
-  // translate when the order rotates. Reads must happen synchronously after
-  // commit but before the browser paints, hence useLayoutEffect.
-  useLayoutEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    const cards = container.querySelectorAll<HTMLDivElement>('[data-ws-id]')
-    const beforeRects = prevRectsRef.current
-    if (!reducedMotion) {
-      cards.forEach((card) => {
-        const id = card.dataset.wsId
-        if (!id) {
-          return
-        }
-        const after = card.getBoundingClientRect()
-        const before = beforeRects.get(id)
-        if (!before) {
-          return
-        }
-        const dy = before.top - after.top
-        if (dy === 0) {
-          return
-        }
-        card.style.transition = 'none'
-        card.style.transform = `translateY(${dy}px)`
-        // Force reflow then play.
-        void card.offsetHeight
-        card.style.transition = ''
-        card.style.transform = ''
-      })
-    }
-    const next = new Map<string, DOMRect>()
-    cards.forEach((card) => {
-      const id = card.dataset.wsId
-      if (!id) {
-        return
-      }
-      next.set(id, card.getBoundingClientRect())
-    })
-    prevRectsRef.current = next
-  }, [order, reducedMotion])
+  // The selected workspace should read as the same completed item in every slot;
+  // the surrounding workspaces carry the running state while they cycle around it.
+  const running = useMemo(() => {
+    const map = new Map<string, number>()
+    WORKSPACES.forEach((ws) => map.set(ws.id, ws.id === SELECTED_ID ? -1 : 0))
+    return map
+  }, [])
 
   useEffect(() => {
     if (reducedMotion) {
+      setVisualState((current) => ({ ...current, promotedWorkspaceId: null }))
       return
     }
     const id = window.setInterval(() => {
-      setOrder((current) => {
-        const next = current.slice()
+      setVisualState((current) => {
+        const next = current.order.slice()
         const finishing = next.pop()
         if (!finishing) {
           return current
         }
         next.unshift(finishing)
-        return next
+        return { order: next, promotedWorkspaceId: finishing.id }
       })
     }, STEP_MS)
     return () => window.clearInterval(id)
   }, [reducedMotion])
 
   return (
-    <div
-      ref={containerRef}
-      className="overflow-hidden rounded-xl border border-border bg-card p-2.5 text-foreground"
-    >
-      {order.map((ws) => {
-        const isSelected = ws.id === SELECTED_ID
-        const runningAgentIndex = running.get(ws.id) ?? -1
-        return (
-          <div
-            key={ws.id}
-            data-ws-id={ws.id}
-            className={`relative rounded-[10px] px-2 py-2.5 transition-[background,box-shadow,transform] duration-[1100ms] [transition-timing-function:cubic-bezier(.2,.8,.2,1)] ${
-              isSelected ? 'bg-accent shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]' : 'bg-card'
-            } [&+[data-ws-id]]:mt-1`}
-          >
-            <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
-              <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
-              <div className="min-w-0">
-                <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
-                  {ws.name}
+    <div className="overflow-hidden rounded-xl border border-border bg-card p-2.5 text-foreground">
+      <div className="relative" style={{ height: VISUAL_HEIGHT_PX }}>
+        {WORKSPACES.map((ws) => {
+          const isSelected = ws.id === SELECTED_ID
+          const runningAgentIndex = running.get(ws.id) ?? -1
+          const slotTop = slotTopById.get(ws.id) ?? 0
+          const isPromoted = ws.id === promotedWorkspaceId
+          return (
+            <div
+              key={ws.id}
+              data-ws-id={ws.id}
+              className={`absolute inset-x-0 rounded-[10px] px-2 py-2.5 transition-[background,box-shadow,transform] duration-[1100ms] [transition-timing-function:cubic-bezier(.2,.8,.2,1)] ${
+                isSelected ? 'bg-accent shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]' : 'bg-card'
+              }`}
+              // Why: the card that was bottom before rotation must pass above the
+              // cards it crosses; stable slots avoid the old end-of-cycle FLIP snap.
+              style={{
+                height: CARD_HEIGHT_PX_BY_ID[ws.id],
+                transform: `translateY(${slotTop}px)`,
+                zIndex: isPromoted ? 30 : 10
+              }}
+            >
+              <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
+                <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+                <div className="min-w-0">
+                  <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
+                    {ws.name}
+                  </div>
                 </div>
               </div>
+              <div className="flex flex-col gap-2.5 pl-[30px] pr-2 pt-2.5 pb-0.5">
+                {ws.agents.map((kind, i) => {
+                  const isRunning = i === runningAgentIndex
+                  return (
+                    <div
+                      key={`${ws.id}-${i}`}
+                      className="grid grid-cols-[16px_16px_minmax(0,1fr)] items-center gap-2.5"
+                    >
+                      <span className="inline-flex size-4 items-center justify-center">
+                        <StatusIcon running={isRunning} />
+                      </span>
+                      <AgentIcon kind={kind} />
+                      <span
+                        className="block h-[9px] rounded-[5px] bg-foreground/[0.16]"
+                        style={{ width: `${60 + ((i * 7) % 20)}%` }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-            <div className="flex flex-col gap-2.5 pl-[30px] pr-2 pt-2.5 pb-0.5">
-              {ws.agents.map((kind, i) => {
-                const isRunning = i === runningAgentIndex
-                return (
-                  <div
-                    key={`${ws.id}-${i}`}
-                    className="grid grid-cols-[16px_16px_minmax(0,1fr)] items-center gap-2.5"
-                  >
-                    <span className="inline-flex size-4 items-center justify-center">
-                      <StatusIcon running={isRunning} />
-                    </span>
-                    <AgentIcon kind={kind} />
-                    <span
-                      className="block h-[9px] rounded-[5px] bg-foreground/[0.16]"
-                      style={{ width: `${60 + ((i * 7) % 20)}%` }}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
