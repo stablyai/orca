@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Import } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -41,12 +41,8 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
           (worktree) => !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
         ).length
       : 0
-  const hiddenWorktreeLabel = `${hiddenCount} non-Orca ${
-    hiddenCount === 1 ? 'worktree' : 'worktrees'
-  }`
-  const importedWorktreeLabel = `${otherCount} non-Orca ${
-    otherCount === 1 ? 'worktree' : 'worktrees'
-  }`
+  const hiddenWorktreeLabel = `${hiddenCount} ${hiddenCount === 1 ? 'worktree' : 'worktrees'}`
+  const shownWorktreeLabel = `${otherCount} ${otherCount === 1 ? 'worktree' : 'worktrees'}`
 
   const handleToggle = useCallback(async () => {
     if (!repoId) {
@@ -65,23 +61,21 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Import Worktrees</DialogTitle>
+          <DialogTitle>Non-Orca worktrees</DialogTitle>
           <DialogDescription>{repo.displayName}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-            <Import className="size-4" />
+            {showOther ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">
-              {showOther
-                ? 'Imported non-Orca worktrees into sidebar'
-                : 'Import non-Orca worktrees into sidebar'}
+              {showOther ? 'Shown in sidebar' : 'Hidden from sidebar'}
             </div>
             <div className="text-xs text-muted-foreground">
               {showOther
-                ? `${importedWorktreeLabel} imported`
+                ? `${shownWorktreeLabel} currently shown`
                 : `${hiddenWorktreeLabel} available to import`}
             </div>
           </div>
@@ -90,7 +84,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
             variant={showOther ? 'secondary' : 'outline'}
             onClick={handleToggle}
           >
-            {showOther ? 'Remove' : 'Import'}
+            {showOther ? 'Hide' : 'Import'}
           </Button>
         </div>
       </DialogContent>

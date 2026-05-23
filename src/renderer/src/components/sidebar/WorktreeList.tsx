@@ -132,6 +132,10 @@ import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { getRepositoryBadgeColorSectionId } from '@/components/settings/repository-settings-targets'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import {
+  effectiveExternalWorktreeVisibility,
+  isLegacyRepoForExternalWorktreeVisibility
+} from '../../../../shared/worktree-ownership'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -207,6 +211,14 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
+}
+
+function getWorktreeVisibilityMenuLabel(repo: Repo): string {
+  const visibility = effectiveExternalWorktreeVisibility(
+    repo,
+    isLegacyRepoForExternalWorktreeVisibility(repo)
+  )
+  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Import Worktrees'
 }
 
 const LINEAGE_INDENT = 18
@@ -1990,7 +2002,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               }}
                             >
                               <Eye className="size-3.5" />
-                              Import Worktrees
+                              {getWorktreeVisibilityMenuLabel(row.repo)}
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
