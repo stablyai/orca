@@ -15,6 +15,7 @@
 
 import {
   test as base,
+  expect as playwrightExpect,
   _electron as electron,
   type Page,
   type ElectronApplication,
@@ -264,14 +265,22 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     }, repoPath)
 
     // Fetch repos in the renderer store so it picks up the new repo
-    await page.evaluate(async () => {
+    await page.evaluate(async (repoPath) => {
       const store = window.__store
       if (!store) {
         return
       }
 
       await store.getState().fetchRepos()
-    })
+      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+      if (!repo) {
+        throw new Error(`Expected e2e repo to be loaded: ${repoPath}`)
+      }
+      // Why: the fixture deliberately creates external Git worktrees. New
+      // repos hide those by default after the visibility rollout, so opt this
+      // disposable repo into showing them before specs assert on worktree state.
+      await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+    }, repoPath)
 
     // Wait for the repo to appear and fetch its worktrees
     await page.evaluate(async () => {
@@ -285,6 +294,31 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         await store.getState().fetchWorktrees(repo.id)
       }
     })
+
+    // Why: parallel specs mutate real git worktrees in the shared fixture repo.
+    // A first scan can briefly return no rows while git holds a worktree lock,
+    // so poll the public fetch path until the seeded primary + secondary load.
+    await playwrightExpect
+      .poll(
+        () =>
+          page.evaluate(async (repoPath) => {
+            const store = window.__store
+            if (!store) {
+              return 0
+            }
+            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+            if (!repo) {
+              return 0
+            }
+            await store.getState().fetchWorktrees(repo.id)
+            return store.getState().worktreesByRepo[repo.id]?.length ?? 0
+          }, repoPath),
+        {
+          timeout: 30_000,
+          message: 'seeded e2e worktrees did not load'
+        }
+      )
+      .toBeGreaterThanOrEqual(2)
 
     // Wait for workspaceSessionReady to become true
     await page.waitForFunction(

@@ -97,11 +97,14 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
+// Why: shard-level load can let the first ready line scroll out before
+// Playwright polls, so the marker stays in repeated output too.
 function backgroundCodexScript(runId: string, intervalMs: number, payloadChars: number): string {
   return `
 const id = process.argv[2] ?? 'bg'
+const readyMarker = 'BG_READY_${runId}_' + id
 let seq = 0
-process.stdout.write('BG_READY_${runId}_' + id + '\\n')
+process.stdout.write(readyMarker + '\\n')
 const emit = () => {
   seq += 1
   const spinner = ['|','/','-','\\\\'][seq % 4]
@@ -116,7 +119,7 @@ const emit = () => {
   }
   process.stdout.write('\\x1b]0;' + spinner + ' Codex ' + id + ' ' + seq + '\\x07')
   process.stdout.write('\\x1b]9999;' + JSON.stringify(payload) + '\\x07')
-  process.stdout.write('\\r\\x1b[2K' + spinner + ' codex ' + id + ' thinking ' + seq + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
+  process.stdout.write('\\r\\x1b[2K' + spinner + ' codex ' + id + ' thinking ' + seq + ' ' + readyMarker + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
 }
 setTimeout(() => setInterval(emit, ${intervalMs}), 250)
 `
@@ -131,7 +134,8 @@ function realCodexBackgroundScript(
 import { spawn } from 'node:child_process'
 
 const id = process.argv[2] ?? 'bg'
-process.stdout.write('BG_READY_${runId}_' + id + '\\n')
+const readyMarker = 'BG_READY_${runId}_' + id
+process.stdout.write(readyMarker + '\\n')
 
 let seq = 0
 const emit = () => {
@@ -147,7 +151,7 @@ const emit = () => {
   }
   process.stdout.write('\\x1b]0;' + spinner + ' Real Codex ' + id + ' ' + seq + '\\x07')
   process.stdout.write('\\x1b]9999;' + JSON.stringify(payload) + '\\x07')
-  process.stdout.write('\\r\\x1b[2K' + spinner + ' real codex ' + id + ' active ' + seq + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
+  process.stdout.write('\\r\\x1b[2K' + spinner + ' real codex ' + id + ' active ' + seq + ' ' + readyMarker + ' ' + 'x'.repeat(${payloadChars}) + '\\n')
 }
 const heartbeat = setInterval(emit, ${intervalMs})
 
