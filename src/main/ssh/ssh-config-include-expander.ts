@@ -1,4 +1,4 @@
-import { existsSync, globSync, readFileSync, realpathSync } from 'fs'
+import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'fs'
 import { homedir, hostname, userInfo } from 'os'
 import { posix, win32 } from 'path'
 
@@ -14,6 +14,8 @@ type IncludeExpansionContext = {
   username: string
 }
 
+const MAX_INCLUDE_GLOB_MATCHES = 256
+const MAX_INCLUDE_FILE_BYTES = 1024 * 1024
 const TARGET_DEPENDENT_INCLUDE_TOKENS = new Set(['h', 'n', 'p', 'r', 'j', 'k', 'C'])
 
 export function expandSshConfigIncludes(configPath: string): string {
@@ -76,6 +78,10 @@ function readCachedFile(filePath: string, context: IncludeExpansionContext): str
     return cached
   }
 
+  if (!isReadableRegularFile(filePath)) {
+    return null
+  }
+
   try {
     const content = readFileSync(filePath, 'utf-8')
     context.cache.set(filePath, content)
@@ -108,19 +114,19 @@ function splitQuotedArguments(input: string): string[] {
   for (let i = 0; i < input.length; i += 1) {
     const char = input[i]
 
-    if (char === '"' && input[i - 1] !== '\\') {
+    if (inQuotes && char === '\\' && input[i + 1] === '"') {
+      current += '"'
+      i += 1
+      continue
+    }
+
+    if (char === '"') {
       inQuotes = !inQuotes
       continue
     }
 
     if (!inQuotes && char === '#') {
       break
-    }
-
-    if (inQuotes && char === '\\' && i + 1 < input.length) {
-      current += input[i + 1]
-      i += 1
-      continue
     }
 
     if (!inQuotes && /\s/.test(char)) {
@@ -155,7 +161,14 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
   const absolutePattern = resolveIncludePatternPath(withTokens, context)
   if (hasGlobPattern(absolutePattern)) {
     try {
-      return globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+      const matches = globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+      if (matches.length > MAX_INCLUDE_GLOB_MATCHES) {
+        console.warn(
+          `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
+        )
+        return matches.slice(0, MAX_INCLUDE_GLOB_MATCHES)
+      }
+      return matches
     } catch {
       return []
     }
@@ -269,6 +282,25 @@ function getCanonicalPath(filePath: string): string | null {
     return realpathSync.native(filePath)
   } catch {
     return null
+  }
+}
+
+function isReadableRegularFile(filePath: string): boolean {
+  try {
+    const stats = statSync(filePath)
+    if (!stats.isFile()) {
+      console.warn(`[ssh] Skipping SSH config include "${filePath}": not a regular file`)
+      return false
+    }
+    if (stats.size > MAX_INCLUDE_FILE_BYTES) {
+      console.warn(
+        `[ssh] Skipping SSH config include "${filePath}": size ${stats.size} exceeds ${MAX_INCLUDE_FILE_BYTES} bytes`
+      )
+      return false
+    }
+    return true
+  } catch {
+    return false
   }
 }
 

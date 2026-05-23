@@ -47,7 +47,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 
       const patterns = value.split(/\s+/)
       const concretePatterns = patterns.filter(
-        (pattern) => !pattern.includes('*') && !pattern.includes('?')
+        (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
       )
       if (concretePatterns.length === 0) {
         current = []

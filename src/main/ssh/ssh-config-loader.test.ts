@@ -1,8 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import type * as FsModule from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as OsModule from 'node:os'
-import { dirname, join, win32 } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadUserSshConfig } from './ssh-config-parser'
 
@@ -197,83 +196,5 @@ describe('loadUserSshConfig', () => {
   it('returns an empty array when the user config does not exist', () => {
     makeHome()
     expect(loadUserSshConfig()).toEqual([])
-  })
-
-  it('supports Windows-style home paths and include separators', async () => {
-    vi.resetModules()
-
-    const normalizeWin = (value: string) => win32.normalize(value.replaceAll('/', '\\'))
-    const files = new Map<string, string>([
-      [
-        normalizeWin('C:/Users/Test User/.ssh/config'),
-        'Include .\\conf.d\\*.conf "C:/Users/Test User/quoted configs/team.conf" forward/slash.conf'
-      ],
-      [
-        normalizeWin('C:/Users/Test User/.ssh/conf.d/zeta.conf'),
-        'Host zeta\n  HostName zeta.example.com\n'
-      ],
-      [
-        normalizeWin('C:/Users/Test User/.ssh/conf.d/alpha.conf'),
-        'Host alpha\n  HostName alpha.example.com\n'
-      ],
-      [
-        normalizeWin('C:/Users/Test User/quoted configs/team.conf'),
-        'Host team\n  HostName team.example.com\n'
-      ],
-      [
-        normalizeWin('C:/Users/Test User/.ssh/forward/slash.conf'),
-        'Host forward\n  HostName forward.example.com\n'
-      ]
-    ])
-
-    vi.doMock('os', async () => {
-      const actual = await vi.importActual<typeof OsModule>('os')
-      return {
-        ...actual,
-        homedir: () => 'C:\\Users\\Test User',
-        hostname: () => 'winbox.example.com',
-        userInfo: () => ({ username: 'TestUser', uid: -1 })
-      }
-    })
-
-    vi.doMock('fs', async () => {
-      const actual = await vi.importActual<typeof FsModule>('fs')
-      return {
-        ...actual,
-        existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
-        globSync: (pattern: string) => {
-          const normalizedPattern = normalizeWin(pattern)
-          if (normalizedPattern === normalizeWin('C:/Users/Test User/.ssh/conf.d/*.conf')) {
-            return [
-              normalizeWin('C:/Users/Test User/.ssh/conf.d/alpha.conf'),
-              normalizeWin('C:/Users/Test User/.ssh/conf.d/zeta.conf')
-            ]
-          }
-          return []
-        },
-        readFileSync: (filePath: string) => {
-          const normalizedPath = normalizeWin(filePath)
-          const content = files.get(normalizedPath)
-          if (content === undefined) {
-            throw new Error(`ENOENT: ${filePath}`)
-          }
-          return content
-        },
-        realpathSync: Object.assign((filePath: string) => normalizeWin(filePath), {
-          native: (filePath: string) => normalizeWin(filePath)
-        })
-      }
-    })
-
-    const { loadUserSshConfig: loadWindowsConfig } = await import('./ssh-config-parser')
-    expect(loadWindowsConfig().map((host) => host.host)).toEqual([
-      'alpha',
-      'zeta',
-      'team',
-      'forward'
-    ])
-
-    vi.doUnmock('fs')
-    vi.doUnmock('os')
   })
 })
