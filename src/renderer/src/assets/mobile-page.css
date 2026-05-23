@@ -304,6 +304,17 @@
 
 /* Step flow ─────────────────────────────────────────────────────── */
 
+.mobile-page-root .mp-flow-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--card) 94%, var(--background));
+  color: var(--card-foreground);
+}
+
 .mobile-page-root .mp-flow-header {
   margin-bottom: 24px;
 }
@@ -1862,6 +1873,10 @@
 
   .mobile-page-root .mp-hero-copy {
     min-height: 0;
+  }
+
+  .mobile-page-root .mp-flow-card {
+    padding: 20px;
   }
 
   .mobile-page-root .mp-h1 {

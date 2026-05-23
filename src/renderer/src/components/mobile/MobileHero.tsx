@@ -168,7 +168,7 @@ export function HeroFlow({
   const isLast = stepIdx === 1
 
   return (
-    <div>
+    <div className="mp-flow-card">
       <div className="mp-flow-viewport">
         <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
           <div className="mp-step2-layout">
