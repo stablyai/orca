@@ -75,6 +75,19 @@ describe('getFeatureWallCompletionProgress', () => {
     ).toBe(true)
   })
 
+  it('keeps the agents workflow complete after view-only sub-step visits are restored', () => {
+    expect(
+      getFeatureWallCompletionProgress(
+        completionInput({
+          visitedAgentSteps: new Set<AgentsStepId>(['statuses', 'orchestration']),
+          hasUsageAccount: true,
+          notificationsConfigured: true,
+          orchestrationSkillInstalled: true
+        })
+      ).workflowDone['agents-orchestration']
+    ).toBe(true)
+  })
+
   it('keeps the review workflow complete after the notes visit is restored', () => {
     expect(
       getFeatureWallCompletionProgress(
@@ -99,7 +112,7 @@ describe('getFeatureWallCompletionProgress', () => {
 })
 
 describe('normalizeFeatureWallVisitedAgentSteps', () => {
-  it('keeps persisted orchestration visits and drops transient or unknown steps', () => {
+  it('keeps persisted agents visits and drops setup-backed or unknown steps', () => {
     expect(
       normalizeFeatureWallVisitedAgentSteps([
         'statuses',
@@ -108,7 +121,7 @@ describe('normalizeFeatureWallVisitedAgentSteps', () => {
         'orchestration',
         'bogus'
       ])
-    ).toEqual(['orchestration'])
+    ).toEqual(['statuses', 'orchestration'])
   })
 })
 

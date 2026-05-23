@@ -2,7 +2,7 @@ import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps
 import type { ReviewStepId } from '../../../../shared/review-steps'
 import type { WorkbenchStepId } from '../../../../shared/workbench-steps'
 
-const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['orchestration'])
+const PERSISTED_AGENT_STEP_IDS = new Set<AgentsStepId>(['statuses', 'orchestration'])
 const VISITED_AGENT_STEPS_STORAGE_KEY = 'orca.featureWall.visitedAgentSteps.v1'
 const PERSISTED_WORKBENCH_STEP_IDS = new Set<WorkbenchStepId>(['terminal', 'editor', 'browser'])
 const VISITED_WORKBENCH_STEPS_STORAGE_KEY = 'orca.featureWall.visitedWorkbenchSteps.v1'
