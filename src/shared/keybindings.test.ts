@@ -192,7 +192,7 @@ describe('keybindings', () => {
     expect(
       keybindingMatchesAction(
         'floatingTerminal.toggle',
-        { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false },
+        { key: 'a', code: 'KeyA', control: true, meta: false, alt: true, shift: false },
         'linux',
         undefined,
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }

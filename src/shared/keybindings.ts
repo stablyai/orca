@@ -317,7 +317,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'floating terminal', 'terminal'],
-    defaultBindings: platformBindings(['Mod+Alt+T']),
+    defaultBindings: platformBindings(['Mod+Alt+A']),
     allowInTerminal: true
   },
   {
