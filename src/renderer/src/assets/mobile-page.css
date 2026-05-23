@@ -15,6 +15,10 @@
 .mobile-page-root {
   /* Real mobile-app tokens (from mobile/src/theme/mobile-theme.ts) — used
      inside .mp-device-screen so simulated screens match the app exactly. */
+  --mp-flow-card-padding: 24px;
+  --mp-flow-card-border-width: 1px;
+  --mp-flow-card-inset: calc(var(--mp-flow-card-padding) + var(--mp-flow-card-border-width));
+  --mp-flow-shell-height: 400px;
   --m-bg-base: #111111;
   --m-bg-panel: #1a1a1a;
   --m-bg-raised: #242424;
@@ -68,15 +72,20 @@
   display: flex;
   flex-direction: column;
   /* Why: min-height (rather than fixed height) keeps the intro/flow
-     screens at a uniform 420px box for centering, while letting the
+     screens at a uniform 400px box for centering, while letting the
      paired view grow when the device list needs more room. */
-  min-height: 390px;
+  min-height: var(--mp-flow-shell-height);
 }
 
 .mobile-page-root .mp-hero-copy > * {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+}
+
+.mobile-page-root .mp-intro-shell,
+.mobile-page-root .mp-flow-card {
+  min-height: var(--mp-flow-shell-height);
 }
 
 .mobile-page-root .mp-eyebrow-row {
@@ -251,6 +260,10 @@
   gap: 14px;
   margin-top: auto;
   padding-top: 16px;
+  /* Why: the intro CTA should land exactly where the step-flow primary
+     button appears, so users can click through without moving the pointer. */
+  padding-right: var(--mp-flow-card-inset);
+  padding-bottom: var(--mp-flow-card-inset);
 }
 
 .mobile-page-root .mp-primary-action {
@@ -276,6 +289,12 @@
 .mobile-page-root .mp-primary-action svg {
   width: 13px;
   height: 13px;
+}
+
+.mobile-page-root .mp-flow-primary-action {
+  width: 150px;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .mobile-page-root .mp-secondary-action {
@@ -308,8 +327,8 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  padding: 24px;
-  border: 1px solid var(--border);
+  padding: var(--mp-flow-card-padding);
+  border: var(--mp-flow-card-border-width) solid var(--border);
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--card) 94%, var(--background));
   color: var(--card-foreground);
@@ -1863,6 +1882,10 @@
 
 /* Narrow viewport: stack the hero so the phone falls below the copy */
 @media (max-width: 920px) {
+  .mobile-page-root {
+    --mp-flow-card-padding: 20px;
+  }
+
   .mobile-page-root .mp-hero {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -1873,10 +1896,6 @@
 
   .mobile-page-root .mp-hero-copy {
     min-height: 0;
-  }
-
-  .mobile-page-root .mp-flow-card {
-    padding: 20px;
   }
 
   .mobile-page-root .mp-h1 {
@@ -1910,7 +1929,7 @@
   }
 
   .mobile-page-root .mp-hero-copy {
-    min-height: 350px;
+    min-height: var(--mp-flow-shell-height);
   }
 
   .mobile-page-root .mp-h1 {

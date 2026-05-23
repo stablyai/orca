@@ -27,7 +27,7 @@ function getDeviceLabel(): string {
 
 export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Element {
   return (
-    <div>
+    <div className="mp-intro-shell">
       <div className="mp-eyebrow-row">
         <span className="mp-eyebrow">Orca Mobile</span>
       </div>
@@ -48,7 +48,11 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
         </span>
       </div>
       <div className="mp-cta-row">
-        <button type="button" className="mp-primary-action" onClick={onStart}>
+        <button
+          type="button"
+          className="mp-primary-action mp-flow-primary-action"
+          onClick={onStart}
+        >
           Get started
           <ArrowRight className="size-3.5" />
         </button>
@@ -308,7 +312,11 @@ export function HeroFlow({
         </button>
         {isLast ? (
           onDone ? (
-            <button type="button" className="mp-primary-action" onClick={onDone}>
+            <button
+              type="button"
+              className="mp-primary-action mp-flow-primary-action"
+              onClick={onDone}
+            >
               Done
               <ArrowRight className="size-3.5" />
             </button>
@@ -316,7 +324,11 @@ export function HeroFlow({
             <span />
           )
         ) : (
-          <button type="button" className="mp-flow-continue" onClick={onContinue}>
+          <button
+            type="button"
+            className="mp-flow-continue mp-flow-primary-action"
+            onClick={onContinue}
+          >
             Continue
             <ArrowRight className="size-3.5" />
           </button>
