@@ -15,6 +15,7 @@ import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
+import type { RepoIcon } from './repo-icon'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -75,6 +76,7 @@ export type Repo = {
   path: string
   displayName: string
   badgeColor: string
+  repoIcon?: RepoIcon | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string

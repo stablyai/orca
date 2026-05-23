@@ -677,6 +677,6 @@ describe('WorktreeList header styles', () => {
 
     expect(source).toContain('resolveRepoGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')
-    expect(source).toContain('style={repoHeaderColor ? { color: repoHeaderColor } : undefined}')
+    expect(source).toContain('color={repoHeaderColor}')
   })
 })

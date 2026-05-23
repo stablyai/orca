@@ -13,6 +13,7 @@ import type {
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
@@ -476,6 +477,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             Repo,
             | 'displayName'
             | 'badgeColor'
+            | 'repoIcon'
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'kind'
@@ -513,6 +515,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
+        }
+      }
+      if ('repoIcon' in updates) {
+        const repoIcon = sanitizeRepoIcon(updates.repoIcon)
+        if (repoIcon === undefined) {
+          delete updates.repoIcon
+        } else {
+          updates.repoIcon = repoIcon
         }
       }
       if (

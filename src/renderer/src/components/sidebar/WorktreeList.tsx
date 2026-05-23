@@ -11,8 +11,8 @@ import {
   CircleX,
   Ellipsis,
   Eye,
-  Palette,
   Plus,
+  Shapes,
   SlidersHorizontal,
   Trash2,
   Workflow
@@ -129,13 +129,14 @@ import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import { getRepositoryBadgeColorSectionId } from '@/components/settings/repository-settings-targets'
+import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -1917,9 +1918,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                           repoHeaderColor ? 'text-muted-foreground' : row.tone
                         )}
-                        style={repoHeaderColor ? { color: repoHeaderColor } : undefined}
                       >
-                        <row.icon className={row.repo ? 'size-3.5' : 'size-3'} />
+                        {row.repo ? (
+                          <RepoIconGlyph
+                            repoIcon={row.repo.repoIcon}
+                            color={repoHeaderColor}
+                            className="size-4"
+                            iconClassName="size-3.5"
+                          />
+                        ) : (
+                          <row.icon className="size-3" />
+                        )}
                       </div>
                     ) : null}
 
@@ -1987,13 +1996,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               if (row.repo) {
                                 handleOpenRepoSettings(
                                   row.repo.id,
-                                  getRepositoryBadgeColorSectionId(row.repo.id)
+                                  getRepositoryIconSectionId(row.repo.id)
                                 )
                               }
                             }}
                           >
-                            <Palette className="size-3.5" />
-                            Change Project Color
+                            <Shapes className="size-3.5" />
+                            Change Project Icon
                           </DropdownMenuItem>
                           {row.repo && isGitRepoKind(row.repo) ? (
                             <DropdownMenuItem

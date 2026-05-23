@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -31,6 +32,10 @@ const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
     badgeColor: OptionalString,
+    repoIcon: z
+      .unknown()
+      .transform((value) => sanitizeRepoIcon(value))
+      .optional(),
     hookSettings: z.unknown().optional(),
     worktreeBaseRef: OptionalString,
     kind: z.enum(['git', 'folder']).optional(),
