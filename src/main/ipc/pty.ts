@@ -659,6 +659,7 @@ export function registerPtyHandlers(
   // throughput. Keystroke echo/redraws bypass this below because agent TUIs
   // already spend tens of ms producing their redraw.
   const pendingData = new Map<string, string>()
+  const headlessSnapshotHeldPtyIds = new Set<string>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
@@ -667,6 +668,15 @@ export function registerPtyHandlers(
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
+  const hasFlushablePendingData = (): boolean => {
+    for (const id of pendingData.keys()) {
+      if (!headlessSnapshotHeldPtyIds.has(id)) {
+        return true
+      }
+    }
+    return false
+  }
+
   const flushPendingData = (): void => {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
@@ -674,29 +684,40 @@ export function registerPtyHandlers(
       return
     }
     for (const [id, data] of pendingData) {
+      if (headlessSnapshotHeldPtyIds.has(id)) {
+        continue
+      }
       mainWindow.webContents.send('pty:data', { id, data })
+      pendingData.delete(id)
     }
-    pendingData.clear()
+    if (hasFlushablePendingData()) {
+      flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
+    }
   }
 
   const clearFlushTimerIfIdle = (): void => {
-    if (pendingData.size > 0 || flushTimer === null) {
+    if (hasFlushablePendingData() || flushTimer === null) {
       return
     }
     clearTimeout(flushTimer)
     flushTimer = null
   }
 
-  const flushPendingDataForPty = (id: string): void => {
-    const data = pendingData.get(id)
-    if (!data) {
+  const sendPtyDataToRenderer = (id: string, data: string): void => {
+    if (!data || mainWindow.isDestroyed()) {
       return
     }
-    pendingData.delete(id)
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:data', { id, data })
+    mainWindow.webContents.send('pty:data', { id, data })
+  }
+
+  const takePendingDataForPty = (id: string): string => {
+    const data = pendingData.get(id)
+    if (!data) {
+      return ''
     }
+    pendingData.delete(id)
     clearFlushTimerIfIdle()
+    return data
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -737,7 +758,7 @@ export function registerPtyHandlers(
         nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
         lastInputAt !== undefined &&
         performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
-      if (isInteractiveOutput) {
+      if (isInteractiveOutput && !headlessSnapshotHeldPtyIds.has(payload.id)) {
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
@@ -749,7 +770,7 @@ export function registerPtyHandlers(
         return
       }
       pendingData.set(payload.id, nextData)
-      if (!flushTimer) {
+      if (!flushTimer && hasFlushablePendingData()) {
         flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
       }
     })
@@ -1848,12 +1869,25 @@ export function registerPtyHandlers(
         opts.scrollbackRows = Math.floor(args.scrollbackRows)
       }
       // Why: hidden-pane reveal uses the headless snapshot as the authoritative
-      // paint. Flush any ≤8ms main-process PTY batch before and after the
-      // snapshot so renderer-side hydration can drop its duplicate fallback
-      // queue without losing bytes that already reached the headless model.
-      flushPendingDataForPty(args.id)
-      const snapshot = await runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
-      flushPendingDataForPty(args.id)
+      // paint. Hold any ≤8ms main-process PTY batches while serializing: a
+      // successful headless snapshot already contains them, while a null
+      // snapshot must release them so the renderer fallback can replay them.
+      const pendingBeforeSnapshot = takePendingDataForPty(args.id)
+      headlessSnapshotHeldPtyIds.add(args.id)
+      let snapshot: { data: string; cols: number; rows: number } | null
+      try {
+        snapshot = await runtime.serializeHeadlessTerminalBufferForRenderer(args.id, opts)
+      } catch (err) {
+        const pendingDuringSnapshot = takePendingDataForPty(args.id)
+        headlessSnapshotHeldPtyIds.delete(args.id)
+        sendPtyDataToRenderer(args.id, pendingBeforeSnapshot + pendingDuringSnapshot)
+        throw err
+      }
+      const pendingDuringSnapshot = takePendingDataForPty(args.id)
+      headlessSnapshotHeldPtyIds.delete(args.id)
+      if (!snapshot) {
+        sendPtyDataToRenderer(args.id, pendingBeforeSnapshot + pendingDuringSnapshot)
+      }
       return snapshot
     }
   )

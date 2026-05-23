@@ -3381,24 +3381,23 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('flushes pending renderer PTY batches around headless serialization', async () => {
+    it('discards pending renderer PTY batches when the headless snapshot includes them', async () => {
       vi.useFakeTimers()
       try {
         const mockProc = createMockProc()
         spawnMock.mockReturnValue(mockProc.proc)
+        let resolveSnapshot!: (snapshot: { data: string; cols: number; rows: number }) => void
         const runtime = {
           setPtyController: vi.fn(),
           onPtySpawned: vi.fn(),
           onPtyData: vi.fn(),
           onPtyExit: vi.fn(),
           preAllocateHandleForPty: vi.fn(),
-          serializeHeadlessTerminalBufferForRenderer: vi.fn(async () => {
+          serializeHeadlessTerminalBufferForRenderer: vi.fn(() => {
             mockProc.emitData('during-serialize')
-            return {
-              data: 'headless',
-              cols: 100,
-              rows: 30
-            }
+            return new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+              resolveSnapshot = resolve
+            })
           })
         }
         handlers.clear()
@@ -3411,20 +3410,119 @@ describe('registerPtyHandlers', () => {
         mainWindow.webContents.send.mockClear()
         mockProc.emitData('before-serialize')
 
-        await handlers.get('pty:serializeHeadlessBuffer')!(null, { id: spawnResult.id })
+        const pending = handlers.get('pty:serializeHeadlessBuffer')!(null, { id: spawnResult.id })
+        vi.advanceTimersByTime(8)
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:data',
+          expect.objectContaining({ id: spawnResult.id })
+        )
+        resolveSnapshot({
+          data: 'headless',
+          cols: 100,
+          rows: 30
+        })
+        await pending
 
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-          id: spawnResult.id,
-          data: 'before-serialize'
-        })
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-          id: spawnResult.id,
-          data: 'during-serialize'
-        })
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:data',
+          expect.objectContaining({ id: spawnResult.id })
+        )
         expect(runtime.serializeHeadlessTerminalBufferForRenderer).toHaveBeenCalledWith(
           spawnResult.id,
           {}
         )
+        mainWindow.webContents.send.mockClear()
+        vi.advanceTimersByTime(8)
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases pending renderer PTY batches when headless serialization cannot snapshot', async () => {
+      vi.useFakeTimers()
+      try {
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        let resolveSnapshot!: (snapshot: null) => void
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyData: vi.fn(),
+          onPtyExit: vi.fn(),
+          preAllocateHandleForPty: vi.fn(),
+          serializeHeadlessTerminalBufferForRenderer: vi.fn(() => {
+            mockProc.emitData('during-serialize')
+            return new Promise<null>((resolve) => {
+              resolveSnapshot = resolve
+            })
+          })
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        mainWindow.webContents.send.mockClear()
+        mockProc.emitData('before-serialize')
+
+        const pending = handlers.get('pty:serializeHeadlessBuffer')!(null, { id: spawnResult.id })
+        vi.advanceTimersByTime(8)
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:data',
+          expect.objectContaining({ id: spawnResult.id })
+        )
+        resolveSnapshot(null)
+        await pending
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'before-serializeduring-serialize'
+        })
+        mainWindow.webContents.send.mockClear()
+        vi.advanceTimersByTime(8)
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases pending renderer PTY batches when headless serialization throws', async () => {
+      vi.useFakeTimers()
+      try {
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyData: vi.fn(),
+          onPtyExit: vi.fn(),
+          preAllocateHandleForPty: vi.fn(),
+          serializeHeadlessTerminalBufferForRenderer: vi.fn(async () => {
+            mockProc.emitData('during-serialize')
+            throw new Error('snapshot failed')
+          })
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        mainWindow.webContents.send.mockClear()
+        mockProc.emitData('before-serialize')
+
+        await expect(
+          handlers.get('pty:serializeHeadlessBuffer')!(null, { id: spawnResult.id })
+        ).rejects.toThrow('snapshot failed')
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'before-serializeduring-serialize'
+        })
         mainWindow.webContents.send.mockClear()
         vi.advanceTimersByTime(8)
         expect(mainWindow.webContents.send).not.toHaveBeenCalled()

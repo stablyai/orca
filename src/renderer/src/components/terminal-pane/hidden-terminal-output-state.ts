@@ -6,11 +6,17 @@ type TerminalOutputTarget = {
 
 type HiddenTerminalState = {
   ptyId: string
-  chunks: string[]
+  chunks: HiddenTerminalChunk[]
   bytes: number
   needsHydration: boolean
   hydrating: boolean
   hydrationToken: number
+  nextChunkSeq: number
+}
+
+type HiddenTerminalChunk = {
+  seq: number
+  data: string
 }
 
 type HiddenTerminalOutputDebugSnapshot = {
@@ -31,7 +37,7 @@ export type HiddenTerminalHydration = {
   ptyId: string
   fallbackData: string
   token: number
-  fallbackChunkCount: number
+  fallbackLastSeq: number
 }
 
 const MAX_FALLBACK_BYTES = 512 * 1024
@@ -78,17 +84,17 @@ function trimFallback(state: HiddenTerminalState): void {
     if (!dropped) {
       continue
     }
-    state.bytes -= dropped.length
+    state.bytes -= dropped.data.length
     if (debugEnabled) {
-      debugState.droppedBytes += dropped.length
+      debugState.droppedBytes += dropped.data.length
     }
   }
   if (state.bytes > MAX_FALLBACK_BYTES && state.chunks.length === 1) {
     const chunk = state.chunks[0]
-    const keepFrom = Math.max(0, chunk.length - MAX_FALLBACK_BYTES)
+    const keepFrom = Math.max(0, chunk.data.length - MAX_FALLBACK_BYTES)
     if (keepFrom > 0) {
-      state.chunks[0] = chunk.slice(keepFrom)
-      state.bytes = state.chunks[0].length
+      state.chunks[0] = { ...chunk, data: chunk.data.slice(keepFrom) }
+      state.bytes = state.chunks[0].data.length
       if (debugEnabled) {
         debugState.droppedBytes += keepFrom
       }
@@ -113,12 +119,13 @@ export function queueHiddenTerminalOutput(
       bytes: 0,
       needsHydration: false,
       hydrating: false,
-      hydrationToken: 0
+      hydrationToken: 0,
+      nextChunkSeq: 1
     }
     hiddenStateByTerminal.set(terminal, state)
   }
   state.needsHydration = true
-  state.chunks.push(data)
+  state.chunks.push({ seq: state.nextChunkSeq++, data })
   state.bytes += data.length
   trimFallback(state)
   if (debugEnabled) {
@@ -143,23 +150,29 @@ export function consumeHiddenTerminalHydration(
   }
   return {
     ptyId: state.ptyId,
-    fallbackData: state.chunks.join(''),
+    fallbackData: state.chunks.map((chunk) => chunk.data).join(''),
     token: state.hydrationToken,
-    fallbackChunkCount: state.chunks.length
+    fallbackLastSeq: state.chunks.at(-1)?.seq ?? 0
   }
 }
 
 function finishHydration(
   terminal: TerminalOutputTarget,
   token: number,
-  consumedChunkCount: number
+  fallbackLastSeq: number,
+  collectQueuedDuringHydration: boolean
 ): string {
   exposeDebugApi()
   const state = hiddenStateByTerminal.get(terminal)
   if (!state || state.hydrationToken !== token) {
     return ''
   }
-  const queuedDuringHydration = state.chunks.slice(consumedChunkCount).join('')
+  const queuedDuringHydration = collectQueuedDuringHydration
+    ? state.chunks
+        .filter((chunk) => chunk.seq > fallbackLastSeq)
+        .map((chunk) => chunk.data)
+        .join('')
+    : ''
   state.chunks.length = 0
   state.bytes = 0
   state.needsHydration = false
@@ -175,7 +188,8 @@ export function markHiddenTerminalFallbackReplayed(
   const queuedDuringHydration = finishHydration(
     terminal,
     hydration.token,
-    hydration.fallbackChunkCount
+    hydration.fallbackLastSeq,
+    true
   )
   if (debugEnabled) {
     debugState.fallbackReplayCount++
@@ -187,7 +201,7 @@ export function markHiddenTerminalHydrated(
   terminal: TerminalOutputTarget,
   hydration: HiddenTerminalHydration
 ): string {
-  return finishHydration(terminal, hydration.token, hydration.fallbackChunkCount)
+  return finishHydration(terminal, hydration.token, hydration.fallbackLastSeq, false)
 }
 
 export function cancelHiddenTerminalHydration(
