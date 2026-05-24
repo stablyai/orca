@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
+import { GitCompare, Globe2, TerminalSquare } from 'lucide-react'
+import { useThemedFileIcon } from '@/hooks/useFileIcon'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import {
@@ -17,6 +18,7 @@ type SwitcherState = {
 
 function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   const className = 'size-4 shrink-0 text-muted-foreground'
+  const FileIcon = useThemedFileIcon(item.label ?? '')
   if (item.type === 'terminal') {
     return <TerminalSquare className={className} />
   }
@@ -26,7 +28,7 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   if (item.contentType === 'diff' || item.contentType === 'conflict-review') {
     return <GitCompare className={className} />
   }
-  return <FileText className={className} />
+  return <FileIcon className={className} />
 }
 
 export default function RecentTabSwitcher(): React.JSX.Element | null {

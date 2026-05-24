@@ -91,14 +91,19 @@ function FileExplorerInner(): React.JSX.Element {
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
   const { colors: fileExplorerColors } = useFileExplorerColors()
+  const iconSize = Math.max(12, useAppStore((s) => s.settings?.fileExplorerIconSize) ?? 16)
   /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
   const explorerShellRef = useRef<HTMLDivElement>(null)
   // Why: applied on the shell as inline CSS variables so virtualized rows can
   // reference `--fe-*` without inline styles per row, and the vars are present
   // on first paint (an effect-based writer would flash unstyled rows).
   const fileExplorerCssVars = useMemo(
-    () => buildFileExplorerCssVars(fileExplorerColors),
-    [fileExplorerColors]
+    () => ({
+      ...buildFileExplorerCssVars(fileExplorerColors),
+      '--fe-icon-size': `${iconSize}px`,
+      '--fe-text-size': `${iconSize - 4}px`
+    }),
+    [fileExplorerColors, iconSize]
   )
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])

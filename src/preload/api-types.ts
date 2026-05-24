@@ -529,10 +529,58 @@ export type AppApi = {
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
 }
 
+export type StoredUserIconTheme = {
+  id: string
+  sourceFolderName: string
+  json: {
+    iconDefinitions?: Record<
+      string,
+      {
+        iconPath?: string
+        fontCharacter?: string
+        fontColor?: string
+        fontId?: string
+        fontSize?: string
+      }
+    >
+    fonts?: {
+      id: string
+      src: { path: string; format: string }[]
+      weight?: string
+      style?: string
+      size?: string
+    }[]
+    [key: string]: unknown
+  }
+}
+
+export type MarketplaceIconTheme = {
+  publisher: string
+  name: string
+  displayName: string
+  description: string
+  version: string
+  downloadUrl: string
+  iconUrl: string | null
+  downloadCount: number
+}
+
 export type PreloadApi = {
   app: AppApi
   e2e: {
     getConfig: () => E2EConfig
+  }
+  iconThemes: {
+    list: () => Promise<StoredUserIconTheme[]>
+    pickAndImport: () => Promise<StoredUserIconTheme | null>
+    remove: (id: string) => Promise<void>
+    searchMarketplace: (query: string) => Promise<MarketplaceIconTheme[]>
+    installFromMarketplace: (args: {
+      publisher: string
+      name: string
+      downloadUrl: string
+      displayName?: string
+    }) => Promise<StoredUserIconTheme>
   }
   repos: {
     list: () => Promise<Repo[]>

@@ -1587,6 +1587,8 @@ export type GlobalSettings = {
   fileExplorerColorOverridesDark?: FileExplorerColorOverrides | null
   /** Per-key color overrides layered on top of the light theme. */
   fileExplorerColorOverridesLight?: FileExplorerColorOverrides | null
+  /** Icon size in px for the file explorer (rows + chevrons). */
+  fileExplorerIconSize?: number
 }
 
 export type CommitMessageAiSettings = {

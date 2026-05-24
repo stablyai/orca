@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Folder, Link2, Plus, X } from 'lucide-react'
+import { Link2, Plus, X } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/hooks/useFileIcon'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
 
@@ -134,7 +134,6 @@ export function WorktreeSymlinksSection({
                 ) : null}
                 {filtered.map((entry) => {
                   const alreadyAdded = paths.includes(entry.name)
-                  const FileIcon = getFileTypeIcon(entry.name)
                   return (
                     <CommandItem
                       key={entry.name}
@@ -143,11 +142,11 @@ export function WorktreeSymlinksSection({
                       onSelect={() => commit(entry.name)}
                       className={cn('items-center gap-2 px-3 py-2', alreadyAdded && 'opacity-50')}
                     >
-                      {entry.isDirectory ? (
-                        <Folder className="size-3.5 text-muted-foreground" />
-                      ) : (
-                        <FileIcon className="size-3.5 text-muted-foreground" />
-                      )}
+                      <ThemedFileIcon
+                        filePath={entry.name}
+                        isDirectory={entry.isDirectory}
+                        className="size-3.5 text-muted-foreground"
+                      />
                       <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (
                         <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">

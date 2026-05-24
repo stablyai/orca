@@ -165,7 +165,12 @@ function prepareMacDevElectronApp() {
 
   rmSync(distDir, { recursive: true, force: true })
   mkdirSync(distDir, { recursive: true })
-  cpSync(sourceAppPath, appPath, { recursive: true })
+  // Why: Node 26's cpSync rewrites the Electron framework's relative symlinks
+  // (Electron Framework -> Versions/Current/...) into absolute paths through
+  // pnpm's `.pnpm/electron@*` store, which corrupts the framework's Versions/A
+  // layout and triggers "icudtl.dat not found in bundle" at launch. /bin/cp -R
+  // preserves relative symlinks verbatim and yields a launchable bundle.
+  execFileSync('/bin/cp', ['-R', sourceAppPath, appPath])
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
   setPlistValue(plistPath, 'CFBundleName', title)

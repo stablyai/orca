@@ -1,24 +1,33 @@
 import React from 'react'
+import { File, Folder, FolderOpen } from 'lucide-react'
 import type { IconNode, IconTheme, IconThemeFileRule, IconThemeFolderRule } from './types'
 
 /**
  * Subset of the VSCode icon theme JSON shape that we parse.
  *
  * The full spec lives at
- * https://code.visualstudio.com/api/extension-guides/file-icon-theme. Fields
- * we don't support yet:
- *   - `languageIds` — Orca doesn't track per-file languages here.
- *   - Font-based icons (`fontCharacter` + `fonts`) — VSCode treats these as a
- *     fallback; modern themes use SVGs exclusively, so we skip them.
- *   - `hidesExplorerArrows` — visual nit, not load-bearing.
+ * https://code.visualstudio.com/api/extension-guides/file-icon-theme.
  */
 export type VscodeIconDefinition = {
   iconPath?: string
   fontCharacter?: string
+  fontColor?: string
+  fontId?: string
+  fontSize?: string
+}
+
+export type VscodeFontSrc = { path: string; format: string }
+export type VscodeFont = {
+  id: string
+  src: VscodeFontSrc[]
+  weight?: string
+  style?: string
+  size?: string
 }
 
 export type VscodeIconThemeShape = {
   iconDefinitions?: Record<string, VscodeIconDefinition>
+  fonts?: VscodeFont[]
   file?: string
   folder?: string
   folderExpanded?: string
@@ -28,6 +37,7 @@ export type VscodeIconThemeShape = {
   fileNames?: Record<string, string>
   folderNames?: Record<string, string>
   folderNamesExpanded?: Record<string, string>
+  languageIds?: Record<string, string>
   light?: VscodeIconThemeOverrides
   highContrast?: VscodeIconThemeOverrides
 }
@@ -42,6 +52,7 @@ export type VscodeIconThemeOverrides = {
   fileNames?: Record<string, string>
   folderNames?: Record<string, string>
   folderNamesExpanded?: Record<string, string>
+  languageIds?: Record<string, string>
 }
 
 export type SvgIconRegistry = {
@@ -53,14 +64,6 @@ export type SvgIconRegistry = {
   resolveIconUrl: (iconPath: string) => string | null
 }
 
-const SVG_ICON_DISPLAY_NAME = 'SvgUrlIcon'
-
-/**
- * Render an SVG asset by URL. Used by both the parser (for VSCode-shaped
- * themes) and the importer (for user-supplied themes from disk). The image
- * is decoded async and tagged aria-hidden so screen readers skip it — the
- * file/folder name beside it is the accessible label.
- */
 function createSvgUrlIcon(url: string): IconNode {
   const Icon: IconNode = ({ className, style, ...rest }) =>
     React.createElement('img', {
@@ -72,27 +75,151 @@ function createSvgUrlIcon(url: string): IconNode {
       draggable: false,
       ...rest
     })
-  Icon.displayName = SVG_ICON_DISPLAY_NAME
+  Icon.displayName = 'SvgUrlIcon'
   return Icon
+}
+
+function createFontIcon(
+  fontFamily: string,
+  character: string,
+  color?: string,
+  fontSize?: string
+): IconNode {
+  const Icon: IconNode = ({ className, style, ...rest }) =>
+    React.createElement(
+      'span',
+      {
+        className,
+        'aria-hidden': true,
+        style: {
+          fontFamily,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+          textDecoration: 'none',
+          textRendering: 'auto',
+          WebkitFontSmoothing: 'antialiased',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 1,
+          ...(color ? { color } : {}),
+          ...(fontSize ? { fontSize } : {}),
+          ...style
+        },
+        ...rest
+      },
+      character
+    )
+  Icon.displayName = 'FontIcon'
+  return Icon
+}
+
+// Why: each imported font-based theme needs a unique @font-face injected once.
+// We track which CSS family names we've already injected to avoid duplicates.
+const injectedFontFaces = new Map<string, HTMLStyleElement>()
+
+type FontRegistry = {
+  fontIdToCssFamily: Map<string, string>
+  fontIdToSize: Map<string, string>
+}
+
+const ALLOWED_FONT_FORMATS = new Set([
+  'woff',
+  'woff2',
+  'truetype',
+  'opentype',
+  'embedded-opentype',
+  'svg'
+])
+
+function sanitizeCssString(value: string): string {
+  return value.replace(/[\\";{}()]/g, '')
+}
+
+function injectFontFaces(themeId: string, fonts: VscodeFont[]): FontRegistry {
+  const fontIdToCssFamily = new Map<string, string>()
+  const fontIdToSize = new Map<string, string>()
+  for (const font of fonts) {
+    const cssFamily = `orca-icon-${themeId}-${sanitizeCssString(font.id)}`
+    fontIdToCssFamily.set(font.id, cssFamily)
+    if (font.size) {
+      fontIdToSize.set(font.id, font.size)
+    }
+    if (injectedFontFaces.has(cssFamily)) {
+      continue
+    }
+    const srcParts = font.src
+      .filter((s) => ALLOWED_FONT_FORMATS.has(s.format))
+      .map((s) => {
+        const safePath = s.path.startsWith('data:') ? s.path : sanitizeCssString(s.path)
+        return `url("${safePath}") format("${sanitizeCssString(s.format)}")`
+      })
+      .join(', ')
+    if (!srcParts) {
+      continue
+    }
+    const css = `@font-face {
+  font-family: "${cssFamily}";
+  src: ${srcParts};
+  font-weight: ${sanitizeCssString(font.weight ?? 'normal')};
+  font-style: ${sanitizeCssString(font.style ?? 'normal')};
+}`
+    const styleEl = document.createElement('style')
+    styleEl.textContent = css
+    document.head.appendChild(styleEl)
+    injectedFontFaces.set(cssFamily, styleEl)
+  }
+  return { fontIdToCssFamily, fontIdToSize }
+}
+
+export function removeInjectedFontFaces(themeId: string): void {
+  for (const [key, styleEl] of injectedFontFaces) {
+    if (key.startsWith(`orca-icon-${themeId}-`)) {
+      styleEl.remove()
+      injectedFontFaces.delete(key)
+    }
+  }
 }
 
 function definitionToIcon(
   defs: Record<string, VscodeIconDefinition>,
   defId: string | undefined,
-  registry: SvgIconRegistry
+  registry: SvgIconRegistry,
+  fontRegistry?: FontRegistry
 ): IconNode | null {
   if (!defId) {
     return null
   }
   const def = defs[defId]
-  if (!def?.iconPath) {
+  if (!def) {
     return null
   }
-  const url = registry.resolveIconUrl(def.iconPath)
-  if (!url) {
-    return null
+
+  if (def.iconPath) {
+    const url = registry.resolveIconUrl(def.iconPath)
+    if (url) {
+      return createSvgUrlIcon(url)
+    }
   }
-  return createSvgUrlIcon(url)
+
+  if (def.fontCharacter && fontRegistry) {
+    const { fontIdToCssFamily, fontIdToSize } = fontRegistry
+    const fontId = def.fontId ?? fontIdToCssFamily.keys().next().value
+    if (!fontId) {
+      return null
+    }
+    const cssFamily = fontIdToCssFamily.get(fontId)
+    if (!cssFamily) {
+      return null
+    }
+    const char = def.fontCharacter.replace(/\\([0-9a-fA-F]+)/g, (_m, hex) =>
+      String.fromCodePoint(parseInt(hex, 16))
+    )
+    const fontSize = def.fontSize ?? fontIdToSize.get(fontId)
+    return createFontIcon(`"${cssFamily}"`, char, def.fontColor, fontSize)
+  }
+
+  return null
 }
 
 export type ParseVscodeOptions = {
@@ -126,17 +253,16 @@ export function parseVscodeIconTheme(
     return null
   }
 
+  const fontReg = json.fonts?.length ? injectFontFaces(options.id, json.fonts) : undefined
+
   const fileDefId = overrides?.file ?? json.file
   const folderDefId = overrides?.folder ?? json.folder
   const folderExpandedDefId = overrides?.folderExpanded ?? json.folderExpanded ?? folderDefId
 
-  const defaultFileIcon = definitionToIcon(defs, fileDefId, registry)
-  const defaultFolderClosed = definitionToIcon(defs, folderDefId, registry)
-  const defaultFolderOpen = definitionToIcon(defs, folderExpandedDefId, registry)
-
-  if (!defaultFileIcon || !defaultFolderClosed || !defaultFolderOpen) {
-    return null
-  }
+  const defaultFileIcon = definitionToIcon(defs, fileDefId, registry, fontReg) ?? File
+  const defaultFolderClosed = definitionToIcon(defs, folderDefId, registry, fontReg) ?? Folder
+  const defaultFolderOpen =
+    definitionToIcon(defs, folderExpandedDefId, registry, fontReg) ?? FolderOpen
 
   const fileExtensions: Record<string, string> = {
     ...json.fileExtensions,
@@ -154,27 +280,37 @@ export function parseVscodeIconTheme(
     ...json.folderNamesExpanded,
     ...overrides?.folderNamesExpanded
   }
+  const languageIds: Record<string, string> = {
+    ...json.languageIds,
+    ...overrides?.languageIds
+  }
 
   const fileRules: IconThemeFileRule[] = []
-  // Filename rules first (more specific). Lower-cased for case-insensitive match.
   for (const [name, defId] of Object.entries(fileNames)) {
-    const icon = definitionToIcon(defs, defId, registry)
+    const icon = definitionToIcon(defs, defId, registry, fontReg)
     if (icon) {
       fileRules.push({ filename: name.toLowerCase(), icon })
     }
   }
   for (const [ext, defId] of Object.entries(fileExtensions)) {
-    const icon = definitionToIcon(defs, defId, registry)
+    const icon = definitionToIcon(defs, defId, registry, fontReg)
     if (icon) {
       fileRules.push({ extension: ext.toLowerCase(), icon })
+    }
+  }
+  // languageIds as extension fallbacks (many themes only declare these)
+  for (const [langId, defId] of Object.entries(languageIds)) {
+    const icon = definitionToIcon(defs, defId, registry, fontReg)
+    if (icon) {
+      fileRules.push({ extension: langId.toLowerCase(), icon })
     }
   }
 
   const folderRules: IconThemeFolderRule[] = []
   const folderNameKeys = new Set([...Object.keys(folderNames), ...Object.keys(folderNamesExpanded)])
   for (const name of folderNameKeys) {
-    const closed = definitionToIcon(defs, folderNames[name], registry)
-    const open = definitionToIcon(defs, folderNamesExpanded[name], registry)
+    const closed = definitionToIcon(defs, folderNames[name], registry, fontReg)
+    const open = definitionToIcon(defs, folderNamesExpanded[name], registry, fontReg)
     if (closed || open) {
       folderRules.push({
         name: name.toLowerCase(),
@@ -188,7 +324,7 @@ export function parseVscodeIconTheme(
     id: options.id,
     name: options.name,
     description: options.description,
-    monochrome: false,
+    monochrome: !!fontReg && !Object.values(defs).some((d) => d?.fontColor),
     defaultFileIcon,
     defaultFolder: { closed: defaultFolderClosed, open: defaultFolderOpen },
     fileRules,

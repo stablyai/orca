@@ -1,16 +1,23 @@
 import React, { useMemo, useState } from 'react'
 import { ChevronRight, Folder } from 'lucide-react'
 import { buildFileExplorerCssVars } from '@/hooks/useFileExplorerCssVars'
-import { type FileExplorerColorMap, toColorMap } from '@/lib/file-explorer-themes'
-import { type FileExplorerColorTheme } from '@/lib/file-explorer-themes/types'
+import {
+  DEFAULT_FILE_EXPLORER_COLOR_THEME_DARK,
+  getFileExplorerColorTheme,
+  toColorMap
+} from '@/lib/file-explorer-themes'
 import { resolveIconWithFallback } from '@/lib/icon-themes'
 import { getIconTheme } from '@/lib/icon-themes/index'
 import { cn } from '@/lib/utils'
 
 type FileExplorerPreviewProps = {
   iconThemeId: string
-  colorTheme: FileExplorerColorTheme
-  overrides: Partial<FileExplorerColorMap> | null
+  iconSize: number
+}
+
+const ICON_STYLE: React.CSSProperties = {
+  width: 'var(--fe-icon-size)',
+  height: 'var(--fe-icon-size)'
 }
 
 type PreviewRow = {
@@ -30,24 +37,25 @@ const PREVIEW_ROWS: readonly PreviewRow[] = [
   { name: 'README.md', depth: 0, isDirectory: false }
 ]
 
-/**
- * Mini file explorer rendered inside the Settings panel. Independent of the
- * real explorer (no store wiring, no git status) so users can preview themes
- * without an open repo. The icon and color theme passed in come from the
- * controlled pickers above, not from `GlobalSettings`, so unsaved selections
- * appear live.
- */
 export function FileExplorerPreview({
   iconThemeId,
-  colorTheme,
-  overrides
+  iconSize
 }: FileExplorerPreviewProps): React.JSX.Element {
   const [selected, setSelected] = useState<string>('package.json')
   const [hover, setHover] = useState<string | null>(null)
 
+  const colorTheme = useMemo(
+    () => getFileExplorerColorTheme(DEFAULT_FILE_EXPLORER_COLOR_THEME_DARK)!,
+    []
+  )
+
   const cssVars = useMemo(
-    () => buildFileExplorerCssVars({ ...toColorMap(colorTheme), ...overrides }),
-    [colorTheme, overrides]
+    () => ({
+      ...buildFileExplorerCssVars(toColorMap(colorTheme)),
+      '--fe-icon-size': `${iconSize}px`,
+      '--fe-text-size': `${iconSize - 4}px`
+    }),
+    [colorTheme, iconSize]
   )
 
   const iconTheme = getIconTheme(iconThemeId)
@@ -55,7 +63,7 @@ export function FileExplorerPreview({
 
   return (
     <div
-      className="rounded-md border border-border/50 p-2 text-xs"
+      className="rounded-md border border-border/50 p-2 text-[length:var(--fe-text-size,12px)]"
       style={{ ...cssVars, backgroundColor: 'var(--fe-bg)' }}
     >
       <div className="space-y-px">
@@ -93,19 +101,22 @@ export function FileExplorerPreview({
                 <>
                   <ChevronRight
                     className={cn(
-                      'size-3 shrink-0 text-[var(--fe-icon-folder)] transition-transform',
+                      'shrink-0 text-[var(--fe-icon-folder)] transition-transform',
                       row.expanded && 'rotate-90'
                     )}
+                    style={ICON_STYLE}
                   />
                   <Icon
-                    className={cn('size-3 shrink-0', monochrome && 'text-[var(--fe-icon-folder)]')}
+                    className={cn('shrink-0', monochrome && 'text-[var(--fe-icon-folder)]')}
+                    style={ICON_STYLE}
                   />
                 </>
               ) : (
                 <>
-                  <span className="size-3 shrink-0" />
+                  <span className="shrink-0" style={ICON_STYLE} />
                   <Icon
-                    className={cn('size-3 shrink-0', monochrome && 'text-[var(--fe-icon-file)]')}
+                    className={cn('shrink-0', monochrome && 'text-[var(--fe-icon-file)]')}
+                    style={ICON_STYLE}
                   />
                 </>
               )}
@@ -119,9 +130,10 @@ export function FileExplorerPreview({
           className="flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left italic"
           style={{ paddingLeft: '8px', color: 'var(--fe-text-ignored)' }}
         >
-          <span className="size-3 shrink-0" />
+          <span className="shrink-0" style={ICON_STYLE} />
           <Folder
-            className={cn('size-3 shrink-0', monochrome && 'text-[var(--fe-text-ignored)]')}
+            className={cn('shrink-0', monochrome && 'text-[var(--fe-text-ignored)]')}
+            style={ICON_STYLE}
           />
           <span className="truncate">node_modules (ignored)</span>
         </button>

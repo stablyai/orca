@@ -2,18 +2,10 @@
 directory rows, file rows, drag metadata, and navigation wiring together so
 the row contracts stay local to the surface. */
 import React from 'react'
-import {
-  Check,
-  ChevronDown,
-  Filter,
-  Folder,
-  FolderOpen,
-  PanelLeftClose,
-  Search
-} from 'lucide-react'
+import { Check, ChevronDown, Filter, PanelLeftClose, Search } from 'lucide-react'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/hooks/useFileIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -363,11 +355,12 @@ function CombinedDiffFileTreeRow({
           <ChevronDown
             className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          {isCollapsed ? (
-            <Folder className="size-3 shrink-0" />
-          ) : (
-            <FolderOpen className="size-3 shrink-0" />
-          )}
+          <ThemedFileIcon
+            filePath={node.name}
+            isDirectory
+            isOpen={!isCollapsed}
+            className="size-3 shrink-0"
+          />
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
         </button>
         <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
@@ -378,7 +371,6 @@ function CombinedDiffFileTreeRow({
   }
 
   const sectionKey = getCombinedDiffFileTreeSectionKey(mode, node.entry)
-  const FileIcon = getFileTypeIcon(node.entry.path)
   const fileName = basename(node.entry.path)
   const parentDir = dirname(node.entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -407,7 +399,11 @@ function CombinedDiffFileTreeRow({
       }}
       onClick={() => onNavigate(node.entry)}
     >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+      <ThemedFileIcon
+        filePath={node.entry.path}
+        className="size-3.5 shrink-0"
+        style={{ color: STATUS_COLORS[status] }}
+      />
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}

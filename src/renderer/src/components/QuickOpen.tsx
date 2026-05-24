@@ -6,7 +6,7 @@ import { useActiveWorktree, useWorktreesForRepo } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/hooks/useFileIcon'
 import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import {
   CommandDialog,
@@ -380,8 +380,6 @@ export default function QuickOpen(): React.JSX.Element | null {
             const lastSlash = item.path.lastIndexOf('/')
             const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
             const filename = item.path.slice(lastSlash + 1)
-            const FileIcon = getFileTypeIcon(item.path)
-
             return (
               <CommandItem
                 key={item.path}
@@ -389,7 +387,10 @@ export default function QuickOpen(): React.JSX.Element | null {
                 onSelect={() => handleSelect(item.path)}
                 className="flex items-center gap-2 px-3 py-1.5"
               >
-                <FileIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
+                <ThemedFileIcon
+                  filePath={item.path}
+                  className="size-3.5 text-muted-foreground flex-shrink-0"
+                />
                 <span className="truncate text-foreground">{filename}</span>
                 {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
               </CommandItem>

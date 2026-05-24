@@ -295,7 +295,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     fileExplorerUseSeparateLightTheme: true,
     fileExplorerColorThemeLight: 'default-light',
     fileExplorerColorOverridesDark: null,
-    fileExplorerColorOverridesLight: null
+    fileExplorerColorOverridesLight: null,
+    fileExplorerIconSize: 16
   }
 }
 

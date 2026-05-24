@@ -1,24 +1,26 @@
-/* eslint-disable max-lines -- Why: this pane is the single owner of all file-explorer theme settings UI; the alternative would scatter related controls across multiple files. */
-import React, { useCallback, useMemo, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Download, Loader2, Minus, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
-import { Label } from '../ui/label'
 import { Button } from '../ui/button'
+import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
 import {
-  DEFAULT_FILE_EXPLORER_COLOR_THEME_DARK,
-  DEFAULT_FILE_EXPLORER_COLOR_THEME_LIGHT,
-  FILE_EXPLORER_COLOR_KEYS,
-  type FileExplorerColorKey,
-  type FileExplorerColorTheme,
-  getFileExplorerColorTheme,
-  getFileExplorerColorThemeNames
-} from '@/lib/file-explorer-themes'
-import { DEFAULT_ICON_THEME_ID, getIconThemes } from '@/lib/icon-themes'
+  DEFAULT_ICON_THEME_ID,
+  ICON_THEME_CATALOG,
+  getIconThemes,
+  registerUserIconTheme,
+  subscribeUserIconThemes,
+  unregisterUserIconTheme
+} from '@/lib/icon-themes'
 import { FileExplorerPreview } from './FileExplorerPreview'
+import { IconThemeMarketplaceDialog } from './IconThemeMarketplaceDialog'
+
+const ICON_SIZE_MIN = 12
+const ICON_SIZE_MAX = 32
+const ICON_SIZE_DEFAULT = 16
 
 type FileExplorerPaneProps = {
   settings: GlobalSettings
@@ -30,22 +32,11 @@ const ICON_ENTRIES: SettingsSearchEntry[] = [
     title: 'Icon Theme',
     description: 'Choose which icon set the file explorer uses.',
     keywords: ['icon', 'icons', 'theme', 'material', 'lucide', 'file explorer']
-  }
-]
-
-const COLOR_ENTRIES: SettingsSearchEntry[] = [
+  },
   {
-    title: 'Color Theme',
-    description: 'Choose the color palette for the file explorer.',
-    keywords: ['color', 'theme', 'palette', 'dark', 'light', 'file explorer']
-  }
-]
-
-const OVERRIDES_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Color Overrides',
-    description: 'Override individual color tokens used by the file explorer.',
-    keywords: ['color', 'override', 'customize', 'file explorer']
+    title: 'Size',
+    description: 'Size of icons and text in the file explorer.',
+    keywords: ['icon', 'size', 'font', 'text', 'file explorer', 'px']
   }
 ]
 
@@ -59,31 +50,8 @@ const PREVIEW_ENTRIES: SettingsSearchEntry[] = [
 
 export const FILE_EXPLORER_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...ICON_ENTRIES,
-  ...COLOR_ENTRIES,
-  ...OVERRIDES_ENTRIES,
   ...PREVIEW_ENTRIES
 ]
-
-const COLOR_KEY_LABELS: Record<FileExplorerColorKey, string> = {
-  background: 'Background',
-  hoverBackground: 'Hover background',
-  selectedBackground: 'Selected background',
-  selectedInactiveBackground: 'Selected (inactive) background',
-  flashBackground: 'Flash background',
-  flashRing: 'Flash ring',
-  textColor: 'Text',
-  selectedTextColor: 'Selected text',
-  mutedTextColor: 'Muted text',
-  gitIgnoredColor: 'Git-ignored text',
-  fileIconColor: 'File icon',
-  folderIconColor: 'Folder icon',
-  gitModifiedColor: 'Git modified',
-  gitAddedColor: 'Git added',
-  gitDeletedColor: 'Git deleted',
-  gitUntrackedColor: 'Git untracked',
-  gitConflictColor: 'Git conflict',
-  dropTargetBorderColor: 'Drop target border'
-}
 
 export function FileExplorerPane({
   settings,
@@ -92,185 +60,187 @@ export function FileExplorerPane({
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
 
   const iconThemeId = settings.fileExplorerIconTheme ?? DEFAULT_ICON_THEME_ID
-  const darkThemeId = settings.fileExplorerColorThemeDark ?? DEFAULT_FILE_EXPLORER_COLOR_THEME_DARK
-  const lightThemeId =
-    settings.fileExplorerColorThemeLight ?? DEFAULT_FILE_EXPLORER_COLOR_THEME_LIGHT
-  const useSeparateLight = settings.fileExplorerUseSeparateLightTheme ?? true
-  const overridesDark = settings.fileExplorerColorOverridesDark ?? null
-  const overridesLight = settings.fileExplorerColorOverridesLight ?? null
+  const iconSize = settings.fileExplorerIconSize ?? ICON_SIZE_DEFAULT
 
-  // Why: the preview should reflect what the user is editing. We default to
-  // the dark theme (most users), but switching mode here is purely cosmetic —
-  // saved settings are split by mode regardless.
-  const [previewMode, setPreviewMode] = useState<'dark' | 'light'>('dark')
+  // Why: getIconThemes includes user-imported themes, which mutate at runtime
+  // when the user clicks Import. Subscribe so the dropdown re-renders.
+  const [userThemeVersion, setUserThemeVersion] = useState(0)
+  useEffect(() => subscribeUserIconThemes(() => setUserThemeVersion((v) => v + 1)), [])
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- version counter triggers re-eval
+  const iconThemes = useMemo(() => getIconThemes(), [userThemeVersion])
 
-  const iconThemes = useMemo(() => getIconThemes(), [])
-  const darkThemes = useMemo(() => getFileExplorerColorThemeNames('dark'), [])
-  const lightThemes = useMemo(() => getFileExplorerColorThemeNames('light'), [])
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
-  const previewColorTheme: FileExplorerColorTheme = useMemo(() => {
-    const id = previewMode === 'dark' ? darkThemeId : useSeparateLight ? lightThemeId : darkThemeId
-    return (
-      getFileExplorerColorTheme(id) ??
-      getFileExplorerColorTheme(
-        previewMode === 'dark'
-          ? DEFAULT_FILE_EXPLORER_COLOR_THEME_DARK
-          : DEFAULT_FILE_EXPLORER_COLOR_THEME_LIGHT
-      )!
-    )
-  }, [previewMode, darkThemeId, lightThemeId, useSeparateLight])
+  // Why: the marketplace dialog needs to know which themes are already
+  // installed so it can render "Installed" instead of an Install button.
+  // We derive ids from the current iconThemes list — the marketplace builds
+  // the same `${publisher}-${name}` id when it persists, so the set keys match.
+  const installedIds = useMemo(() => new Set(iconThemes.map((t) => t.id)), [iconThemes])
 
-  const activeOverrides = previewMode === 'dark' ? overridesDark : overridesLight
+  const isUserTheme = !(iconThemeId in ICON_THEME_CATALOG)
 
-  const setOverride = useCallback(
-    (mode: 'dark' | 'light', key: FileExplorerColorKey, value: string) => {
-      const current = mode === 'dark' ? overridesDark : overridesLight
-      const next = { ...current, [key]: value }
-      updateSettings(
-        mode === 'dark'
-          ? { fileExplorerColorOverridesDark: next }
-          : { fileExplorerColorOverridesLight: next }
-      )
-    },
-    [overridesDark, overridesLight, updateSettings]
-  )
-
-  const clearOverride = useCallback(
-    (mode: 'dark' | 'light', key: FileExplorerColorKey) => {
-      const current = mode === 'dark' ? overridesDark : overridesLight
-      if (!current) {
+  const handleImport = async (): Promise<void> => {
+    setImportError(null)
+    setImporting(true)
+    try {
+      const result = await window.api.iconThemes.pickAndImport()
+      if (!result) {
         return
       }
-      const { [key]: _removed, ...rest } = current
-      const next = Object.keys(rest).length === 0 ? null : rest
-      updateSettings(
-        mode === 'dark'
-          ? { fileExplorerColorOverridesDark: next }
-          : { fileExplorerColorOverridesLight: next }
-      )
-    },
-    [overridesDark, overridesLight, updateSettings]
-  )
+      const name = (result.json?.name as string | undefined) ?? result.sourceFolderName
+      const registered = registerUserIconTheme({
+        id: result.id,
+        name,
+        shape: result.json
+      })
+      if (!registered) {
+        await window.api.iconThemes.remove(result.id)
+        setImportError('Theme could not be parsed — check the JSON shape.')
+        return
+      }
+      updateSettings({ fileExplorerIconTheme: result.id })
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImporting(false)
+    }
+  }
 
-  const resetAllOverrides = useCallback(
-    (mode: 'dark' | 'light') => {
-      updateSettings(
-        mode === 'dark'
-          ? { fileExplorerColorOverridesDark: null }
-          : { fileExplorerColorOverridesLight: null }
-      )
-    },
-    [updateSettings]
-  )
+  const handleRemove = async (): Promise<void> => {
+    if (!isUserTheme) {
+      return
+    }
+    try {
+      await window.api.iconThemes.remove(iconThemeId)
+      unregisterUserIconTheme(iconThemeId)
+      updateSettings({ fileExplorerIconTheme: DEFAULT_ICON_THEME_ID })
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   const sections = [
     matchesSettingsSearch(searchQuery, ICON_ENTRIES) ? (
       <section key="icon-theme" className="space-y-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Icon Theme</h3>
+          <h3 className="text-sm font-semibold">Icons</h3>
           <p className="text-xs text-muted-foreground">
-            Choose which icon set the file explorer uses to render files and folders.
+            Choose which icon set the file explorer uses and how big icons render.
           </p>
         </div>
         <SearchableSetting
           title="Icon Theme"
           description="Choose which icon set the file explorer uses."
-          keywords={['icon', 'theme', 'material', 'lucide']}
+          keywords={['icon', 'theme', 'material', 'lucide', 'import', 'vscode']}
+          className="space-y-2"
         >
-          <Select
-            value={iconThemeId}
-            onValueChange={(value) => updateSettings({ fileExplorerIconTheme: value })}
-          >
-            <SelectTrigger className="w-72">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {iconThemes.map((theme) => (
-                <SelectItem key={theme.id} value={theme.id}>
-                  {theme.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SearchableSetting>
-      </section>
-    ) : null,
-
-    matchesSettingsSearch(searchQuery, COLOR_ENTRIES) ? (
-      <section key="color-theme" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Color Theme</h3>
-          <p className="text-xs text-muted-foreground">
-            Pick a built-in color palette for the file explorer. Dark and light modes can be set
-            independently.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="Dark mode theme"
-          description="Theme applied while the app is in dark mode."
-          keywords={['color', 'dark', 'theme']}
-        >
-          <Select
-            value={darkThemeId}
-            onValueChange={(value) => updateSettings({ fileExplorerColorThemeDark: value })}
-          >
-            <SelectTrigger className="w-72">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {darkThemes.map((theme) => (
-                <SelectItem key={theme.id} value={theme.id}>
-                  {theme.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SearchableSetting>
-
-        <SearchableSetting
-          title="Use separate light theme"
-          description="When off, the dark theme is used in light mode too."
-          keywords={['light', 'separate', 'mode']}
-        >
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={useSeparateLight}
-              onChange={(e) =>
-                updateSettings({ fileExplorerUseSeparateLightTheme: e.target.checked })
-              }
-              className="size-4"
-            />
-            <span className="text-xs text-muted-foreground">
-              Use a separate theme when Orca is in light mode.
-            </span>
-          </label>
-        </SearchableSetting>
-
-        {useSeparateLight ? (
-          <SearchableSetting
-            title="Light mode theme"
-            description="Theme applied while the app is in light mode."
-            keywords={['color', 'light', 'theme']}
-          >
+          <Label>Icon Theme</Label>
+          <div className="flex items-center gap-2">
             <Select
-              value={lightThemeId}
-              onValueChange={(value) => updateSettings({ fileExplorerColorThemeLight: value })}
+              value={iconThemeId}
+              onValueChange={(value) => updateSettings({ fileExplorerIconTheme: value })}
             >
               <SelectTrigger className="w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {lightThemes.map((theme) => (
+                {iconThemes.map((theme) => (
                   <SelectItem key={theme.id} value={theme.id}>
                     {theme.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </SearchableSetting>
-        ) : null}
+            <IconThemeMarketplaceDialog
+              installedIds={installedIds}
+              onInstalled={(id) => updateSettings({ fileExplorerIconTheme: id })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleImport}
+              disabled={importing}
+              title="Import a VS Code icon theme folder (icon-theme.json + /icons SVGs)."
+            >
+              {importing ? (
+                <Loader2 className="mr-1 size-3 animate-spin" />
+              ) : (
+                <Download className="mr-1 size-3" />
+              )}
+              Import folder…
+            </Button>
+            {isUserTheme ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleRemove()}
+                title="Remove the selected user-imported icon theme."
+              >
+                <Trash2 className="mr-1 size-3" />
+                Remove
+              </Button>
+            ) : null}
+          </div>
+          {importError ? (
+            <p className="text-xs text-destructive">{importError}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Browse the Open VSX marketplace or import a local VS Code icon-theme folder. Either
+              way, the JSON and SVGs are saved on this machine and persist across updates.
+            </p>
+          )}
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Size"
+          description="Size of icons and text in the file explorer."
+          keywords={['icon', 'size', 'font', 'text', 'px']}
+          className="space-y-2"
+        >
+          <Label>Size</Label>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() =>
+                updateSettings({
+                  fileExplorerIconSize: Math.max(ICON_SIZE_MIN, iconSize - 1)
+                })
+              }
+              disabled={iconSize <= ICON_SIZE_MIN}
+            >
+              <Minus className="size-3" />
+            </Button>
+            <span className="w-12 text-center text-sm tabular-nums text-foreground">
+              {iconSize}px
+            </span>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() =>
+                updateSettings({
+                  fileExplorerIconSize: Math.min(ICON_SIZE_MAX, iconSize + 1)
+                })
+              }
+              disabled={iconSize >= ICON_SIZE_MAX}
+            >
+              <Plus className="size-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateSettings({ fileExplorerIconSize: ICON_SIZE_DEFAULT })}
+              disabled={iconSize === ICON_SIZE_DEFAULT}
+              className="ml-1 gap-1.5"
+            >
+              <RotateCcw className="size-3" />
+              Default
+            </Button>
+          </div>
+        </SearchableSetting>
       </section>
     ) : null,
 
@@ -279,78 +249,10 @@ export function FileExplorerPane({
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Preview</h3>
           <p className="text-xs text-muted-foreground">
-            Live preview of the active file explorer theme. Use the toggle to compare dark and light
-            modes.
+            Live preview of the active file explorer icon theme.
           </p>
         </div>
-        <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-          {(['dark', 'light'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setPreviewMode(option)}
-              className={`rounded-sm px-3 py-1 text-xs capitalize transition-colors ${
-                previewMode === option
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-        <FileExplorerPreview
-          iconThemeId={iconThemeId}
-          colorTheme={previewColorTheme}
-          overrides={activeOverrides}
-        />
-      </section>
-    ) : null,
-
-    matchesSettingsSearch(searchQuery, OVERRIDES_ENTRIES) ? (
-      <section key="overrides" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold">Color Overrides ({previewMode} mode)</h3>
-            <p className="text-xs text-muted-foreground">
-              Override individual color tokens. Empty fields fall through to the base theme.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!activeOverrides}
-            onClick={() => resetAllOverrides(previewMode)}
-          >
-            <RotateCcw className="mr-1 size-3" />
-            Reset {previewMode} overrides
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {FILE_EXPLORER_COLOR_KEYS.map((key) => {
-            const overridden = activeOverrides?.[key]
-            const baseValue = previewColorTheme[key]
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <Label className="w-44 text-xs text-muted-foreground">
-                  {COLOR_KEY_LABELS[key]}
-                </Label>
-                <input
-                  type="text"
-                  value={overridden ?? ''}
-                  placeholder={baseValue}
-                  onChange={(e) =>
-                    e.target.value
-                      ? setOverride(previewMode, key, e.target.value)
-                      : clearOverride(previewMode, key)
-                  }
-                  className="h-7 flex-1 rounded border border-border bg-background px-2 text-xs font-mono"
-                />
-              </div>
-            )
-          })}
-        </div>
+        <FileExplorerPreview iconThemeId={iconThemeId} iconSize={iconSize} />
       </section>
     ) : null
   ]

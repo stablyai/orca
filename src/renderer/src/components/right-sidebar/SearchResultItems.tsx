@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/hooks/useFileIcon'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -62,8 +62,6 @@ export function FileResultRow({
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
-  const FileIcon = getFileTypeIcon(fileResult.relativePath)
-
   return (
     <div className="pt-1.5">
       {/* File header with context menu */}
@@ -84,7 +82,10 @@ export function FileResultRow({
                       !collapsed && 'rotate-90'
                     )}
                   />
-                  <FileIcon className="size-3.5 flex-shrink-0 text-muted-foreground" />
+                  <ThemedFileIcon
+                    filePath={fileResult.relativePath}
+                    className="size-3.5 flex-shrink-0 text-muted-foreground"
+                  />
                   <div className="min-w-0 flex-1 text-xs">
                     <span className="min-w-0 block truncate">
                       <span className="text-foreground">{fileName}</span>

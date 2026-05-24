@@ -356,6 +356,20 @@ const api = {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
   },
 
+  iconThemes: {
+    list: (): Promise<unknown[]> => ipcRenderer.invoke('icon-themes:list'),
+    pickAndImport: (): Promise<unknown> => ipcRenderer.invoke('icon-themes:pickAndImport'),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('icon-themes:remove', id),
+    searchMarketplace: (query: string): Promise<unknown[]> =>
+      ipcRenderer.invoke('icon-themes:searchMarketplace', query),
+    installFromMarketplace: (args: {
+      publisher: string
+      name: string
+      downloadUrl: string
+      displayName?: string
+    }): Promise<unknown> => ipcRenderer.invoke('icon-themes:installFromMarketplace', args)
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 

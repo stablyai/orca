@@ -36,6 +36,11 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
+const ICON_STYLE: React.CSSProperties = {
+  width: 'var(--fe-icon-size)',
+  height: 'var(--fe-icon-size)'
+}
+
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
 
@@ -138,15 +143,15 @@ export function InlineInputRow({
       className="flex items-center w-full h-[26px] px-2 gap-1"
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
     >
-      <span className="size-3 shrink-0" />
+      <span className="shrink-0" style={ICON_STYLE} />
       {inlineInput.type === 'folder' ? (
-        <Folder className="size-3 shrink-0 text-muted-foreground" />
+        <Folder className="shrink-0 text-muted-foreground" style={ICON_STYLE} />
       ) : (
-        <File className="size-3 shrink-0 text-muted-foreground" />
+        <File className="shrink-0 text-muted-foreground" style={ICON_STYLE} />
       )}
       <input
         ref={inputRef}
-        className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
+        className="flex-1 min-w-0 bg-transparent text-[length:var(--fe-text-size,12px)] text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -280,7 +285,7 @@ export function FileExplorerRow({
       <ContextMenuTrigger asChild>
         <button
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-[length:var(--fe-text-size,12px)] transition-colors',
             'text-[var(--fe-text)] hover:bg-[var(--fe-bg-hover)] hover:text-[var(--fe-text)]',
             isSelected && 'bg-[var(--fe-bg-selected)] text-[var(--fe-text-selected)]',
             isFlashing && 'bg-[var(--fe-flash-bg)] ring-1 ring-inset ring-[var(--fe-flash-ring)]'
@@ -307,29 +312,29 @@ export function FileExplorerRow({
             <>
               <ChevronRight
                 className={cn(
-                  'size-3 shrink-0 text-[var(--fe-icon-folder)] transition-transform',
+                  'shrink-0 text-[var(--fe-icon-folder)] transition-transform',
                   isExpanded && 'rotate-90'
                 )}
+                style={ICON_STYLE}
               />
               {isLoading ? (
-                <Loader2 className="size-3 shrink-0 animate-spin text-[var(--fe-icon-folder)]" />
+                <Loader2
+                  className="shrink-0 animate-spin text-[var(--fe-icon-folder)]"
+                  style={ICON_STYLE}
+                />
               ) : (
                 <ResolvedIcon
-                  className={cn(
-                    'size-3 shrink-0',
-                    iconThemeMonochrome && 'text-[var(--fe-icon-folder)]'
-                  )}
+                  className={cn('shrink-0', iconThemeMonochrome && 'text-[var(--fe-icon-folder)]')}
+                  style={ICON_STYLE}
                 />
               )}
             </>
           ) : (
             <>
-              <span className="size-3 shrink-0" />
+              <span className="shrink-0" style={ICON_STYLE} />
               <ResolvedIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  iconThemeMonochrome && 'text-[var(--fe-icon-file)]'
-                )}
+                className={cn('shrink-0', iconThemeMonochrome && 'text-[var(--fe-icon-file)]')}
+                style={ICON_STYLE}
               />
             </>
           )}
@@ -359,7 +364,7 @@ export function FileExplorerRow({
           </span>
           {nodeStatus ? (
             <span
-              className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
+              className="ml-auto shrink-0 text-[length:calc(var(--fe-text-size,12px)*0.83)] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}
             >
               {STATUS_LABELS[nodeStatus]}
