@@ -12,6 +12,7 @@ import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicat
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { getWorkspaceKanbanDetailsHoverOpenState } from './workspace-kanban-details-hover'
 import { writeWorkspaceDragData } from './workspace-status'
+import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
@@ -106,8 +107,11 @@ function WorkspaceKanbanCompactCard({
   onContextMenuSelect
 }: Omit<WorkspaceKanbanCardProps, 'compact'>): React.JSX.Element {
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const openModal = useAppStore((s) => s.openModal)
   const isDeleting = deleteState?.isDeleting ?? false
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [titleRenaming, setTitleRenaming] = useState(false)
   const contextMenuOpenRef = useRef(false)
   const contextWorktrees = useMemo(
     () =>
@@ -126,7 +130,7 @@ function WorkspaceKanbanCompactCard({
   }, [isDeleting, onActivate, worktree.id])
 
   const handleClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
+    (event: React.MouseEvent<HTMLElement>) => {
       const selectionOnly = onSelectionGesture(event, worktree.id)
       if (selectionOnly) {
         event.preventDefault()
@@ -138,8 +142,19 @@ function WorkspaceKanbanCompactCard({
     [handleActivate, onSelectionGesture, worktree.id]
   )
 
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (titleRenaming || isDeleting || (event.key !== 'Enter' && event.key !== ' ')) {
+        return
+      }
+      event.preventDefault()
+      handleActivate()
+    },
+    [handleActivate, isDeleting, titleRenaming]
+  )
+
   const handleDragStart = useCallback(
-    (event: React.DragEvent<HTMLButtonElement>) => {
+    (event: React.DragEvent<HTMLElement>) => {
       if (isDeleting) {
         event.preventDefault()
         return
@@ -152,6 +167,28 @@ function WorkspaceKanbanCompactCard({
     },
     [contextWorktrees, isDeleting, isSelected, worktree.id]
   )
+
+  const handleRenameTitle = useCallback(
+    (displayName: string) => updateWorktreeMeta(worktree.id, { displayName }),
+    [updateWorktreeMeta, worktree.id]
+  )
+
+  const handleDoubleClick = useCallback(() => {
+    openModal('edit-meta', {
+      worktreeId: worktree.id,
+      currentDisplayName: worktree.displayName,
+      currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
+      currentComment: worktree.comment
+    })
+  }, [
+    openModal,
+    worktree.comment,
+    worktree.displayName,
+    worktree.id,
+    worktree.linkedIssue,
+    worktree.linkedPR
+  ])
 
   const handleDetailsOpenChange = useCallback((requestedOpen: boolean) => {
     setDetailsOpen(
@@ -193,11 +230,14 @@ function WorkspaceKanbanCompactCard({
         closeDelay={100}
       >
         <HoverCardTrigger asChild>
-          <button
-            type="button"
-            draggable={nativeDragEnabled && !isDeleting}
+          <div
+            role="button"
+            tabIndex={isDeleting ? -1 : 0}
+            draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
             onDragStart={nativeDragEnabled ? handleDragStart : undefined}
             onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            onKeyDown={handleKeyDown}
             className={cn(
               'flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
               isActive
@@ -208,6 +248,7 @@ function WorkspaceKanbanCompactCard({
               isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
               'data-[workspace-board-card-area-selected=true]:border-sidebar-ring/50 data-[workspace-board-card-area-selected=true]:bg-sidebar-accent/75 data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/30',
               !nativeDragEnabled && !isDeleting && '!cursor-grab',
+              titleRenaming && '!border-transparent !bg-transparent !ring-0 cursor-default',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
             data-workspace-board-card-mode="compact"
@@ -217,10 +258,17 @@ function WorkspaceKanbanCompactCard({
               nativeDragEnabled || isDeleting ? undefined : 'true'
             }
             aria-label={`Open ${worktree.displayName}`}
+            aria-disabled={isDeleting ? true : undefined}
             aria-busy={isDeleting}
           >
             <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mr-1" />
-            <span className="min-w-0 flex-1 truncate">{worktree.displayName}</span>
+            <WorktreeTitleInlineRename
+              displayName={worktree.displayName}
+              disabled={isDeleting}
+              className="flex-1 text-[12px]"
+              onEditingChange={setTitleRenaming}
+              onRename={handleRenameTitle}
+            />
             {repo ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -242,7 +290,7 @@ function WorkspaceKanbanCompactCard({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-          </button>
+          </div>
         </HoverCardTrigger>
         <HoverCardContent
           side="right"
