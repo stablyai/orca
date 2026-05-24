@@ -105,6 +105,7 @@ import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-forma
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
+import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
@@ -1586,6 +1587,19 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
+  const commitFailureRecoveryPrompt = useMemo(
+    () =>
+      commitError
+        ? buildFixCommitFailurePrompt({
+            summary: summarizeCommitFailure(commitError),
+            error: commitError,
+            entries: grouped.staged,
+            worktreePath,
+            commitMessage
+          })
+        : null,
+    [commitError, commitMessage, grouped.staged, worktreePath]
+  )
   const handleFixCommitFailureWithAI = useCallback(async (): Promise<boolean> => {
     if (isLaunchingCommitFailureAgent || !activeWorktreeId || !commitError) {
       return false
@@ -1610,18 +1624,15 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const prompt = buildFixCommitFailurePrompt({
-        summary: summarizeCommitFailure(commitError),
-        error: commitError,
-        entries: grouped.staged,
-        worktreePath,
-        commitMessage
-      })
+      if (!commitFailureRecoveryPrompt) {
+        toast.error('Could not build the agent prompt.')
+        return false
+      }
       const result = launchAgentInNewTab({
         agent,
         worktreeId: activeWorktreeId,
         groupId: activeGroupId ?? activeWorktreeId,
-        prompt,
+        prompt: commitFailureRecoveryPrompt,
         promptDelivery: 'submit-after-ready',
         launchSource: 'source_control_recovery'
       })
@@ -1640,10 +1651,8 @@ function SourceControlInner(): React.JSX.Element {
     activeGroupId,
     activeWorktreeId,
     commitError,
-    commitMessage,
-    grouped.staged,
-    isLaunchingCommitFailureAgent,
-    worktreePath
+    commitFailureRecoveryPrompt,
+    isLaunchingCommitFailureAgent
   ])
 
   // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
@@ -4013,9 +4022,11 @@ function SourceControlInner(): React.JSX.Element {
                 worktreeId={activeWorktreeId}
                 commitMessage={commitMessage}
                 commitError={commitError}
+                commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
                 remoteActionError={remoteActionError?.message ?? null}
                 isCommitting={isCommitting}
                 isFixingCommitFailureWithAI={isLaunchingCommitFailureAgent}
+                groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!(scope === 'all' && showGenericEmptyState)}
                 aiEnabled={commitMessageAi?.enabled === true}
                 aiAgentConfigured={
@@ -4804,10 +4815,98 @@ function PullRequestComposer({
   )
 }
 
+type CommitFailureFixSplitButtonProps = {
+  label: string
+  worktreeId: string | null
+  groupId: string | null
+  prompt: string | null
+  isLaunching: boolean
+  variant: React.ComponentProps<typeof Button>['variant']
+  size: React.ComponentProps<typeof Button>['size']
+  iconClassName: string
+  primaryClassName?: string
+  chevronClassName?: string
+  onFixWithDefaultAgent: () => Promise<boolean> | boolean
+  onPromptDelivered: () => void
+}
+
+function CommitFailureFixSplitButton({
+  label,
+  worktreeId,
+  groupId,
+  prompt,
+  isLaunching,
+  variant,
+  size,
+  iconClassName,
+  primaryClassName,
+  chevronClassName,
+  onFixWithDefaultAgent,
+  onPromptDelivered
+}: CommitFailureFixSplitButtonProps): React.JSX.Element {
+  const canLaunch = Boolean(worktreeId && groupId && prompt)
+  const dividerClass =
+    variant === 'default' ? 'border-primary-foreground/20' : 'border-destructive/20'
+
+  return (
+    <DropdownMenu>
+      <div className="flex shrink-0 items-stretch">
+        <Button
+          type="button"
+          variant={variant}
+          size={size}
+          className={cn('rounded-r-none', primaryClassName)}
+          disabled={isLaunching || !canLaunch}
+          onClick={() => void onFixWithDefaultAgent()}
+          title="Start the default AI agent to fix this commit failure"
+          aria-label="Fix commit failure with AI"
+        >
+          {isLaunching ? (
+            <RefreshCw className={cn(iconClassName, 'animate-spin')} />
+          ) : (
+            <Sparkle className={iconClassName} />
+          )}
+          {label}
+        </Button>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant={variant}
+            size={size}
+            className={cn('rounded-l-none border-l', dividerClass, chevronClassName)}
+            disabled={isLaunching || !canLaunch}
+            title="Choose an agent for this commit failure"
+            aria-label="Choose agent to fix commit failure"
+          >
+            <ChevronDown className={iconClassName} />
+          </Button>
+        </DropdownMenuTrigger>
+      </div>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        {worktreeId && groupId && prompt ? (
+          <QuickLaunchAgentMenuItems
+            worktreeId={worktreeId}
+            groupId={groupId}
+            onFocusTerminal={focusTerminalTabSurface}
+            prompt={prompt}
+            promptDelivery="submit-after-ready"
+            launchSource="source_control_recovery"
+            onPromptDelivered={onPromptDelivered}
+          />
+        ) : (
+          <DropdownMenuItem disabled>Commit failure context unavailable</DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 type CommitAreaProps = {
   worktreeId: string | null
+  groupId: string | null
   commitMessage: string
   commitError: string | null
+  commitFailureRecoveryPrompt: string | null
   remoteActionError: string | null
   isCommitting: boolean
   isFixingCommitFailureWithAI: boolean
@@ -4833,8 +4932,10 @@ type CommitAreaProps = {
 
 export function CommitArea({
   worktreeId,
+  groupId,
   commitMessage,
   commitError,
+  commitFailureRecoveryPrompt,
   remoteActionError,
   isCommitting,
   isFixingCommitFailureWithAI,
@@ -4909,12 +5010,16 @@ export function CommitArea({
     },
     [commitFailureIdentity]
   )
-  const handleFixCommitFailureWithAI = useCallback(async () => {
+  const handleFixCommitFailureWithAI = useCallback(async (): Promise<boolean> => {
     const launched = await onFixCommitFailureWithAI()
     if (launched) {
       setCommitFailureDialogOpen(false)
     }
+    return launched
   }, [onFixCommitFailureWithAI, setCommitFailureDialogOpen])
+  const handleCommitFailureAgentPromptDelivered = useCallback(() => {
+    setCommitFailureDialogOpen(false)
+  }, [setCommitFailureDialogOpen])
 
   useEffect(() => {
     setCommitFailureDialogState((current) =>
@@ -5141,23 +5246,20 @@ export function CommitArea({
         >
           <TriangleAlert className="size-3 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{commitFailureSummary}</span>
-          <Button
-            type="button"
+          <CommitFailureFixSplitButton
+            label="Fix"
+            worktreeId={worktreeId}
+            groupId={groupId}
+            prompt={commitFailureRecoveryPrompt}
+            isLaunching={isFixingCommitFailureWithAI}
             variant="ghost"
             size="xs"
-            className="h-5 shrink-0 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={isFixingCommitFailureWithAI}
-            onClick={() => void handleFixCommitFailureWithAI()}
-            title="Start the default AI agent to fix this commit failure"
-            aria-label="Fix commit failure with AI"
-          >
-            {isFixingCommitFailureWithAI ? (
-              <RefreshCw className="size-3 animate-spin" />
-            ) : (
-              <Sparkle className="size-3" />
-            )}
-            Fix
-          </Button>
+            iconClassName="size-3"
+            primaryClassName="h-5 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+            chevronClassName="h-5 px-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+            onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+          />
           {hasCommitFailureDetails && (
             <Button
               type="button"
@@ -5186,20 +5288,20 @@ export function CommitArea({
               {commitError}
             </pre>
             <DialogFooter>
-              <Button
-                type="button"
+              <CommitFailureFixSplitButton
+                label="Fix with AI"
+                worktreeId={worktreeId}
+                groupId={groupId}
+                prompt={commitFailureRecoveryPrompt}
+                isLaunching={isFixingCommitFailureWithAI}
                 variant="default"
                 size="sm"
-                disabled={isFixingCommitFailureWithAI}
-                onClick={() => void handleFixCommitFailureWithAI()}
-              >
-                {isFixingCommitFailureWithAI ? (
-                  <RefreshCw className="size-4 animate-spin" />
-                ) : (
-                  <Sparkle className="size-4" />
-                )}
-                Fix with AI
-              </Button>
+                iconClassName="size-4"
+                primaryClassName="rounded-r-none"
+                chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+              />
               <DialogClose asChild>
                 <Button type="button" variant="outline" size="sm">
                   Close
