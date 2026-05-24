@@ -62,6 +62,10 @@ export function showTerminalShortcutCaptureNotification({
   )
   toast.message('Orca handled a terminal shortcut', {
     description: `${definition.title} (${bindingLabel}) can be changed in Keyboard Shortcuts.`,
+    // Why: this is the user's one-time rebind path for a captured shortcut; it
+    // should stay visible until they act on or dismiss it.
+    duration: Infinity,
+    dismissible: true,
     icon: <Keyboard className="size-4 text-muted-foreground" />,
     action: {
       label: 'Open Shortcuts',
