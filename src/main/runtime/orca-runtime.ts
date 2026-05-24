@@ -2167,11 +2167,30 @@ export class OrcaRuntimeService {
     const oscTitle = extractLastOscTitle(data)
     const agentStatus = oscTitle ? detectAgentStatusFromTitle(oscTitle) : null
 
+    let normalizedData: string | null = null
+    const getNormalizedData = (): string => {
+      normalizedData ??= normalizeTerminalChunk(data)
+      return normalizedData
+    }
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+    const ptyTailBefore = pty
+      ? {
+          lines: pty.tailBuffer,
+          partialLine: pty.tailPartialLine,
+          truncated: pty.tailTruncated,
+          linesTotal: pty.tailLinesTotal
+        }
+      : null
+    let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     if (pty) {
       pty.connected = true
       pty.lastOutputAt = at
-      const nextTail = appendToTailBuffer(pty.tailBuffer, pty.tailPartialLine, data)
+      const nextTail = appendNormalizedToTailBuffer(
+        pty.tailBuffer,
+        pty.tailPartialLine,
+        getNormalizedData()
+      )
+      ptyTailAfter = nextTail
       pty.tailBuffer = nextTail.lines
       pty.tailPartialLine = nextTail.partialLine
       pty.tailTruncated = pty.tailTruncated || nextTail.truncated
@@ -2201,12 +2220,37 @@ export class OrcaRuntimeService {
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
-      const nextTail = appendToTailBuffer(leaf.tailBuffer, leaf.tailPartialLine, data)
-      leaf.tailBuffer = nextTail.lines
-      leaf.tailPartialLine = nextTail.partialLine
-      leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
-      leaf.tailLinesTotal += nextTail.newCompleteLines
-      leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
+      if (
+        pty &&
+        ptyTailBefore &&
+        ptyTailAfter &&
+        tailStateMatches(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.tailTruncated,
+          leaf.tailLinesTotal,
+          ptyTailBefore
+        )
+      ) {
+        // Why: the leaf and PTY record usually mirror the same terminal. Reuse
+        // the PTY tail update instead of splitting large output twice.
+        leaf.tailBuffer = pty.tailBuffer
+        leaf.tailPartialLine = pty.tailPartialLine
+        leaf.tailTruncated = pty.tailTruncated
+        leaf.tailLinesTotal = pty.tailLinesTotal
+        leaf.preview = pty.preview
+      } else {
+        const nextTail = appendNormalizedToTailBuffer(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          getNormalizedData()
+        )
+        leaf.tailBuffer = nextTail.lines
+        leaf.tailPartialLine = nextTail.partialLine
+        leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
+        leaf.tailLinesTotal += nextTail.newCompleteLines
+        leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
+      }
 
       if (oscTitle !== null) {
         // Why: keep the latest OSC title on the leaf so worktree.ps can
@@ -11912,17 +11956,16 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
-function appendToTailBuffer(
+function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
-  chunk: string
+  normalizedChunk: string
 ): {
   lines: string[]
   partialLine: string
   truncated: boolean
   newCompleteLines: number
 } {
-  const normalizedChunk = normalizeTerminalChunk(chunk)
   if (normalizedChunk.length === 0) {
     return {
       lines: previousLines,
@@ -11969,6 +12012,37 @@ function appendToTailBuffer(
     truncated,
     newCompleteLines
   }
+}
+
+function tailStateMatches(
+  lines: string[],
+  partialLine: string,
+  truncated: boolean,
+  linesTotal: number,
+  snapshot: {
+    lines: string[]
+    partialLine: string
+    truncated: boolean
+    linesTotal: number
+  }
+): boolean {
+  if (
+    partialLine !== snapshot.partialLine ||
+    truncated !== snapshot.truncated ||
+    linesTotal !== snapshot.linesTotal ||
+    lines.length !== snapshot.lines.length
+  ) {
+    return false
+  }
+  if (lines === snapshot.lines) {
+    return true
+  }
+  for (let index = 0; index < lines.length; index++) {
+    if (lines[index] !== snapshot.lines[index]) {
+      return false
+    }
+  }
+  return true
 }
 
 function buildTailLines(lines: string[], partialLine: string): string[] {
@@ -12406,6 +12480,11 @@ function mergeWorktreeStatus(
 }
 
 function normalizeTerminalChunk(chunk: string): string {
+  // Why: most high-throughput PTY chunks are plain printable text. Avoid
+  // running every ANSI/OSC regex over megabytes that do not need normalization.
+  if (!terminalChunkNeedsNormalization(chunk)) {
+    return chunk
+  }
   return chunk
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -12414,6 +12493,22 @@ function normalizeTerminalChunk(chunk: string): string {
     .replace(/\x1b[@-_]/g, '')
     .replace(/\u0008/g, '')
     .replace(/[^\x09\x0a\x20-\x7e]/g, '')
+}
+
+function terminalChunkNeedsNormalization(chunk: string): boolean {
+  for (let index = 0; index < chunk.length; index++) {
+    const code = chunk.charCodeAt(index)
+    if (
+      code === 0x1b ||
+      code === 0x0d ||
+      code < 0x09 ||
+      (code > 0x0a && code < 0x20) ||
+      code > 0x7e
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function maxTimestamp(left: number | null, right: number | null): number | null {
