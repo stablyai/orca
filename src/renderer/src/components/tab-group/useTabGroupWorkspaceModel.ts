@@ -19,6 +19,7 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
@@ -312,6 +313,28 @@ export function useTabGroupWorkspaceModel({
       focusTerminalTabSurface(terminalId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveTab, setActiveTabType, worktreeId]
+  )
+
+  const toggleTerminalPaneExpand = useCallback(
+    (terminalId: string) => {
+      const item = groupTabs.find(
+        (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
+      )
+      if (!item) {
+        return
+      }
+      // Why: the tab-bar collapse icon stops pointer propagation, so it does
+      // not run the normal tab activation handler before toggling pane layout.
+      activateTerminal(terminalId)
+      requestAnimationFrame(() => {
+        window.dispatchEvent(
+          new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
+            detail: { tabId: terminalId }
+          })
+        )
+      })
+    },
+    [activateTerminal, groupTabs]
   )
 
   const activateEditor = useCallback(
@@ -614,7 +637,8 @@ export function useTabGroupWorkspaceModel({
       },
       pinFile,
       setTabColor,
-      setTabCustomTitle
+      setTabCustomTitle,
+      toggleTerminalPaneExpand
     }
   }
 }

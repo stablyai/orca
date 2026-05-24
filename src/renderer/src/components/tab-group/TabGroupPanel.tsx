@@ -116,7 +116,7 @@ export default function TabGroupPanel({
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
-      onTogglePaneExpand={() => {}}
+      onTogglePaneExpand={commands.toggleTerminalPaneExpand}
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
