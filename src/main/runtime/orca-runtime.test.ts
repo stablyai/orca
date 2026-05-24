@@ -3455,6 +3455,9 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.limited).toBe(false)
   })
 
+  // Why: PR #2553 fixed Orca CLI terminal reads so older retained output stays
+  // reachable by cursor; this guards that pagination without allowing previews
+  // to regress into full-transcript RPC payloads.
   it('keeps terminal read payloads bounded while retained output remains pageable', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)
@@ -3468,8 +3471,6 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
 
     const preview = await runtime.readTerminal(terminal.handle)
-    // Why: byte-size assertions catch accidental full-transcript RPC payloads
-    // without relying on wall-clock performance thresholds in CI.
     expect(Buffer.byteLength(JSON.stringify(preview), 'utf8')).toBeLessThan(10_000)
     expect(preview.tail).toHaveLength(120)
     expect(preview.tail[0]).toBe(lines.at(-120))
