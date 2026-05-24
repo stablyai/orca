@@ -41,16 +41,21 @@ describe('showTerminalShortcutCaptureNotification', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps the shortcut capture warning visible until dismissed', () => {
+  it('keeps the shortcut capture warning visible long enough to act on', () => {
     showTerminalShortcutCaptureNotification({
       actionId: 'tab.close',
       platform: 'darwin'
     })
 
     expect(toast.message).toHaveBeenCalledWith(
-      'Orca handled a terminal shortcut',
+      'Terminal shortcut handled',
       expect.objectContaining({
-        duration: Infinity,
+        className: expect.stringContaining('!py-2'),
+        classNames: expect.objectContaining({
+          title: expect.stringContaining('truncate'),
+          description: expect.stringContaining('truncate')
+        }),
+        duration: 20_000,
         dismissible: true,
         action: expect.objectContaining({ label: 'Open Shortcuts' })
       })
