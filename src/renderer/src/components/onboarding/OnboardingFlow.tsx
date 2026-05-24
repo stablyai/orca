@@ -84,7 +84,12 @@ export default function OnboardingFlow({
   const shouldShowSkipToProjectSetup = currentStep.id !== 'repo' && currentStep.id !== 'tour'
   const shouldShowStepHeading = !isTourStep
   const footerPrimaryLabel = isTourStep ? 'Skip the tour' : primaryActionLabel
-  const { next: flowNext, openFolder: flowOpenFolder, skipTourToRepo: flowSkipTourToRepo } = flow
+  const {
+    next: flowNext,
+    openFolder: flowOpenFolder,
+    continueWithExistingProject: flowContinueWithExistingProject,
+    skipTourToRepo: flowSkipTourToRepo
+  } = flow
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
   useEffect(() => {
@@ -110,14 +115,26 @@ export default function OnboardingFlow({
         return
       }
       if (currentStep.id === 'repo') {
-        void flowOpenFolder()
+        if (flow.hasExistingProject) {
+          void flowContinueWithExistingProject('keyboard')
+        } else {
+          void flowOpenFolder()
+        }
       } else {
         void flowNext('keyboard')
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flowNext, flowOpenFolder, flowSkipTourToRepo, tourStarted])
+  }, [
+    currentStep.id,
+    flow.hasExistingProject,
+    flowContinueWithExistingProject,
+    flowNext,
+    flowOpenFolder,
+    flowSkipTourToRepo,
+    tourStarted
+  ])
 
   return (
     <div
@@ -319,7 +336,7 @@ export default function OnboardingFlow({
                   Skip
                 </button>
               )}
-              {currentStep.id !== 'repo' && (
+              {(currentStep.id !== 'repo' || flow.hasExistingProject) && (
                 <button
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   aria-busy={Boolean(busyLabel)}
@@ -327,6 +344,10 @@ export default function OnboardingFlow({
                   onClick={() => {
                     if (isTourStep) {
                       void flow.skipTourToRepo()
+                      return
+                    }
+                    if (currentStep.id === 'repo') {
+                      void flow.continueWithExistingProject()
                       return
                     }
                     void flow.next()

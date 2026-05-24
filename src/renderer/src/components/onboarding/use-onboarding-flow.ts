@@ -88,6 +88,9 @@ export function useOnboardingFlow(
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  // Why: App hydrates repos before mounting onboarding. Reading the store
+  // synchronously lets the final step render its already-added state without a flash.
+  const repos = useAppStore((s) => s.repos)
 
   const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
   const [stepIndex, setStepIndex] = useState(initialStep)
@@ -193,6 +196,7 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
+  const hasExistingProject = repos.length > 0
 
   // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
   // the freshest detection snapshot at click time without re-rebinding the
@@ -634,6 +638,35 @@ export function useOnboardingFlow(
     }
   }, [busyLabel, cloneDestination, cloneUrl, completeRepo, settings])
 
+  const continueWithExistingProject = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button') => {
+      if (busyLabel !== null || currentStep.id !== 'repo' || repos.length === 0) {
+        return
+      }
+      setError(null)
+      setBusyLabel('Finishing...')
+      try {
+        const checklist = repos.some((repo) => isGitRepoKind(repo))
+          ? { addedRepo: true }
+          : { addedFolder: true }
+        const closed = await closeWith('completed', checklist, ONBOARDING_FINAL_STEP)
+        if (!closed) {
+          return
+        }
+        emitPendingTourOutcome()
+        track('onboarding_step_completed', {
+          step: ONBOARDING_FINAL_STEP,
+          value_kind: 'repo',
+          duration_ms: consumeStepDurationMs(),
+          advanced_via: advancedVia
+        })
+      } finally {
+        setBusyLabel(null)
+      }
+    },
+    [busyLabel, closeWith, consumeStepDurationMs, currentStep.id, emitPendingTourOutcome, repos]
+  )
+
   const skipToRepo = useCallback(async () => {
     if (busyLabel) {
       return
@@ -882,6 +915,7 @@ export function useOnboardingFlow(
     hasSelectedFeatureSetup,
     cloneUrl,
     setCloneUrl,
+    hasExistingProject,
     serverPath,
     setServerPath,
     cloneDestination,
@@ -901,6 +935,7 @@ export function useOnboardingFlow(
     back,
     jumpToStep,
     openFolder,
+    continueWithExistingProject,
     openSshSettings,
     clone
   }
