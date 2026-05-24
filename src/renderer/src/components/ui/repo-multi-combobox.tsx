@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 
 type RepoMultiComboboxProps = {
   repos: Repo[]
@@ -42,7 +42,11 @@ function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
       {first ? (
-        <RepoDotLabel name={first.displayName} color={first.badgeColor} dotClassName="size-1.5" />
+        <RepoBadgeLabel
+          name={first.displayName}
+          color={first.badgeColor}
+          badgeClassName="size-1.5"
+        />
       ) : null}
       {second ? <span className="text-muted-foreground">, {second.displayName}</span> : null}
       {rest.length > 0 ? <span className="text-muted-foreground">+{rest.length}</span> : null}
@@ -181,7 +185,7 @@ export default function RepoMultiCombobox({
                   />
                   <div className="min-w-0 flex-1">
                     <span className="inline-flex items-center gap-1.5 text-xs">
-                      <RepoDotLabel
+                      <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
                         className="max-w-full"

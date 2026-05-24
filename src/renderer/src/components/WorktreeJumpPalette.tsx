@@ -46,6 +46,7 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
@@ -1043,15 +1044,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                           {repoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <span
-                                aria-hidden="true"
-                                className="size-1.5 shrink-0 rounded-full"
-                                style={
-                                  repo?.badgeColor
-                                    ? { backgroundColor: repo.badgeColor }
-                                    : undefined
-                                }
-                              />
+                              <RepoBadgeMark color={repo?.badgeColor} />
                               <span className="truncate">
                                 {entry.match.repoRange ? (
                                   <HighlightedText
@@ -1125,15 +1118,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                            <span
-                              aria-hidden="true"
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={
-                                browserRepo?.badgeColor
-                                  ? { backgroundColor: browserRepo.badgeColor }
-                                  : undefined
-                              }
-                            />
+                            <RepoBadgeMark color={browserRepo?.badgeColor} />
                             <span className="truncate">
                               <HighlightedText
                                 text={browserRepoName}

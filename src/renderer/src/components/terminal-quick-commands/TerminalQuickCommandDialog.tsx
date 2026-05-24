@@ -25,7 +25,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
@@ -187,7 +187,7 @@ export function TerminalQuickCommandDialog({
                     <SelectContent>
                       {repos.map((repo) => (
                         <SelectItem key={repo.id} value={repo.id}>
-                          <RepoDotLabel
+                          <RepoBadgeLabel
                             name={getRepoLabel(repo)}
                             color={repo.badgeColor}
                             className="max-w-full"

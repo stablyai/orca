@@ -43,6 +43,7 @@ import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCa
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { runWorktreeDelete } from './delete-worktree-flow'
@@ -415,8 +416,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
   // Why: deleting the active/current workspace or one with live activity is a
   // disruptive hover action; keep the quick action delete-only and passive.
-  const showDeleteQuickAction =
-    !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
+  const showDeleteQuickAction = !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -718,10 +718,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             {repo && !hideRepoBadge && (
               <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-                <div
-                  className="size-1.5 rounded-full"
-                  style={{ backgroundColor: repo.badgeColor }}
-                />
+                <RepoBadgeMark color={repo.badgeColor} />
                 <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
                   {repo.displayName}
                 </span>

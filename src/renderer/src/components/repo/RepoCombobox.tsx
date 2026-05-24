@@ -14,7 +14,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
-import RepoDotLabel from './RepoDotLabel'
+import RepoBadgeLabel from './RepoBadgeLabel'
 
 type RepoComboboxProps = {
   repos: Repo[]
@@ -174,10 +174,10 @@ export default function RepoCombobox({
           >
             {selectedRepo ? (
               <span className="inline-flex min-w-0 items-center gap-1.5">
-                <RepoDotLabel
+                <RepoBadgeLabel
                   name={selectedRepo.displayName}
                   color={selectedRepo.badgeColor}
-                  dotClassName="size-1.5"
+                  badgeClassName="size-1.5"
                 />
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
@@ -221,7 +221,7 @@ export default function RepoCombobox({
                   />
                   <div className="min-w-0 flex-1">
                     <span className="inline-flex items-center gap-1.5">
-                      <RepoDotLabel
+                      <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
                         className="max-w-full"

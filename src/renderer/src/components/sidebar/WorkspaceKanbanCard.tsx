@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
 import WorktreeCard from './WorktreeCard'
@@ -228,10 +229,7 @@ function WorkspaceKanbanCompactCard({
                     className="ml-2 flex max-w-[25%] shrink-0 items-center gap-1 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 leading-none dark:border-border/60 dark:bg-accent/50"
                     data-workspace-board-repo-badge=""
                   >
-                    <span
-                      className="size-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: repo.badgeColor }}
-                    />
+                    <RepoBadgeMark color={repo.badgeColor} />
                     <span className="min-w-0 truncate text-[10px] font-semibold lowercase text-foreground">
                       {repo.displayName}
                     </span>

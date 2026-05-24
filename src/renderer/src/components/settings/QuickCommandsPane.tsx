@@ -17,7 +17,7 @@ import { Button } from '../ui/button'
 import { Command, CommandItem, CommandList } from '../ui/command'
 import { Label } from '../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import RepoDotLabel from '../repo/RepoDotLabel'
+import RepoBadgeLabel, { RepoBadgeMark } from '../repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 
@@ -270,7 +270,7 @@ export function QuickCommandsPane({
                           isSelected ? 'opacity-70' : 'opacity-0'
                         )}
                       />
-                      <RepoDotLabel
+                      <RepoBadgeLabel
                         name={getRepoLabel(repo)}
                         color={repo.badgeColor}
                         className="max-w-full"
@@ -308,13 +308,7 @@ export function QuickCommandsPane({
                       <Badge variant="outline" className="max-w-44 gap-1.5">
                         {scope.type === 'repo' ? (
                           <>
-                            <span
-                              aria-hidden
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={{
-                                backgroundColor: repoById.get(scope.repoId)?.badgeColor
-                              }}
-                            />
+                            <RepoBadgeMark color={repoById.get(scope.repoId)?.badgeColor} />
                             <span className="truncate">{getScopeLabel(scope, repoById)}</span>
                           </>
                         ) : (

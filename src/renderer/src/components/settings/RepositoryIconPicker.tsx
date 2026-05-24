@@ -156,7 +156,7 @@ export function RepositoryIconPicker({
             type="button"
             onClick={() => updateRepo(repo.id, { badgeColor: color })}
             className={cn(
-              'size-7 rounded-full transition-all',
+              'size-7 rounded-[4px] transition-all',
               repo.badgeColor === color
                 ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
                 : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'

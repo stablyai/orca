@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { track } from '@/lib/telemetry'
 import { cn } from '@/lib/utils'
 import { getRepositoryLocalCommandsSectionId } from '@/components/settings/repository-settings-targets'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import {
   checkRuntimeHooks,
   inspectRuntimeSetupScriptImports,
@@ -352,10 +353,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             <>
               Automate workspace setup for{' '}
               <span className="inline-flex items-center gap-1.5 align-baseline px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-                <span
-                  className="size-1.5 rounded-full"
-                  style={{ backgroundColor: activeRepo.badgeColor }}
-                />
+                <RepoBadgeMark color={activeRepo.badgeColor} />
                 <span className="text-[10px] font-semibold text-foreground truncate max-w-[8rem] leading-none lowercase">
                   {activeRepo.displayName}
                 </span>

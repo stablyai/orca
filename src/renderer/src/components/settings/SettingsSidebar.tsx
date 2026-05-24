@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
+import { RepoBadgeMark } from '../repo/RepoBadgeLabel'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 
@@ -161,14 +162,12 @@ export function SettingsSidebar({
                       }
                       className={navItemClassName(isActive)}
                     >
-                      <span
+                      <RepoBadgeMark
+                        color={section.badgeColor}
                         className={cn(
-                          'size-2.5 shrink-0 rounded-full',
+                          'size-2.5',
                           section.badgeColor ? null : 'bg-muted-foreground'
                         )}
-                        style={
-                          section.badgeColor ? { backgroundColor: section.badgeColor } : undefined
-                        }
                       />
                       <span className="truncate">{section.title}</span>
                       {section.isRemote && (

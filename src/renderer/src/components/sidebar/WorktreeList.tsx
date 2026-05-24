@@ -137,6 +137,7 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -2214,10 +2215,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="mt-1 flex min-w-0 items-center gap-1.5">
                           {child.repo && groupBy !== 'repo' ? (
                             <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
-                              <span
-                                className="size-1.5 rounded-full"
-                                style={{ backgroundColor: child.repo.badgeColor }}
-                              />
+                              <RepoBadgeMark color={child.repo.badgeColor} />
                               <span className="max-w-[6rem] truncate lowercase">
                                 {child.repo.displayName}
                               </span>

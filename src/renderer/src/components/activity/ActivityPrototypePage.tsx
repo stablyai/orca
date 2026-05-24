@@ -27,6 +27,7 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Button } from '@/components/ui/button'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -868,7 +869,7 @@ function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | nu
   }
   return (
     <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 dark:border-border/60 dark:bg-accent/50">
-      <div className="size-1.5 rounded-full" style={{ backgroundColor: repo.badgeColor }} />
+      <RepoBadgeMark color={repo.badgeColor} />
       <span className="max-w-[6rem] truncate text-[10px] font-semibold leading-none text-foreground lowercase">
         {repo.displayName}
       </span>

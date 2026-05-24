@@ -54,7 +54,7 @@ function segmentClass(state: PillState, disabled: boolean | undefined): string {
 }
 
 // Why: exported so the Tasks-header row can wrap the selector (and the
-// optional per-repo dot-label prefix) in the same pill shape used by the
+// optional per-repo badge label prefix) in the same pill shape used by the
 // static `IssueSourceIndicator`. Keeping the styling here means the chip
 // and its segments stay visually consistent.
 export const issueSourceChipClass =
