@@ -33,6 +33,9 @@ export function shouldRecordProcessGoneCrash({
   if (exitCode === 15) {
     return false
   }
+  if (expectedTeardown === 'app-shutdown') {
+    return false
+  }
   return !(source === 'renderer' && expectedTeardown === 'renderer-reload')
 }
 

@@ -24,6 +24,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'app-shutdown'
       })
     ).toBe(false)
+
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 9,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
   })
 
   it('records real crash reasons during expected renderer-only teardown', () => {
