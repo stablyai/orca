@@ -2626,6 +2626,55 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('drains large batched PTY output in bounded slices', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const firstSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const secondSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      const firstChunk = 'x'.repeat(16 * 1024)
+      const firstRemainder = 'tail'
+      secondProc.emitData('second-terminal-output')
+      firstProc.emitData(`${firstChunk}${firstRemainder}`)
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: secondSpawn.id,
+        data: 'second-terminal-output'
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstChunk
+      })
+
+      vi.advanceTimersByTime(1)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(3)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(3, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstRemainder
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('batches stale PTY output after the interactive window expires', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()

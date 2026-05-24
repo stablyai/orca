@@ -661,21 +661,48 @@ export function registerPtyHandlers(
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
+  const PTY_BATCH_DRAIN_CONTINUE_MS = 1
+  const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
+  const PTY_BATCH_FLUSH_MAX_WRITES = 2
   // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
-  const flushPendingData = (): void => {
+  function schedulePendingDataFlush(delayMs: number): void {
+    if (flushTimer) {
+      return
+    }
+    flushTimer = setTimeout(flushPendingData, delayMs)
+  }
+
+  function flushPendingData(): void {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
       pendingData.clear()
       return
     }
-    for (const [id, data] of pendingData) {
-      mainWindow.webContents.send('pty:data', { id, data })
+    let writes = 0
+    while (pendingData.size > 0 && writes < PTY_BATCH_FLUSH_MAX_WRITES) {
+      const next = pendingData.entries().next().value
+      if (!next) {
+        break
+      }
+      const [id, data] = next
+      pendingData.delete(id)
+      const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
+      const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
+      if (remaining) {
+        pendingData.set(id, remaining)
+      }
+      mainWindow.webContents.send('pty:data', { id, data: chunk })
+      writes++
     }
-    pendingData.clear()
+    if (pendingData.size > 0) {
+      // Why: a background terminal can dump megabytes at once. Yield between
+      // small IPC slices so keystroke writes are not stuck behind one flush.
+      schedulePendingDataFlush(PTY_BATCH_DRAIN_CONTINUE_MS)
+    }
   }
 
   const clearFlushTimerIfIdle = (): void => {
@@ -737,7 +764,7 @@ export function registerPtyHandlers(
       }
       pendingData.set(payload.id, nextData)
       if (!flushTimer) {
-        flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
+        schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
       }
     })
     localExitUnsub = localProvider.onExit((payload) => {
