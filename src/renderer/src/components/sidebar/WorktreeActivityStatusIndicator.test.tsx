@@ -5,15 +5,21 @@ import type { WorktreeStatus } from '@/lib/worktree-status'
 import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 
 const mocks = vi.hoisted(() => ({
-  status: 'inactive' as WorktreeStatus
+  status: 'inactive' as WorktreeStatus,
+  isFocusedAgentPane: false
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: vi.fn(() => mocks.status)
 }))
 
-function renderMarkup(status: WorktreeStatus): string {
+vi.mock('./focused-agent-status-highlight', () => ({
+  useFocusedAgentStatusHighlight: vi.fn(() => mocks.isFocusedAgentPane)
+}))
+
+function renderMarkup(status: WorktreeStatus, isFocusedAgentPane = false): string {
   mocks.status = status
+  mocks.isFocusedAgentPane = isFocusedAgentPane
   return renderToStaticMarkup(
     React.createElement(WorktreeActivityStatusIndicator, { worktreeId: 'wt-child' })
   )
@@ -22,6 +28,7 @@ function renderMarkup(status: WorktreeStatus): string {
 describe('WorktreeActivityStatusIndicator', () => {
   beforeEach(() => {
     mocks.status = 'inactive'
+    mocks.isFocusedAgentPane = false
   })
 
   it('renders the shared inactive status for slept worktrees', () => {
@@ -37,5 +44,13 @@ describe('WorktreeActivityStatusIndicator', () => {
 
     expect(markup).toContain('Active')
     expect(markup).toContain('bg-emerald-500')
+  })
+
+  it('adds a blue focus halo when the active pane owns an agent status row', () => {
+    const markup = renderMarkup('working', true)
+
+    expect(markup).toContain('data-focused-agent-pane="true"')
+    expect(markup).toContain('ring-[var(--terminal-pane-locate)]')
+    expect(markup).toContain('Focused agent pane, Working')
   })
 })
