@@ -57,14 +57,11 @@ test.describe('Create Workspace', () => {
     const workspaceName = `e2e-create-${Date.now()}`
 
     try {
-      // 1. Open the composer. Using the store setter (not clicking the
-      // sidebar affordance) keeps the spec stable under sidebar refactors;
-      // the modal open path itself is not what #1186 broke.
-      await orcaPage.evaluate(() => {
-        window.__store?.getState().openModal('new-workspace-composer')
-      })
+      // 1. Open the composer through the visible affordance so the lazy modal
+      // mount path stays covered along with the composer body.
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 
-      const dialog = orcaPage.getByRole('dialog', { name: /Create Workspace/i })
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
 
       // Wait for the composer to settle. The card fires several async effects
@@ -96,10 +93,10 @@ test.describe('Create Workspace', () => {
       await expect(nameInput).toBeVisible()
       await nameInput.fill(workspaceName)
 
-      // 4. Click Create Workspace. This fires the full submitQuick path:
+      // 4. Click Create. This fires the full submitQuick path:
       // createWorktree IPC, applyWorktreeMeta, activateAndRevealWorktree,
       // and closeModal via onCreated.
-      const createButton = dialog.getByRole('button', { name: /Create Workspace/i })
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
       await expect(createButton).toBeEnabled()
       await createButton.click()
 
