@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Benchmarks mirror PTY ANSI/OSC parsing regexes. */
 import { performance } from 'node:perf_hooks'
 import v8 from 'node:v8'
 
