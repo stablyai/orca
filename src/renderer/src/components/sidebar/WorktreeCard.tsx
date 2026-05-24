@@ -254,6 +254,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showLinearIssue = cardProps.includes('linear-issue')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
+  const showBranch = cardProps.includes('branch')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
@@ -415,8 +416,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
   // Why: deleting the active/current workspace or one with live activity is a
   // disruptive hover action; keep the quick action delete-only and passive.
-  const showDeleteQuickAction =
-    !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
+  const showDeleteQuickAction = !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -624,10 +624,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
 
             {/* Why: weight alone carries the unread signal; color stays
-                 at text-foreground in both states so the title keeps
-                 hierarchy against the muted branch row below (muting the
-                 title as well flattened the card — same reasoning as the
-                 repo chip comment below). */}
+                 at text-foreground in both states so the title remains
+                 the card's primary scan target even when optional branch
+                 metadata is hidden. */}
             <div
               className={cn(
                 'text-[12px] truncate leading-tight text-foreground',
@@ -643,8 +642,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
             {/* Why: the primary worktree (the original clone directory) cannot be
                  deleted via `git worktree remove`. Placing this badge next to the
-                 name makes it immediately visible and avoids confusion with the
-                 branch name "main" shown below. */}
+                 name keeps that constraint visible even when branch metadata is
+                 hidden by the user's card-property choice. */}
             {worktree.isMainWorktree && !isFolder && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -735,11 +734,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
               >
                 {repo ? getRepoKindLabel(repo) : 'Folder'}
               </Badge>
-            ) : (
+            ) : showBranch && branch ? (
               <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
                 {branch}
               </span>
-            )}
+            ) : null}
 
             {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
                  only signal that the worktree is in an incomplete operation state.

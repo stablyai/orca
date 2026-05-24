@@ -547,6 +547,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
+
+  it('persists Branch name as an opt-in card property', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().toggleWorktreeCardProperty('branch')
+
+    expect(store.getState().worktreeCardProperties).toContain('branch')
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: expect.arrayContaining(['status', 'unread', 'branch'])
+    })
+  })
 })
 
 describe('createUISlice settings navigation', () => {

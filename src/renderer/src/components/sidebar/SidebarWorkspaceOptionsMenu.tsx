@@ -35,6 +35,7 @@ const GROUP_BY_OPTIONS = [
 ] as const
 
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
+  { id: 'branch', label: 'Branch name' },
   { id: 'issue', label: 'GitHub ticket' },
   { id: 'linear-issue', label: 'Linear issue' },
   { id: 'pr', label: 'PR/MR link' },

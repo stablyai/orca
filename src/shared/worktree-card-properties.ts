@@ -18,6 +18,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
 const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
   'status',
   'unread',
+  'branch',
   'ci',
   'issue',
   'linear-issue',

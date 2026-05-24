@@ -2111,6 +2111,7 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
     expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
     expect(store.getUI().worktreeCardProperties).toContain('ports')
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
     expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)

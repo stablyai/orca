@@ -249,5 +249,23 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeGreaterThan(childStart)
     expect(childToggleIndex).toBeGreaterThan(childStart)
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
+    expect(markup).not.toContain('child-branch')
+    expect(markup).not.toContain('grandchild-branch')
+  })
+
+  it('renders nested lineage branch labels when the Branch name property is enabled', async () => {
+    setLineageFixtureState()
+    mockStore.state.worktreeCardProperties = ['status', 'inline-agents', 'branch']
+    const { default: WorktreeList } = await import('./WorktreeList')
+
+    const markup = renderToStaticMarkup(
+      React.createElement(WorktreeList, {
+        scrollOffsetRef: { current: 0 },
+        scrollAnchorRef: { current: null }
+      })
+    )
+
+    expect(markup).toContain('child-branch')
+    expect(markup).toContain('grandchild-branch')
   })
 })

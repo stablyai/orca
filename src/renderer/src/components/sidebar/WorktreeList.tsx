@@ -25,6 +25,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
+import { branchDisplayName } from './WorktreeCardHelpers'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
@@ -125,7 +126,6 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -2162,6 +2162,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
             const renderLineageChildCard = (child: WorktreeItemRow) => {
               const isActive = activeWorktreeId === child.worktree.id
+              const childRepo = child.repo
+              const showChildRepoBadge = childRepo !== undefined && groupBy !== 'repo'
+              const showChildBranch =
+                cardProps.includes('branch') && child.worktree.branch.trim() !== ''
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -2211,22 +2215,26 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="truncate text-[12px] leading-tight text-foreground">
                           {child.worktree.displayName}
                         </div>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                          {child.repo && groupBy !== 'repo' ? (
-                            <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
-                              <span
-                                className="size-1.5 rounded-full"
-                                style={{ backgroundColor: child.repo.badgeColor }}
-                              />
-                              <span className="max-w-[6rem] truncate lowercase">
-                                {child.repo.displayName}
+                        {showChildRepoBadge || showChildBranch ? (
+                          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                            {showChildRepoBadge && childRepo ? (
+                              <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
+                                <span
+                                  className="size-1.5 rounded-full"
+                                  style={{ backgroundColor: childRepo.badgeColor }}
+                                />
+                                <span className="max-w-[6rem] truncate lowercase">
+                                  {childRepo.displayName}
+                                </span>
                               </span>
-                            </span>
-                          ) : null}
-                          <span className="truncate text-[10.5px] leading-none text-muted-foreground">
-                            {branchDisplayName(child.worktree.branch)}
-                          </span>
-                        </div>
+                            ) : null}
+                            {showChildBranch ? (
+                              <span className="truncate text-[10.5px] leading-none text-muted-foreground">
+                                {branchDisplayName(child.worktree.branch)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {child.worktree.linkedIssue || child.worktree.comment ? (
                           <div className="mt-1.5 truncate text-[10.5px] leading-tight text-muted-foreground">
                             {child.worktree.linkedIssue ? (

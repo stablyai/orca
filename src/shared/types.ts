@@ -2025,6 +2025,9 @@ export type NotificationPermissionStatusResult = {
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
+  // Git branch metadata shown on workspace cards. Hidden by default because
+  // workspace names already carry the primary identity for most lists.
+  | 'branch'
   // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
   // GitHub issue metadata shown on workspace cards.

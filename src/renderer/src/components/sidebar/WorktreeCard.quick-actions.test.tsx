@@ -125,6 +125,41 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-workspace-board-preserve-open=""')
   })
 
+  it('hides the branch name from workspace card metadata by default', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'Visible workspace',
+          branch: 'refs/heads/feature/secret-ref'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Visible workspace')
+    expect(markup).not.toContain('feature/secret-ref')
+    expect(markup).not.toContain('secret-ref')
+  })
+
+  it('renders the branch name when the Branch name property is enabled', () => {
+    worktreeCardProperties = ['status', 'unread', 'branch']
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'Visible workspace',
+          branch: 'refs/heads/feature/show-ref'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Visible workspace')
+    expect(markup).toContain('feature/show-ref')
+  })
+
   it('shows delete as the top-right quick action for an inactive workspace', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />

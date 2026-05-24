@@ -136,7 +136,7 @@ describe('client UI RPC methods', () => {
   it('accepts persisted literal UI arrays and nested UI state', async () => {
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
-      worktreeCardProperties: ['status', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'inline-agents'],
       statusBarItems: ['codex'],
       taskResumeState: {
         githubMode: 'items',
@@ -163,7 +163,7 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const payload = {
-      worktreeCardProperties: ['status', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'inline-agents'],
       statusBarItems: ['codex'],
       taskResumeState: {
         githubMode: 'items',
