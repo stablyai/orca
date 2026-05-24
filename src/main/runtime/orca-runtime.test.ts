@@ -3455,6 +3455,50 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.limited).toBe(false)
   })
 
+  it('keeps terminal read payloads bounded while retained output remains pageable', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const linePayload = 'x'.repeat(24)
+    const lines = Array.from(
+      { length: 2000 },
+      (_, index) => `line-${index.toString().padStart(4, '0')}-${linePayload}`
+    )
+    runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
+
+    const preview = await runtime.readTerminal(terminal.handle)
+    // Why: byte-size assertions catch accidental full-transcript RPC payloads
+    // without relying on wall-clock performance thresholds in CI.
+    expect(Buffer.byteLength(JSON.stringify(preview), 'utf8')).toBeLessThan(10_000)
+    expect(preview.tail).toHaveLength(120)
+    expect(preview.tail[0]).toBe(lines.at(-120))
+    expect(preview.limited).toBe(true)
+    expect(preview.oldestCursor).toBe('0')
+    expect(preview.nextCursor).toBe('2000')
+    expect(preview.latestCursor).toBe('2000')
+
+    const collected: string[] = []
+    let cursor = Number(preview.oldestCursor)
+    const latestCursor = Number(preview.latestCursor)
+    for (let pageIndex = 0; cursor < latestCursor; pageIndex += 1) {
+      expect(pageIndex).toBeLessThan(10)
+      const page = await runtime.readTerminal(terminal.handle, { cursor, limit: 333 })
+      expect(Buffer.byteLength(JSON.stringify(page), 'utf8')).toBeLessThan(16_000)
+      expect(page.tail.length).toBeGreaterThan(0)
+      expect(page.tail.length).toBeLessThanOrEqual(333)
+      expect(page.returnedLineCount).toBe(page.tail.length)
+
+      collected.push(...page.tail)
+      const nextCursor = Number(page.nextCursor)
+      expect(nextCursor).toBeGreaterThan(cursor)
+      cursor = nextCursor
+    }
+
+    expect(collected).toHaveLength(lines.length)
+    expect(collected.findIndex((line, index) => line !== lines[index])).toBe(-1)
+  })
+
   it('bounds retained partial terminal output before preview reads', async () => {
     const runtime = new OrcaRuntimeService(store)
 
