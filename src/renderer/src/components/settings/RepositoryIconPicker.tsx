@@ -230,7 +230,7 @@ export function RepositoryIconPicker({
               onClick={handleUploadImage}
             >
               <Image className="size-3.5" />
-              Upload PNG/SVG
+              Upload PNG
             </Button>
             <Button
               type="button"
@@ -262,7 +262,7 @@ export function RepositoryIconPicker({
               Favicon
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">PNG/SVG uploads must be 256KB or smaller.</p>
+          <p className="text-xs text-muted-foreground">PNG uploads must be 256KB or smaller.</p>
         </TabsContent>
       </Tabs>
     </div>

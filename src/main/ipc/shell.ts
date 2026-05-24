@@ -11,8 +11,7 @@ import { getSpawnArgsForWindows } from '../win32-utils'
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 
 const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml'
+  '.png': 'image/png'
 }
 
 async function pathExists(pathValue: string): Promise<boolean> {
@@ -248,7 +247,7 @@ export function registerShellHandlers(): void {
     async (): Promise<{ dataUrl: string; fileName: string } | null> => {
       const result = await dialog.showOpenDialog({
         properties: ['openFile'],
-        filters: [{ name: 'Repo icon images', extensions: ['png', 'svg'] }]
+        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null
@@ -258,7 +257,7 @@ export function registerShellHandlers(): void {
       const extension = extname(filePath).toLowerCase()
       const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
       if (!mimeType) {
-        throw new Error('Repo icons must be PNG or SVG files.')
+        throw new Error('Repo icons must be PNG files.')
       }
 
       const stats = await stat(filePath)

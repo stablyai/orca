@@ -11822,6 +11822,7 @@ export class OrcaRuntimeService {
 
 const MAX_TAIL_LINES = 2000
 const MAX_TAIL_CHARS = 256 * 1024
+const MAX_TAIL_PARTIAL_CHARS = 4000
 const DEFAULT_TERMINAL_READ_LIMIT = 120
 const MAX_TERMINAL_READ_LIMIT = 2000
 const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
@@ -11931,26 +11932,40 @@ function appendToTailBuffer(
     }
   }
 
-  const pieces = `${previousPartialLine}${normalizedChunk}`.split('\n')
+  // Why: fullscreen TUIs often emit long, newline-free redraw streams. Keep the
+  // larger line transcript for pagination, but keep partial-line work bounded.
+  const previousPartialWasCapped = previousPartialLine.length > MAX_TAIL_PARTIAL_CHARS
+  const boundedPreviousPartialLine = previousPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
+  const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`.split('\n')
   const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
+  const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
   const newCompleteLines = pieces.length
-  const nextLines = [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
-  let truncated = false
+  let nextLines =
+    newCompleteLines > 0
+      ? [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
+      : previousLines
+  let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
   while (nextLines.length > MAX_TAIL_LINES) {
     nextLines.shift()
     truncated = true
   }
 
-  let totalChars = nextLines.reduce((sum, line) => sum + line.length, 0) + nextPartialLine.length
-  while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
-    totalChars -= nextLines.shift()!.length
-    truncated = true
+  if (newCompleteLines > 0 || retainedPartialLine.length > previousPartialLine.length) {
+    if (nextLines === previousLines) {
+      nextLines = [...previousLines]
+    }
+    let totalChars =
+      nextLines.reduce((sum, line) => sum + line.length, 0) + retainedPartialLine.length
+    while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
+      totalChars -= nextLines.shift()!.length
+      truncated = true
+    }
   }
 
   return {
     lines: nextLines,
-    partialLine: nextPartialLine.slice(-MAX_TAIL_CHARS),
+    partialLine: retainedPartialLine,
     truncated,
     newCompleteLines
   }

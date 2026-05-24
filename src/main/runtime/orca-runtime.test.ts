@@ -3455,7 +3455,7 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.limited).toBe(false)
   })
 
-  it('bounds preview reads by characters for long partial terminal output', async () => {
+  it('bounds retained partial terminal output before preview reads', async () => {
     const runtime = new OrcaRuntimeService(store)
 
     runtime.attachWindow(1)
@@ -3481,16 +3481,43 @@ describe('OrcaRuntimeService', () => {
     })
 
     const [terminal] = (await runtime.listTerminals()).terminals
-    const longPartialLine = `${'x'.repeat(40_000)}tail-marker`
-    runtime.onPtyData('pty-1', longPartialLine, 100)
+    runtime.onPtyData(
+      'pty-1',
+      `${Array.from({ length: 2000 }, (_, index) => `line-${index}`).join('\n')}\n`,
+      99
+    )
+    runtime.onPtyData('pty-1', `${'x'.repeat(40_000)}tail-marker-0`, 100)
+    type RetainedTailState = {
+      tailBuffer: string[]
+      tailPartialLine: string
+      tailTruncated: boolean
+    }
+    const cappedPartialState = (
+      runtime as unknown as {
+        ptysById: Map<string, RetainedTailState>
+      }
+    ).ptysById.get('pty-1')
+    const retainedLineBuffer = cappedPartialState?.tailBuffer
+    for (let index = 1; index < 5; index += 1) {
+      runtime.onPtyData('pty-1', `${'x'.repeat(40_000)}tail-marker-${index}`, 100 + index)
+    }
+
+    const retained = (
+      runtime as unknown as {
+        ptysById: Map<string, RetainedTailState>
+      }
+    ).ptysById.get('pty-1')
+    expect(retained?.tailBuffer).toBe(retainedLineBuffer)
+    expect(retained?.tailPartialLine).toHaveLength(4000)
+    expect(retained?.tailPartialLine.endsWith('tail-marker-4')).toBe(true)
+    expect(retained?.tailTruncated).toBe(true)
 
     const preview = await runtime.readTerminal(terminal.handle)
-    expect(preview.tail).toHaveLength(1)
-    expect(preview.tail[0]).toHaveLength(32 * 1024)
-    expect(preview.tail[0].endsWith('tail-marker')).toBe(true)
-    expect(preview.limited).toBe(true)
+    expect(preview.tail).toHaveLength(120)
+    expect(preview.tail.at(-1)).toHaveLength(4000)
+    expect(preview.tail.at(-1)?.endsWith('tail-marker-4')).toBe(true)
     expect(preview.truncated).toBe(true)
-    expect(preview.nextCursor).toBe('0')
+    expect(preview.nextCursor).toBe('2000')
   })
 
   it('delivers pending orchestration messages to an already-idle agent', async () => {

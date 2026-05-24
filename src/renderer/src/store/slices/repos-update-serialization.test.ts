@@ -136,8 +136,8 @@ describe('repo update serialization', () => {
     await store.getState().updateRepo(localRepo.id, {
       repoIcon: {
         type: 'image',
-        source: 'github',
-        src: 'https://example.com/icon.png'
+        source: 'upload',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
       } as never
     })
 

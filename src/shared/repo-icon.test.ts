@@ -46,17 +46,6 @@ describe('sanitizeRepoIcon', () => {
       src: 'data:image/png;base64,aGVsbG8=',
       source: 'upload'
     })
-    expect(
-      sanitizeRepoIcon({
-        type: 'image',
-        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
-        source: 'upload'
-      })
-    ).toEqual({
-      type: 'image',
-      src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
-      source: 'upload'
-    })
   })
 
   it('keeps null as an explicit reset', () => {
@@ -81,22 +70,15 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+        source: 'upload'
+      })
+    ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
         src: 'https://example.com/icon.png',
         source: 'github'
-      })
-    ).toBeUndefined()
-    expect(
-      sanitizeRepoIcon({
-        type: 'image',
-        src: 'https://example.com/icon.png',
-        source: 'favicon'
-      })
-    ).toBeUndefined()
-    expect(
-      sanitizeRepoIcon({
-        type: 'image',
-        src: 'https://example.com/icon.png',
-        source: 'upload'
       })
     ).toBeUndefined()
   })

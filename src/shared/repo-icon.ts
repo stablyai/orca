@@ -14,7 +14,7 @@ const isRepoIconImageSource = (value: string): value is RepoIconImageSource =>
 
 function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
   if (source === 'upload') {
-    return /^data:image\/(?:png|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(src)
+    return /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src)
   }
 
   let url: URL

@@ -80,17 +80,21 @@ vi.mock('../ui/toggle-group', () => ({
 }))
 
 vi.mock('./SettingsFormControls', () => ({
+  SettingsRow: function SettingsRow({ children }: { children?: unknown }) {
+    return children
+  },
   NumberField: function NumberField() {
     return null
   },
   FontAutocomplete: function FontAutocomplete() {
     return null
   },
-  SettingsRow: function SettingsRow() {
-    return null
-  },
-  SettingsSegmentedControl: function SettingsSegmentedControl() {
-    return null
+  SettingsSegmentedControl: function SettingsSegmentedControl({
+    options
+  }: {
+    options?: readonly { label: string }[]
+  }) {
+    return options?.map((option) => option.label) ?? null
   },
   SettingsSubsectionHeader: function SettingsSubsectionHeader() {
     return null

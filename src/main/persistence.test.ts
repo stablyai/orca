@@ -1383,8 +1383,8 @@ describe('Store', () => {
     const updated = store.updateRepo('r1', {
       repoIcon: {
         type: 'image',
-        source: 'github',
-        src: 'https://example.com/icon.png'
+        source: 'upload',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
       } as never
     })
 
@@ -1399,8 +1399,8 @@ describe('Store', () => {
       makeRepo({
         repoIcon: {
           type: 'image',
-          source: 'github',
-          src: 'https://example.com/icon.png'
+          source: 'upload',
+          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
         } as never
       })
     )
