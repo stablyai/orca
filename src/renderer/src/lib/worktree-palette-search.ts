@@ -27,6 +27,20 @@ export type PaletteSearchResult = {
   supportingText: PaletteSupportingText | null
 }
 
+export function getWorktreePaletteSearchScope(args: {
+  hasQuery: boolean
+  allWorktrees: readonly Worktree[]
+  emptyQueryWorktrees: readonly Worktree[]
+}): Worktree[] {
+  if (!args.hasQuery) {
+    return [...args.emptyQueryWorktrees]
+  }
+
+  // Why: sidebar filters keep the default list quiet, but explicit search is
+  // a recovery path for sleeping/default-branch workspaces hidden by filters.
+  return args.allWorktrees.filter((worktree) => !worktree.isArchived)
+}
+
 type PRCacheEntry = { data?: { number: number; title: string } | null } | undefined
 type IssueCacheEntry = { data?: { number: number; title: string } | null } | undefined
 

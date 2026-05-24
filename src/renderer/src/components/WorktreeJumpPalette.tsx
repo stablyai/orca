@@ -25,6 +25,7 @@ import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
+  getWorktreePaletteSearchScope,
   searchWorktrees,
   type MatchRange,
   type PaletteSearchResult
@@ -200,16 +201,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const hasQuery = deferredQuery.trim().length > 0
 
-  // Why: keep the jump palette aligned with the sidebar. Surfacing hidden
-  // default-branch or sleeping workspaces here would reintroduce entries the
-  // user asked the workspace navigation surfaces to omit.
-  // Drift warning: this check must stay in lockstep with the sidebar's
-  // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
-  // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
-  // but adding a new filter axis (e.g. a second toggle) here would need
-  // the matching change in the sidebar pipeline — otherwise Cmd+J and
-  // the sidebar will show different lists.
-  const visibleWorktrees = useMemo(
+  // Why: the empty-query palette mirrors sidebar filters so opening Search
+  // starts from the same quiet list. Typed search switches to the global
+  // non-archived scope below.
+  const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
         if (worktree.isArchived) {
@@ -246,11 +241,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
       orderEmptyQueryWorktrees({
-        visibleWorktrees,
+        visibleWorktrees: emptyQueryVisibleWorktrees,
         activeWorktreeId,
         lastVisitedAtByWorktreeId
       }),
-    [visibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+    [emptyQueryVisibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+  )
+
+  const searchScopeWorktrees = useMemo(
+    () =>
+      getWorktreePaletteSearchScope({
+        hasQuery,
+        allWorktrees,
+        emptyQueryWorktrees: switchableWorktreesForRows
+      }),
+    [allWorktrees, hasQuery, switchableWorktreesForRows]
   )
 
   // Why: typed queries still route through sortWorktreesSmart — switcher
@@ -259,7 +264,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () =>
       hasQuery
         ? sortWorktreesSmart(
-            visibleWorktrees,
+            searchScopeWorktrees,
             tabsByWorktree,
             repoMap,
             agentStatusByPaneKey,
@@ -268,11 +273,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             migrationUnsupportedByPtyId,
             terminalLayoutsByTabId
           )
-        : switchableWorktreesForRows,
+        : searchScopeWorktrees,
     [
       hasQuery,
-      visibleWorktrees,
-      switchableWorktreesForRows,
+      searchScopeWorktrees,
       tabsByWorktree,
       repoMap,
       agentStatusByPaneKey,
@@ -500,6 +504,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // because the only visible worktree is the currently active one.
   // See docs/cmd-j-empty-query-ordering.md.
   const hasAnyWorktrees = visibleWorktreesForState.length > 0
+  const hasAnySearchableWorktrees = hasQuery ? searchScopeWorktrees.length > 0 : hasAnyWorktrees
   const hasAnyBrowserPages = browserPageEntries.length > 0
 
   useEffect(() => {
@@ -857,7 +862,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const resultCount = selectableItems.length
   const emptyState = (() => {
-    if ((hasAnyWorktrees || hasAnyBrowserPages) && hasQuery) {
+    if ((hasAnySearchableWorktrees || hasAnyBrowserPages) && hasQuery) {
       return {
         title: 'No results match your search',
         subtitle: 'Try a name, branch, repo, port, comment, PR, page title, or URL.'
