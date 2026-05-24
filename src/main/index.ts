@@ -337,6 +337,7 @@ function openMainWindow(): BrowserWindow {
     shouldRecordRendererCrash: (details, webContentsId) =>
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: details.reason,
         exitCode: details.exitCode ?? null,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
@@ -398,7 +399,12 @@ function openMainWindow(): BrowserWindow {
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
-    keybindings
+    keybindings,
+    {
+      onBeforeRelaunch: () => {
+        isQuitting = true
+      }
+    }
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -524,6 +530,7 @@ function recordProcessGoneCrash(
   if (
     !shouldRecordProcessGoneCrash({
       source,
+      processType,
       reason,
       exitCode,
       expectedTeardown: getExpectedTeardownScope(webContentsId)

@@ -9,6 +9,7 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: 'killed',
         exitCode: 15,
         expectedTeardown: 'renderer-reload'
@@ -17,6 +18,7 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
+        processType: 'GPU',
         reason: 'killed',
         exitCode: 15,
         expectedTeardown: 'app-shutdown'
@@ -24,10 +26,11 @@ describe('shouldRecordProcessGoneCrash', () => {
     ).toBe(false)
   })
 
-  it('records real crash reasons even during expected lifecycle teardown', () => {
+  it('records real crash reasons during expected renderer-only teardown', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: 'crashed',
         exitCode: 5,
         expectedTeardown: 'renderer-reload'
@@ -36,9 +39,46 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: 'oom',
         exitCode: null,
         expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(true)
+  })
+
+  it('suppresses crash-shaped GPU child exits during expected app shutdown', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'crashed',
+        exitCode: 5,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
+  })
+
+  it('still records crash-shaped non-GPU child exits during expected app shutdown', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        reason: 'crashed',
+        exitCode: 5,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(true)
+  })
+
+  it('still records crash-shaped renderer exits during expected app shutdown', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'crashed',
+        exitCode: 5,
+        expectedTeardown: 'app-shutdown'
       })
     ).toBe(true)
   })
@@ -47,6 +87,7 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: 'killed',
         exitCode: 15,
         expectedTeardown: 'none'
@@ -58,6 +99,7 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: 'killed',
         exitCode: 9,
         expectedTeardown: 'none'
@@ -69,6 +111,7 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
+        processType: 'GPU',
         reason: 'killed',
         exitCode: 9,
         expectedTeardown: 'renderer-reload'
