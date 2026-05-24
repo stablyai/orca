@@ -6,9 +6,9 @@ import type {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
 import {
-  hasFocusedAgentStatusForWorktree,
-  type FocusedAgentStatusHighlightState
-} from './focused-agent-status-highlight'
+  getFocusedAgentPaneKeyForWorktree,
+  type FocusedAgentRowHighlightState
+} from './focused-agent-row-highlight'
 
 vi.mock('@/lib/agent-status', () => ({
   isExplicitAgentStatusFresh: vi.fn(
@@ -64,8 +64,8 @@ function makeUnsupportedEntry(paneKey: string): MigrationUnsupportedPtyEntry {
 }
 
 function makeState(
-  overrides: Partial<FocusedAgentStatusHighlightState> = {}
-): FocusedAgentStatusHighlightState {
+  overrides: Partial<FocusedAgentRowHighlightState> = {}
+): FocusedAgentRowHighlightState {
   return {
     activeWorktreeId: WORKTREE_ID,
     activeTabType: 'terminal',
@@ -88,25 +88,25 @@ function makeState(
   }
 }
 
-describe('hasFocusedAgentStatusForWorktree', () => {
-  it('highlights when the focused terminal pane has a fresh live agent status', () => {
+describe('getFocusedAgentPaneKeyForWorktree', () => {
+  it('returns the focused pane key when that pane has a fresh live agent status', () => {
     const state = makeState({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentStatusEntry(PANE_KEY)
       }
     })
 
-    expect(hasFocusedAgentStatusForWorktree(state, WORKTREE_ID, 2_000)).toBe(true)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
   })
 
-  it('does not highlight for another split pane in the same terminal tab', () => {
+  it('does not return another split pane in the same terminal tab', () => {
     const state = makeState({
       agentStatusByPaneKey: {
         [OTHER_PANE_KEY]: makeAgentStatusEntry(OTHER_PANE_KEY)
       }
     })
 
-    expect(hasFocusedAgentStatusForWorktree(state, WORKTREE_ID, 2_000)).toBe(false)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBeNull()
   })
 
   it('does not highlight while another surface type is active', () => {
@@ -117,10 +117,10 @@ describe('hasFocusedAgentStatusForWorktree', () => {
       }
     })
 
-    expect(hasFocusedAgentStatusForWorktree(state, WORKTREE_ID, 2_000)).toBe(false)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBeNull()
   })
 
-  it('highlights retained agent rows for the focused pane', () => {
+  it('returns retained agent row pane keys for the focused pane', () => {
     const entry = makeAgentStatusEntry(PANE_KEY)
     const state = makeState({
       retainedAgentsByPaneKey: {
@@ -134,16 +134,16 @@ describe('hasFocusedAgentStatusForWorktree', () => {
       }
     })
 
-    expect(hasFocusedAgentStatusForWorktree(state, WORKTREE_ID, 2_000)).toBe(true)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
   })
 
-  it('highlights migration-unsupported agent rows for the focused pane', () => {
+  it('returns migration-unsupported agent row pane keys for the focused pane', () => {
     const state = makeState({
       migrationUnsupportedByPtyId: {
         'pty-unsupported': makeUnsupportedEntry(PANE_KEY)
       }
     })
 
-    expect(hasFocusedAgentStatusForWorktree(state, WORKTREE_ID, 2_000)).toBe(true)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
   })
 })

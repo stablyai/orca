@@ -110,6 +110,8 @@ type Props = {
    */
   hideIdentityIcon?: boolean
   hideExpand?: boolean
+  /** Reuse the row's hover tint to show the focused terminal pane's agent. */
+  isFocusedPane?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -120,7 +122,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isUnvisited = false,
   stateDotSize = 'md',
   hideIdentityIcon = false,
-  hideExpand = false
+  hideExpand = false,
+  isFocusedPane = false
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
@@ -236,8 +239,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         // near-nothing because accent (#f5f5f5) is already ~white. Use a
         // black alpha overlay in light mode (mirrors WorktreeCard.tsx's
         // active-state pattern) so the lift is symmetric across themes.
-        'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30'
+        'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30',
+        isFocusedPane && 'bg-black/[0.06] dark:bg-accent/30'
       )}
+      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}

@@ -92,6 +92,28 @@ function tokenCount(markup: string, token: string): number {
 }
 
 describe('DashboardAgentRow', () => {
+  it('uses the hover background as the focused-pane row highlight', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={makeAgent()}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          hideIdentityIcon
+          hideExpand
+          isFocusedPane
+        />
+      </TooltipProvider>
+    )
+
+    expect(markup).toContain('data-focused-agent-pane="true"')
+    expect(classTokens(markup)).toContain('hover:bg-black/[0.06]')
+    expect(classTokens(markup)).toContain('dark:hover:bg-accent/30')
+    expect(classTokens(markup)).toContain('bg-black/[0.06]')
+    expect(classTokens(markup)).toContain('dark:bg-accent/30')
+  })
+
   it('scopes the timestamp and dismiss hover swap to the row-owned group', () => {
     const markup = renderRow(makeAgent())
     const classes = hoverSwapClasses(markup)

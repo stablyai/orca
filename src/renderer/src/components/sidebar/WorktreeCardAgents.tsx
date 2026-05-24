@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
+import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 
 type Props = {
   worktreeId: string
@@ -53,6 +54,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
+  const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -159,6 +161,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             // Keep the identity glyph (Claude/Gemini/…) so users can tell
             // agents apart at a glance within a worktree.
             hideExpand
+            isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           />
         </div>
       ))}

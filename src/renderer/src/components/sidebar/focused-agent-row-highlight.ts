@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 
-export type FocusedAgentStatusHighlightState = Pick<
+export type FocusedAgentRowHighlightState = Pick<
   AppState,
   | 'activeWorktreeId'
   | 'activeTabType'
@@ -19,49 +19,50 @@ export type FocusedAgentStatusHighlightState = Pick<
   | 'migrationUnsupportedByPtyId'
 >
 
-export function hasFocusedAgentStatusForWorktree(
-  state: FocusedAgentStatusHighlightState,
+export function getFocusedAgentPaneKeyForWorktree(
+  state: FocusedAgentRowHighlightState,
   worktreeId: string,
   now = Date.now()
-): boolean {
+): string | null {
   if (state.activeWorktreeId !== worktreeId || state.activeTabType !== 'terminal') {
-    return false
+    return null
   }
 
   const activeTabId = state.activeTabId
   if (!activeTabId) {
-    return false
+    return null
   }
 
   const activeTabBelongsToWorktree = (state.tabsByWorktree[worktreeId] ?? []).some(
     (tab) => tab.id === activeTabId
   )
   if (!activeTabBelongsToWorktree) {
-    return false
+    return null
   }
 
   const activeLeafId = state.terminalLayoutsByTabId[activeTabId]?.activeLeafId
   if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
-    return false
+    return null
   }
 
   const activePaneKey = makePaneKey(activeTabId, activeLeafId)
   const liveEntry = state.agentStatusByPaneKey[activePaneKey]
   if (liveEntry && isFreshLiveAgent(liveEntry, now)) {
-    return true
+    return activePaneKey
   }
 
   if (state.retainedAgentsByPaneKey[activePaneKey]?.worktreeId === worktreeId) {
-    return true
+    return activePaneKey
   }
 
-  return Object.values(state.migrationUnsupportedByPtyId).some(
+  const hasMigrationUnsupportedRow = Object.values(state.migrationUnsupportedByPtyId).some(
     (entry) => entry.paneKey === activePaneKey
   )
+  return hasMigrationUnsupportedRow ? activePaneKey : null
 }
 
-export function useFocusedAgentStatusHighlight(worktreeId: string): boolean {
-  return useAppStore((state) => hasFocusedAgentStatusForWorktree(state, worktreeId))
+export function useFocusedAgentPaneKey(worktreeId: string): string | null {
+  return useAppStore((state) => getFocusedAgentPaneKeyForWorktree(state, worktreeId))
 }
 
 function isFreshLiveAgent(entry: AgentStatusEntry, now: number): boolean {
