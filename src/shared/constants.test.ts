@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getDefaultPrimarySelectionMiddleClickPaste,
-  getDefaultSettings,
-  getDefaultUIState
-} from './constants'
+import { getDefaultPrimarySelectionMiddleClickPaste, getDefaultSettings } from './constants'
 
 describe('getDefaultSettings', () => {
   it('enables gitignored file decorations by default', () => {
@@ -38,11 +34,5 @@ describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
 
   it('leaves primary selection paste opt-in on Windows', () => {
     expect(getDefaultPrimarySelectionMiddleClickPaste('win32')).toBe(false)
-  })
-})
-
-describe('getDefaultUIState', () => {
-  it('keeps branch names hidden from workspace cards by default', () => {
-    expect(getDefaultUIState().worktreeCardProperties).not.toContain('branch')
   })
 })

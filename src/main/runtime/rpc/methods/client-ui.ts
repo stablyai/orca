@@ -10,7 +10,6 @@ const UnknownRecordArray = z.array(UnknownRecord)
 const WorktreeCardProperty = z.enum([
   'status',
   'unread',
-  'branch',
   'ci',
   'issue',
   'linear-issue',
