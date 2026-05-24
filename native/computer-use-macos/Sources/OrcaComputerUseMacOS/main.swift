@@ -2090,9 +2090,15 @@ private final class PermissionWindowController: NSWindowController {
         window.center()
         window.isReleasedWhenClosed = false
         self.init(window: window, terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses)
-        window.contentView = PermissionView(frame: window.contentView?.bounds ?? .zero) { [weak self] permission in
-            self?.showDragAssistant(for: permission)
-        }
+        window.contentView = PermissionView(
+            frame: window.contentView?.bounds ?? .zero,
+            showDragAssistant: { [weak self] permission in
+                self?.showDragAssistant(for: permission)
+            },
+            close: { [weak self] in
+                self?.window?.close()
+            }
+        )
     }
 
     init(window: NSWindow?, terminateWhenDragAssistantCloses: Bool) {
@@ -2124,7 +2130,7 @@ private final class PermissionWindowController: NSWindowController {
     }
 }
 
-private enum PermissionKind {
+private enum PermissionKind: CaseIterable {
     case accessibility
     case screenshots
 
@@ -2148,6 +2154,42 @@ private enum PermissionKind {
         }
     }
 
+    var title: String {
+        switch self {
+        case .accessibility:
+            "Accessibility"
+        case .screenshots:
+            "Screenshots"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .accessibility:
+            "Read and control app interfaces"
+        case .screenshots:
+            "Capture windows for visual state"
+        }
+    }
+
+    var icon: NSImage {
+        switch self {
+        case .accessibility:
+            NSImage(systemSymbolName: "figure", accessibilityDescription: "Accessibility") ?? NSImage()
+        case .screenshots:
+            NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Screen Recording") ?? NSImage()
+        }
+    }
+
+    var isGranted: Bool {
+        switch self {
+        case .accessibility:
+            accessibilityTrusted()
+        case .screenshots:
+            screenCaptureTrusted()
+        }
+    }
+
     func requestAndOpenSettings() {
         switch self {
         case .accessibility:
@@ -2162,9 +2204,11 @@ private enum PermissionKind {
 private final class PermissionView: NSView {
     private let appURL = Bundle.main.bundleURL
     private let showDragAssistant: (PermissionKind) -> Void
+    private let close: () -> Void
 
-    init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void) {
+    init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void, close: @escaping () -> Void) {
         self.showDragAssistant = showDragAssistant
+        self.close = close
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = PermissionPalette.background.cgColor
@@ -2192,9 +2236,12 @@ private final class PermissionView: NSView {
             icon.heightAnchor.constraint(equalToConstant: 58)
         ])
 
-        let title = label("Enable Orca Computer Use", size: 22, weight: .bold)
+        let missingPermissions = PermissionKind.allCases.filter { !$0.isGranted }
+        let ready = missingPermissions.isEmpty
+
+        let title = label(ready ? "Computer Use is Ready" : "Enable Orca Computer Use", size: 22, weight: .bold)
         let subtitle = label(
-            "Grant permissions so Orca can use apps when you ask.",
+            ready ? "Orca can use local apps when you ask." : "Grant permissions so Orca can use apps when you ask.",
             size: 12,
             weight: .regular
         )
@@ -2211,25 +2258,16 @@ private final class PermissionView: NSView {
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         subtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -10).isActive = true
 
-        stack.addArrangedSubview(permissionRow(
-            icon: NSImage(systemSymbolName: "figure", accessibilityDescription: "Accessibility"),
-            title: "Accessibility",
-            detail: "Read and control app interfaces",
-            buttonTitle: "Allow"
-        ) {
-            PermissionKind.accessibility.requestAndOpenSettings()
-            self.showDragAssistant(.accessibility)
-        })
-
-        stack.addArrangedSubview(permissionRow(
-            icon: NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Screen Recording"),
-            title: "Screenshots",
-            detail: "Capture windows for visual state",
-            buttonTitle: "Allow"
-        ) {
-            PermissionKind.screenshots.requestAndOpenSettings()
-            self.showDragAssistant(.screenshots)
-        })
+        if ready {
+            stack.addArrangedSubview(doneButton())
+        } else {
+            for permission in missingPermissions {
+                stack.addArrangedSubview(permissionRow(permission: permission) {
+                    permission.requestAndOpenSettings()
+                    self.showDragAssistant(permission)
+                })
+            }
+        }
 
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
@@ -2239,13 +2277,7 @@ private final class PermissionView: NSView {
         ])
     }
 
-    private func permissionRow(
-        icon: NSImage?,
-        title: String,
-        detail: String,
-        buttonTitle: String,
-        action: @escaping () -> Void
-    ) -> NSView {
+    private func permissionRow(permission: PermissionKind, action: @escaping () -> Void) -> NSView {
         let row = NSView()
         row.wantsLayer = true
         row.layer?.cornerRadius = 14
@@ -2254,13 +2286,13 @@ private final class PermissionView: NSView {
         row.layer?.backgroundColor = PermissionPalette.card.cgColor
         row.translatesAutoresizingMaskIntoConstraints = false
 
-        let iconView = NSImageView(image: icon ?? NSImage())
+        let iconView = NSImageView(image: permission.icon)
         iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 30, weight: .regular)
         iconView.contentTintColor = .controlAccentColor
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        let titleLabel = label(title, size: 13, weight: .bold)
-        let detailLabel = label(detail, size: 11, weight: .regular)
+        let titleLabel = label(permission.title, size: 13, weight: .bold)
+        let detailLabel = label(permission.detail, size: 11, weight: .regular)
         detailLabel.textColor = PermissionPalette.secondaryText
         let textStack = NSStackView(views: [titleLabel, detailLabel])
         textStack.orientation = .vertical
@@ -2268,7 +2300,7 @@ private final class PermissionView: NSView {
         textStack.spacing = 4
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let button = NSButton(title: buttonTitle, target: nil, action: nil)
+        let button = NSButton(title: "Allow", target: nil, action: nil)
         button.bezelStyle = .rounded
         button.controlSize = .regular
         button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -2278,8 +2310,8 @@ private final class PermissionView: NSView {
             .foregroundColor: NSColor.white,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
         ]
-        button.attributedTitle = NSAttributedString(string: buttonTitle, attributes: buttonTitleAttributes)
-        button.attributedAlternateTitle = NSAttributedString(string: buttonTitle, attributes: buttonTitleAttributes)
+        button.attributedTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
         let target = ButtonTarget(action)
         button.target = target
         button.action = #selector(ButtonTarget.run)
@@ -2304,6 +2336,29 @@ private final class PermissionView: NSView {
             textStack.trailingAnchor.constraint(lessThanOrEqualTo: button.leadingAnchor, constant: -12)
         ])
         return row
+    }
+
+    private func doneButton() -> NSView {
+        let button = NSButton(title: "Done", target: nil, action: nil)
+        button.bezelStyle = .rounded
+        button.controlSize = .regular
+        button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        button.contentTintColor = .white
+        button.bezelColor = .controlAccentColor
+        let buttonTitleAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: NSColor.white,
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
+        ]
+        button.attributedTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
+        let target = ButtonTarget(close)
+        button.target = target
+        button.action = #selector(ButtonTarget.run)
+        objc_setAssociatedObject(button, "orca-action", target, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.widthAnchor.constraint(greaterThanOrEqualToConstant: 82).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        return button
     }
 
     private func label(_ text: String, size: CGFloat, weight: NSFont.Weight) -> NSTextField {
@@ -2348,9 +2403,8 @@ private final class PermissionDragAssistantController: NSWindowController {
         window.isMovableByWindowBackground = false
         window.hasShadow = true
         self.init(window: window, fallbackVisibleFrame: fallbackVisibleFrame, onClose: onClose)
-        window.contentView = PermissionDragAssistantView(permission: permission, appURL: Bundle.main.bundleURL) { [weak self, weak window] in
-            window?.close()
-            self?.onClose()
+        window.contentView = PermissionDragAssistantView(permission: permission, appURL: Bundle.main.bundleURL) { [weak self] in
+            self?.dismissFromCloseButton()
         }
     }
 
@@ -2373,6 +2427,13 @@ private final class PermissionDragAssistantController: NSWindowController {
         followTimer?.invalidate()
         followTimer = nil
         super.close()
+    }
+
+    private func dismissFromCloseButton() {
+        // Why: closing the NSWindow directly skips this controller's timer cleanup,
+        // letting the assistant reappear while System Settings remains visible.
+        close()
+        onClose()
     }
 
     private func schedulePositionAndShow() {

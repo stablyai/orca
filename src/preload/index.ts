@@ -1465,7 +1465,8 @@ const api = {
   computerUsePermissions: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
     openSetup: (args?: { id?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('computerUsePermissions:openSetup', args)
+      ipcRenderer.invoke('computerUsePermissions:openSetup', args),
+    reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
   shell: {
