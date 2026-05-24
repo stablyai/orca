@@ -18,6 +18,7 @@ import {
   resolveOwnedClaudeManagedAuthPath
 } from '../claude-accounts/managed-auth-path'
 import { createOAuthUsageError, OAuthUsageError } from './claude-oauth-usage-error'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -318,7 +319,7 @@ export async function fetchClaudeRateLimits(options?: {
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: err.message,
+          error: withMacTailscaleDnsHint(err.message),
           status: 'error'
         }
       }
@@ -340,7 +341,7 @@ export async function fetchClaudeRateLimits(options?: {
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: message,
+        error: withMacTailscaleDnsHint(message),
         status: 'error'
       }
     }
