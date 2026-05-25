@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  WORKSPACE_INSTANCE_SEPARATOR,
   WORKTREE_ID_SEPARATOR,
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId,
   splitWorktreeId,
-  splitWorktreeIdForFilesystem
+  splitWorktreeIdForFilesystem,
+  stripWorkspaceInstanceSuffix
 } from './worktree-id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
   it('is the literal "::" separator', () => {
     expect(WORKTREE_ID_SEPARATOR).toBe('::')
+  })
+
+  it('uses the same workspace instance separator for folder and git workspaces', () => {
+    expect(WORKSPACE_INSTANCE_SEPARATOR).toBe('::workspace:')
   })
 })
 
@@ -90,6 +96,28 @@ describe('splitWorktreeIdForFilesystem', () => {
     expect(
       splitWorktreeIdForFilesystem('repo::/folder::workspace:123e4567-e89b-12d3-a456-426614174000')
     ).toEqual({ repoId: 'repo', worktreePath: '/folder' })
+  })
+
+  it('strips git checkout workspace instance suffixes from the parsed path', () => {
+    expect(
+      splitWorktreeIdForFilesystem(
+        'repo::/repo/main::workspace:123e4567-e89b-12d3-a456-426614174000'
+      )
+    ).toEqual({ repoId: 'repo', worktreePath: '/repo/main' })
+  })
+})
+
+describe('stripWorkspaceInstanceSuffix', () => {
+  it('removes a workspace instance suffix from a path or id', () => {
+    expect(
+      stripWorkspaceInstanceSuffix(
+        'repo::/repo/main::workspace:123e4567-e89b-12d3-a456-426614174000'
+      )
+    ).toBe('repo::/repo/main')
+  })
+
+  it('leaves non-workspace values unchanged', () => {
+    expect(stripWorkspaceInstanceSuffix('repo::/repo/main')).toBe('repo::/repo/main')
   })
 })
 

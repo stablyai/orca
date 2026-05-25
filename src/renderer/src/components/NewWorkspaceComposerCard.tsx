@@ -7,11 +7,13 @@ import {
   ChevronDown,
   CornerDownLeft,
   FolderPlus,
+  Info,
   LoaderCircle,
   PlugZap,
   Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
@@ -46,6 +48,8 @@ type NewWorkspaceComposerCardProps = {
   eligibleRepos: RepoOption[]
   repoId: string
   selectedRepoIsGit: boolean
+  workspaceCreateMode: 'new-worktree' | 'open-existing'
+  onWorkspaceCreateModeChange: (mode: 'new-worktree' | 'open-existing') => void
   onRepoChange: (value: string) => void
   primaryActionLabel: string
   name: string
@@ -93,6 +97,23 @@ const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
   'reconnection-failed': 'SSH reconnection failed',
   error: 'SSH connection error'
 }
+
+const WORKSPACE_MODE_COPY = {
+  'new-worktree': {
+    label: 'New worktree',
+    blurb:
+      'Best for isolated branch work. Orca creates a separate checkout directory for this workspace.',
+    tooltip:
+      'Use this when agents or terminals should make changes without touching your main checkout.'
+  },
+  'open-existing': {
+    label: 'Existing checkout',
+    blurb:
+      'Best for extra sessions on the same files. Orca adds workspace state without creating a git worktree.',
+    tooltip:
+      'Use this for another agent, terminal, note, or task context on the current checkout. File and git state are shared.'
+  }
+} as const
 
 function SetupCommandPreview({
   setupConfig,
@@ -210,6 +231,8 @@ export default function NewWorkspaceComposerCard({
   eligibleRepos,
   repoId,
   selectedRepoIsGit,
+  workspaceCreateMode,
+  onWorkspaceCreateModeChange,
   onRepoChange,
   primaryActionLabel,
   name,
@@ -278,6 +301,8 @@ export default function NewWorkspaceComposerCard({
       nameInputRef?.current?.focus()
     })
   }, [nameInputRef])
+  const isOpeningExistingCheckout = selectedRepoIsGit && workspaceCreateMode === 'open-existing'
+  const workspaceModeCopy = WORKSPACE_MODE_COPY[workspaceCreateMode]
 
   const visibleQuickAgents = React.useMemo(
     () =>
@@ -307,6 +332,48 @@ export default function NewWorkspaceComposerCard({
       )}
     >
       <div className="min-w-0 space-y-4 pt-3">
+        {selectedRepoIsGit ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Workflow</label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    aria-label={`${workspaceModeCopy.label} guidance`}
+                  >
+                    <Info className="size-3.5" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                  {workspaceModeCopy.tooltip}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <ToggleGroup
+              type="single"
+              value={workspaceCreateMode}
+              onValueChange={(value) => {
+                if (value === 'new-worktree' || value === 'open-existing') {
+                  onWorkspaceCreateModeChange(value)
+                }
+              }}
+              variant="outline"
+              size="sm"
+              className="grid w-full grid-cols-2"
+            >
+              <ToggleGroupItem value="new-worktree" className="w-full text-xs">
+                New worktree
+              </ToggleGroupItem>
+              <ToggleGroupItem value="open-existing" className="w-full text-xs">
+                Existing checkout
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-[11px] leading-4 text-muted-foreground">{workspaceModeCopy.blurb}</p>
+          </div>
+        ) : null}
+
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">Project</label>
@@ -376,7 +443,11 @@ export default function NewWorkspaceComposerCard({
 
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
+            {isOpeningExistingCheckout
+              ? 'Workspace name'
+              : selectedRepoIsGit
+                ? "Name or 'Create From'"
+                : 'Workspace name'}{' '}
             <span className="text-muted-foreground/70">[Optional]</span>
           </label>
           <SmartWorkspaceNameField
@@ -394,7 +465,7 @@ export default function NewWorkspaceComposerCard({
             onClearSelectedSource={onClearSmartNameSelection}
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder="Connect this repo first"
-            textOnly={!selectedRepoIsGit}
+            textOnly={!selectedRepoIsGit || isOpeningExistingCheckout}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -605,21 +676,25 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Only available for local Git projects.
-                  </p>
-                ) : null}
-              </div>
+              {!isOpeningExistingCheckout ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Sparse checkout
+                  </label>
+                  <SparseCheckoutPresetSelect
+                    repoId={repoId}
+                    presets={sparsePresets}
+                    selectedPresetId={sparseSelectedPresetId}
+                    onSelectPreset={onSparseSelectPreset}
+                    disabled={!canUseSparseCheckout}
+                  />
+                  {!canUseSparseCheckout ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Only available for local Git projects.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

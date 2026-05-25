@@ -53,6 +53,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   areWorktreePathsEqual,
+  sanitizeWorktreeDisplayName,
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
@@ -85,7 +86,11 @@ import {
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  WORKSPACE_INSTANCE_SEPARATOR,
+  stripWorkspaceInstanceSuffix
+} from '../../shared/worktree-id'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
@@ -245,7 +250,9 @@ function pruneLineageForMissingRepoWorktrees(
   const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
   const repoPrefix = `${repo.id}::`
   for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
-    if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
+    const canonicalChildId = stripWorkspaceInstanceSuffix(childId)
+    const canonicalParentId = stripWorkspaceInstanceSuffix(lineage.parentWorktreeId)
+    if (childId.startsWith(repoPrefix) && !liveIds.has(canonicalChildId)) {
       // Why: path-derived IDs can disappear and later be reused by a different
       // checkout. Once a successful scan proves the child is gone, drop its
       // lineage so a future same-path worktree cannot inherit it. Missing
@@ -253,7 +260,7 @@ function pruneLineageForMissingRepoWorktrees(
       // parent" state.
       store.removeWorktreeLineage(childId)
     }
-    if (lineage.parentWorktreeId.startsWith(repoPrefix) && !liveIds.has(lineage.parentWorktreeId)) {
+    if (lineage.parentWorktreeId.startsWith(repoPrefix) && !liveIds.has(canonicalParentId)) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
         // Why: keep the child lineage so the UI can show "Missing parent", but
@@ -330,35 +337,55 @@ function listDisconnectedSshWorktrees(
 function buildDetectedGitWorktrees(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  allMeta: Record<string, WorktreeMeta> = store.getAllWorktreeMeta()
 ): DetectedWorktree[] {
   const settings = store.getSettings()
   const knownOrcaLayouts = repo.connectionId ? [] : buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  return gitWorktrees.map((gitWorktree) => {
+  return gitWorktrees.flatMap((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    let meta = store.getWorktreeMeta(worktreeId)
-    const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
-    const detected = toDetectedWorktree({
-      repo,
-      worktree,
-      meta,
-      settings,
-      knownOrcaLayouts,
-      isLegacyRepoForVisibility
-    })
-    if (!detected.visible) {
-      return detected
-    }
+    const instancePrefix = `${worktreeId}${WORKSPACE_INSTANCE_SEPARATOR}`
+    const workspaceIds = [
+      worktreeId,
+      ...Object.keys(allMeta)
+        .filter((candidateId) => candidateId.startsWith(instancePrefix))
+        .sort()
+    ]
 
-    meta = resolveWorktreeMetaWithDiscoveryStamp(store, worktreeId)
-    return toDetectedWorktree({
-      repo,
-      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      meta,
-      settings,
-      knownOrcaLayouts,
-      isLegacyRepoForVisibility
+    return workspaceIds.map((workspaceId) => {
+      let meta = store.getWorktreeMeta(workspaceId)
+      const isWorkspaceInstance = workspaceId !== worktreeId
+      const worktree = {
+        ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
+        id: workspaceId,
+        isMainWorktree: isWorkspaceInstance ? false : gitWorktree.isMainWorktree
+      }
+      const detected = toDetectedWorktree({
+        repo,
+        worktree,
+        meta,
+        settings,
+        knownOrcaLayouts,
+        isLegacyRepoForVisibility
+      })
+      if (!detected.visible) {
+        return detected
+      }
+
+      meta = resolveWorktreeMetaWithDiscoveryStamp(store, workspaceId)
+      return toDetectedWorktree({
+        repo,
+        worktree: {
+          ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
+          id: workspaceId,
+          isMainWorktree: isWorkspaceInstance ? false : gitWorktree.isMainWorktree
+        },
+        meta,
+        settings,
+        knownOrcaLayouts,
+        isLegacyRepoForVisibility
+      })
     })
   })
 }
@@ -369,7 +396,7 @@ function stampAndMergeVisibleDetectedWorktree(
   detected: DetectedWorktree
 ) {
   const meta = resolveWorktreeMetaWithDiscoveryStamp(store, detected.id)
-  return mergeWorktree(repo.id, detected, meta, repo.displayName)
+  return { ...mergeWorktree(repo.id, detected, meta, repo.displayName), id: detected.id }
 }
 
 function getFolderWorkspaceRootId(repo: Repo): string {
@@ -505,6 +532,54 @@ function createFolderWorkspace(
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }
 
+async function createExistingCheckoutWorkspace(
+  args: CreateWorktreeArgs,
+  repo: Repo,
+  store: Store
+): Promise<CreateWorktreeResult> {
+  if (!args.existingWorktreePath) {
+    throw new Error('Existing worktree path is required.')
+  }
+  const existingWorktreePath = args.existingWorktreePath
+
+  const gitWorktrees = await listRepoWorktrees(repo)
+  const selected = gitWorktrees.find((worktree) =>
+    areWorktreePathsEqual(worktree.path, existingWorktreePath)
+  )
+  if (!selected) {
+    throw new Error('Existing checkout is not a worktree for this project.')
+  }
+
+  const now = Date.now()
+  const instanceId = randomUUID()
+  const worktreeId = `${repo.id}::${selected.path}${WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
+  const displayName =
+    sanitizeWorktreeDisplayName(args.displayName ?? args.name) || repo.displayName || args.name
+  const meta = store.setWorktreeMeta(worktreeId, {
+    instanceId,
+    displayName,
+    lastActivityAt: now,
+    createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: repo.connectionId ? 'ssh' : 'desktop',
+    ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+    ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+    ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
+    ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
+    ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
+    ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {})
+  })
+  return {
+    worktree: {
+      ...mergeWorktree(repo.id, selected, meta, repo.displayName),
+      id: worktreeId,
+      isMainWorktree: false
+    }
+  }
+}
+
 function buildDisconnectedDetectedWorktrees(
   store: Store,
   repo: Repo,
@@ -555,8 +630,9 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle('worktrees:listAll', async () => {
     const repos = store.getRepos()
+    const allWorktreeMeta = store.getAllWorktreeMeta()
     const sshWorktreeMetaIndex = repos.some((repo) => repo.connectionId)
-      ? createSshWorktreeMetaIndex(Object.entries(store.getAllWorktreeMeta()))
+      ? createSshWorktreeMetaIndex(Object.entries(allWorktreeMeta))
       : new Map()
 
     // Why: repos are listed in parallel so total time = slowest repo, not
@@ -595,7 +671,7 @@ export function registerWorktreeHandlers(
           rememberLocalWorktreeRoots(store, repo, gitWorktrees)
           pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
           loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-          return buildDetectedGitWorktrees(store, repo, gitWorktrees)
+          return buildDetectedGitWorktrees(store, repo, gitWorktrees, allWorktreeMeta)
             .filter((worktree) => worktree.visible)
             .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
         } catch (err) {
@@ -774,11 +850,13 @@ export function registerWorktreeHandlers(
           // worktrees`) signal IPC-shape bugs, not the user-visible
           // git/filesystem failures the funnel cares about — bucketing them
           // into `unknown` would pollute the failure taxonomy.
-          result = isFolderRepo(repo)
-            ? createFolderWorkspace(args, repo, store)
-            : repo.connectionId
-              ? await createRemoteWorktree(args, repo, store, mainWindow)
-              : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+          result = args.existingWorktreePath
+            ? await createExistingCheckoutWorkspace(args, repo, store)
+            : isFolderRepo(repo)
+              ? createFolderWorkspace(args, repo, store)
+              : repo.connectionId
+                ? await createRemoteWorktree(args, repo, store, mainWindow)
+                : await createLocalWorktree(args, repo, store, mainWindow, runtime)
         } catch (error) {
           track('workspace_create_failed', {
             source,
@@ -805,7 +883,7 @@ export function registerWorktreeHandlers(
           ...getCohortAtEmit()
         })
 
-        if (isFolderRepo(repo)) {
+        if (isFolderRepo(repo) || args.existingWorktreePath) {
           notifyWorktreesChanged(mainWindow, repo.id)
         }
 
@@ -921,6 +999,22 @@ export function registerWorktreeHandlers(
           }
           // Why: folder workspaces share one filesystem root, so there is no Git
           // remove step to close shells; sweep PTYs before dropping metadata.
+          await killAllProcessesForWorktree(args.worktreeId, {
+            runtime,
+            localProvider: getLocalPtyProvider()
+          }).catch((err) => {
+            console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+          })
+          store.removeWorktreeMeta(args.worktreeId)
+          deleteWorktreeHistoryDir(args.worktreeId)
+          notifyWorktreesChanged(mainWindow, repoId)
+          return
+        }
+
+        if (stripWorkspaceInstanceSuffix(args.worktreeId) !== args.worktreeId) {
+          // Why: Git workspace instances share an existing checkout path. Remove
+          // only Orca session metadata; `git worktree remove` would delete the
+          // underlying checkout for every sibling workspace.
           await killAllProcessesForWorktree(args.worktreeId, {
             runtime,
             localProvider: getLocalPtyProvider()

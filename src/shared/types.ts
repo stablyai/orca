@@ -1302,6 +1302,9 @@ export type CreateWorktreeArgs = {
    *  pre-date this prop default to `unknown` at the IPC boundary instead
    *  of failing typecheck. */
   telemetrySource?: WorkspaceSource
+  /** Existing checkout/worktree path to open as another Orca workspace without
+   *  creating a new git worktree directory. */
+  existingWorktreePath?: string
 }
 
 export type CreateWorktreeResult = {

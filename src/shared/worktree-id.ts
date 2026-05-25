@@ -7,9 +7,10 @@ export type ParsedWorktreeId = {
   worktreePath: string
 }
 
-export const FOLDER_WORKSPACE_INSTANCE_SEPARATOR = '::workspace:'
-const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
-  `${FOLDER_WORKSPACE_INSTANCE_SEPARATOR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f-]{36}$`
+export const WORKSPACE_INSTANCE_SEPARATOR = '::workspace:'
+export const FOLDER_WORKSPACE_INSTANCE_SEPARATOR = WORKSPACE_INSTANCE_SEPARATOR
+const WORKSPACE_INSTANCE_SUFFIX = new RegExp(
+  `${WORKSPACE_INSTANCE_SEPARATOR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f-]{36}$`
 )
 
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
@@ -35,11 +36,15 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
   }
   return {
     repoId: parsed.repoId,
-    // Why: folder projects can have multiple workspace sessions backed by the
-    // same directory. Their IDs carry a UUID suffix, but filesystem callers
-    // still need the real folder path as cwd/root.
-    worktreePath: parsed.worktreePath.replace(FOLDER_WORKSPACE_INSTANCE_SUFFIX, '')
+    // Why: multiple workspace sessions can be backed by the same folder or
+    // Git checkout. Their IDs carry a UUID suffix, but filesystem callers
+    // still need the real path as cwd/root.
+    worktreePath: stripWorkspaceInstanceSuffix(parsed.worktreePath)
   }
+}
+
+export function stripWorkspaceInstanceSuffix(value: string): string {
+  return value.replace(WORKSPACE_INSTANCE_SUFFIX, '')
 }
 
 export function getWorktreePathBasenameFromId(worktreeId: string): string | null {

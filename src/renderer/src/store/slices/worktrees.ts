@@ -846,7 +846,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     branchNameOverride,
     workspaceStatus,
     linkedGitLabMR,
-    linkedGitLabIssue
+    linkedGitLabIssue,
+    existingWorktreePath
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -888,7 +889,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(existingWorktreePath ? { existingWorktreePath } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -915,7 +917,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-                    ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+                    ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+                    ...(existingWorktreePath ? { existingWorktreePath } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )

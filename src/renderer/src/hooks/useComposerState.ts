@@ -114,6 +114,8 @@ export type ComposerCardProps = {
   eligibleRepos: ReturnType<typeof useAppStore.getState>['repos']
   repoId: string
   selectedRepoIsGit: boolean
+  workspaceCreateMode: 'new-worktree' | 'open-existing'
+  onWorkspaceCreateModeChange: (mode: 'new-worktree' | 'open-existing') => void
   onRepoChange: (value: string) => void
   name: string
   onNameValueChange: (value: string) => void
@@ -423,6 +425,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
+  const [workspaceCreateMode, setWorkspaceCreateMode] = useState<'new-worktree' | 'open-existing'>(
+    'new-worktree'
+  )
+  useEffect(() => {
+    if (!selectedRepoIsGit && workspaceCreateMode !== 'new-worktree') {
+      setWorkspaceCreateMode('new-worktree')
+    }
+  }, [selectedRepoIsGit, workspaceCreateMode])
   const [advancedOpen, setAdvancedOpen] = useState(
     persistDraft ? Boolean((newWorkspaceDraft?.note ?? '').trim()) : false
   )
@@ -555,7 +565,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [normalizedSparseDirectories, sparsePresets, sparseSelectedPresetId])
 
   const sparseError = useMemo(() => {
-    if (!sparseEnabled) {
+    if (!sparseEnabled || workspaceCreateMode === 'open-existing') {
       return null
     }
     if (!selectedRepoIsGit) {
@@ -573,7 +583,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return 'Use repo-relative directories, not root or parent paths.'
     }
     return null
-  }, [normalizedSparseDirectories, selectedRepo?.connectionId, selectedRepoIsGit, sparseEnabled])
+  }, [
+    normalizedSparseDirectories,
+    selectedRepo?.connectionId,
+    selectedRepoIsGit,
+    sparseEnabled,
+    workspaceCreateMode
+  ])
   const parsedLinkedIssueNumber = useMemo(
     () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
     [linkedIssue]
@@ -604,8 +620,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return null
   }, [linkedPR, name, selectedRepoSlug])
   const setupConfig = useMemo(
-    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, yamlHooks) : null),
-    [selectedRepo, selectedRepoIsGit, yamlHooks]
+    () =>
+      selectedRepoIsGit && workspaceCreateMode === 'new-worktree'
+        ? getSetupConfig(selectedRepo, yamlHooks)
+        : null,
+    [selectedRepo, selectedRepoIsGit, workspaceCreateMode, yamlHooks]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
   const hasIssueAutomationConfig = enableIssueAutomation && issueCommandTemplate.length > 0
@@ -616,6 +635,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const willApplyIssueCommandAsPrompt =
     enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem)
   const shouldWaitForIssueAutomationCheck =
+    workspaceCreateMode === 'new-worktree' &&
     enableIssueAutomation &&
     (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
     !hasLoadedIssueCommand
@@ -629,7 +649,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? 'run'
         : 'skip')
   const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
-  const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
+  const shouldWaitForSetupCheck =
+    Boolean(selectedRepo) &&
+    selectedRepoIsGit &&
+    workspaceCreateMode === 'new-worktree' &&
+    isSetupCheckPending
 
   // Why: when the user leaves the workspace name blank and provides no other
   // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
@@ -1704,7 +1728,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
       let issueCommandTrustDecision: 'run' | 'skip' = 'run'
-      if (selectedRepoIsGit && shouldRunIssueAutomation) {
+      if (selectedRepoIsGit && workspaceCreateMode === 'new-worktree' && shouldRunIssueAutomation) {
         issueCommandTrustDecision =
           setupTrustDecision === 'skip'
             ? 'skip'
@@ -1719,9 +1743,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const result = await createWorktree(
         repoId,
         workspaceName,
-        selectedRepoIsGit ? baseBranch : undefined,
+        selectedRepoIsGit && workspaceCreateMode === 'new-worktree' ? baseBranch : undefined,
         effectiveSetupDecision,
-        selectedRepoIsGit && sparseEnabled
+        selectedRepoIsGit && workspaceCreateMode === 'new-worktree' && sparseEnabled
           ? {
               directories: normalizedSparseDirectories,
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
@@ -1735,7 +1759,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         tuiAgent,
         linkedLinearIssue,
         effectiveBranchNameOverride,
-        resolvedInitialWorkspaceStatus
+        resolvedInitialWorkspaceStatus,
+        undefined,
+        undefined,
+        selectedRepoIsGit && workspaceCreateMode === 'open-existing' ? selectedRepo.path : undefined
       )
       const worktree = result.worktree
 
@@ -1847,6 +1874,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
     startupPrompt,
+    workspaceCreateMode,
     workspaceSeedName
   ])
 
@@ -1875,7 +1903,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       try {
         let submitSetupConfig = setupConfig
         let submitResolvedSetupDecision = resolvedSetupDecision
-        if (selectedRepoIsGit && checkedHooksRepoId !== repoId) {
+        if (
+          selectedRepoIsGit &&
+          workspaceCreateMode === 'new-worktree' &&
+          checkedHooksRepoId !== repoId
+        ) {
           let hookCheck: HookCheckResult
           try {
             hookCheck = await loadHookCheckForRepo(repoId)
@@ -1894,14 +1926,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ? 'run'
                 : 'skip')
         }
-        if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
+        if (
+          selectedRepoIsGit &&
+          workspaceCreateMode === 'new-worktree' &&
+          submitSetupConfig &&
+          setupPolicy === 'ask' &&
+          !setupDecision
+        ) {
           setAdvancedOpen(true)
           return
         }
 
-        const trustDecision = selectedRepoIsGit
-          ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
-          : 'skip'
+        const trustDecision =
+          selectedRepoIsGit && workspaceCreateMode === 'new-worktree'
+            ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+            : 'skip'
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
             ? 'skip'
@@ -1915,9 +1954,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const result = await createWorktree(
           repoId,
           workspaceName,
-          selectedRepoIsGit ? baseBranch : undefined,
+          selectedRepoIsGit && workspaceCreateMode === 'new-worktree' ? baseBranch : undefined,
           effectiveSetupDecision,
-          selectedRepoIsGit && sparseEnabled
+          selectedRepoIsGit && workspaceCreateMode === 'new-worktree' && sparseEnabled
             ? {
                 directories: normalizedSparseDirectories,
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
@@ -1931,7 +1970,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           agent ?? undefined,
           linkedLinearIssue,
           effectiveBranchNameOverride,
-          resolvedInitialWorkspaceStatus
+          resolvedInitialWorkspaceStatus,
+          undefined,
+          undefined,
+          selectedRepoIsGit && workspaceCreateMode === 'open-existing'
+            ? selectedRepo.path
+            : undefined
         )
         const worktree = result.worktree
 
@@ -2086,7 +2130,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       commitHookCheckIfCurrent,
       loadHookCheckForRepo,
       setupConfig,
-      setupPolicy
+      setupPolicy,
+      workspaceCreateMode
     ]
   )
 
@@ -2109,6 +2154,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     eligibleRepos,
     repoId,
     selectedRepoIsGit,
+    workspaceCreateMode,
+    onWorkspaceCreateModeChange: setWorkspaceCreateMode,
     onRepoChange: handleRepoChange,
     name,
     onNameValueChange: handleNameValueChange,
@@ -2169,7 +2216,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForSetupCheck,
     resolvedSetupDecision,
     createError,
-    canUseSparseCheckout: selectedRepoIsGit && !selectedRepo?.connectionId,
+    canUseSparseCheckout:
+      selectedRepoIsGit && workspaceCreateMode === 'new-worktree' && !selectedRepo?.connectionId,
     sparsePresets,
     sparseSelectedPresetId,
     onSparseSelectPreset: handleSparseSelectPreset

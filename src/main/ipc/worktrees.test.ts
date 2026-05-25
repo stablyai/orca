@@ -533,6 +533,50 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('creates an additional workspace for an existing git checkout without git worktree add', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockReturnValue(repo)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => makeWorktreeMeta(meta))
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'Main follow-up',
+      existingWorktreePath: '/workspace/repo',
+      createdWithAgent: 'codex'
+    })) as { worktree: { id: string; path: string; displayName: string } }
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(result.worktree).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^repo-1::\/workspace\/repo::workspace:[0-9a-f-]{36}$/),
+        repoId: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'Main follow-up',
+        instanceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        createdWithAgent: 'codex',
+        isMainWorktree: false
+      })
+    )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
   it('checks out a selected existing local branch exactly', async () => {
     listWorktreesMock
       .mockResolvedValueOnce([
@@ -1640,6 +1684,55 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
+  it('lists additional git checkout workspaces backed by the same path', async () => {
+    const workspaceId = 'repo-1::/workspace/repo::workspace:123e4567-e89b-12d3-a456-426614174000'
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    })
+    store.getAllWorktreeMeta.mockReturnValue({
+      [workspaceId]: makeWorktreeMeta({
+        instanceId: '123e4567-e89b-12d3-a456-426614174000',
+        displayName: 'Main follow-up'
+      })
+    })
+    store.getWorktreeMeta.mockImplementation((id) =>
+      id === workspaceId
+        ? makeWorktreeMeta({
+            instanceId: '123e4567-e89b-12d3-a456-426614174000',
+            displayName: 'Main follow-up'
+          })
+        : makeWorktreeMeta({ displayName: 'main' })
+    )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      path: string
+      displayName: string
+    }[]
+
+    expect(listed.map((worktree) => worktree.id)).toEqual(['repo-1::/workspace/repo', workspaceId])
+    expect(listed[1]).toEqual(
+      expect.objectContaining({
+        path: '/workspace/repo',
+        displayName: 'Main follow-up',
+        isMainWorktree: false
+      })
+    )
+  })
+
   it('returns reconstructed rows when an SSH provider is unavailable', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -2518,6 +2611,26 @@ describe('registerWorktreeHandlers', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-folder'
+    })
+  })
+
+  it('removes additional git checkout workspace metadata without removing the checkout', async () => {
+    const ptyProvider = {} as never
+    const worktreeId = 'repo-1::/workspace/repo::workspace:123e4567-e89b-12d3-a456-426614174000'
+    getLocalPtyProviderMock.mockReturnValue(ptyProvider)
+
+    await handlers['worktrees:remove'](null, { worktreeId })
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
+      runtime: runtimeStub,
+      localProvider: ptyProvider
+    })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
     })
   })
 
