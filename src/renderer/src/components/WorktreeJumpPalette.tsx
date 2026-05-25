@@ -1085,7 +1085,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       onCloseAutoFocus={handleCloseAutoFocus}
       title="Jump to..."
       description="Search workspaces, settings, tabs, and actions"
-      overlayClassName="bg-black/55 backdrop-blur-[2px]"
+      // Why: drop the bg-black/55 override — base CommandDialog overlay
+      // already has bg-black/50 + dialog-overlay-dim class which the
+      // glass theme override (main.css) lightens to rgba(0,0,0,0.12).
+      // Keep the 2px backdrop blur for the depth-of-field behind the
+      // palette.
+      overlayClassName="backdrop-blur-[2px]"
       // Why: omit backdrop-blur-xl here so the base CommandDialog's
       // .glass-surface remains the sole blur source. backdrop-filter rules
       // replace rather than compose, and stacking backdrop-blur-xl on top of
