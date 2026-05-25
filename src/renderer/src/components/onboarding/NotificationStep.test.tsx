@@ -23,11 +23,10 @@ describe('NotificationStep', () => {
       <NotificationStep settings={createSettings()} updateSettings={vi.fn()} />
     )
 
-    expect(html).toContain('System Default')
-    expect(html).toContain('Two Tone')
-    expect(html).toContain('Sonar')
-    expect(html).toContain('Ding')
+    expect(html).toContain('Notification Sound')
+    expect(html).toContain('role="combobox"')
     expect(html).toContain('Send Test Notification')
+    expect(html).not.toContain('aria-pressed')
     expect(html).not.toContain('Agent task complete')
     expect(html).not.toContain('Terminal bell')
     expect(html).not.toContain('Set up agent features')

@@ -1,12 +1,18 @@
 /* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, upload, and volume controls. */
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, Check, ChevronDown, FileAudio, Settings, Upload, Volume2, X } from 'lucide-react'
+import { BellRing, FileAudio, Settings, Upload, Volume2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Slider } from '@/components/ui/slider'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import logo from '../../../../../resources/logo.svg'
@@ -22,6 +28,18 @@ type NotificationStepProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 }
 
+const CHOOSE_CUSTOM_SOUND_VALUE = 'choose-custom-file'
+
+type NotificationSoundSelectValue =
+  | GlobalSettings['notifications']['customSoundId']
+  | typeof CHOOSE_CUSTOM_SOUND_VALUE
+
+function isNotificationSoundId(
+  value: NotificationSoundSelectValue
+): value is GlobalSettings['notifications']['customSoundId'] {
+  return value !== CHOOSE_CUSTOM_SOUND_VALUE
+}
+
 export function NotificationStep({
   settings,
   updateSettings
@@ -31,14 +49,20 @@ export function NotificationStep({
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermissionStatusResult | null>(null)
   const [volumeDraft, setVolumeDraft] = useState(notificationSettings?.customSoundVolume ?? 100)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
+  const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings
     setVolumeDraft(notificationSettings?.customSoundVolume ?? 100)
   }, [notificationSettings])
+
+  useEffect(() => {
+    // Why: onboarding sits above body-level portals, so the select menu must
+    // portal into the overlay to stay clickable.
+    setSelectPortalRoot(document.querySelector<HTMLElement>('[data-onboarding-overlay]'))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -91,13 +115,6 @@ export function NotificationStep({
     }
   }
 
-  const handleChooseBuiltInSound = async (
-    customSoundId: GlobalSettings['notifications']['customSoundId']
-  ): Promise<void> => {
-    await updateNotificationSettings({ customSoundId })
-    await previewSound(customSoundId)
-  }
-
   const handleChooseCustomSound = async (): Promise<void> => {
     setIsPickingSound(true)
     try {
@@ -105,11 +122,19 @@ export function NotificationStep({
       if (soundPath) {
         await updateNotificationSettings({ customSoundId: 'custom', customSoundPath: soundPath })
         await previewSound('custom')
-        setAdvancedOpen(true)
       }
     } finally {
       setIsPickingSound(false)
     }
+  }
+
+  const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
+    if (!isNotificationSoundId(value)) {
+      await handleChooseCustomSound()
+      return
+    }
+    await updateNotificationSettings({ customSoundId: value })
+    await previewSound(value)
   }
 
   const handleVolumeCommit = (value: number): void => {
@@ -234,109 +259,66 @@ export function NotificationStep({
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-          {soundOptions.map((option) => {
-            const selected = selectedSoundId === option.id
-            const OptionIcon = option.icon
-            return (
-              <button
-                key={option.id}
-                type="button"
-                aria-pressed={selected}
-                className={cn(
-                  'group relative flex min-h-14 items-center gap-3 overflow-hidden rounded-xl border p-3 text-left transition-all',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  selected
-                    ? 'border-violet-500/60 bg-violet-500/10 text-foreground ring-2 ring-violet-500/30'
-                    : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'
-                )}
-                onClick={() => void handleChooseBuiltInSound(option.id)}
-              >
-                <span className="grid size-5 shrink-0 place-items-center text-muted-foreground">
-                  <OptionIcon className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {option.title}
-                </span>
-                {selected ? (
-                  <span
-                    aria-hidden
-                    className="grid size-5 shrink-0 place-items-center rounded-full bg-violet-500 text-white shadow-sm"
-                  >
-                    <Check className="size-3" strokeWidth={3} />
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <FileAudio className="size-4" />
+            Notification Sound
+          </div>
+          <Select
+            value={selectedSoundId}
+            disabled={isPickingSound}
+            onValueChange={(value) => void handleSoundSelect(value as NotificationSoundSelectValue)}
+          >
+            <SelectTrigger className="w-full max-w-[360px]" size="sm">
+              <SelectValue placeholder="Choose notification sound" />
+            </SelectTrigger>
+            <SelectContent
+              portalContainer={selectPortalRoot}
+              align="start"
+              className="w-[--radix-select-trigger-width]"
+            >
+              {soundOptions.map((option) => {
+                const OptionIcon = option.icon
+                return (
+                  <SelectItem key={option.id} value={option.id}>
+                    <OptionIcon className="size-4" />
+                    <span className="truncate">{option.title}</span>
+                  </SelectItem>
+                )
+              })}
+              <SelectSeparator />
+              <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
+                <Upload className="size-4" />
+                <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          {customPath ? (
+            <p className="truncate font-mono text-[11px] text-muted-foreground" title={customPath}>
+              Custom: {customPath}
+            </p>
+          ) : null}
         </div>
 
         {canAdjustVolume ? (
-          <div className="rounded-lg border border-border bg-muted/20 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Volume2 className="size-4 text-muted-foreground" />
-              <Slider
-                value={[volumeDraft]}
-                min={0}
-                max={100}
-                step={5}
-                onValueChange={([value]) => setVolumeDraft(value)}
-                onValueCommit={([value]) => handleVolumeCommit(value)}
-                className="flex-1"
-                aria-label="Notification sound volume"
-              />
-              <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                {volumeDraft}%
-              </span>
-            </div>
+          <div className="flex items-center gap-3 pt-1">
+            <Volume2 className="size-4 text-muted-foreground" />
+            <Slider
+              value={[volumeDraft]}
+              min={0}
+              max={100}
+              step={5}
+              onValueChange={([value]) => setVolumeDraft(value)}
+              onValueCommit={([value]) => handleVolumeCommit(value)}
+              className="flex-1"
+              aria-label="Notification sound volume"
+            />
+            <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
+              {volumeDraft}%
+            </span>
           </div>
         ) : null}
       </section>
-
-      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ChevronDown
-              className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
-            />
-            Advanced sound file
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="mt-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <FileAudio className="size-4" />
-                  Upload a sound
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  MP3, WAV, OGG, M4A, AAC, or FLAC. Orca stores only the local file path.
-                </p>
-                {customPath ? (
-                  <p className="truncate font-mono text-[11px] text-muted-foreground">
-                    {customPath}
-                  </p>
-                ) : null}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={isPickingSound}
-                onClick={() => void handleChooseCustomSound()}
-              >
-                <Upload className="size-3.5" />
-                {customPath ? 'Change File' : 'Choose File'}
-              </Button>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
     </div>
   )
 }
