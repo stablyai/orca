@@ -429,6 +429,22 @@
   border-left: none;
 }
 
+/* Why: xterm-viewport uses overflow-y:scroll (forced reserved gutter for
+   the scrollbar). The gutter sits on top of xterm-viewport's transparent
+   background, so under glass themes the gutter showed wallpaper bleed as
+   a thin vertical strip on the right edge of the terminal pane. Fill the
+   gutter with the same color the terminal theme paints so the strip
+   visually disappears. Also override scrollbar-color so the track is
+   transparent (overlay-like) while the thumb gets a subtle neutral tint. */
+:root.glass-light .xterm-viewport {
+  background: rgba(255, 255, 255, 0.15);
+  scrollbar-color: rgba(120, 120, 120, 0.35) transparent;
+}
+:root.glass-dark .xterm-viewport {
+  background: rgba(15, 18, 32, 0.15);
+  scrollbar-color: rgba(180, 200, 240, 0.35) transparent;
+}
+
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
