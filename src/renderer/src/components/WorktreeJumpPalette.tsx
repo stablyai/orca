@@ -1086,7 +1086,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       title="Jump to..."
       description="Search workspaces, settings, tabs, and actions"
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
-      contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      // Why: omit backdrop-blur-xl here so the base CommandDialog's
+      // .glass-surface remains the sole blur source. backdrop-filter rules
+      // replace rather than compose, and stacking backdrop-blur-xl on top of
+      // glass-surface causes the unlayered .glass-surface to lose to
+      // glass-blur(0) on non-glass themes — collapsing the intended frost.
+      contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)]"
       commandProps={{
         loop: true,
         value: selectedItemId,
