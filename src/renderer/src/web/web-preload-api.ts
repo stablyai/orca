@@ -2016,10 +2016,18 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 }
 
 function readLocalWebUIState(): PersistedUIState {
-  return mergeWebUIState(
-    getDefaultUIState(),
-    readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  )
+  const defaults = getDefaultUIState()
+  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(defaults, stored)
+  }
+  const storedSettings = getStoredSettings()
+  return mergeWebUIState(defaults, {
+    ...stored,
+    // Why: web fallback lacks main-process normalization, so migrate the
+    // retired setting only when the local UI preference is still absent.
+    rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
+  })
 }
 
 function mergeWebUIState(

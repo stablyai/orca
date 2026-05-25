@@ -1658,6 +1658,7 @@ export type GlobalSettings = {
   openLinksInApp: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
@@ -2064,10 +2065,14 @@ export type TaskResumeState = {
   linearQuery?: string
 }
 
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   sidebarWidth: number
+  rightSidebarOpen: boolean
+  rightSidebarTab: RightSidebarTab
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

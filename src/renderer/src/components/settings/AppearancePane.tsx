@@ -148,27 +148,9 @@ export function AppearancePane({
     ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-3">
-        <SettingsSubsectionHeader
-          title="Layout"
-          description="Default layout when creating new worktrees."
-        />
+        <SettingsSubsectionHeader title="File Explorer" />
 
         <div className="divide-y divide-border/40">
-          <SearchableSetting
-            title="Open Right Sidebar by Default"
-            description="Automatically expand the file explorer panel when creating a new worktree."
-            keywords={['layout', 'file explorer', 'sidebar']}
-          >
-            <SettingsSwitchRow
-              label="Open Right Sidebar by Default"
-              description="Automatically expand the file explorer panel when creating a new worktree."
-              checked={settings.rightSidebarOpenByDefault}
-              onChange={() =>
-                updateSettings({ rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault })
-              }
-            />
-          </SearchableSetting>
-
           <SearchableSetting
             title="Show Git-Ignored Files"
             description="Show files matched by .gitignore in the file explorer."

@@ -251,8 +251,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       createWorktree: s.createWorktree,
       updateWorktreeMeta: s.updateWorktreeMeta,
       setSidebarOpen: s.setSidebarOpen,
-      setRightSidebarOpen: s.setRightSidebarOpen,
-      setRightSidebarTab: s.setRightSidebarTab,
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
       openSettingsTarget: s.openSettingsTarget,
@@ -266,8 +264,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createWorktree,
     updateWorktreeMeta,
     setSidebarOpen,
-    setRightSidebarOpen,
-    setRightSidebarTab,
     closeModal,
     openSettingsPage,
     openSettingsTarget,
@@ -1802,10 +1798,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
       }
       setSidebarOpen(true)
-      if (settings?.rightSidebarOpenByDefault) {
-        setRightSidebarTab('explorer')
-        setRightSidebarOpen(true)
-      }
       if (persistDraft) {
         clearNewWorkspaceDraft()
       }
@@ -1845,9 +1837,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoRequiresConnection,
     settings?.agentCmdOverrides,
     settings?.agentStatusHooksEnabled,
-    settings?.rightSidebarOpenByDefault,
-    setRightSidebarOpen,
-    setRightSidebarTab,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -2052,10 +2041,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           })
         }
         setSidebarOpen(true)
-        if (settings?.rightSidebarOpenByDefault) {
-          setRightSidebarTab('explorer')
-          setRightSidebarOpen(true)
-        }
         if (persistDraft) {
           clearNewWorkspaceDraft()
         }
@@ -2094,9 +2079,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
       settings?.agentStatusHooksEnabled,
-      settings?.rightSidebarOpenByDefault,
-      setRightSidebarOpen,
-      setRightSidebarTab,
       setSidebarOpen,
       setupDecision,
       sparseEnabled,

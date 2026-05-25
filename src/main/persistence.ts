@@ -231,6 +231,19 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   return getDefaultUIState().sortBy
 }
 
+function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+  if (
+    tab === 'explorer' ||
+    tab === 'search' ||
+    tab === 'source-control' ||
+    tab === 'checks' ||
+    tab === 'ports'
+  ) {
+    return tab
+  }
+  return getDefaultUIState().rightSidebarTab
+}
+
 function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const defaults = getDefaultNotificationSettings()
   const candidate =
@@ -1546,6 +1559,15 @@ export class Store {
             const rawSort = parsed.ui?.sortBy
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
+            const rightSidebarOpen =
+              typeof parsed.ui?.rightSidebarOpen === 'boolean'
+                ? parsed.ui.rightSidebarOpen
+                : typeof parsed.settings?.rightSidebarOpenByDefault === 'boolean'
+                  ? parsed.settings.rightSidebarOpenByDefault
+                  : defaults.ui.rightSidebarOpen
+            if (typeof parsed.ui?.rightSidebarOpen !== 'boolean') {
+              this.loadNeedsSave = true
+            }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
             // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
@@ -1652,6 +1674,10 @@ export class Store {
             return {
               ...defaults.ui,
               ...parsed.ui,
+              // Why: migrate once from the retired Appearance setting only
+              // when no explicit persisted chrome preference exists yet.
+              rightSidebarOpen,
+              rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               sortBy: migrate ? ('smart' as const) : sort,
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
@@ -2509,6 +2535,7 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
@@ -2531,6 +2558,10 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      rightSidebarTab:
+        updates.rightSidebarTab !== undefined
+          ? normalizeRightSidebarTab(updates.rightSidebarTab)
+          : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties:
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)

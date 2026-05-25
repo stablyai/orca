@@ -88,11 +88,6 @@ export const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
 
 export const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Open Right Sidebar by Default',
-    description: 'Automatically expand the file explorer panel when creating a new worktree.',
-    keywords: ['layout', 'file explorer', 'sidebar']
-  },
-  {
     title: 'Show Git-Ignored Files',
     description: 'Dim files matched by .gitignore in the file explorer.',
     keywords: ['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']

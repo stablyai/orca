@@ -104,6 +104,21 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
   return out as StatusBarItem[]
 }
 
+function normalizePersistedRightSidebarTab(
+  tab: PersistedUIState['rightSidebarTab'] | unknown
+): PersistedUIState['rightSidebarTab'] {
+  if (
+    tab === 'explorer' ||
+    tab === 'search' ||
+    tab === 'source-control' ||
+    tab === 'checks' ||
+    tab === 'ports'
+  ) {
+    return tab
+  }
+  return 'explorer'
+}
+
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 // Why: the right sidebar drag-resize is window-relative (see right-sidebar
@@ -1164,6 +1179,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           s.rightSidebarWidth,
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
+        rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
+        rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: Active-only was retired. Force the old persisted flag off so an

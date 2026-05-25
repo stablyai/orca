@@ -21,6 +21,7 @@ import {
 import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -399,6 +400,7 @@ function App(): React.JSX.Element {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
@@ -890,6 +892,8 @@ function App(): React.JSX.Element {
     const timer = window.setTimeout(() => {
       void window.api.ui.set({
         sidebarWidth,
+        rightSidebarOpen,
+        rightSidebarTab,
         rightSidebarWidth,
         groupBy,
         sortBy,
@@ -911,6 +915,8 @@ function App(): React.JSX.Element {
   }, [
     persistedUIReady,
     sidebarWidth,
+    rightSidebarOpen,
+    rightSidebarTab,
     rightSidebarWidth,
     groupBy,
     sortBy,
@@ -990,14 +996,7 @@ function App(): React.JSX.Element {
   const workspaceActive = activeView === 'terminal' && activeWorktreeId !== null
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
-  const showRightSidebarControls =
-    activeView !== 'settings' &&
-    activeView !== 'tasks' &&
-    activeView !== 'activity' &&
-    activeView !== 'automations' &&
-    activeView !== 'space' &&
-    activeView !== 'skills' &&
-    activeView !== 'mobile'
+  const showRightSidebarControls = canShowRightSidebarForView(activeView)
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -1056,13 +1055,7 @@ function App(): React.JSX.Element {
         })
       }
 
-      const canRevealRightSidebar =
-        activeView !== 'tasks' &&
-        activeView !== 'activity' &&
-        activeView !== 'automations' &&
-        activeView !== 'space' &&
-        activeView !== 'skills' &&
-        activeView !== 'mobile'
+      const canRevealRightSidebar = canShowRightSidebarForView(activeView)
 
       const openSearchSidebar = (query: string | null): void => {
         if (query && activeWorktreeId) {
@@ -1451,22 +1444,6 @@ function App(): React.JSX.Element {
       </TooltipContent>
     </Tooltip>
   ) : null
-
-  useEffect(() => {
-    if (
-      (activeView === 'tasks' ||
-        activeView === 'activity' ||
-        activeView === 'automations' ||
-        activeView === 'space' ||
-        activeView === 'skills' ||
-        activeView === 'mobile') &&
-      rightSidebarOpen
-    ) {
-      // Why: hide the right sidebar immediately when entering full-page
-      // navigation views so previous side-panel state cannot occlude them.
-      actions.setRightSidebarOpen(false)
-    }
-  }, [activeView, rightSidebarOpen, actions])
 
   return (
     <div

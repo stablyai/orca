@@ -32,6 +32,7 @@ import type {
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import {
   handleSwitchRecentTab,
@@ -661,7 +662,11 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
-        useAppStore.getState().toggleRightSidebar()
+        const store = useAppStore.getState()
+        if (!canShowRightSidebarForView(store.activeView)) {
+          return
+        }
+        store.toggleRightSidebar()
       })
     )
 

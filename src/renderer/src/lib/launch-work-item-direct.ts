@@ -341,10 +341,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
 
   store.setSidebarOpen(true)
-  if (settings?.rightSidebarOpenByDefault) {
-    store.setRightSidebarTab('explorer')
-    store.setRightSidebarOpen(true)
-  }
 
   // Why: at this point the workspace is live and the agent (if any) has
   // been queued on `primaryTabId`. The post-launch paste step below only

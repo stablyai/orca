@@ -352,6 +352,8 @@ export function getDefaultUIState(): PersistedUIState {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
+    rightSidebarOpen: true,
+    rightSidebarTab: 'explorer',
     rightSidebarWidth: 350,
     groupBy: 'repo',
     sortBy: 'recent',

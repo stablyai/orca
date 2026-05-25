@@ -25,6 +25,7 @@ function createUIStore(): StoreApi<AppState> {
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     worktreesByRepo: {},
+    rightSidebarOpen: false,
     rightSidebarWidth: 280,
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
@@ -59,6 +60,10 @@ function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUI
 }
 
 describe('createUISlice hydratePersistedUI', () => {
+  it('defaults persisted right sidebar visibility to open', () => {
+    expect(getDefaultUIState().rightSidebarOpen).toBe(true)
+  })
+
   it('defaults to showing sleeping workspaces', () => {
     const store = createUIStore()
 
@@ -75,6 +80,42 @@ describe('createUISlice hydratePersistedUI', () => {
     })
 
     expect(store.getState().rightSidebarWidth).toBe(360)
+  })
+
+  it('hydrates a persisted closed right sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: false }))
+
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
+  it('hydrates a persisted open right sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: true }))
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+  })
+
+  it('hydrates a persisted right sidebar tab preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
+
+    expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('falls back to explorer for invalid persisted right sidebar tabs', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarTab: 'bogus' as PersistedUIState['rightSidebarTab'] })
+      )
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
   })
 
   it('clamps persisted sidebar widths into the supported range', () => {
