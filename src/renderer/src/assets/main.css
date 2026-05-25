@@ -181,13 +181,13 @@
    and both selectors share the same single-class specificity. */
 
 :root.glass-light {
-  /* Pure white (not cream). All "frame" surfaces are very transparent so
-     the wallpaper / lower windows visibly bleed through. --background also
-     stays transparent so Settings, search palette, and similar
-     bg-background consumers remain glassy. --background-opaque exists for
-     the inverted-text pattern (bg-foreground + text-background) — tooltips,
+  /* Pure white (not cream). All "frame" surfaces share alpha 0.15 (matching
+     the terminal default) so sidebar / body / terminal / right-rail form one
+     uniform glass canvas instead of three slightly-different alphas with
+     visible seams between regions. --background-opaque exists for the
+     inverted-text pattern (bg-foreground + text-background) — tooltips,
      active filter chips, primary buttons — without it those texts vanish. */
-  --background: rgba(255, 255, 255, 0.12);
+  --background: rgba(255, 255, 255, 0.15);
   --background-opaque: #ffffff;
   --foreground: rgba(20, 20, 20, 1);
   --editor-surface: rgba(255, 255, 255, 0.4);
@@ -209,7 +209,7 @@
   --input: rgba(120, 120, 120, 0.32);
   --ring: rgba(120, 120, 120, 0.6);
 
-  --sidebar: rgba(255, 255, 255, 0.1);
+  --sidebar: rgba(255, 255, 255, 0.15);
   --sidebar-foreground: rgba(20, 20, 20, 0.92);
   --sidebar-primary: rgba(20, 20, 20, 0.95);
   --sidebar-primary-foreground: rgba(255, 255, 255, 0.98);
@@ -232,7 +232,7 @@
 
 :root.glass-dark {
   /* See :root.glass-light for tuning rationale + token-split rationale. */
-  --background: rgba(15, 18, 32, 0.14);
+  --background: rgba(15, 18, 32, 0.15);
   --background-opaque: #0f1220;
   --foreground: rgba(235, 240, 255, 1);
   --editor-surface: rgba(15, 18, 32, 0.4);
@@ -254,7 +254,7 @@
   --input: rgba(180, 200, 240, 0.28);
   --ring: rgba(140, 170, 230, 0.55);
 
-  --sidebar: rgba(18, 22, 38, 0.12);
+  --sidebar: rgba(18, 22, 38, 0.15);
   --sidebar-foreground: rgba(220, 230, 250, 0.92);
   --sidebar-primary: rgba(40, 100, 220, 0.85);
   --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
