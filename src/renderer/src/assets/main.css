@@ -401,6 +401,18 @@
   }
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   GLASS THEME OVERRIDES
+   ─────────────────────────────────────────────────────────────────────────
+   All rules below scoped to :root.glass-light or :root.glass-dark are part
+   of the macOS 26 Liquid Glass theme. Token definitions for the two
+   themes live at the top of this file (search ":root.glass-light"). This
+   block contains the renderer-side overrides: glass-surface utilities,
+   chrome region-divider suppression, dialog overlay dim, xterm gutter fill,
+   and the prefers-reduced-transparency fallback. Sections within this
+   block are grouped by surface category.
+   ═════════════════════════════════════════════════════════════════════════ */
+
 /* Why: any surface that should "be glass" wears this class. backdrop-filter
    reads the values from the active theme's --glass-* tokens, so the same
    class is a no-op outside glass themes (blur(0) is short-circuited by the
@@ -529,6 +541,10 @@
     --glass-saturate: 100%;
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   END GLASS THEME OVERRIDES
+   ═════════════════════════════════════════════════════════════════════════ */
 
 /* ── Sleek scrollbar (VS Code-like) ─────────────────── */
 
