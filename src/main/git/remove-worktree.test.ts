@@ -341,34 +341,6 @@ describe('assertWorktreeCleanForRemoval', () => {
     )
   })
 
-  it('removes disposable OS metadata before deciding a worktree is dirty', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: '?? .DS_Store\n?? nested/.DS_Store\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
-
-    await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
-
-    expect(getGitCalls()).toEqual([
-      'git status --porcelain --untracked-files=all',
-      'git clean -f -q -- .DS_Store :(glob)**/.DS_Store Thumbs.db :(glob)**/Thumbs.db Desktop.ini :(glob)**/Desktop.ini',
-      'git status --porcelain --untracked-files=all'
-    ])
-  })
-
-  it('does not remove disposable metadata when real untracked files also block deletion', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: '?? .DS_Store\n?? scratch.txt\n',
-      stderr: ''
-    })
-
-    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toMatchObject({
-      message: 'Worktree has uncommitted or untracked changes.',
-      stdout: '?? .DS_Store\n?? scratch.txt\n'
-    })
-    expect(getGitCalls()).toEqual(['git status --porcelain --untracked-files=all'])
-  })
-
   it('throws a dedicated dirty/untracked error when status output is non-empty', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? scratch.txt\n', stderr: '' })
 

@@ -6,10 +6,6 @@
  */
 import * as path from 'path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
-import {
-  disposableWorktreeMetadataPathspecs,
-  hasOnlyDisposableWorktreeMetadata
-} from '../shared/disposable-worktree-metadata'
 import type { GitExec } from './git-handler-ops'
 import { parseWorktreeList } from './git-handler-utils'
 
@@ -119,10 +115,6 @@ export async function removeWorktreeOp(
   )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
 
-  if (!force) {
-    await assertRelayWorktreeCleanForRemoval(git, worktreePath)
-  }
-
   const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
@@ -162,34 +154,6 @@ export async function removeWorktreeOp(
 type RelayWorktreeInfo = {
   path: string
   branch?: string
-}
-
-async function assertRelayWorktreeCleanForRemoval(
-  git: GitExec,
-  worktreePath: string
-): Promise<void> {
-  let { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
-  if (!stdout.trim()) {
-    return
-  }
-
-  if (hasOnlyDisposableWorktreeMetadata(stdout)) {
-    // Why: SSH worktree deletion bypasses the local preflight; clean remote
-    // Finder/Explorer metadata here so SSH and local delete behavior match.
-    await git(['clean', '-f', '-q', '--', ...disposableWorktreeMetadataPathspecs], worktreePath)
-    const statusAfterCleanup = await git(
-      ['status', '--porcelain', '--untracked-files=all'],
-      worktreePath
-    )
-    stdout = statusAfterCleanup.stdout
-    if (!stdout.trim()) {
-      return
-    }
-  }
-
-  const error = new Error('Worktree has uncommitted or untracked changes.')
-  ;(error as Error & { stdout?: string }).stdout = stdout
-  throw error
 }
 
 async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {

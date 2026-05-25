@@ -3,10 +3,6 @@ import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type { GitWorktreeInfo } from '../../shared/types'
-import {
-  disposableWorktreeMetadataPathspecs,
-  hasOnlyDisposableWorktreeMetadata
-} from '../../shared/disposable-worktree-metadata'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -424,29 +420,11 @@ export async function assertWorktreeCleanForRemoval(
     return
   }
 
-  let { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
+  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
     cwd: worktreePath
   })
   if (!stdout.trim()) {
     return
-  }
-
-  if (hasOnlyDisposableWorktreeMetadata(stdout)) {
-    // Why: Finder/Explorer metadata can make a user-clean worktree require
-    // force-delete. Remove only untracked disposable files, then re-check.
-    await gitExecFileAsync(['clean', '-f', '-q', '--', ...disposableWorktreeMetadataPathspecs], {
-      cwd: worktreePath
-    })
-    const statusAfterCleanup = await gitExecFileAsync(
-      ['status', '--porcelain', '--untracked-files=all'],
-      {
-        cwd: worktreePath
-      }
-    )
-    stdout = statusAfterCleanup.stdout
-    if (!stdout.trim()) {
-      return
-    }
   }
 
   const error = new Error('Worktree has uncommitted or untracked changes.')
