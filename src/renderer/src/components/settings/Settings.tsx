@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Info } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -73,6 +74,9 @@ const SETTINGS_NAV_GROUPS = [
   { id: 'safety', title: 'Safety' },
   { id: 'experimental', title: 'Experimental' }
 ] as const
+
+const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
+const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 
 function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
   if (pane === 'repo' && repoId) {
@@ -196,6 +200,7 @@ function Settings(): React.JSX.Element {
   const pendingScrollTargetRef = useRef<string | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const repoHooksRuntimeIdentityRef = useRef<string>('local')
+  const shortcutsEscapeConfirmUntilRef = useRef(0)
 
   const confirmDiscardCommitPromptChanges = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedCommitPromptChanges) {
@@ -264,12 +269,29 @@ function Settings(): React.JSX.Element {
       if (isEditableTarget(event.target)) {
         return
       }
+      if (activeSectionId === 'shortcuts') {
+        event.preventDefault()
+        const now = Date.now()
+        if (now <= shortcutsEscapeConfirmUntilRef.current) {
+          shortcutsEscapeConfirmUntilRef.current = 0
+          toast.dismiss(SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID)
+          void closeSettingsPageWithPromptGuard()
+          return
+        }
+        shortcutsEscapeConfirmUntilRef.current = now + SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
+        toast.info('Press ESC again to exit settings', {
+          id: SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
+          duration: SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS,
+          className: 'whitespace-nowrap'
+        })
+        return
+      }
       void closeSettingsPageWithPromptGuard()
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [closeSettingsPageWithPromptGuard])
+  }, [activeSectionId, closeSettingsPageWithPromptGuard])
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {

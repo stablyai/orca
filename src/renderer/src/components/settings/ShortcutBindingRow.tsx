@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 
@@ -45,17 +46,17 @@ function BindingPreview({
 }): React.JSX.Element {
   if (bindings.length === 0) {
     return (
-      <div className="flex min-h-7 items-center">
+      <span className="flex min-h-7 items-center">
         <span className="text-xs text-muted-foreground">Unassigned</span>
-      </div>
+      </span>
     )
   }
   return (
-    <div className="flex min-h-7 flex-wrap items-center justify-start gap-1.5">
+    <span className="flex min-h-7 flex-wrap items-center justify-start gap-1.5">
       {bindings.map((binding) => (
         <ShortcutKeyCombo key={binding} keys={formatKeybinding(binding, platform)} />
       ))}
-    </div>
+    </span>
   )
 }
 
@@ -161,87 +162,95 @@ export function ShortcutBindingRow({
         {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
       </div>
 
-      <div className="mt-1 flex min-w-0 items-center lg:col-start-2 lg:row-start-1 lg:mt-0 lg:self-center lg:justify-end lg:pr-24">
-        <BindingPreview bindings={effective} platform={platform} />
-      </div>
-
-      <div
-        className={cn(
-          'mt-2 flex items-center gap-1 lg:absolute lg:top-1/2 lg:right-2 lg:z-10 lg:mt-0 lg:-translate-y-1/2 lg:rounded-md lg:border lg:border-border/60 lg:bg-background/95 lg:p-0.5 lg:shadow-xs lg:transition-opacity',
-          recording
-            ? 'lg:opacity-100'
-            : 'lg:pointer-events-none lg:opacity-0 lg:group-hover:pointer-events-auto lg:group-hover:opacity-100 lg:group-focus-within:pointer-events-auto lg:group-focus-within:opacity-100'
-        )}
-      >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              ref={recordButtonRef}
-              type="button"
-              variant={recording ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={
-                recording
-                  ? `Press shortcut keys for ${item.title}. Escape cancels.`
-                  : `Change shortcut for ${item.title}`
-              }
-              aria-invalid={Boolean(error)}
-              aria-pressed={recording}
-              data-shortcut-recorder=""
-              data-shortcut-recorder-active={recording ? '' : undefined}
-              onClick={() => {
-                if (recording) {
-                  return
-                }
-                onStartRecording(item.id)
-              }}
-              onKeyDown={handleRecordKeyDown}
-              className={cn(
-                'text-muted-foreground hover:text-foreground',
-                recording &&
-                  'border border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-              )}
-            >
-              <Keyboard className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {recording ? 'Listening for shortcut' : 'Change shortcut'}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Disable ${item.title}`}
-              onClick={() => onDisable(item.id)}
-            >
-              <Ban className="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            Disable
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Reset ${item.title}`}
-              onClick={() => onReset(item.id)}
-            >
-              <RotateCcw className="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            Reset
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      <HoverCard openDelay={0} closeDelay={80}>
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Shortcut actions for ${item.title}`}
+            className="mt-1 flex min-w-0 items-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:col-start-2 lg:row-start-1 lg:mt-0 lg:self-center lg:justify-self-end"
+          >
+            <BindingPreview bindings={effective} platform={platform} />
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="right"
+          align="center"
+          sideOffset={8}
+          collisionPadding={12}
+          className="w-auto max-w-[min(22rem,calc(100vw-2rem))] p-1"
+        >
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  ref={recordButtonRef}
+                  type="button"
+                  variant={recording ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  aria-label={
+                    recording
+                      ? `Press shortcut keys for ${item.title}. Escape cancels.`
+                      : `Change shortcut for ${item.title}`
+                  }
+                  aria-invalid={Boolean(error)}
+                  aria-pressed={recording}
+                  data-shortcut-recorder=""
+                  data-shortcut-recorder-active={recording ? '' : undefined}
+                  onClick={() => {
+                    if (recording) {
+                      return
+                    }
+                    onStartRecording(item.id)
+                  }}
+                  onKeyDown={handleRecordKeyDown}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground',
+                    recording &&
+                      'border border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
+                  )}
+                >
+                  <Keyboard className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {recording ? 'Listening for shortcut' : 'Change shortcut'}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Disable ${item.title}`}
+                  onClick={() => onDisable(item.id)}
+                >
+                  <Ban className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Disable
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Reset ${item.title}`}
+                  onClick={() => onReset(item.id)}
+                >
+                  <RotateCcw className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Reset
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
     </SearchableSetting>
   )
 }
