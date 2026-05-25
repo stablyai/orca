@@ -211,7 +211,7 @@ export default function TabGroupPanel({
           this, the empty space after tabs in the center column is dead — the
           user can only drag from the tiny left-sidebar header strip. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className="tab-group-tab-bar h-[32px] shrink-0 border-b border-border bg-card"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex h-full items-stretch pr-1.5">

@@ -405,14 +405,23 @@
 :root.glass-dark .sidebar {
   border-right: none;
 }
-/* Why: the tab-group wrapper paints a 1px border-l between the worktree
-   sidebar and the main content area. Under glass themes this creates a
-   sharp visible line at the same x where the see-through sidebar meets
-   the slightly-more-opaque main canvas, producing two perceptual boundaries
-   (sharp line + opacity gradient). Suppressing the border lets the natural
-   opacity transition be the only boundary. */
+/* Why: several layout wrappers paint a 1px region-divider border that, under
+   glass themes, becomes a redundant second boundary next to the natural
+   opacity transition between regions. Suppress them so the opacity
+   gradient is the sole boundary.
+   - .tab-group-main-wrapper: left seam between worktree sidebar and main
+   - .tab-group-tab-bar: bottom seam between tab bar and content pane
+   - .side-activity-bar-windows-inset: left seam between main and right rail */
 :root.glass-light .tab-group-main-wrapper,
 :root.glass-dark .tab-group-main-wrapper {
+  border-left: none;
+}
+:root.glass-light .tab-group-tab-bar,
+:root.glass-dark .tab-group-tab-bar {
+  border-bottom: none;
+}
+:root.glass-light .side-activity-bar-windows-inset,
+:root.glass-dark .side-activity-bar-windows-inset {
   border-left: none;
 }
 
