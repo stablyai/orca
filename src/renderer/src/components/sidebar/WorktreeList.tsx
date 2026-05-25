@@ -2200,7 +2200,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         'flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                          : 'hover:bg-sidebar-accent/40'
+                          : 'worktree-sidebar-card-hover'
                       )}
                       onClick={handleClick}
                       onDoubleClick={(event) => event.stopPropagation()}

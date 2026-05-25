@@ -802,6 +802,33 @@
   transition: width 200ms ease;
 }
 
+/* Why: light-mode sidebar-accent/40 is nearly invisible on the sidebar, while
+   agent rows stack on top of the card hover. Keep nested rows quieter than the
+   workspace card without changing the established dark-mode balance. */
+.worktree-sidebar-card-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
+.dark .worktree-sidebar-card-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
+}
+
+.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+}
+
+.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+}
+
+.dark .worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;

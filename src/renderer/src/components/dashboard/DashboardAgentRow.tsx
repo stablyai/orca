@@ -233,14 +233,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         // ancestor groups from workspace cards must not reveal every row's X.
         'group/agent-row relative flex flex-col -ml-2 py-1',
         isLineageChild ? 'pl-5 pr-2' : 'px-2',
-        // Why: hover tints have to go in opposite directions per theme —
-        // dark mode adds light on dark (bg-accent/30), light mode needs to
-        // add *dark* on white. Alpha-on-accent in light mode collapses to
-        // near-nothing because accent (#f5f5f5) is already ~white. Use a
-        // black alpha overlay in light mode (mirrors WorktreeCard.tsx's
-        // active-state pattern) so the lift is symmetric across themes.
-        'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30',
-        isFocusedPane && 'bg-black/[0.06] dark:bg-accent/30'
+        // Why: inline agent rows sit inside a hoverable workspace card, so
+        // their hover wash must stay softer than the parent card highlight.
+        // The focused-pane state reuses the same class via data attribute.
+        'cursor-pointer rounded-sm worktree-agent-row-hover'
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}

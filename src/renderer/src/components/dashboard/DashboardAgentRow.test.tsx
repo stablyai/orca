@@ -108,10 +108,7 @@ describe('DashboardAgentRow', () => {
     )
 
     expect(markup).toContain('data-focused-agent-pane="true"')
-    expect(classTokens(markup)).toContain('hover:bg-black/[0.06]')
-    expect(classTokens(markup)).toContain('dark:hover:bg-accent/30')
-    expect(classTokens(markup)).toContain('bg-black/[0.06]')
-    expect(classTokens(markup)).toContain('dark:bg-accent/30')
+    expect(classTokens(markup)).toContain('worktree-agent-row-hover')
   })
 
   it('scopes the timestamp and dismiss hover swap to the row-owned group', () => {
