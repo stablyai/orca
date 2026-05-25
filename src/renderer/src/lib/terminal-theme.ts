@@ -49,8 +49,16 @@ export function resolveEffectiveTerminalAppearance(
   >,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
-  const sourceTheme =
-    settings.theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : settings.theme
+  // Why: glass-* themes resolve to their underlying light/dark variant for
+  // terminal coloring — the translucency is applied via window vibrancy +
+  // .glass-surface CSS, not via the terminal palette.
+  const baseTheme: 'system' | 'dark' | 'light' =
+    settings.theme === 'glass-dark'
+      ? 'dark'
+      : settings.theme === 'glass-light'
+        ? 'light'
+        : settings.theme
+  const sourceTheme = baseTheme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : baseTheme
   const useLightVariant = sourceTheme === 'light' && settings.terminalUseSeparateLightTheme
   const themeName = useLightVariant
     ? settings.terminalThemeLight || DEFAULT_TERMINAL_THEME_LIGHT
@@ -61,7 +69,7 @@ export function resolveEffectiveTerminalAppearance(
 
   return {
     mode: sourceTheme,
-    sourceTheme: settings.theme,
+    sourceTheme: baseTheme,
     themeName,
     dividerColor,
     theme: getTerminalThemePreview(themeName),
