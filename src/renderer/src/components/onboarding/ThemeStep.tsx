@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Monitor, Moon, Settings2, Sun } from 'lucide-react'
+import { Check, Monitor, Moon, Settings2, Sparkles, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
@@ -165,6 +165,9 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     }
   }
 
+  // Why: glass themes are macOS-only (see Task 1b clamp + main vibrancy path).
+  // Non-Mac users get the original 3 tiles so the picker stays compact.
+  const isMac = navigator.userAgent.includes('Mac')
   const themes: {
     id: GlobalSettings['theme']
     label: string
@@ -173,12 +176,28 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
   }[] = [
     { id: 'system', label: 'System', hint: 'Match OS', icon: Monitor },
     { id: 'dark', label: 'Dark', hint: 'Easy on the eyes', icon: Moon },
-    { id: 'light', label: 'Light', hint: 'Bright & crisp', icon: Sun }
+    { id: 'light', label: 'Light', hint: 'Bright & crisp', icon: Sun },
+    ...(isMac
+      ? ([
+          {
+            id: 'glass-dark' as const,
+            label: 'Glass Dark',
+            hint: 'macOS 26 · midnight',
+            icon: Sparkles
+          },
+          {
+            id: 'glass-light' as const,
+            label: 'Glass Light',
+            hint: 'macOS 26 · cream',
+            icon: Sparkles
+          }
+        ] as const)
+      : [])
   ]
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-3">
+      <div className={isMac ? 'grid grid-cols-3 gap-3 sm:grid-cols-5' : 'grid grid-cols-3 gap-3'}>
         {themes.map(({ id, label, hint, icon: Icon }) => {
           const selected = theme === id
           return (
@@ -325,18 +344,41 @@ function ChromePreview({ variant }: { variant: GlobalSettings['theme'] }) {
       </div>
     )
   }
+  if (variant === 'glass-light' || variant === 'glass-dark') {
+    return <ChromeMock dark={variant === 'glass-dark'} glass />
+  }
   return <ChromeMock dark={variant === 'dark'} />
 }
 
-function ChromeMock({ dark }: { dark: boolean }) {
+function ChromeMock({ dark, glass = false }: { dark: boolean; glass?: boolean }) {
   // Tiny Orca chrome: sidebar with two rows + a content area with a tab and
   // a composer line. Pure Tailwind so it stays lightweight inside the tile.
-  const bg = dark ? 'bg-[#0f1115]' : 'bg-[#f7f8fa]'
-  const sidebar = dark ? 'bg-[#16181d]' : 'bg-[#eceef2]'
+  // Glass variants overlay a colorful gradient "wallpaper" behind translucent
+  // chrome so users see the vibrancy effect they're choosing.
+  const bg = glass
+    ? dark
+      ? 'bg-gradient-to-br from-[#2d1b4d] via-[#1a3a5c] to-[#0d2e3a]'
+      : 'bg-gradient-to-br from-[#ff9966] via-[#cc66ff] to-[#6699ff]'
+    : dark
+      ? 'bg-[#0f1115]'
+      : 'bg-[#f7f8fa]'
+  const sidebar = glass
+    ? dark
+      ? 'bg-white/10 backdrop-blur-md'
+      : 'bg-white/40 backdrop-blur-md'
+    : dark
+      ? 'bg-[#16181d]'
+      : 'bg-[#eceef2]'
   const sidebarBorder = dark ? 'border-white/5' : 'border-black/5'
   const row = dark ? 'bg-white/10' : 'bg-black/10'
   const rowDim = dark ? 'bg-white/5' : 'bg-black/5'
-  const tab = dark ? 'bg-[#1d2026] border-white/5' : 'bg-white border-black/5'
+  const tab = glass
+    ? dark
+      ? 'bg-white/15 backdrop-blur-md border-white/10'
+      : 'bg-white/55 backdrop-blur-md border-white/40'
+    : dark
+      ? 'bg-[#1d2026] border-white/5'
+      : 'bg-white border-black/5'
   const accent = 'bg-violet-500/80'
   return (
     <div className={cn('flex size-full', bg)}>
