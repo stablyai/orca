@@ -632,6 +632,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
   const revealHighlightTimeoutRef = useRef<number | null>(null)
+  const flashRevealedWorktree = useCallback((worktreeId: string) => {
+    if (revealHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(revealHighlightTimeoutRef.current)
+    }
+    // Why: remove before add restarts the CSS glow when the user repeatedly
+    // asks to reveal the same active workspace.
+    setHighlightedRevealWorktreeId(null)
+    window.requestAnimationFrame(() => {
+      setHighlightedRevealWorktreeId(worktreeId)
+      revealHighlightTimeoutRef.current = window.setTimeout(() => {
+        revealHighlightTimeoutRef.current = null
+        setHighlightedRevealWorktreeId(null)
+      }, 1500)
+    })
+  }, [])
   const suppressWorktreeClickUntilRef = useRef(0)
   const canReorderRepoHeaders = groupBy === 'repo' && repoGroupOrdering === 'manual'
   const lastVisibleRefreshKeyRef = useRef('')
@@ -1020,6 +1035,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             pendingRevealWorktree.behavior
           )
         ) {
+          flashRevealedWorktree(pendingRevealWorktree.worktreeId)
           pendingRevealRetryRef.current = null
           clearPendingRevealWorktreeId()
           return
@@ -1067,7 +1083,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     collapsedGroups,
     workspaceStatuses,
     settings,
-    pendingRevealRetryTick
+    pendingRevealRetryTick,
+    flashRevealedWorktree
   ])
 
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
@@ -1296,21 +1313,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     if (!currentWorktreeId) {
       return
     }
-    if (revealHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(revealHighlightTimeoutRef.current)
-    }
-    setHighlightedRevealWorktreeId(currentWorktreeId)
-    revealHighlightTimeoutRef.current = window.setTimeout(() => {
-      revealHighlightTimeoutRef.current = null
-      setHighlightedRevealWorktreeId(null)
-    }, 1200)
     const container = scrollRef.current
     container?.focus({ preventScroll: true })
     if (container && revealMountedWorktreeElement(container, currentWorktreeId, 'smooth')) {
+      flashRevealedWorktree(currentWorktreeId)
       return
     }
     onRevealCurrentWorkspace(currentWorktreeId)
-  }, [currentWorktreeId, onRevealCurrentWorkspace])
+  }, [currentWorktreeId, flashRevealedWorktree, onRevealCurrentWorkspace])
 
   useEffect(() => {
     return () => {
@@ -2261,7 +2271,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   className={cn(
                     'relative transition-[opacity,transform,filter] duration-150 ease-out',
                     highlightedRevealWorktreeId === itemRow.worktree.id &&
-                      'rounded-md bg-sidebar-accent/70 ring-2 ring-sidebar-ring/70 ring-offset-1 ring-offset-sidebar',
+                      'scroll-to-current-workspace-reveal-highlight',
                     worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
                       'z-20 scale-[0.985] opacity-35 saturate-75'
                   )}
@@ -2350,9 +2360,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       aria-selected={selectedWorktreeIds.has(child.worktree.id)}
                       aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
+                        'relative flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
                         highlightedRevealWorktreeId === child.worktree.id &&
-                          'bg-sidebar-accent/70 ring-2 ring-sidebar-ring/70 ring-offset-1 ring-offset-sidebar',
+                          'scroll-to-current-workspace-reveal-highlight',
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
                           : 'worktree-sidebar-card-hover'

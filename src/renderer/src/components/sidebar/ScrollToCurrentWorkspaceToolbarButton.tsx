@@ -12,7 +12,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
           variant="ghost"
           size="icon-xs"
           type="button"
-          aria-label="Scroll to open workspace"
+          aria-label="Reveal active workspace"
           onClick={requestScrollToCurrentWorkspaceReveal}
           className="text-muted-foreground"
         >
@@ -20,7 +20,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        Scroll to open workspace
+        Reveal active workspace
       </TooltipContent>
     </Tooltip>
   )

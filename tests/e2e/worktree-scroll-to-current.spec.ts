@@ -73,7 +73,7 @@ async function forceCurrentWorkspaceClipped(page: Page, targetId: string): Promi
     .toBe(true)
 }
 
-test.describe('Scroll to current workspace button', () => {
+test.describe('Reveal active workspace button', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -94,7 +94,7 @@ test.describe('Scroll to current workspace button', () => {
 
     const targetId = decodeURIComponent(targetIdAttribute.slice(WORKTREE_OPTION_PREFIX.length))
     const targetRow = worktreeOption(orcaPage, targetId)
-    const revealButton = orcaPage.getByRole('button', { name: 'Scroll to open workspace' })
+    const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
 
     await renderedOptions.last().click()
     await expect(targetRow).toHaveAttribute('aria-current', 'page')

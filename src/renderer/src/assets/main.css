@@ -829,6 +829,56 @@
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+.scroll-to-current-workspace-reveal-highlight {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.scroll-to-current-workspace-reveal-highlight::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 30;
+  pointer-events: none;
+  border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
+  border-radius: calc(var(--radius-md) + 2px);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
+  animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
+}
+
+@keyframes scroll-to-current-workspace-reveal-glow {
+  0% {
+    opacity: 1;
+    transform: scale(0.992);
+  }
+
+  24% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+
+  60% {
+    opacity: 0.28;
+    transform: scale(1.006);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.006);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-current-workspace-reveal-highlight::before {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;
