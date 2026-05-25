@@ -181,33 +181,31 @@
    and both selectors share the same single-class specificity. */
 
 :root.glass-light {
-  /* Re-map role tokens to semi-transparent warm cream. Components keep
-     referencing the same role tokens (--background, --sidebar, --card, etc.)
-     — only the values behind them change. Alphas tuned for macOS 26 Liquid
-     Glass: sidebar / cards in the 0.35-0.50 range so the desktop and lower
-     windows visibly bleed through the vibrancy layer. */
-  --background: rgba(252, 244, 230, 0.45);
-  --foreground: rgba(50, 30, 10, 0.95);
-  --editor-surface: rgba(252, 244, 230, 0.75);
-  --card: rgba(255, 248, 235, 0.4);
-  --card-foreground: rgba(50, 30, 10, 0.95);
-  --popover: rgba(255, 248, 232, 0.55);
-  --popover-foreground: rgba(50, 30, 10, 0.95);
-  --primary: rgba(60, 40, 20, 0.95);
+  /* CLEAR mode — lighter blur + lower surface alphas so the wallpaper /
+     window behind reads sharply through the glass instead of being a
+     smeared cream wash. Text foregrounds stay at 1.0 alpha for legibility. */
+  --background: rgba(252, 244, 230, 0.1);
+  --foreground: rgba(30, 18, 6, 1);
+  --editor-surface: rgba(252, 244, 230, 0.4);
+  --card: rgba(255, 248, 235, 0.12);
+  --card-foreground: rgba(30, 18, 6, 1);
+  --popover: rgba(255, 248, 232, 0.22);
+  --popover-foreground: rgba(30, 18, 6, 1);
+  --primary: rgba(40, 25, 10, 1);
   --primary-foreground: rgba(252, 244, 230, 0.98);
-  --secondary: rgba(255, 255, 255, 0.4);
-  --secondary-foreground: rgba(60, 40, 20, 0.9);
-  --muted: rgba(255, 255, 255, 0.35);
-  --muted-foreground: rgba(100, 70, 40, 0.85);
-  --accent: rgba(255, 255, 255, 0.45);
-  --accent-foreground: rgba(50, 30, 10, 0.95);
+  --secondary: rgba(255, 255, 255, 0.15);
+  --secondary-foreground: rgba(40, 25, 10, 1);
+  --muted: rgba(255, 255, 255, 0.12);
+  --muted-foreground: rgba(80, 55, 30, 1);
+  --accent: rgba(255, 255, 255, 0.2);
+  --accent-foreground: rgba(30, 18, 6, 1);
   --destructive: #c41020;
   --destructive-foreground: rgba(252, 244, 230, 0.98);
-  --border: rgba(180, 140, 90, 0.25);
-  --input: rgba(180, 140, 90, 0.25);
-  --ring: rgba(180, 140, 90, 0.55);
+  --border: rgba(180, 140, 90, 0.32);
+  --input: rgba(180, 140, 90, 0.3);
+  --ring: rgba(180, 140, 90, 0.6);
 
-  --sidebar: rgba(255, 248, 235, 0.35);
+  --sidebar: rgba(255, 248, 235, 0.08);
   --sidebar-foreground: rgba(60, 40, 20, 0.92);
   --sidebar-primary: rgba(60, 40, 20, 0.95);
   --sidebar-primary-foreground: rgba(252, 244, 230, 0.98);
@@ -216,9 +214,9 @@
   --sidebar-border: rgba(180, 140, 90, 0.18);
   --sidebar-ring: rgba(180, 140, 90, 0.55);
 
-  /* Activate glass */
-  --glass-blur: 28px;
-  --glass-saturate: 150%;
+  /* Activate glass — lighter blur so background reads sharply */
+  --glass-blur: 12px;
+  --glass-saturate: 180%;
   --glass-inner-glow: rgba(255, 255, 255, 0.55);
   --glass-shadow: rgba(120, 80, 40, 0.18);
 }
@@ -227,30 +225,29 @@
 /* Why: see :root.glass-light above for the same specificity rationale. */
 
 :root.glass-dark {
-  /* See :root.glass-light for tuning rationale — alphas in 0.35-0.55 range
-     so the macOS vibrancy layer actually shows through. */
-  --background: rgba(15, 18, 32, 0.5);
-  --foreground: rgba(220, 230, 250, 0.95);
-  --editor-surface: rgba(15, 18, 32, 0.75);
-  --card: rgba(28, 34, 52, 0.45);
-  --card-foreground: rgba(220, 230, 250, 0.95);
-  --popover: rgba(28, 34, 52, 0.55);
-  --popover-foreground: rgba(220, 230, 250, 0.95);
-  --primary: rgba(220, 230, 250, 0.95);
-  --primary-foreground: rgba(18, 22, 38, 0.95);
-  --secondary: rgba(40, 50, 80, 0.4);
-  --secondary-foreground: rgba(220, 230, 250, 0.95);
-  --muted: rgba(40, 50, 80, 0.35);
-  --muted-foreground: rgba(180, 200, 235, 0.8);
-  --accent: rgba(60, 80, 130, 0.45);
-  --accent-foreground: rgba(220, 230, 250, 0.98);
+  /* CLEAR mode — see :root.glass-light. */
+  --background: rgba(15, 18, 32, 0.12);
+  --foreground: rgba(235, 240, 255, 1);
+  --editor-surface: rgba(15, 18, 32, 0.4);
+  --card: rgba(28, 34, 52, 0.14);
+  --card-foreground: rgba(235, 240, 255, 1);
+  --popover: rgba(28, 34, 52, 0.25);
+  --popover-foreground: rgba(235, 240, 255, 1);
+  --primary: rgba(235, 240, 255, 1);
+  --primary-foreground: rgba(18, 22, 38, 0.98);
+  --secondary: rgba(40, 50, 80, 0.18);
+  --secondary-foreground: rgba(235, 240, 255, 1);
+  --muted: rgba(40, 50, 80, 0.14);
+  --muted-foreground: rgba(210, 220, 245, 1);
+  --accent: rgba(60, 80, 130, 0.22);
+  --accent-foreground: rgba(235, 240, 255, 1);
   --destructive: #ff6568;
-  --destructive-foreground: rgba(220, 230, 250, 0.95);
-  --border: rgba(140, 170, 230, 0.22);
-  --input: rgba(140, 170, 230, 0.25);
-  --ring: rgba(140, 170, 230, 0.5);
+  --destructive-foreground: rgba(235, 240, 255, 1);
+  --border: rgba(140, 170, 230, 0.32);
+  --input: rgba(140, 170, 230, 0.32);
+  --ring: rgba(140, 170, 230, 0.55);
 
-  --sidebar: rgba(18, 22, 38, 0.4);
+  --sidebar: rgba(18, 22, 38, 0.1);
   --sidebar-foreground: rgba(220, 230, 250, 0.92);
   --sidebar-primary: rgba(40, 100, 220, 0.85);
   --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
@@ -259,9 +256,9 @@
   --sidebar-border: rgba(140, 170, 230, 0.12);
   --sidebar-ring: rgba(140, 170, 230, 0.4);
 
-  /* Activate glass */
-  --glass-blur: 28px;
-  --glass-saturate: 150%;
+  /* Activate glass — lighter blur so background reads sharply */
+  --glass-blur: 12px;
+  --glass-saturate: 180%;
   --glass-inner-glow: rgba(140, 170, 230, 0.12);
   --glass-shadow: rgba(0, 0, 30, 0.5);
 }
