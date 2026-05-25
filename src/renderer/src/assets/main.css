@@ -428,6 +428,17 @@
 :root.glass-dark .right-sidebar-panel-content {
   border-left: none;
 }
+/* Why: the 4px col-resize handle at the left edge of the right rail panel
+   was creating a visible transparent strip between terminal and rail under
+   glass themes. User wants terminal and rail to touch directly with zero
+   visible gap — collapse the handle's width to 0. Resize-drag is sacrificed
+   under glass; users who need to resize can switch themes or use a future
+   keyboard shortcut. */
+:root.glass-light .right-sidebar-resize-handle,
+:root.glass-dark .right-sidebar-resize-handle {
+  width: 0;
+  pointer-events: none;
+}
 
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
