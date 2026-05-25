@@ -124,7 +124,7 @@ export function ShortcutBindingRow({
       title={item.title}
       description={`${groupTitle} shortcut`}
       keywords={[...item.searchKeywords]}
-      className="grid min-h-[54px] grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_6rem] lg:items-center"
+      className="group relative grid min-h-[54px] max-w-none grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)] lg:items-center"
     >
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
@@ -162,11 +162,18 @@ export function ShortcutBindingRow({
         </div>
       </div>
 
-      <div className="mt-1 min-w-0 lg:mt-0">
+      <div className="mt-1 flex min-w-0 items-center lg:mt-0 lg:justify-end lg:pr-24">
         <BindingPreview bindings={effective} platform={platform} />
       </div>
 
-      <div className="mt-2 flex items-center gap-1 lg:mt-0 lg:justify-end">
+      <div
+        className={cn(
+          'mt-2 flex items-center gap-1 lg:absolute lg:top-1/2 lg:right-2 lg:z-10 lg:mt-0 lg:-translate-y-1/2 lg:rounded-md lg:border lg:border-border/60 lg:bg-background/95 lg:p-0.5 lg:shadow-xs lg:transition-opacity',
+          recording
+            ? 'lg:opacity-100'
+            : 'lg:pointer-events-none lg:opacity-0 lg:group-hover:pointer-events-auto lg:group-hover:opacity-100 lg:group-focus-within:pointer-events-auto lg:group-focus-within:opacity-100'
+        )}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
