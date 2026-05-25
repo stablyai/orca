@@ -176,7 +176,7 @@ export function NotificationStep({
                 Allow Orca in macOS
               </div>
               <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                Open System Settings and make sure Orca is allowed to show alerts and play sounds.
+                Open System Settings and make sure Orca is allowed to send notifications.
               </p>
             </div>
             <Button
