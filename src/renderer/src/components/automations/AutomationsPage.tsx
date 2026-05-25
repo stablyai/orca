@@ -1398,7 +1398,7 @@ export default function AutomationsPage(): React.JSX.Element {
             <span
               className={`flex size-4 items-center justify-center rounded-sm border transition-colors ${
                 dontAskDeleteAgain
-                  ? 'border-foreground bg-foreground text-background'
+                  ? 'border-foreground bg-foreground text-[var(--background-opaque,var(--background))]'
                   : 'border-muted-foreground bg-transparent'
               }`}
             >

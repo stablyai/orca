@@ -1464,7 +1464,7 @@ function PRViewedCheckbox({
             className={cn(
               'flex size-4 items-center justify-center rounded-sm border transition-colors',
               checked
-                ? 'border-foreground bg-foreground text-background'
+                ? 'border-foreground bg-foreground text-[var(--background-opaque,var(--background))]'
                 : 'border-muted-foreground/50 bg-background text-transparent'
             )}
           >

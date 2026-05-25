@@ -311,7 +311,7 @@ function GhosttyDiscoveryRow({
         )}
       </div>
       <button
-        className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background hover:bg-foreground/90 disabled:opacity-50"
+        className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-[var(--background-opaque,var(--background))] hover:bg-foreground/90 disabled:opacity-50"
         disabled={importing || disabled}
         onClick={() => onImport(preview)}
       >
