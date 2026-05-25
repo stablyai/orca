@@ -119,25 +119,20 @@ export function TerminalQuickCommandDialog({
   }, [command, open])
 
   const agentPresets = useMemo(() => {
-    return (
-      AGENT_CATALOG.map((entry, index) => {
-        const preset = buildTerminalAgentQuickCommandPreset({
-          agent: entry.id,
-          label: entry.label,
-          cmdOverrides: agentCmdOverrides,
-          platform: CLIENT_PLATFORM
-        })
-        return preset ? { preset, index } : null
+    return AGENT_CATALOG.map((entry, index) => {
+      const preset = buildTerminalAgentQuickCommandPreset({
+        agent: entry.id,
+        label: entry.label,
+        cmdOverrides: agentCmdOverrides,
+        platform: CLIENT_PLATFORM
       })
-        .filter((item): item is { preset: TerminalAgentQuickCommandPreset; index: number } =>
-          Boolean(item)
-        )
-        // Why: the picker inserts a one-line command template. Agents that can
-        // only receive prompts after startup cannot be represented by that text.
-        .filter((item) => item.preset.startsWithPrompt)
-        .sort((a, b) => a.index - b.index)
-        .map((item) => item.preset)
-    )
+      return preset ? { preset, index } : null
+    })
+      .filter((item): item is { preset: TerminalAgentQuickCommandPreset; index: number } =>
+        Boolean(item)
+      )
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.preset)
   }, [agentCmdOverrides])
 
   const visibleAgentPresets = useMemo(
@@ -222,7 +217,7 @@ export function TerminalQuickCommandDialog({
                     <ChevronDown className="size-3" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-[min(14rem,calc(100vw-2rem))] p-0">
+                <PopoverContent align="end" className="w-[min(17rem,calc(100vw-2rem))] p-0">
                   <Command shouldFilter={false}>
                     <CommandInput
                       autoFocus
@@ -238,11 +233,25 @@ export function TerminalQuickCommandDialog({
                         <CommandItem
                           key={preset.agent}
                           value={`${preset.agent} ${preset.label}`}
-                          onSelect={() => selectAgentPreset(preset)}
-                          className="h-9 items-center gap-2 px-3"
+                          disabled={!preset.startsWithPrompt}
+                          onSelect={() => {
+                            if (preset.startsWithPrompt) {
+                              selectAgentPreset(preset)
+                            }
+                          }}
+                          className="min-h-11 items-start gap-2 px-3 py-2"
                         >
-                          <AgentIcon agent={preset.agent} size={16} />
-                          <span className="truncate text-sm font-medium">{preset.label}</span>
+                          <span className="mt-0.5">
+                            <AgentIcon agent={preset.agent} size={16} />
+                          </span>
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate text-sm font-medium">{preset.label}</span>
+                            {!preset.startsWithPrompt ? (
+                              <span className="truncate text-xs text-muted-foreground">
+                                Does not support prompt commands
+                              </span>
+                            ) : null}
+                          </span>
                         </CommandItem>
                       ))}
                     </CommandList>
