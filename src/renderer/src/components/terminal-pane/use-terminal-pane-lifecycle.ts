@@ -48,6 +48,7 @@ import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
+import { installCopyOnSelectMouseSelectionForcing } from './terminal-mouse-selection-forcing'
 import {
   PRIMARY_SELECTION_MAX_LENGTH,
   isPrimarySelectionEnabled,
@@ -272,6 +273,7 @@ export function useTerminalPaneLifecycle({
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
+  const forcedSelectionDisposablesRef = useRef(new Map<number, () => void>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
@@ -337,6 +339,7 @@ export function useTerminalPaneLifecycle({
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
+    const forcedSelectionDisposables = forcedSelectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
     const worktreePath =
@@ -523,6 +526,14 @@ export function useTerminalPaneLifecycle({
           })
         })
 
+        const disposeForcedSelection = installCopyOnSelectMouseSelectionForcing({
+          container: pane.container,
+          getCopyOnSelect: () => settingsRef.current?.terminalClipboardOnSelect === true,
+          isMac: navigator.userAgent.includes('Mac'),
+          terminal: pane.terminal
+        })
+        forcedSelectionDisposablesRef.current.set(pane.id, disposeForcedSelection)
+
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
         )
@@ -657,6 +668,11 @@ export function useTerminalPaneLifecycle({
         if (selectionDisposable) {
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
+        }
+        const forcedSelectionDisposable = forcedSelectionDisposablesRef.current.get(paneId)
+        if (forcedSelectionDisposable) {
+          forcedSelectionDisposable()
+          forcedSelectionDisposablesRef.current.delete(paneId)
         }
         const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
         if (selectionCaptureTimer !== undefined) {
@@ -1063,6 +1079,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       selectionDisposables.clear()
+      for (const dispose of forcedSelectionDisposables.values()) {
+        dispose()
+      }
+      forcedSelectionDisposables.clear()
       for (const timer of selectionCaptureTimers.values()) {
         window.clearTimeout(timer)
       }
