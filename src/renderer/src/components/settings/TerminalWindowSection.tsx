@@ -77,13 +77,23 @@ export function TerminalWindowSection({
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
+  // Why: glass themes force vibrancy on at window creation regardless of the
+  // standalone windowBackgroundBlur setting, so the toggle is meaningless
+  // (always effectively on) while a glass theme is active.
+  const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
+  const effectiveBlur = themeIsGlass || (settings.windowBackgroundBlur ?? false)
   // Why: windowBackgroundBlur is only read by createMainWindow() at startup
   // (macOS vibrancy / Windows acrylic both require window creation options),
   // so the UI has to ask the user to restart for the change to take effect.
   // Snapshot the value on first render and compare to the live setting to
   // show a "Restart required" banner only when they differ.
   const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
-  const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
+  // Why: when a glass theme is active, blur is governed by the theme's
+  // vibrancy chain (AppearancePane shows its own glass-boundary restart
+  // banner). Suppress this banner so the user doesn't see a redundant /
+  // spurious "Restart required" prompt for a toggle they can't change.
+  const blurPendingRestart =
+    !themeIsGlass && (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
 
   // Why: the mount-time snapshot captures local state, not main-process state.
@@ -147,18 +157,29 @@ export function TerminalWindowSection({
             <p className="text-xs text-muted-foreground">
               Apply background blur to the terminal window. Requires restart.
             </p>
+            {themeIsGlass ? (
+              <p className="text-xs text-muted-foreground italic">
+                Window blur is on automatically for glass themes.
+              </p>
+            ) : null}
           </div>
           <button
             role="switch"
-            aria-checked={settings.windowBackgroundBlur ?? false}
-            onClick={() => updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              (settings.windowBackgroundBlur ?? false) ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
+            aria-checked={effectiveBlur}
+            disabled={themeIsGlass}
+            onClick={() => {
+              if (themeIsGlass) {
+                return
+              }
+              updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })
+            }}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
+              themeIsGlass ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+            } ${effectiveBlur ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
           >
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
+                effectiveBlur ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </button>
