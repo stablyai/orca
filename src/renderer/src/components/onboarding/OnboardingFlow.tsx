@@ -27,7 +27,7 @@ const stepCopy = {
   },
   notifications: {
     title: 'Set up notifications',
-    subtitle: 'Allow desktop alerts and choose the sound Orca uses when work needs attention.'
+    subtitle: 'Orca will notify you know when agents are done or need help.'
   },
   agentSetup: {
     title: 'Set up Orca for agents',
