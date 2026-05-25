@@ -4,7 +4,6 @@ import { Check, Copy, Maximize2, Smartphone, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import type { SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 import {
@@ -12,6 +11,7 @@ import {
   type MobileNetworkInterface
 } from './mobile-network-interface-selection'
 import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
+export { MOBILE_PANE_SEARCH_ENTRIES } from './mobile-pane-search'
 
 // Why: the section heading "When you leave the mobile app" carries the
 // "what happens" framing so the option labels only need to vary on the
@@ -31,54 +31,6 @@ function autoRestoreValueFromMs(ms: number | null | undefined): string {
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
   return exact ? exact.value : 'indefinite'
 }
-
-export const MOBILE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Mobile Pairing',
-    description: 'Pair a mobile device by scanning a QR code.',
-    keywords: ['mobile', 'qr', 'code', 'pair', 'phone', 'scan']
-  },
-  {
-    title: 'Connected Devices',
-    description: 'Manage paired mobile devices.',
-    keywords: ['mobile', 'devices', 'revoke', 'paired', 'connected']
-  },
-  {
-    title: 'Network Interface',
-    description: 'Choose which network address to use for mobile pairing.',
-    keywords: [
-      'network',
-      'interface',
-      'tailscale',
-      'tailnet',
-      'vpn',
-      'overlay',
-      'ip',
-      'address',
-      'wifi',
-      'lan',
-      'remote'
-    ]
-  },
-  {
-    title: 'When you leave the mobile app',
-    description:
-      'Choose what happens to terminals you were viewing on mobile after you close the app or switch away.',
-    keywords: [
-      'mobile',
-      'terminal',
-      'restore',
-      'phone',
-      'fit',
-      'width',
-      'resize',
-      'hold',
-      'leave',
-      'background',
-      'close'
-    ]
-  }
-]
 
 type PairedDevice = {
   deviceId: string

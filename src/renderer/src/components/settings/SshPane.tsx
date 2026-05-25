@@ -10,34 +10,11 @@ import {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
-import type { SettingsSearchEntry } from './settings-search'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
-
-export const SSH_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'SSH Connections',
-    description: 'Manage remote SSH targets.',
-    keywords: ['ssh', 'remote', 'server', 'connection', 'host']
-  },
-  {
-    title: 'Add SSH Target',
-    description: 'Add a new remote SSH target.',
-    keywords: ['ssh', 'add', 'new', 'target', 'host', 'server']
-  },
-  {
-    title: 'Import from SSH Config',
-    description: 'Import hosts from ~/.ssh/config.',
-    keywords: ['ssh', 'import', 'config', 'hosts']
-  },
-  {
-    title: 'Test Connection',
-    description: 'Test connectivity to an SSH target.',
-    keywords: ['ssh', 'test', 'connection', 'ping']
-  }
-]
+export { SSH_PANE_SEARCH_ENTRIES } from './ssh-search'
 
 type SshPaneProps = Record<string, never>
 

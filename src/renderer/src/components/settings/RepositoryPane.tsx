@@ -12,10 +12,12 @@ import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
+import { getRepositoryPaneSearchEntries } from './repository-search'
+export { getRepositoryPaneSearchEntries }
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -25,157 +27,6 @@ type RepositoryPaneProps = {
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeRepo: (repoId: string) => void
-}
-
-export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
-  const isFolder = isFolderRepo(repo)
-  return [
-    {
-      title: 'Display Name',
-      description: 'Project-specific display details for the sidebar and tabs.',
-      keywords: [repo.displayName, repo.path, 'project name', 'repository name']
-    },
-    {
-      title: 'Project Icon',
-      description: 'Project icon and color used in the sidebar and tabs.',
-      keywords: [
-        repo.displayName,
-        'project icon',
-        'repository icon',
-        'color',
-        'badge',
-        'emoji',
-        'favicon'
-      ]
-    },
-    ...(isFolder
-      ? []
-      : [
-          {
-            title: 'Default Worktree Base',
-            description: 'Default base branch or ref when creating worktrees.',
-            keywords: [repo.displayName, 'base ref', 'branch']
-          },
-          {
-            title: 'Sparse Checkout Presets',
-            description: 'Saved directory sets for sparse worktree creation.',
-            keywords: [
-              repo.displayName,
-              'sparse',
-              'checkout',
-              'preset',
-              'presets',
-              'directory',
-              'directories',
-              'monorepo'
-            ]
-          }
-        ]),
-    {
-      title: 'Remove Project',
-      description: 'Remove this project from Orca.',
-      keywords: [repo.displayName, 'delete', 'project', 'repository']
-    },
-    ...(isFolder
-      ? []
-      : [
-          {
-            title: 'Worktree Symlinks',
-            description: 'Paths to symlink from the primary checkout into newly created worktrees.',
-            keywords: [
-              repo.displayName,
-              'symlink',
-              'symlinks',
-              'worktree',
-              'link',
-              'shared',
-              'env',
-              'node_modules'
-            ]
-          },
-          {
-            title: 'MCP Configs',
-            description: 'Inspect project-level MCP server config files.',
-            keywords: [
-              repo.displayName,
-              'mcp',
-              'model context protocol',
-              '.mcp.json',
-              '.cursor/mcp.json',
-              '.claude.json',
-              '.claude/mcp.json'
-            ]
-          },
-          {
-            title: 'Setup Script',
-            description: 'Local and shared scripts that run after a new worktree is created.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'setup',
-              'setup script',
-              'setup command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Archive Script',
-            description: 'Local and shared scripts that run before a worktree is archived.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'archive',
-              'archive script',
-              'archive command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Advanced',
-            description: 'Command source and orca.yaml details.',
-            keywords: [
-              repo.displayName,
-              'advanced',
-              'command source',
-              'local',
-              'orca.yaml',
-              'shared',
-              'both',
-              'source',
-              'authoritative'
-            ]
-          },
-          {
-            title: 'When to Run Setup',
-            description: 'Choose the default behavior when a setup script is available.',
-            keywords: [
-              repo.displayName,
-              'setup run policy',
-              'ask',
-              'run by default',
-              'skip by default'
-            ]
-          },
-          {
-            title: 'Custom GitHub Issue Command',
-            description:
-              'File-based linked-issue command configured via orca.yaml and optional local override.',
-            keywords: [
-              repo.displayName,
-              'github issue command',
-              'issue command',
-              'workflow',
-              'github',
-              'orca.yaml',
-              '.orca/issue-command'
-            ]
-          }
-        ])
-  ]
 }
 
 export function RepositoryPane({

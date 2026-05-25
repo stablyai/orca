@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import type {
   GlobalSettings,
@@ -24,6 +24,7 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog'
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  addCommandIntentSignal?: number
 }
 
 const GLOBAL_SCOPE_KEY = '__global__'
@@ -43,6 +44,13 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
   return repo.displayName || repo.path
 }
 
+export function shouldOpenQuickCommandAddIntent(
+  addCommandIntentSignal: number | undefined,
+  consumedAddIntentSignal: number
+): boolean {
+  return Boolean(addCommandIntentSignal && consumedAddIntentSignal !== addCommandIntentSignal)
+}
+
 function getScopeLabel(
   scope: TerminalQuickCommandScope,
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
@@ -56,7 +64,8 @@ function getScopeLabel(
 
 export function QuickCommandsPane({
   settings,
-  updateSettings
+  updateSettings,
+  addCommandIntentSignal
 }: QuickCommandsPaneProps): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -64,6 +73,7 @@ export function QuickCommandsPane({
   const confirm = useConfirmationDialog()
 
   const [editor, setEditor] = useState<EditorState>(null)
+  const consumedAddIntentSignalRef = useRef(0)
   // Why: `null` means "show all" (sticky-all), independent of the current repo
   // list — mirrors the tasks-page repo combobox so newly added repos appear
   // automatically rather than being silently excluded.
@@ -90,7 +100,7 @@ export function QuickCommandsPane({
     return effectiveSelection.has(scope.repoId)
   })
 
-  const createDraftForCurrentFilter = (): TerminalQuickCommand => {
+  const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
     // Why: when the user has narrowed to a single repo scope, the natural
     // intent for "Add Command" is to create one in that repo. When the filter
     // is narrowed to Global-only, honor that. Otherwise prefer the active
@@ -108,7 +118,19 @@ export function QuickCommandsPane({
       return createTerminalQuickCommandDraft({ type: 'repo', repoId: activeRepoId })
     }
     return createTerminalQuickCommandDraft({ type: 'global' })
-  }
+  }, [activeRepoId, effectiveSelection, repoById, showAll])
+
+  useEffect(() => {
+    const intentSignal = addCommandIntentSignal
+    if (
+      typeof intentSignal !== 'number' ||
+      !shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+    ) {
+      return
+    }
+    consumedAddIntentSignalRef.current = intentSignal
+    setEditor({ mode: 'add', command: createDraftForCurrentFilter() })
+  }, [addCommandIntentSignal, createDraftForCurrentFilter])
 
   const toggleScope = (key: string): void => {
     const current = new Set(effectiveSelection)

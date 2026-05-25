@@ -10,9 +10,7 @@ import {
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { useAllWorktrees } from '../store/selectors'
-import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { getConnectionId } from '../lib/connection-context'
-import { extractIpcErrorMessage } from '../lib/ipc-error'
 import { basename } from '../lib/path'
 import {
   Dialog,
@@ -53,11 +51,11 @@ import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
 import {
@@ -128,11 +126,17 @@ function Terminal(): React.JSX.Element | null {
   )
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
-  const openFile = useAppStore((s) => s.openFile)
   const closeFile = useAppStore((s) => s.closeFile)
   const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
+  const openNewBrowserTabInActiveWorkspace = useAppStore(
+    (s) => s.openNewBrowserTabInActiveWorkspace
+  )
+  const openNewMarkdownInActiveWorkspace = useAppStore((s) => s.openNewMarkdownInActiveWorkspace)
+  const openNewTerminalTabInActiveWorkspace = useAppStore(
+    (s) => s.openNewTerminalTabInActiveWorkspace
+  )
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((s) => s.setActiveBrowserTab)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
@@ -643,6 +647,13 @@ function Terminal(): React.JSX.Element | null {
       if (!activeWorktreeId) {
         return
       }
+      const targetGroupId =
+        useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+        useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+      if (!shellOverride && targetGroupId) {
+        void openNewTerminalTabInActiveWorkspace(targetGroupId)
+        return
+      }
       if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
@@ -679,18 +690,29 @@ function Terminal(): React.JSX.Element | null {
       const order = base.filter((id) => id !== newTab.id)
       order.push(newTab.id)
       setTabBarOrder(activeWorktreeId, order)
-      // Why: keyboard (Cmd/Ctrl+T) creation should leave the user ready to type
-      // in the new shell. Without an explicit focus call, the window-level
-      // keydown handler keeps focus on whatever surface dispatched the shortcut
-      // (often <body>), so the first keystroke is dropped instead of reaching
-      // the new xterm. Matches the "+" menu path in TabBar.tsx.
+      // Why: shell-specific creation still uses the legacy path; keep the
+      // keyboard shortcut focused until the lifted action accepts shell overrides.
       focusTerminalTabSurface(newTab.id)
     },
-    [activeRuntimeEnvironmentId, activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+    [
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      createTab,
+      openNewTerminalTabInActiveWorkspace,
+      setActiveTabType,
+      setTabBarOrder
+    ]
   )
 
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
+      return
+    }
+    const targetGroupId =
+      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    if (targetGroupId) {
+      void openNewBrowserTabInActiveWorkspace(targetGroupId)
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
@@ -706,7 +728,12 @@ function Terminal(): React.JSX.Element | null {
       title: 'New Browser Tab',
       focusAddressBar: true
     })
-  }, [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab])
+  }, [
+    activeRuntimeEnvironmentId,
+    activeWorktreeId,
+    createBrowserTab,
+    openNewBrowserTabInActiveWorkspace
+  ])
 
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
@@ -740,29 +767,14 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
-    const worktree = useAppStore.getState().getKnownWorktreeById(activeWorktreeId)
-    if (!worktree) {
+    const targetGroupId =
+      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    if (!targetGroupId) {
       return
     }
-    try {
-      // Why: the global Cmd/Ctrl+Shift+M shortcut is handled here rather than
-      // inside a specific TabGroupPanel, so it must snapshot the store's
-      // current focused group explicitly. Otherwise split layouts fall back to
-      // the ambient/default group and open the file in the wrong pane.
-      const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      const settings = useAppStore.getState().settings
-      const fileInfo = await createUntitledMarkdownFile(
-        worktree.path,
-        activeWorktreeId,
-        connectionId,
-        settings
-      )
-      openFile(fileInfo, { preview: false, targetGroupId })
-    } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
-    }
-  }, [activeWorktreeId, openFile])
+    await openNewMarkdownInActiveWorkspace(targetGroupId)
+  }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
 
   const handleCloseTab = useCallback(
     (tabId: string) => {

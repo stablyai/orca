@@ -1,34 +1,8 @@
 /* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BarChart3,
-  Bell,
-  Bot,
-  Cable,
-  FlaskConical,
-  GitBranch,
-  Globe,
-  Info,
-  Keyboard,
-  ListChecks,
-  Lock,
-  MousePointerClick,
-  Network,
-  PanelsTopLeft,
-  Play,
-  ShieldCheck,
-  Palette,
-  Server,
-  SlidersHorizontal,
-  Smartphone,
-  Blocks,
-  Mic,
-  SquareTerminal,
-  TextCursorInput,
-  UserCog
-} from 'lucide-react'
+import { Info } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
-import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -36,108 +10,58 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
-import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
-import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
-import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
-import { InputPane, INPUT_PANE_SEARCH_ENTRIES } from './InputPane'
-import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
+import { GeneralPane } from './GeneralPane'
+import { BrowserPane } from './BrowserPane'
+import { AppearancePane } from './AppearancePane'
+import { InputPane } from './InputPane'
+import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
-import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
-import { getTerminalPaneSearchEntries } from './terminal-search'
-import { FLOATING_WORKSPACE_SEARCH_ENTRIES } from './floating-workspace-search'
-import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
+import { RepositoryPane } from './RepositoryPane'
+import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
-import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
-import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
+import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
-import { VOICE_PANE_SEARCH_ENTRIES } from './voice-pane-search'
-import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
-import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
-import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { SshPane } from './SshPane'
+import { ExperimentalPane } from './ExperimentalPane'
+import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
-import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
-import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
-import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
-import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
+import { AccountsPane } from './AccountsPane'
+import { StatsPane } from '../stats/StatsPane'
+import { IntegrationsPane } from './IntegrationsPane'
 import { TasksPane } from './TasksPane'
-import { TASKS_PANE_SEARCH_ENTRIES } from './tasks-search'
 import { QuickCommandsPane } from './QuickCommandsPane'
-import { QUICK_COMMANDS_PANE_SEARCH_ENTRIES } from './quick-commands-search'
-import {
-  DeveloperPermissionsPane,
-  DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
-} from './DeveloperPermissionsPane'
-import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
-import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
+import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
+import { ComputerUsePane } from './ComputerUsePane'
+import { MobileSettingsPane } from './MobileSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
-import {
-  RUNTIME_ENVIRONMENTS_SEARCH_ENTRY,
-  WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
-} from './runtime-environments-search'
 import { PrivacyPane } from './PrivacyPane'
-import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import {
+  isWebClientLocation,
+  useSettingsNavigationMetadata
+} from '@/hooks/useSettingsNavigationMetadata'
+import type {
+  SettingsNavGroup,
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/lib/settings-navigation-types'
 import {
   deriveNeededRepoIds,
   deriveNeededSectionIds,
   getInitialMountedSectionIds,
   getRuntimeTargetIdentity
 } from './settings-load-performance'
-
-type SettingsNavTarget =
-  | 'general'
-  | 'integrations'
-  | 'accounts'
-  | 'browser'
-  | 'git'
-  | 'tasks'
-  | 'appearance'
-  | 'input'
-  | 'floating-workspace'
-  | 'terminal'
-  | 'quick-commands'
-  | 'notifications'
-  | 'computer-use'
-  | 'developer-permissions'
-  | 'privacy'
-  | 'voice'
-  | 'shortcuts'
-  | 'stats'
-  | 'ssh'
-  | 'privacy'
-  | 'experimental'
-  | 'agents'
-  | 'orchestration'
-  | 'servers'
-  | 'mobile'
-  | 'repo'
-
-type SettingsNavSection = {
-  id: string
-  title: string
-  description: string
-  icon: typeof SlidersHorizontal
-  searchEntries: SettingsSearchEntry[]
-  group: string
-  badge?: string
-}
-
-type SettingsNavGroup = {
-  id: string
-  title: string
-  sections: SettingsNavSection[]
-}
 
 const SETTINGS_NAV_GROUPS = [
   { id: 'setup', title: 'Set Up' },
@@ -211,13 +135,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
-function isWebClientLocation(): boolean {
-  return (
-    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
-    window.location.pathname.endsWith('/web-index.html')
-  )
-}
-
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -248,10 +165,6 @@ function Settings(): React.JSX.Element {
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
-  const terminalPaneSearchEntries = useMemo(
-    () => getTerminalPaneSearchEntries({ isWindows, isMac }),
-    [isWindows, isMac]
-  )
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
   // Why: lifted out of TerminalPane so the Terminal section header can render
@@ -266,6 +179,7 @@ function Settings(): React.JSX.Element {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
@@ -408,6 +322,9 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    if (settingsNavigationTarget.intent === 'add-quick-command') {
+      setQuickCommandAddIntentSignal((signal) => signal + 1)
+    }
     setMountedSectionIds((previous) => {
       if (previous.has(paneSectionId)) {
         return previous
@@ -439,243 +356,13 @@ function Settings(): React.JSX.Element {
   }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
-  const runtimeEnvironmentsSearchEntry = isWebClient
-    ? WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
-    : RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
-
-  const navSections = useMemo<SettingsNavSection[]>(
-    () => [
-      {
-        id: 'general',
-        title: 'General',
-        description: 'Workspace defaults, app setup, and maintenance.',
-        icon: SlidersHorizontal,
-        searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
-        group: 'setup'
-      },
-      {
-        id: 'agents',
-        title: 'Agents',
-        description: 'Manage AI agents, set a default, and customize commands.',
-        icon: Bot,
-        searchEntries: AGENTS_PANE_SEARCH_ENTRIES,
-        group: 'setup'
-      },
-      {
-        id: 'accounts',
-        title: 'AI Provider Accounts',
-        description: 'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.',
-        icon: UserCog,
-        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES,
-        group: 'setup',
-        badge: 'Optional'
-      },
-      {
-        id: 'integrations',
-        title: 'Integrations',
-        description: 'Connect GitHub, GitLab, Linear, and source-hosting services.',
-        icon: Blocks,
-        searchEntries: INTEGRATIONS_PANE_SEARCH_ENTRIES,
-        group: 'setup'
-      },
-      {
-        id: 'git',
-        title: 'Git & Source Control',
-        description: 'Branch naming, base refs, attribution, and AI commit messages.',
-        icon: GitBranch,
-        // Why: the AI commit messages pane is rendered inside the Git section,
-        // so its search entries belong to Git too — that way a query like
-        // "claude" or "thinking" still surfaces the section.
-        searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES],
-        group: 'workflows'
-      },
-      {
-        id: 'tasks',
-        title: 'Task Sources',
-        description: 'Choose which task providers appear in the Tasks page and sidebar.',
-        icon: ListChecks,
-        searchEntries: TASKS_PANE_SEARCH_ENTRIES,
-        group: 'workflows'
-      },
-      {
-        id: 'floating-workspace',
-        title: 'Floating Workspace',
-        description: 'Global terminal, browser, and markdown tabs.',
-        icon: PanelsTopLeft,
-        searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
-        group: 'workflows'
-      },
-      {
-        id: 'appearance',
-        title: 'Appearance',
-        description: 'Theme, zoom, app font, sidebars, and status bar.',
-        icon: Palette,
-        searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
-        group: 'interface'
-      },
-      {
-        id: 'input',
-        title: 'Input & Editing',
-        description: 'Selection and editing behavior.',
-        icon: TextCursorInput,
-        searchEntries: INPUT_PANE_SEARCH_ENTRIES,
-        group: 'interface'
-      },
-      {
-        id: 'terminal',
-        title: 'Terminal',
-        description: 'Shells, terminal appearance, and pane behavior.',
-        icon: SquareTerminal,
-        searchEntries: terminalPaneSearchEntries,
-        group: 'workflows'
-      },
-      {
-        id: 'quick-commands',
-        title: 'Quick Commands',
-        description: 'Saved terminal commands, scoped globally or per project.',
-        icon: Play,
-        searchEntries: QUICK_COMMANDS_PANE_SEARCH_ENTRIES,
-        group: 'workflows'
-      },
-      ...(showDesktopOnlySettings
-        ? [
-            {
-              id: 'browser' as const,
-              title: 'Browser',
-              description: 'Home page, link routing, and session cookies.',
-              icon: Globe,
-              searchEntries: BROWSER_PANE_SEARCH_ENTRIES,
-              group: 'workflows'
-            },
-            {
-              id: 'notifications' as const,
-              title: 'Notifications',
-              description: 'Native desktop notifications for agent and terminal events.',
-              icon: Bell,
-              searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES,
-              group: 'interface'
-            }
-          ]
-        : []),
-      {
-        id: 'orchestration',
-        title: 'Orchestration',
-        description: 'Coordinate multiple coding agents through Orca.',
-        icon: Network,
-        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
-        group: 'capabilities'
-      },
-      {
-        id: 'servers',
-        title: 'Remote Orca Servers',
-        description: isWebClient
-          ? 'Connect this browser to a saved Orca server.'
-          : 'Switch between local desktop mode and paired remote Orca runtimes.',
-        icon: Server,
-        searchEntries: [runtimeEnvironmentsSearchEntry],
-        group: 'remote',
-        badge: 'Beta'
-      },
-      ...(showDesktopOnlySettings
-        ? [
-            {
-              id: 'ssh' as const,
-              title: 'SSH Hosts',
-              description: 'Remote SSH hosts for files, terminals, and git.',
-              icon: Cable,
-              searchEntries: SSH_PANE_SEARCH_ENTRIES,
-              group: 'remote'
-            },
-            {
-              id: 'mobile' as const,
-              title: 'Mobile',
-              description: 'Control terminals and agents from your phone.',
-              icon: Smartphone,
-              searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
-              group: 'remote'
-            },
-            {
-              id: 'computer-use' as const,
-              title: 'Computer Use',
-              description: 'Enable agents to control any app on your computer.',
-              icon: MousePointerClick,
-              searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-              group: 'capabilities',
-              badge: 'Beta'
-            },
-            {
-              id: 'voice' as const,
-              title: 'Voice',
-              description: 'Local speech-to-text dictation with on-device models.',
-              icon: Mic,
-              searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-              group: 'capabilities',
-              badge: 'Beta'
-            }
-          ]
-        : []),
-      ...(showDesktopOnlySettings && isMac
-        ? [
-            {
-              id: 'developer-permissions' as const,
-              title: 'macOS Permissions',
-              description: 'macOS privacy access for terminal-launched developer tools.',
-              icon: ShieldCheck,
-              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES,
-              group: 'safety'
-            }
-          ]
-        : []),
-      {
-        id: 'privacy',
-        title: 'Privacy & Telemetry',
-        description: 'Anonymous usage data and telemetry controls.',
-        icon: Lock,
-        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES,
-        group: 'safety'
-      },
-      {
-        id: 'shortcuts',
-        title: 'Shortcuts',
-        description: 'Keyboard shortcuts for common actions.',
-        icon: Keyboard,
-        searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
-        group: 'interface'
-      },
-      {
-        id: 'stats',
-        title: 'Stats & Usage',
-        description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
-        icon: BarChart3,
-        searchEntries: STATS_PANE_SEARCH_ENTRIES,
-        group: 'interface'
-      },
-      {
-        id: 'experimental',
-        title: 'Experimental',
-        description: 'New features that are still taking shape. Give them a try.',
-        icon: FlaskConical,
-        searchEntries: EXPERIMENTAL_PANE_SEARCH_ENTRIES,
-        group: 'experimental'
-      },
-      ...repos.map((repo) => ({
-        id: `repo-${repo.id}`,
-        title: repo.displayName,
-        description: `${getRepoKindLabel(repo)} • ${repo.path}`,
-        icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(repo),
-        group: 'repositories'
-      }))
-    ],
-    [
-      isMac,
-      isWebClient,
-      repos,
-      runtimeEnvironmentsSearchEntry,
-      showDesktopOnlySettings,
-      terminalPaneSearchEntries
-    ]
+  const navSections = useSettingsNavigationMetadata()
+  const navSectionById = useMemo(
+    () => new Map(navSections.map((section) => [section.id, section] as const)),
+    [navSections]
   )
+  const getSectionSearchEntries = (sectionId: string) =>
+    navSectionById.get(sectionId)?.searchEntries ?? []
 
   const visibleNavSections = useMemo(
     () =>
@@ -996,7 +683,7 @@ function Settings(): React.JSX.Element {
                   id="general"
                   title="General"
                   description="Workspace defaults, app setup, and maintenance."
-                  searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('general')}
                 >
                   {isSectionMounted('general') ? (
                     <GeneralPane settings={settings} updateSettings={updateSettings} />
@@ -1007,7 +694,7 @@ function Settings(): React.JSX.Element {
                   id="agents"
                   title="Agents"
                   description="Manage AI agents, set a default, and customize commands."
-                  searchEntries={AGENTS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('agents')}
                 >
                   {isSectionMounted('agents') ? (
                     <AgentsPane settings={settings} updateSettings={updateSettings} />
@@ -1019,7 +706,7 @@ function Settings(): React.JSX.Element {
                   title="AI Provider Accounts"
                   description="Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them."
                   badge="Optional"
-                  searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('accounts')}
                 >
                   {isSectionMounted('accounts') ? (
                     <AccountsPane settings={settings} updateSettings={updateSettings} />
@@ -1030,7 +717,7 @@ function Settings(): React.JSX.Element {
                   id="integrations"
                   title="Integrations"
                   description="Connect GitHub, GitLab, Linear, and source-hosting services."
-                  searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('integrations')}
                 >
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
@@ -1039,10 +726,7 @@ function Settings(): React.JSX.Element {
                   id="git"
                   title="Git & Source Control"
                   description="Branch naming, base refs, attribution, and AI commit messages."
-                  searchEntries={[
-                    ...GIT_PANE_SEARCH_ENTRIES,
-                    ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
-                  ]}
+                  searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedCommitPromptChanges}
                 >
                   {isSectionMounted('git') ? (
@@ -1066,7 +750,7 @@ function Settings(): React.JSX.Element {
                   id="tasks"
                   title="Task Sources"
                   description="Choose which task providers appear in the Tasks page and sidebar."
-                  searchEntries={TASKS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('tasks')}
                 >
                   {isSectionMounted('tasks') ? (
                     <TasksPane settings={settings} updateSettings={updateSettings} />
@@ -1077,7 +761,7 @@ function Settings(): React.JSX.Element {
                   id="floating-workspace"
                   title="Floating Workspace"
                   description="Global terminal, browser, and markdown tabs."
-                  searchEntries={FLOATING_WORKSPACE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('floating-workspace')}
                 >
                   {isSectionMounted('floating-workspace') ? (
                     <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
@@ -1088,7 +772,7 @@ function Settings(): React.JSX.Element {
                   id="terminal"
                   title="Terminal"
                   description="Shells, terminal appearance, and pane behavior."
-                  searchEntries={terminalPaneSearchEntries}
+                  searchEntries={getSectionSearchEntries('terminal')}
                   headerAction={
                     <Button
                       variant="outline"
@@ -1122,10 +806,14 @@ function Settings(): React.JSX.Element {
                   id="quick-commands"
                   title="Quick Commands"
                   description="Saved terminal commands, scoped globally or per project."
-                  searchEntries={QUICK_COMMANDS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('quick-commands')}
                 >
                   {isSectionMounted('quick-commands') ? (
-                    <QuickCommandsPane settings={settings} updateSettings={updateSettings} />
+                    <QuickCommandsPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      addCommandIntentSignal={quickCommandAddIntentSignal}
+                    />
                   ) : null}
                 </SettingsSection>
 
@@ -1134,7 +822,7 @@ function Settings(): React.JSX.Element {
                     id="browser"
                     title="Browser"
                     description="Home page, link routing, and session cookies."
-                    searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
+                    searchEntries={getSectionSearchEntries('browser')}
                   >
                     {isSectionMounted('browser') ? (
                       <BrowserPane
@@ -1150,7 +838,7 @@ function Settings(): React.JSX.Element {
                   id="appearance"
                   title="Appearance"
                   description="Theme, zoom, app font, sidebars, and status bar."
-                  searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('appearance')}
                 >
                   {isSectionMounted('appearance') ? (
                     <AppearancePane
@@ -1166,7 +854,7 @@ function Settings(): React.JSX.Element {
                   id="input"
                   title="Input & Editing"
                   description="Selection and editing behavior."
-                  searchEntries={INPUT_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('input')}
                 >
                   <InputPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
@@ -1176,7 +864,7 @@ function Settings(): React.JSX.Element {
                     id="notifications"
                     title="Notifications"
                     description="Native desktop notifications for agent activity and terminal events."
-                    searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
+                    searchEntries={getSectionSearchEntries('notifications')}
                   >
                     {isSectionMounted('notifications') ? (
                       <NotificationsPane settings={settings} updateSettings={updateSettings} />
@@ -1188,7 +876,7 @@ function Settings(): React.JSX.Element {
                   id="shortcuts"
                   title="Shortcuts"
                   description="Keyboard shortcuts for common actions."
-                  searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('shortcuts')}
                 >
                   {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
                 </SettingsSection>
@@ -1197,7 +885,7 @@ function Settings(): React.JSX.Element {
                   id="stats"
                   title="Stats & Usage"
                   description="Orca stats plus Claude, Codex, and OpenCode usage analytics."
-                  searchEntries={STATS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('stats')}
                 >
                   {isSectionMounted('stats') ? <StatsPane /> : null}
                 </SettingsSection>
@@ -1206,7 +894,7 @@ function Settings(): React.JSX.Element {
                   id="orchestration"
                   title="Orchestration"
                   description="Coordinate multiple coding agents through Orca."
-                  searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('orchestration')}
                 >
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
@@ -1241,7 +929,7 @@ function Settings(): React.JSX.Element {
                         ) : null
                       }
                       description="Enable agents to control any app on your computer."
-                      searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
+                      searchEntries={getSectionSearchEntries('computer-use')}
                     >
                       {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
                     </SettingsSection>
@@ -1251,7 +939,7 @@ function Settings(): React.JSX.Element {
                       title="Voice"
                       badge="Beta"
                       description="Local speech-to-text dictation with on-device models."
-                      searchEntries={VOICE_PANE_SEARCH_ENTRIES}
+                      searchEntries={getSectionSearchEntries('voice')}
                     >
                       {isSectionMounted('voice') ? (
                         <VoicePane settings={settings} updateSettings={updateSettings} />
@@ -1269,7 +957,7 @@ function Settings(): React.JSX.Element {
                       ? 'Connect this browser to a saved Orca server.'
                       : 'Switch between local desktop mode and paired remote Orca runtimes.'
                   }
-                  searchEntries={[runtimeEnvironmentsSearchEntry]}
+                  searchEntries={getSectionSearchEntries('servers')}
                 >
                   {isSectionMounted('servers') ? (
                     <RuntimeEnvironmentsPane
@@ -1287,7 +975,7 @@ function Settings(): React.JSX.Element {
                       id="ssh"
                       title="SSH Hosts"
                       description="Remote SSH hosts for files, terminals, and git."
-                      searchEntries={SSH_PANE_SEARCH_ENTRIES}
+                      searchEntries={getSectionSearchEntries('ssh')}
                     >
                       {isSectionMounted('ssh') ? <SshPane /> : null}
                     </SettingsSection>
@@ -1297,7 +985,7 @@ function Settings(): React.JSX.Element {
                       title="Mobile"
                       badge="Beta"
                       description="Control terminals and agents from your phone."
-                      searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
+                      searchEntries={getSectionSearchEntries('mobile')}
                     >
                       {isSectionMounted('mobile') ? (
                         <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
@@ -1311,7 +999,7 @@ function Settings(): React.JSX.Element {
                     id="developer-permissions"
                     title="macOS Permissions"
                     description="macOS privacy access for terminal-launched developer tools."
-                    searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
+                    searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
                       <DeveloperPermissionsPane />
@@ -1323,7 +1011,7 @@ function Settings(): React.JSX.Element {
                   id="privacy"
                   title="Privacy & Telemetry"
                   description="Anonymous usage data and telemetry controls."
-                  searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('privacy')}
                 >
                   {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
                 </SettingsSection>
@@ -1332,7 +1020,7 @@ function Settings(): React.JSX.Element {
                   id="experimental"
                   title="Experimental"
                   description="New features that are still taking shape. Give them a try."
-                  searchEntries={EXPERIMENTAL_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('experimental')}
                 >
                   {isSectionMounted('experimental') ? (
                     <ExperimentalPane
@@ -1353,7 +1041,7 @@ function Settings(): React.JSX.Element {
                       id={repoSectionId}
                       title={`Project Settings > ${repo.displayName}`}
                       description={repo.path}
-                      searchEntries={getRepositoryPaneSearchEntries(repo)}
+                      searchEntries={getSectionSearchEntries(repoSectionId)}
                     >
                       {isSectionMounted(repoSectionId) ? (
                         <RepositoryPane

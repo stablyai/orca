@@ -400,26 +400,32 @@ export type UISlice = {
     pane:
       | 'general'
       | 'integrations'
+      | 'accounts'
       | 'browser'
+      | 'git'
       | 'appearance'
       | 'input'
       | 'tasks'
+      | 'floating-workspace'
       | 'terminal'
+      | 'quick-commands'
       | 'notifications'
       | 'computer-use'
       | 'developer-permissions'
+      | 'privacy'
       | 'shortcuts'
+      | 'stats'
       | 'repo'
       | 'agents'
-      | 'accounts'
       | 'voice'
       | 'experimental'
+      | 'orchestration'
       | 'servers'
       | 'mobile'
-      | 'notifications'
       | 'ssh'
     repoId: string | null
     sectionId?: string
+    intent?: 'add-quick-command'
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void

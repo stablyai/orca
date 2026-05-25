@@ -24,6 +24,12 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
 import { ShortcutBindingRow, type ShortcutTerminalStatus } from './ShortcutBindingRow'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import {
+  CTRL_TAB_BEHAVIOR_SEARCH_ENTRY,
+  SHORTCUTS_PANE_SEARCH_ENTRIES,
+  TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY
+} from './shortcuts-search'
+export { SHORTCUTS_PANE_SEARCH_ENTRIES }
 
 type ShortcutGroup = {
   title: string
@@ -36,38 +42,6 @@ const platform: NodeJS.Platform = isMac
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
-
-const CTRL_TAB_BEHAVIOR_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Recent Tab Order',
-  description: 'Choose recent or sequential tab switching.',
-  keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
-}
-
-const TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Shortcuts in Terminal',
-  description: 'Choose whether Orca or the focused terminal wins when shortcuts overlap.',
-  keywords: [
-    'shortcut',
-    'keyboard',
-    'terminal',
-    'tui',
-    'shell',
-    'agent',
-    'conflict',
-    'orca first',
-    'terminal first'
-  ]
-}
-
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...KEYBINDING_DEFINITIONS.map((item) => ({
-    title: item.title,
-    description: `${item.group} shortcut`,
-    keywords: [...item.searchKeywords]
-  })),
-  TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY,
-  CTRL_TAB_BEHAVIOR_SEARCH_ENTRY
-]
 
 function groupDefinitions(): ShortcutGroup[] {
   const groups = new Map<string, KeybindingDefinition[]>()
