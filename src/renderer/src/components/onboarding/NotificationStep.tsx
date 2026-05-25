@@ -239,23 +239,11 @@ export function NotificationStep({
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-foreground">Choose a sound</h2>
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Pick the alert Orca plays after a desktop notification is delivered.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => void handleSendTestNotification()}
-          >
-            <BellRing className="size-3.5" />
-            Send Test Notification
-          </Button>
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-foreground">Choose a sound</h2>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            Pick the alert Orca plays after a desktop notification is delivered.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -263,35 +251,49 @@ export function NotificationStep({
             <FileAudio className="size-4" />
             Notification Sound
           </div>
-          <Select
-            value={selectedSoundId}
-            disabled={isPickingSound}
-            onValueChange={(value) => void handleSoundSelect(value as NotificationSoundSelectValue)}
-          >
-            <SelectTrigger className="w-full max-w-[360px]" size="sm">
-              <SelectValue placeholder="Choose notification sound" />
-            </SelectTrigger>
-            <SelectContent
-              portalContainer={selectPortalRoot}
-              align="start"
-              className="w-[--radix-select-trigger-width]"
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedSoundId}
+              disabled={isPickingSound}
+              onValueChange={(value) =>
+                void handleSoundSelect(value as NotificationSoundSelectValue)
+              }
             >
-              {soundOptions.map((option) => {
-                const OptionIcon = option.icon
-                return (
-                  <SelectItem key={option.id} value={option.id}>
-                    <OptionIcon className="size-4" />
-                    <span className="truncate">{option.title}</span>
-                  </SelectItem>
-                )
-              })}
-              <SelectSeparator />
-              <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
-                <Upload className="size-4" />
-                <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+              <SelectTrigger className="w-[360px] max-w-full" size="sm">
+                <SelectValue placeholder="Choose notification sound" />
+              </SelectTrigger>
+              <SelectContent
+                portalContainer={selectPortalRoot}
+                align="start"
+                className="w-[--radix-select-trigger-width]"
+              >
+                {soundOptions.map((option) => {
+                  const OptionIcon = option.icon
+                  return (
+                    <SelectItem key={option.id} value={option.id}>
+                      <OptionIcon className="size-4" />
+                      <span className="truncate">{option.title}</span>
+                    </SelectItem>
+                  )
+                })}
+                <SelectSeparator />
+                <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
+                  <Upload className="size-4" />
+                  <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => void handleSendTestNotification()}
+            >
+              <BellRing className="size-3.5" />
+              Send Test Notification
+            </Button>
+          </div>
           {customPath ? (
             <p className="truncate font-mono text-[11px] text-muted-foreground" title={customPath}>
               Custom: {customPath}
