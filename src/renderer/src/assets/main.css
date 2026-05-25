@@ -405,6 +405,16 @@
 :root.glass-dark .sidebar {
   border-right: none;
 }
+/* Why: the tab-group wrapper paints a 1px border-l between the worktree
+   sidebar and the main content area. Under glass themes this creates a
+   sharp visible line at the same x where the see-through sidebar meets
+   the slightly-more-opaque main canvas, producing two perceptual boundaries
+   (sharp line + opacity gradient). Suppressing the border lets the natural
+   opacity transition be the only boundary. */
+:root.glass-light .tab-group-main-wrapper,
+:root.glass-dark .tab-group-main-wrapper {
+  border-left: none;
+}
 
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
