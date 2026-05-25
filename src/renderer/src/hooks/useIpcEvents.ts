@@ -780,16 +780,24 @@ export function useIpcEvents(): void {
             // not this local Electron event.
             return
           }
+          const existedBeforeFetch = Boolean(
+            useAppStore.getState().getKnownWorktreeById(worktreeId)
+          )
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
           // the main process and is not yet in the renderer state.
           await useAppStore.getState().fetchWorktrees(repoId)
+          const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
           // Why: route through activateAndRevealWorktree so CLI-created
           // worktrees share the canonical activation path with UI-created
           // ones. This records the visit in the back/forward history stack
           // (recordWorktreeVisit), without which the nav buttons would
           // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, { setup, startup })
+          activateAndRevealWorktree(worktreeId, {
+            ...(setup ? { setup } : {}),
+            ...(startup ? { startup } : {}),
+            ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
+          })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })

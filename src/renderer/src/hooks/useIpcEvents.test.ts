@@ -1829,9 +1829,12 @@ describe('useIpcEvents CLI-created worktree activation', () => {
   // the back/forward buttons ignoring the CLI-driven switch. This test pins
   // the handler to the canonical `activateAndRevealWorktree` helper, which
   // is the single place that records the visit in history.
-  it('routes CLI-driven activation through activateAndRevealWorktree so back/forward history is recorded', async () => {
+  it('uses immediate reveal only for newly fetched ui:activateWorktree targets', async () => {
     const activateAndRevealWorktree = vi.fn()
-    const fetchWorktrees = vi.fn().mockResolvedValue(undefined)
+    let worktreeKnown = false
+    const fetchWorktrees = vi.fn().mockImplementation(async () => {
+      worktreeKnown = true
+    })
     const activateWorktreeListenerRef: {
       current:
         | ((data: {
@@ -1862,6 +1865,12 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           activeModal: null,
           closeModal: vi.fn(),
           openModal: vi.fn(),
+          getKnownWorktreeById: vi.fn((id: string) => {
+            if (id === 'wt-existing') {
+              return { id, repoId: 'repo-1' }
+            }
+            return worktreeKnown && id === 'wt-new' ? { id, repoId: 'repo-1' } : undefined
+          }),
           activeWorktreeId: 'wt-old',
           activeView: 'terminal',
           setActiveView: vi.fn(),
@@ -2044,7 +2053,24 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     // mis-aliased into `startup`, which was a latent bug in the original
     // hand-rolled path.
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', { setup })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', {
+      setup,
+      sidebarRevealBehavior: 'auto'
+    })
+
+    activateAndRevealWorktree.mockClear()
+    fetchWorktrees.mockClear()
+    activateWorktreeListenerRef.current({
+      repoId: 'repo-1',
+      worktreeId: 'wt-existing'
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-existing', {})
   })
 })
 
