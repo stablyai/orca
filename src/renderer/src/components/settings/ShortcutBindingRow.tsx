@@ -124,7 +124,7 @@ export function ShortcutBindingRow({
       title={item.title}
       description={`${groupTitle} shortcut`}
       keywords={[...item.searchKeywords]}
-      className="grid min-h-[54px] grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_10rem_4rem] lg:items-center"
+      className="grid min-h-[54px] grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(10rem,0.8fr)_6rem] lg:items-center"
     >
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
@@ -166,34 +166,43 @@ export function ShortcutBindingRow({
         <BindingPreview bindings={effective} platform={platform} />
       </div>
 
-      <Button
-        ref={recordButtonRef}
-        type="button"
-        variant={recording ? 'secondary' : 'outline'}
-        size="sm"
-        aria-invalid={Boolean(error)}
-        aria-pressed={recording}
-        data-shortcut-recorder=""
-        data-shortcut-recorder-active={recording ? '' : undefined}
-        onClick={() => {
-          if (recording) {
-            return
-          }
-          onStartRecording(item.id)
-        }}
-        onKeyDown={handleRecordKeyDown}
-        className={cn(
-          'mt-2 h-8 w-full justify-start px-2.5 text-xs lg:mt-0 lg:w-40',
-          !recording &&
-            'border-border/70 bg-background/60 text-foreground/80 shadow-none hover:border-border hover:bg-accent/70 hover:text-foreground dark:text-foreground dark:shadow-xs',
-          recording && 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-        )}
-      >
-        <Keyboard className="size-3.5" />
-        <span className="truncate">{recording ? 'Press keys...' : 'Change shortcut'}</span>
-      </Button>
-
       <div className="mt-2 flex items-center gap-1 lg:mt-0 lg:justify-end">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              ref={recordButtonRef}
+              type="button"
+              variant={recording ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label={
+                recording
+                  ? `Press shortcut keys for ${item.title}. Escape cancels.`
+                  : `Change shortcut for ${item.title}`
+              }
+              aria-invalid={Boolean(error)}
+              aria-pressed={recording}
+              data-shortcut-recorder=""
+              data-shortcut-recorder-active={recording ? '' : undefined}
+              onClick={() => {
+                if (recording) {
+                  return
+                }
+                onStartRecording(item.id)
+              }}
+              onKeyDown={handleRecordKeyDown}
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                recording &&
+                  'border border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
+              )}
+            >
+              <Keyboard className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {recording ? 'Listening for shortcut' : 'Change shortcut'}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
