@@ -176,33 +176,38 @@
 }
 
 /* ── Glass Light (warm cream tint, macOS only) ────────── */
+/* Why: scoped with :root prefix to bump specificity above .dark, which
+   would otherwise win the cascade because it's defined later in the file
+   and both selectors share the same single-class specificity. */
 
-.glass-light {
+:root.glass-light {
   /* Re-map role tokens to semi-transparent warm cream. Components keep
      referencing the same role tokens (--background, --sidebar, --card, etc.)
-     — only the values behind them change. */
-  --background: rgba(252, 244, 230, 0.7);
+     — only the values behind them change. Alphas tuned for macOS 26 Liquid
+     Glass: sidebar / cards in the 0.35-0.50 range so the desktop and lower
+     windows visibly bleed through the vibrancy layer. */
+  --background: rgba(252, 244, 230, 0.45);
   --foreground: rgba(50, 30, 10, 0.95);
-  --editor-surface: rgba(252, 244, 230, 0.85);
-  --card: rgba(255, 248, 235, 0.62);
+  --editor-surface: rgba(252, 244, 230, 0.75);
+  --card: rgba(255, 248, 235, 0.4);
   --card-foreground: rgba(50, 30, 10, 0.95);
-  --popover: rgba(255, 248, 232, 0.72);
+  --popover: rgba(255, 248, 232, 0.55);
   --popover-foreground: rgba(50, 30, 10, 0.95);
   --primary: rgba(60, 40, 20, 0.95);
   --primary-foreground: rgba(252, 244, 230, 0.98);
-  --secondary: rgba(255, 255, 255, 0.55);
+  --secondary: rgba(255, 255, 255, 0.4);
   --secondary-foreground: rgba(60, 40, 20, 0.9);
-  --muted: rgba(255, 255, 255, 0.5);
-  --muted-foreground: rgba(100, 70, 40, 0.65);
-  --accent: rgba(255, 255, 255, 0.55);
+  --muted: rgba(255, 255, 255, 0.35);
+  --muted-foreground: rgba(100, 70, 40, 0.85);
+  --accent: rgba(255, 255, 255, 0.45);
   --accent-foreground: rgba(50, 30, 10, 0.95);
   --destructive: #c41020;
   --destructive-foreground: rgba(252, 244, 230, 0.98);
-  --border: rgba(180, 140, 90, 0.18);
-  --input: rgba(180, 140, 90, 0.2);
+  --border: rgba(180, 140, 90, 0.25);
+  --input: rgba(180, 140, 90, 0.25);
   --ring: rgba(180, 140, 90, 0.55);
 
-  --sidebar: rgba(255, 248, 235, 0.55);
+  --sidebar: rgba(255, 248, 235, 0.35);
   --sidebar-foreground: rgba(60, 40, 20, 0.92);
   --sidebar-primary: rgba(60, 40, 20, 0.95);
   --sidebar-primary-foreground: rgba(252, 244, 230, 0.98);
@@ -219,30 +224,33 @@
 }
 
 /* ── Glass Dark (cool midnight blue tint, macOS only) ─── */
+/* Why: see :root.glass-light above for the same specificity rationale. */
 
-.glass-dark {
-  --background: rgba(15, 18, 32, 0.74);
-  --foreground: rgba(220, 230, 250, 0.92);
-  --editor-surface: rgba(15, 18, 32, 0.85);
-  --card: rgba(28, 34, 52, 0.65);
-  --card-foreground: rgba(220, 230, 250, 0.92);
-  --popover: rgba(28, 34, 52, 0.72);
-  --popover-foreground: rgba(220, 230, 250, 0.92);
-  --primary: rgba(220, 230, 250, 0.92);
+:root.glass-dark {
+  /* See :root.glass-light for tuning rationale — alphas in 0.35-0.55 range
+     so the macOS vibrancy layer actually shows through. */
+  --background: rgba(15, 18, 32, 0.5);
+  --foreground: rgba(220, 230, 250, 0.95);
+  --editor-surface: rgba(15, 18, 32, 0.75);
+  --card: rgba(28, 34, 52, 0.45);
+  --card-foreground: rgba(220, 230, 250, 0.95);
+  --popover: rgba(28, 34, 52, 0.55);
+  --popover-foreground: rgba(220, 230, 250, 0.95);
+  --primary: rgba(220, 230, 250, 0.95);
   --primary-foreground: rgba(18, 22, 38, 0.95);
-  --secondary: rgba(40, 50, 80, 0.55);
-  --secondary-foreground: rgba(220, 230, 250, 0.92);
-  --muted: rgba(40, 50, 80, 0.5);
-  --muted-foreground: rgba(160, 180, 220, 0.65);
-  --accent: rgba(60, 80, 130, 0.55);
-  --accent-foreground: rgba(220, 230, 250, 0.95);
+  --secondary: rgba(40, 50, 80, 0.4);
+  --secondary-foreground: rgba(220, 230, 250, 0.95);
+  --muted: rgba(40, 50, 80, 0.35);
+  --muted-foreground: rgba(180, 200, 235, 0.8);
+  --accent: rgba(60, 80, 130, 0.45);
+  --accent-foreground: rgba(220, 230, 250, 0.98);
   --destructive: #ff6568;
   --destructive-foreground: rgba(220, 230, 250, 0.95);
-  --border: rgba(140, 170, 230, 0.14);
-  --input: rgba(140, 170, 230, 0.2);
+  --border: rgba(140, 170, 230, 0.22);
+  --input: rgba(140, 170, 230, 0.25);
   --ring: rgba(140, 170, 230, 0.5);
 
-  --sidebar: rgba(18, 22, 38, 0.62);
+  --sidebar: rgba(18, 22, 38, 0.4);
   --sidebar-foreground: rgba(220, 230, 250, 0.92);
   --sidebar-primary: rgba(40, 100, 220, 0.85);
   --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
@@ -385,7 +393,7 @@
    renderer layers degrade together — surfaces become opaque tinted colors
    with no backdrop-filter cost. */
 @media (prefers-reduced-transparency: reduce) {
-  .glass-light {
+  :root.glass-light {
     --background: #fcf4e6;
     --foreground: #322110;
     --editor-surface: #fdf6eb;
@@ -395,7 +403,7 @@
     --glass-blur: 0px;
     --glass-saturate: 100%;
   }
-  .glass-dark {
+  :root.glass-dark {
     --background: #0f1220;
     --foreground: #dce6fa;
     --editor-surface: #131628;
