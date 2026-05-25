@@ -214,7 +214,13 @@ export function createMainWindow(
     // dictation session whose final text would be dropped.
     return false
   })
-  const blur = settings?.windowBackgroundBlur ?? false
+  // Why: glass themes (macOS-only) require the same vibrancy chain as the
+  // windowBackgroundBlur setting. Force vibrancy on when the user picks a
+  // glass theme so they don't also need to toggle the standalone blur switch.
+  const themeRequiresGlass =
+    process.platform === 'darwin' &&
+    (settings?.theme === 'glass-light' || settings?.theme === 'glass-dark')
+  const blur = themeRequiresGlass || (settings?.windowBackgroundBlur ?? false)
   // Why: native blur requires platform-specific Electron APIs. macOS uses
   // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
   // Linux has no native equivalent. Blur only applies at window creation;

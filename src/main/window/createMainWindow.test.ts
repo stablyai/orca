@@ -2123,4 +2123,50 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.maximize).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
   })
+
+  it('injects vibrancy when theme is glass-dark on macOS', () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}) as never,
+      getSettings: () =>
+        ({
+          windowBackgroundBlur: false,
+          theme: 'glass-dark',
+          voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
+        }) as never,
+      updateUI: vi.fn()
+    } as never)
+
+    const opts = browserWindowMock.mock.calls[0]?.[0]
+    expect(opts?.vibrancy).toBe('under-window')
+    expect(opts?.transparent).toBe(true)
+  })
 })
