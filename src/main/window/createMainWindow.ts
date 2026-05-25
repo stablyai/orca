@@ -248,7 +248,14 @@ export function createMainWindow(
     // Window/Help menus by pressing Alt, matching native Windows/Linux
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    // Why: when vibrancy is enabled (glass theme or explicit windowBackgroundBlur),
+    // the BrowserWindow must be visually transparent so the renderer's rgba surfaces
+    // composite over the vibrancy layer. With an opaque backgroundColor, Electron
+    // still paints it behind the renderer — backdrop-filter then blurs an opaque
+    // fallback fill (no-op) and rgba colors composite over solid white/black instead
+    // of the wallpaper. When blur is off, keep the opaque fallback to avoid
+    // flash-of-unstyled-content on launch.
+    backgroundColor: blur ? '#00000000' : nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
     // inside our custom 42px titlebar. On Windows 'hidden' removes the default
     // OS title bar (which would otherwise stack on top of our renderer titlebar
