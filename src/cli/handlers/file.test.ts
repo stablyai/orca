@@ -113,6 +113,18 @@ describe('orca file CLI handlers', () => {
     })
   })
 
+  it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
+    const priorExitCode = process.exitCode
+
+    await main(['file', 'open', 'src/App.tsx', '--worktree'], '/tmp/repo/src')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Missing value for --worktree.')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('opens git-changed files as diffs by default', async () => {
     queueFixtures(
       callMock,
@@ -166,6 +178,45 @@ describe('orca file CLI handlers', () => {
       staged: false
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened 3 changed file targets.')
+  })
+
+  it('skips unresolved conflict entries in diff mode without opening a normal diff', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        entries: [
+          {
+            path: 'src/conflicted.ts',
+            status: 'modified',
+            area: 'unstaged',
+            conflictStatus: 'unresolved'
+          },
+          { path: 'src/App.tsx', status: 'modified', area: 'staged' }
+        ],
+        conflictOperation: 'merge'
+      }),
+      okFixture('req_diff', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open-changed', '--worktree', 'id:wt-1'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenCalledTimes(2)
+    expect(callMock).toHaveBeenNthCalledWith(1, 'git.status', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: true
+    })
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('Opened 1 changed file targets.')
+    expect(output).toContain(
+      'src/conflicted.ts: unresolved conflict may not have a single diff target'
+    )
   })
 
   it('opens changed files in both edit and diff modes while skipping deleted edit targets', async () => {
@@ -243,6 +294,20 @@ describe('orca file CLI handlers', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
       'Remote file commands require --worktree'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects --mode without a value before cwd inference or RPC calls', async () => {
+    const priorExitCode = process.exitCode
+
+    await main(['file', 'open-changed', '--mode'], '/tmp/repo/src')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Missing value for --mode. Use edit, diff, or both.'
     )
     expect(process.exitCode).toBe(1)
 

@@ -28,6 +28,10 @@ type FileOpenChangedResult = {
 }
 
 async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): Promise<string> {
+  const worktree = flags.get('worktree')
+  if (flags.has('worktree') && (typeof worktree !== 'string' || worktree.length === 0)) {
+    throw new RuntimeClientError('invalid_argument', 'Missing value for --worktree.')
+  }
   const explicit = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
   if (explicit) {
     return explicit
@@ -42,6 +46,13 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
+  const value = flags.get('mode')
+  if (flags.has('mode') && (typeof value !== 'string' || value.length === 0)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Missing value for --mode. Use edit, diff, or both.'
+    )
+  }
   const mode = getOptionalStringFlag(flags, 'mode') ?? 'diff'
   if (mode === 'edit' || mode === 'diff' || mode === 'both') {
     return mode
@@ -170,7 +181,19 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
       }
 
       if (mode === 'diff' || mode === 'both') {
-        opened.push(await openFileDiff(ctx, worktree, entry.path, entry.area === 'staged'))
+        const staged = entry.area === 'staged'
+        if (entry.conflictStatus === 'unresolved') {
+          skipped.push({
+            path: entry.path,
+            mode: 'diff',
+            staged,
+            opened: false,
+            skipped: true,
+            reason: 'unresolved conflict may not have a single diff target'
+          })
+        } else {
+          opened.push(await openFileDiff(ctx, worktree, entry.path, staged))
+        }
       }
     }
 
