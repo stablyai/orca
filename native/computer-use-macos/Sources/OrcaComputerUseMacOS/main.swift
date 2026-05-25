@@ -2056,6 +2056,7 @@ private final class PermissionRuntime: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowController = PermissionWindowController(
+            initialPermission: initialPermission,
             terminateWhenDragAssistantCloses: initialPermission != nil
         )
         if let initialPermission {
@@ -2067,6 +2068,10 @@ private final class PermissionRuntime: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        windowController?.refreshPermissions()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         initialPermission == nil
     }
@@ -2074,9 +2079,11 @@ private final class PermissionRuntime: NSObject, NSApplicationDelegate {
 
 private final class PermissionWindowController: NSWindowController {
     private var dragAssistant: PermissionDragAssistantController?
+    private var dragAssistantPermission: PermissionKind?
+    private let initialPermission: PermissionKind?
     private let terminateWhenDragAssistantCloses: Bool
 
-    convenience init(terminateWhenDragAssistantCloses: Bool = false) {
+    convenience init(initialPermission: PermissionKind? = nil, terminateWhenDragAssistantCloses: Bool = false) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 315),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
@@ -2089,19 +2096,20 @@ private final class PermissionWindowController: NSWindowController {
         window.backgroundColor = PermissionPalette.background
         window.center()
         window.isReleasedWhenClosed = false
-        self.init(window: window, terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses)
+        self.init(window: window, initialPermission: initialPermission, terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses)
         window.contentView = PermissionView(
             frame: window.contentView?.bounds ?? .zero,
             showDragAssistant: { [weak self] permission in
                 self?.showDragAssistant(for: permission)
             },
             close: { [weak self] in
-                self?.window?.close()
+                self?.closePermissionWindow()
             }
         )
     }
 
-    init(window: NSWindow?, terminateWhenDragAssistantCloses: Bool) {
+    init(window: NSWindow?, initialPermission: PermissionKind?, terminateWhenDragAssistantCloses: Bool) {
+        self.initialPermission = initialPermission
         self.terminateWhenDragAssistantCloses = terminateWhenDragAssistantCloses
         super.init(window: window)
     }
@@ -2112,9 +2120,13 @@ private final class PermissionWindowController: NSWindowController {
 
     private func showDragAssistant(for permission: PermissionKind) {
         dragAssistant?.close()
+        dragAssistantPermission = permission
         dragAssistant = PermissionDragAssistantController(
             permission: permission,
             fallbackVisibleFrame: window?.screen?.visibleFrame,
+            onRefreshPermissions: { [weak self] in
+                self?.refreshPermissions()
+            },
             onClose: { [weak self] in
                 if self?.terminateWhenDragAssistantCloses == true {
                     NSApp.terminate(nil)
@@ -2124,9 +2136,53 @@ private final class PermissionWindowController: NSWindowController {
         dragAssistant?.showWhenReady()
     }
 
+    private func closeDragAssistant() {
+        dragAssistant?.close()
+        dragAssistant = nil
+        dragAssistantPermission = nil
+    }
+
+    private func completeDragAssistant() {
+        guard let dragAssistant else {
+            dragAssistantPermission = nil
+            if terminateWhenDragAssistantCloses {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+        self.dragAssistant = nil
+        dragAssistantPermission = nil
+        dragAssistant.complete()
+    }
+
+    private func closePermissionWindow() {
+        // Why: the floating assistant is a separate retained window controller and
+        // can keep the helper app alive after the main permission window closes.
+        closeDragAssistant()
+        window?.close()
+    }
+
     func openPermission(_ permission: PermissionKind) {
         permission.requestAndOpenSettings()
         showDragAssistant(for: permission)
+    }
+
+    func refreshPermissions() {
+        if let initialPermission, initialPermission.isGranted {
+            // Why: targeted permission helpers should finish once the requested
+            // grant lands, even if other Computer Use permissions remain unset.
+            completeDragAssistant()
+            return
+        }
+        if dragAssistantPermission?.isGranted == true {
+            // Why: after one grant in full setup, the remaining missing permission
+            // needs fresh guidance instead of the old assistant's instructions.
+            closeDragAssistant()
+        }
+        if PermissionKind.allCases.allSatisfy(\.isGranted) {
+            closeDragAssistant()
+        }
+        (window?.contentView as? PermissionView)?.refreshPermissions()
     }
 }
 
@@ -2205,6 +2261,8 @@ private final class PermissionView: NSView {
     private let appURL = Bundle.main.bundleURL
     private let showDragAssistant: (PermissionKind) -> Void
     private let close: () -> Void
+    private var contentStack: NSStackView?
+    private var contentConstraints: [NSLayoutConstraint] = []
 
     init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void, close: @escaping () -> Void) {
         self.showDragAssistant = showDragAssistant
@@ -2220,6 +2278,10 @@ private final class PermissionView: NSView {
     }
 
     private func build() {
+        NSLayoutConstraint.deactivate(contentConstraints)
+        contentStack?.removeFromSuperview()
+        contentConstraints = []
+
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -2227,6 +2289,7 @@ private final class PermissionView: NSView {
         stack.distribution = .gravityAreas
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        contentStack = stack
 
         let icon = NSImageView(image: NSWorkspace.shared.icon(forFile: appURL.path))
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -2262,19 +2325,25 @@ private final class PermissionView: NSView {
             stack.addArrangedSubview(doneButton())
         } else {
             for permission in missingPermissions {
-                stack.addArrangedSubview(permissionRow(permission: permission) {
+                stack.addArrangedSubview(permissionRow(permission: permission) { [weak self] in
                     permission.requestAndOpenSettings()
-                    self.showDragAssistant(permission)
+                    self?.showDragAssistant(permission)
                 })
             }
         }
 
-        NSLayoutConstraint.activate([
+        contentConstraints = [
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 22),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -20)
-        ])
+        ]
+        NSLayoutConstraint.activate(contentConstraints)
+    }
+
+    func refreshPermissions() {
+        // Why: TCC grants can change in System Settings while this window stays open.
+        build()
     }
 
     private func permissionRow(permission: PermissionKind, action: @escaping () -> Void) -> NSView {
@@ -2378,11 +2447,19 @@ private final class PermissionDragAssistantController: NSWindowController {
     }
 
     private let fallbackVisibleFrame: NSRect?
+    private let onRefreshPermissions: () -> Void
     private let onClose: () -> Void
     private var hasSeenSettingsWindow = false
     private var followTimer: Timer?
+    private var isDismissed = false
+    private var scheduledShowWorkItems: [DispatchWorkItem] = []
 
-    convenience init(permission: PermissionKind, fallbackVisibleFrame: NSRect?, onClose: @escaping () -> Void) {
+    convenience init(
+        permission: PermissionKind,
+        fallbackVisibleFrame: NSRect?,
+        onRefreshPermissions: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 390, height: 92),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -2402,14 +2479,25 @@ private final class PermissionDragAssistantController: NSWindowController {
         window.isMovable = false
         window.isMovableByWindowBackground = false
         window.hasShadow = true
-        self.init(window: window, fallbackVisibleFrame: fallbackVisibleFrame, onClose: onClose)
+        self.init(
+            window: window,
+            fallbackVisibleFrame: fallbackVisibleFrame,
+            onRefreshPermissions: onRefreshPermissions,
+            onClose: onClose
+        )
         window.contentView = PermissionDragAssistantView(permission: permission, appURL: Bundle.main.bundleURL) { [weak self] in
             self?.dismissFromCloseButton()
         }
     }
 
-    init(window: NSWindow?, fallbackVisibleFrame: NSRect?, onClose: @escaping () -> Void) {
+    init(
+        window: NSWindow?,
+        fallbackVisibleFrame: NSRect?,
+        onRefreshPermissions: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
         self.fallbackVisibleFrame = fallbackVisibleFrame
+        self.onRefreshPermissions = onRefreshPermissions
         self.onClose = onClose
         super.init(window: window)
     }
@@ -2419,11 +2507,15 @@ private final class PermissionDragAssistantController: NSWindowController {
     }
 
     func showWhenReady() {
+        guard !isDismissed else { return }
         startFollowingSettingsWindow()
         schedulePositionAndShow()
     }
 
     override func close() {
+        isDismissed = true
+        scheduledShowWorkItems.forEach { $0.cancel() }
+        scheduledShowWorkItems.removeAll()
         followTimer?.invalidate()
         followTimer = nil
         super.close()
@@ -2432,25 +2524,35 @@ private final class PermissionDragAssistantController: NSWindowController {
     private func dismissFromCloseButton() {
         // Why: closing the NSWindow directly skips this controller's timer cleanup,
         // letting the assistant reappear while System Settings remains visible.
+        complete()
+    }
+
+    func complete() {
         close()
         onClose()
     }
 
     private func schedulePositionAndShow() {
+        scheduledShowWorkItems.forEach { $0.cancel() }
+        scheduledShowWorkItems.removeAll()
         let delays = [0.12, 0.25, 0.4, 0.65, 0.95, 1.35, 1.8, 2.5]
         for (index, delay) in delays.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, self.window?.isVisible != true else { return }
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, !self.isDismissed, self.window?.isVisible != true else { return }
                 if let settingsWindow = self.systemSettingsWindowState(), settingsWindow.isVisible {
                     self.positionNearSettingsWindow(settingsWindow.frame)
+                    guard !self.isDismissed else { return }
                     self.showWindow(nil)
                     self.window?.orderFrontRegardless()
                 } else if index == delays.count - 1 && self.systemSettingsIsFrontmost() {
                     self.positionFallback()
+                    guard !self.isDismissed else { return }
                     self.showWindow(nil)
                     self.window?.orderFrontRegardless()
                 }
             }
+            scheduledShowWorkItems.append(workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
         }
     }
 
@@ -2458,12 +2560,18 @@ private final class PermissionDragAssistantController: NSWindowController {
         followTimer?.invalidate()
         followTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.syncVisibilityWithSettingsWindow()
+                guard let self, !self.isDismissed else { return }
+                self.syncVisibilityWithSettingsWindow()
             }
         }
     }
 
     private func syncVisibilityWithSettingsWindow() {
+        guard !isDismissed else {
+            followTimer?.invalidate()
+            followTimer = nil
+            return
+        }
         guard let window else {
             followTimer?.invalidate()
             followTimer = nil
@@ -2479,10 +2587,14 @@ private final class PermissionDragAssistantController: NSWindowController {
         // Why: System Settings can stay visible on one display while the user
         // works on another; follow actual occlusion instead of app focus.
         if let settingsWindow, settingsWindow.isVisible {
+            onRefreshPermissions()
+            guard !isDismissed else { return }
             positionNearSettingsWindow(settingsWindow.frame)
+            guard !isDismissed else { return }
             if !window.isVisible {
                 showWindow(nil)
             }
+            guard !isDismissed else { return }
             window.orderFrontRegardless()
         } else if window.isVisible {
             window.orderOut(nil)

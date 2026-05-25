@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Accessibility,
   Camera,
@@ -88,6 +88,9 @@ export function ComputerUsePane(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
   const [resetting, setResetting] = useState(false)
+  // Why: reset changes OS permission state, so older status probes must not overwrite it.
+  const resettingRef = useRef(false)
+  const permissionOperationSequence = useRef(0)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
   const {
     installed: computerUseSkillDetected,
@@ -108,6 +111,8 @@ export function ComputerUsePane(): React.JSX.Element {
   const allGranted = grantedCount === PERMISSIONS.length
   const checking = loading && states.length === 0
   const setupUnavailable = helperUnavailableReason !== null
+  const resetAccessDisabled =
+    resetting || loading || states.length === 0 || pendingId !== null || setupUnavailable
   const summaryTitle = checking
     ? 'Checking Computer Use access.'
     : setupUnavailable
@@ -126,18 +131,31 @@ export function ComputerUsePane(): React.JSX.Element {
           } required before agents can operate app windows.`
 
   const refresh = useCallback(async (): Promise<void> => {
+    if (resettingRef.current) {
+      return
+    }
+
+    const operationId = ++permissionOperationSequence.current
     setLoading(true)
     try {
       const result = await window.api.computerUsePermissions.getStatus()
+      if (operationId !== permissionOperationSequence.current) {
+        return
+      }
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
     } catch (error) {
+      if (operationId !== permissionOperationSequence.current) {
+        return
+      }
       toast.error(
         error instanceof Error ? error.message : 'Could not load Computer Use permissions'
       )
     } finally {
-      setLoading(false)
+      if (operationId === permissionOperationSequence.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -178,19 +196,35 @@ export function ComputerUsePane(): React.JSX.Element {
   }
 
   const resetAccess = async (): Promise<void> => {
+    if (resettingRef.current) {
+      return
+    }
+
+    resettingRef.current = true
+    const operationId = ++permissionOperationSequence.current
     setResetting(true)
     try {
       const result = await window.api.computerUsePermissions.reset()
+      if (operationId !== permissionOperationSequence.current) {
+        return
+      }
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
       toast.message('Reset Computer Use access')
     } catch (error) {
+      if (operationId !== permissionOperationSequence.current) {
+        return
+      }
       toast.error(
         error instanceof Error ? error.message : 'Could not reset Computer Use permissions'
       )
     } finally {
-      setResetting(false)
+      if (operationId === permissionOperationSequence.current) {
+        resettingRef.current = false
+        setResetting(false)
+        setLoading(false)
+      }
     }
   }
 
@@ -220,6 +254,7 @@ export function ComputerUsePane(): React.JSX.Element {
               variant="outline"
               size="sm"
               className="shrink-0 gap-1.5"
+              disabled={resetting}
               onClick={() => void refresh()}
             >
               <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -259,7 +294,10 @@ export function ComputerUsePane(): React.JSX.Element {
                         variant="outline"
                         size="sm"
                         disabled={
-                          pending || status === 'unsupported' || helperUnavailableReason !== null
+                          resetting ||
+                          pending ||
+                          status === 'unsupported' ||
+                          helperUnavailableReason !== null
                         }
                         onClick={() => void openPermission(permission.id)}
                         className="gap-1.5"
@@ -274,7 +312,7 @@ export function ComputerUsePane(): React.JSX.Element {
             </div>
             <button
               type="button"
-              disabled={resetting || setupUnavailable}
+              disabled={resetAccessDisabled}
               onClick={() => void resetAccess()}
               className="ml-auto mr-4 block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
