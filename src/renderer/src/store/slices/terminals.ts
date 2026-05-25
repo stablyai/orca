@@ -193,6 +193,9 @@ export type TerminalSlice = {
     string,
     {
       command: string
+      /** Renderer-delivered startup input. Used by multiline quick commands so
+       *  xterm can use bracketed paste before the submit Enter is sent. */
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
@@ -308,6 +311,7 @@ export type TerminalSlice = {
     tabId: string,
     startup: {
       command: string
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
       telemetry?: AgentStartedTelemetry
     }
