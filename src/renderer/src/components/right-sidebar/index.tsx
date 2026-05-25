@@ -324,13 +324,11 @@ function RightSidebarInner(): React.JSX.Element {
 
         {/* Resize handle on LEFT side
             Why: 'bg-sidebar' matches the rest of the right rail's surface
-            color so the 4px handle does not look like a transparent gap
-            on non-glass themes. Under glass themes the handle collapses
-            to width 0 + pointer-events:none via the
-            .right-sidebar-resize-handle override in main.css, eliminating
-            any visible seam between terminal and rail. */}
+            color so the 4px handle stops looking like a transparent gap
+            between the terminal and the rail under glass themes. The
+            hover/active accents still show. */}
         <div
-          className="right-sidebar-resize-handle absolute top-0 left-0 w-1 h-full cursor-col-resize bg-sidebar hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg-sidebar hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
           onMouseDown={onResizeStart}
         />
       </div>
