@@ -8,7 +8,7 @@ import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
 
 const TOUR_LEARNING_POINTS: readonly string[] = [
-  'Work on several branches at once, with several agents inside each.',
+  'Work on several branches at once.',
   'Hand off a feature to an orchestrator agent.',
   'Start work straight from a GitHub or Linear ticket.',
   'Grab an element from your running app and send it to an agent.'
