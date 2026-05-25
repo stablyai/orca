@@ -686,6 +686,20 @@ export default function MonacoEditor({
     })
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
+  // Why: Monaco paints its own background canvas, so a transparent-background
+  // theme is required for the underlying CSS surface (--editor-surface) to
+  // show through under glass themes. Glass cases bypass the isDark boolean
+  // because each maps to a specific named Monaco theme registered in
+  // monaco-setup.ts. All other themes keep the existing vs / vs-dark mapping.
+  const monacoTheme =
+    settings?.theme === 'glass-dark'
+      ? 'orca-glass-dark'
+      : settings?.theme === 'glass-light'
+        ? 'orca-glass-light'
+        : isDark
+          ? 'vs-dark'
+          : 'vs'
+
   return (
     <div
       ref={editorContainerRef}
@@ -732,7 +746,7 @@ export default function MonacoEditor({
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
         value={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={monacoTheme}
         onChange={handleChange}
         onMount={handleMount}
         options={{
