@@ -197,15 +197,19 @@
      different color region. */
   --card: rgba(255, 255, 255, 0.15);
   --card-foreground: rgba(20, 20, 20, 1);
-  --popover: rgba(255, 255, 255, 0.32);
+  /* --popover is the frosted floating-panel tier — higher alpha so
+     dialogs / dropdowns / floating workspace clearly stand out from the
+     see-through canvas. With glass-surface-strong (3× blur) it reads
+     as proper frosted glass. */
+  --popover: rgba(255, 255, 255, 0.65);
   --popover-foreground: rgba(20, 20, 20, 1);
   --primary: rgba(20, 20, 20, 1);
   --primary-foreground: rgba(255, 255, 255, 0.98);
-  --secondary: rgba(255, 255, 255, 0.22);
+  --secondary: rgba(255, 255, 255, 0.25);
   --secondary-foreground: rgba(20, 20, 20, 1);
-  --muted: rgba(255, 255, 255, 0.18);
+  --muted: rgba(255, 255, 255, 0.2);
   --muted-foreground: rgba(60, 60, 60, 1);
-  --accent: rgba(255, 255, 255, 0.28);
+  --accent: rgba(255, 255, 255, 0.3);
   --accent-foreground: rgba(20, 20, 20, 1);
   --destructive: #c41020;
   --destructive-foreground: rgba(255, 255, 255, 0.98);
@@ -217,7 +221,7 @@
   --sidebar-foreground: rgba(20, 20, 20, 0.92);
   --sidebar-primary: rgba(20, 20, 20, 0.95);
   --sidebar-primary-foreground: rgba(255, 255, 255, 0.98);
-  --sidebar-accent: rgba(255, 255, 255, 0.22);
+  --sidebar-accent: rgba(255, 255, 255, 0.3);
   --sidebar-accent-foreground: rgba(20, 20, 20, 0.95);
   --sidebar-border: rgba(120, 120, 120, 0.18);
   --sidebar-ring: rgba(120, 120, 120, 0.55);
@@ -236,24 +240,23 @@
 
 :root.glass-dark {
   /* See :root.glass-light for tuning rationale + token-split rationale.
-     IMPORTANT: --background, --sidebar, and --card all share the same RGB
-     base (15, 18, 32) — different RGB at the same alpha produces visibly
-     different colors that look like region seams. */
+     IMPORTANT: every frame token shares RGB (15, 18, 32) — different RGB
+     at the same alpha produces visibly different region colors. */
   --background: rgba(15, 18, 32, 0.15);
   --background-opaque: #0f1220;
   --foreground: rgba(235, 240, 255, 1);
   --editor-surface: rgba(15, 18, 32, 0.4);
   --card: rgba(15, 18, 32, 0.15);
   --card-foreground: rgba(235, 240, 255, 1);
-  --popover: rgba(15, 18, 32, 0.32);
+  --popover: rgba(15, 18, 32, 0.65);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
-  --secondary: rgba(60, 70, 100, 0.28);
+  --secondary: rgba(15, 18, 32, 0.25);
   --secondary-foreground: rgba(235, 240, 255, 1);
-  --muted: rgba(60, 70, 100, 0.2);
+  --muted: rgba(15, 18, 32, 0.18);
   --muted-foreground: rgba(210, 220, 245, 1);
-  --accent: rgba(80, 100, 150, 0.32);
+  --accent: rgba(15, 18, 32, 0.3);
   --accent-foreground: rgba(235, 240, 255, 1);
   --destructive: #ff6568;
   --destructive-foreground: rgba(235, 240, 255, 1);
@@ -265,7 +268,7 @@
   --sidebar-foreground: rgba(220, 230, 250, 0.92);
   --sidebar-primary: rgba(40, 100, 220, 0.85);
   --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
-  --sidebar-accent: rgba(40, 50, 80, 0.55);
+  --sidebar-accent: rgba(15, 18, 32, 0.3);
   --sidebar-accent-foreground: rgba(220, 230, 250, 0.95);
   --sidebar-border: rgba(140, 170, 230, 0.12);
   --sidebar-ring: rgba(140, 170, 230, 0.4);
