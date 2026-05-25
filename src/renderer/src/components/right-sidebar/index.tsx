@@ -204,12 +204,16 @@ function RightSidebarInner(): React.JSX.Element {
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
-      {/* Panel content area */}
+      {/* Panel content area
+          Why: the left border is a class instead of inline style so the
+          glass theme override in main.css (right-sidebar-panel-content)
+          can suppress it. Inline styles cannot be overridden by external
+          CSS without !important, which is harder to reason about. */}
       <div
-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
-        style={{
-          borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
-        }}
+        className={cn(
+          'right-sidebar-panel-content flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden',
+          rightSidebarOpen && 'border-l border-[var(--sidebar-border)]'
+        )}
       >
         {activityBarPosition === 'top' ? (
           /* ── Top activity bar: horizontal icon row ── */
@@ -318,9 +322,13 @@ function RightSidebarInner(): React.JSX.Element {
 
         {panelContent}
 
-        {/* Resize handle on LEFT side */}
+        {/* Resize handle on LEFT side
+            Why: 'bg-sidebar' matches the rest of the right rail's surface
+            color so the 4px handle stops looking like a transparent gap
+            between the terminal and the rail under glass themes. The
+            hover/active accents still show. */}
         <div
-          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg-sidebar hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
           onMouseDown={onResizeStart}
         />
       </div>

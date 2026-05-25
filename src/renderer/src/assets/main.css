@@ -424,6 +424,10 @@
 :root.glass-dark .side-activity-bar-windows-inset {
   border-left: none;
 }
+:root.glass-light .right-sidebar-panel-content,
+:root.glass-dark .right-sidebar-panel-content {
+  border-left: none;
+}
 
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
