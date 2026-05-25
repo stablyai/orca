@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { GitHubViewer } from '../../../../shared/types'
 import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
+import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -288,6 +289,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
+          <ScrollToCurrentWorkspaceToolbarButton />
           <DropdownMenu modal={false}>
             <Tooltip>
               <TooltipTrigger asChild>
