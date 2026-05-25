@@ -53,6 +53,7 @@ export function FeatureWallTourPanel(props: {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   footerText: string | null
   continueButton: ReactNode
+  leadingFooterContent?: ReactNode
 }): JSX.Element {
   const panel = (
     <div
@@ -164,7 +165,10 @@ export function FeatureWallTourPanel(props: {
     return (
       <div className={cn('grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3', props.className)}>
         {panel}
-        <div className="flex justify-end">{props.continueButton}</div>
+        <div className="flex items-center justify-between gap-3">
+          {props.leadingFooterContent ?? <span />}
+          {props.continueButton}
+        </div>
       </div>
     )
   }

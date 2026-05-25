@@ -280,6 +280,7 @@ export default function OnboardingFlow({
               busyLabel={busyLabel}
               onStartTour={flow.startTour}
               onCompleteTour={flow.completeTour}
+              onExitTour={flow.exitTour}
               onTourDepthSummaryChange={flow.recordTourDepthSummary}
             />
           )}

@@ -19,6 +19,7 @@ type OnboardingTourStepProps = {
   busyLabel: string | null
   onStartTour: () => void
   onCompleteTour: (markSuccessfulExit?: () => void) => boolean | void | Promise<boolean | void>
+  onExitTour: () => void
   onTourDepthSummaryChange: (summary: FeatureWallTourDepthSummary) => void
 }
 
@@ -35,6 +36,7 @@ export function OnboardingTourStep({
   busyLabel,
   onStartTour,
   onCompleteTour,
+  onExitTour,
   onTourDepthSummaryChange
 }: OnboardingTourStepProps): JSX.Element {
   const prefersReducedMotion = usePrefersReducedMotion()
@@ -83,6 +85,16 @@ export function OnboardingTourStep({
         onTourDepthSummaryChange={onTourDepthSummaryChange}
         className="h-full max-h-[790px] min-h-0"
         panelClassName="rounded-xl border border-border bg-card"
+        leadingFooterContent={
+          <button
+            type="button"
+            className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+            disabled={Boolean(busyLabel)}
+            onClick={onExitTour}
+          >
+            Exit tour
+          </button>
+        }
       />
     )
   }
