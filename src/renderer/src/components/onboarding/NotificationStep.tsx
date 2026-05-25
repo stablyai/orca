@@ -294,11 +294,6 @@ export function NotificationStep({
               Send Test Notification
             </Button>
           </div>
-          {customPath ? (
-            <p className="truncate font-mono text-[11px] text-muted-foreground" title={customPath}>
-              Custom: {customPath}
-            </p>
-          ) : null}
         </div>
 
         {canAdjustVolume ? (
