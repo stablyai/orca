@@ -202,7 +202,14 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  // Why: glass themes default to a translucent terminal while preserving any
+  // explicit user opacity value, including fully opaque.
+  const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
+  const effectiveOpacity = settings.terminalBackgroundOpacity ?? (themeIsGlass ? 0.92 : undefined)
+  const theme = composeActiveTerminalTheme(baseTheme, {
+    ...settings,
+    terminalBackgroundOpacity: effectiveOpacity
+  })
   const paneBackground = theme?.background ?? '#000000'
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
@@ -218,8 +225,9 @@ export function applyTerminalAppearance(
     // Why: xterm's allowTransparency has measurable rendering cost, so clear
     // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
     // bleeding in from a prior opacity setting that has since been reset.
-    pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+    // Why: enable xterm transparency whenever the effective opacity (user
+    // setting or glass-theme default) is below 1.
+    pane.terminal.options.allowTransparency = effectiveOpacity !== undefined && effectiveOpacity < 1
     const cursorStyle = settings.terminalCursorStyle ?? 'bar'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
