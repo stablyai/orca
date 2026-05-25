@@ -64,7 +64,7 @@ function Sidebar({
     <TooltipProvider delayDuration={400}>
       <div
         ref={containerRef}
-        className="relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        className="glass-surface relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
       >
         {sidebarOpen && (
           <>
