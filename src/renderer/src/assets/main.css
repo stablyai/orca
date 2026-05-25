@@ -181,28 +181,32 @@
    and both selectors share the same single-class specificity. */
 
 :root.glass-light {
-  /* CLEAR mode — lighter blur + lower surface alphas so the wallpaper /
-     window behind reads sharply through the glass instead of being a
-     smeared cream wash. Text foregrounds stay at 1.0 alpha for legibility. */
+  /* Two-tier transparency model:
+     - "Frame" surfaces (background, sidebar) → low alpha so the user sees
+       through Orca into the world (wallpaper / lower windows).
+     - "Floating" surfaces (card, popover, dialog, sheet) → medium alpha
+       so floating panels remain clearly distinguishable.
+     - Borders → higher alpha so button outlines remain visible against
+       the near-transparent main canvas. */
   --background: rgba(252, 244, 230, 0.1);
   --foreground: rgba(30, 18, 6, 1);
   --editor-surface: rgba(252, 244, 230, 0.4);
-  --card: rgba(255, 248, 235, 0.12);
+  --card: rgba(255, 248, 235, 0.65);
   --card-foreground: rgba(30, 18, 6, 1);
-  --popover: rgba(255, 248, 232, 0.22);
+  --popover: rgba(255, 248, 232, 0.72);
   --popover-foreground: rgba(30, 18, 6, 1);
   --primary: rgba(40, 25, 10, 1);
   --primary-foreground: rgba(252, 244, 230, 0.98);
-  --secondary: rgba(255, 255, 255, 0.15);
+  --secondary: rgba(255, 255, 255, 0.55);
   --secondary-foreground: rgba(40, 25, 10, 1);
-  --muted: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.45);
   --muted-foreground: rgba(80, 55, 30, 1);
-  --accent: rgba(255, 255, 255, 0.2);
+  --accent: rgba(255, 255, 255, 0.5);
   --accent-foreground: rgba(30, 18, 6, 1);
   --destructive: #c41020;
   --destructive-foreground: rgba(252, 244, 230, 0.98);
-  --border: rgba(180, 140, 90, 0.32);
-  --input: rgba(180, 140, 90, 0.3);
+  --border: rgba(120, 80, 40, 0.55);
+  --input: rgba(120, 80, 40, 0.45);
   --ring: rgba(180, 140, 90, 0.6);
 
   --sidebar: rgba(255, 248, 235, 0.08);
@@ -227,26 +231,26 @@
 /* Why: see :root.glass-light above for the same specificity rationale. */
 
 :root.glass-dark {
-  /* CLEAR mode — see :root.glass-light. */
+  /* Two-tier transparency model — see :root.glass-light. */
   --background: rgba(15, 18, 32, 0.12);
   --foreground: rgba(235, 240, 255, 1);
   --editor-surface: rgba(15, 18, 32, 0.4);
-  --card: rgba(28, 34, 52, 0.14);
+  --card: rgba(28, 34, 52, 0.7);
   --card-foreground: rgba(235, 240, 255, 1);
-  --popover: rgba(28, 34, 52, 0.25);
+  --popover: rgba(28, 34, 52, 0.75);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
-  --secondary: rgba(40, 50, 80, 0.18);
+  --secondary: rgba(40, 50, 80, 0.55);
   --secondary-foreground: rgba(235, 240, 255, 1);
-  --muted: rgba(40, 50, 80, 0.14);
+  --muted: rgba(40, 50, 80, 0.45);
   --muted-foreground: rgba(210, 220, 245, 1);
-  --accent: rgba(60, 80, 130, 0.22);
+  --accent: rgba(60, 80, 130, 0.55);
   --accent-foreground: rgba(235, 240, 255, 1);
   --destructive: #ff6568;
   --destructive-foreground: rgba(235, 240, 255, 1);
-  --border: rgba(140, 170, 230, 0.32);
-  --input: rgba(140, 170, 230, 0.32);
+  --border: rgba(180, 200, 240, 0.55);
+  --input: rgba(180, 200, 240, 0.4);
   --ring: rgba(140, 170, 230, 0.55);
 
   --sidebar: rgba(18, 22, 38, 0.1);
