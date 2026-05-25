@@ -531,6 +531,7 @@ function recordProcessGoneCrash(
     !shouldRecordProcessGoneCrash({
       source,
       processType,
+      serviceName: typeof details.serviceName === 'string' ? details.serviceName : undefined,
       reason,
       exitCode,
       expectedTeardown: getExpectedTeardownScope(webContentsId)

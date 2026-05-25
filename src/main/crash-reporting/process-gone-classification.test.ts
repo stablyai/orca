@@ -105,6 +105,113 @@ describe('shouldRecordProcessGoneCrash', () => {
     ).toBe(false)
   })
 
+  it('skips Windows control termination killed events outside expected lifecycle teardown', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        reason: 'killed',
+        exitCode: -1073741510,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        reason: 'killed',
+        exitCode: 1073807364,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+  })
+
+  it('skips recoverable Chromium child process exits', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'crashed',
+        exitCode: -2147483645,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'gpu',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'network.mojom.NetworkService',
+        reason: 'killed',
+        exitCode: 9,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'network.mojom.NetworkService',
+        reason: 'crashed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+  })
+
+  it('still records unknown child process crashes', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'com.orca.unexpected',
+        reason: 'crashed',
+        exitCode: 5,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
+  it('still records severe Chromium child process failures', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'oom',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'network.mojom.NetworkService',
+        reason: 'launch-failed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
+  it('still records renderer kills from the recent Linux crash-report cluster', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 61696,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
   it('records non-SIGTERM killed process exits outside expected lifecycle teardown', () => {
     expect(
       shouldRecordProcessGoneCrash({
@@ -121,7 +228,8 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
-        processType: 'GPU',
+        processType: 'Utility',
+        serviceName: 'com.orca.unexpected',
         reason: 'killed',
         exitCode: 9,
         expectedTeardown: 'renderer-reload'
