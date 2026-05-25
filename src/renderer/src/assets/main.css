@@ -27,6 +27,15 @@
 
 @theme inline {
   --color-background: var(--background);
+  /* Why: --background is intentionally translucent under glass themes so
+     the canvas reads through to the wallpaper, but the inverted-text
+     pattern (bg-foreground + text-background) needs an opaque companion
+     or the text fades into the dark fill. --color-background-opaque maps
+     to --background-opaque (a solid hex) under glass and falls back to
+     --background under non-glass themes (where --background was already
+     opaque). Use `text-background-opaque` / `bg-background-opaque` in
+     components that need a guaranteed-solid surface. */
+  --color-background-opaque: var(--background-opaque, var(--background));
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);

@@ -79,7 +79,7 @@ export default function CodexRestartChip({
           <button
             type="button"
             onClick={() => queueCodexPaneRestarts(staleWorktreePtyIds)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-[var(--background-opaque,var(--background))] transition-colors hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background-opaque transition-colors hover:opacity-90"
           >
             <RefreshCw className="size-3" />
             Restart

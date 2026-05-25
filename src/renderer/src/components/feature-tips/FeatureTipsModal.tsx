@@ -22,7 +22,7 @@ function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
     case 'enable-voice':
       return (
         <div className="flex flex-col items-center gap-2.5">
-          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-[var(--background-opaque,var(--background))]">
+          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-background-opaque">
             <Mic className="size-5" />
           </div>
           {/* Animated waveform — purely decorative, signals "voice" without copy */}

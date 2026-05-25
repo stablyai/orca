@@ -858,7 +858,7 @@ function PricingCard(props: {
         className={cn(
           'mt-1 inline-flex w-fit items-center rounded-md px-2 py-1 text-[11px] font-semibold transition-[background-color,color,box-shadow,transform] duration-300',
           highlighted
-            ? 'bg-foreground text-[var(--background-opaque,var(--background))]'
+            ? 'bg-foreground text-background-opaque'
             : ctaIsBranded
               ? 'bg-blue-600 text-white shadow-[0_6px_16px_rgba(37,99,235,0.35)]'
               : 'bg-foreground/[0.07] text-foreground',

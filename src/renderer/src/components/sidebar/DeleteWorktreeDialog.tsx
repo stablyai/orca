@@ -363,7 +363,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             <span
               className={`flex size-4 items-center justify-center rounded-sm border transition-colors ${
                 dontAskAgain
-                  ? 'border-foreground bg-foreground text-[var(--background-opaque,var(--background))]'
+                  ? 'border-foreground bg-foreground text-background-opaque'
                   : 'border-muted-foreground bg-transparent'
               }`}
             >
