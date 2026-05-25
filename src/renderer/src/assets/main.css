@@ -191,7 +191,11 @@
   --background-opaque: #ffffff;
   --foreground: rgba(20, 20, 20, 1);
   --editor-surface: rgba(255, 255, 255, 0.4);
-  --card: rgba(255, 255, 255, 0.16);
+  /* --card matches --sidebar/--background exactly so titlebar (which uses
+     --card via --bg-titlebar fallback) and any other bg-card surface
+     visually merges with the chrome instead of looking like a slightly
+     different color region. */
+  --card: rgba(255, 255, 255, 0.15);
   --card-foreground: rgba(20, 20, 20, 1);
   --popover: rgba(255, 255, 255, 0.32);
   --popover-foreground: rgba(20, 20, 20, 1);
@@ -231,14 +235,17 @@
 /* Why: see :root.glass-light above for the same specificity rationale. */
 
 :root.glass-dark {
-  /* See :root.glass-light for tuning rationale + token-split rationale. */
+  /* See :root.glass-light for tuning rationale + token-split rationale.
+     IMPORTANT: --background, --sidebar, and --card all share the same RGB
+     base (15, 18, 32) — different RGB at the same alpha produces visibly
+     different colors that look like region seams. */
   --background: rgba(15, 18, 32, 0.15);
   --background-opaque: #0f1220;
   --foreground: rgba(235, 240, 255, 1);
   --editor-surface: rgba(15, 18, 32, 0.4);
-  --card: rgba(28, 34, 52, 0.18);
+  --card: rgba(15, 18, 32, 0.15);
   --card-foreground: rgba(235, 240, 255, 1);
-  --popover: rgba(28, 34, 52, 0.32);
+  --popover: rgba(15, 18, 32, 0.32);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
@@ -254,7 +261,7 @@
   --input: rgba(180, 200, 240, 0.28);
   --ring: rgba(140, 170, 230, 0.55);
 
-  --sidebar: rgba(18, 22, 38, 0.15);
+  --sidebar: rgba(15, 18, 32, 0.15);
   --sidebar-foreground: rgba(220, 230, 250, 0.92);
   --sidebar-primary: rgba(40, 100, 220, 0.85);
   --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
