@@ -202,10 +202,10 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  // Why: glass themes default to a translucent terminal while preserving any
-  // explicit user opacity value, including fully opaque.
+  // Why: glass themes default to the sidebar's see-through level so there is
+  // no sharp seam where the sidebar meets the terminal. Explicit user opacity wins.
   const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
-  const effectiveOpacity = settings.terminalBackgroundOpacity ?? (themeIsGlass ? 0.45 : undefined)
+  const effectiveOpacity = settings.terminalBackgroundOpacity ?? (themeIsGlass ? 0.15 : undefined)
   const theme = composeActiveTerminalTheme(baseTheme, {
     ...settings,
     terminalBackgroundOpacity: effectiveOpacity
