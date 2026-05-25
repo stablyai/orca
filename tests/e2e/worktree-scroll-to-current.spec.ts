@@ -94,16 +94,19 @@ test.describe('Scroll to current workspace button', () => {
 
     const targetId = decodeURIComponent(targetIdAttribute.slice(WORKTREE_OPTION_PREFIX.length))
     const targetRow = worktreeOption(orcaPage, targetId)
+    const revealButton = orcaPage.getByRole('button', { name: 'Scroll to open workspace' })
 
     await renderedOptions.last().click()
     await expect(targetRow).toHaveAttribute('aria-current', 'page')
+    await expect(revealButton).toBeVisible()
+    await expect(revealButton).toBeEnabled()
     await forceCurrentWorkspaceClipped(orcaPage, targetId)
 
-    const revealButton = orcaPage.getByRole('button', { name: 'Scroll to open workspace' })
     await expect(revealButton).toBeVisible()
     await expect(revealButton).toBeEnabled()
 
     await revealButton.click()
+    await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
 
     await expect
       .poll(
@@ -130,6 +133,7 @@ test.describe('Scroll to current workspace button', () => {
         }
       )
       .toBe(true)
-    await expect(revealButton).toBeHidden()
+    await expect(revealButton).toBeVisible()
+    await expect(revealButton).toBeEnabled()
   })
 })
