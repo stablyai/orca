@@ -38,8 +38,8 @@ const stepCopy = {
     subtitle: 'Connect GitHub or Linear to:'
   },
   tour: {
-    title: 'Explore Orca',
-    subtitle: ''
+    title: "Interested in Orca's advanced features?",
+    subtitle: 'Take a short tour before getting started.'
   },
   repo: {
     title: 'Point Orca at some code',
@@ -81,9 +81,9 @@ export default function OnboardingFlow({
   const tourStarted = flow.tourStarted
   const isInlineTourRunning = isTourStep && tourStarted
   const shouldShowFooter = !isInlineTourRunning
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'repo' && currentStep.id !== 'tour'
-  const shouldShowStepHeading = !isTourStep
-  const footerPrimaryLabel = isTourStep ? 'Skip the tour' : primaryActionLabel
+  const shouldShowSkipToProjectSetup = currentStep.id !== 'repo'
+  const shouldShowStepHeading = !isInlineTourRunning
+  const footerPrimaryLabel = primaryActionLabel
   const {
     next: flowNext,
     openFolder: flowOpenFolder,
@@ -217,7 +217,7 @@ export default function OnboardingFlow({
           </span>
           {isInlineTourRunning ? (
             <h1 className="ml-5 text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-              {copy.title}
+              {stepTooltipLabels.tour}
             </h1>
           ) : null}
         </div>

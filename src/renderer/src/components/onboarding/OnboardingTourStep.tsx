@@ -1,11 +1,18 @@
 import type { JSX } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { FeatureTourPreview } from '../feature-wall/FeatureTourPreview'
 import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
+
+const TOUR_LEARNING_POINTS: readonly string[] = [
+  'Work on several branches at once, with several agents inside each.',
+  'Hand off a feature to an orchestrator agent.',
+  'Start work straight from a GitHub or Linear ticket.',
+  'Grab an element from your running app and send it to an agent.'
+]
 
 type OnboardingTourStepProps = {
   tourStarted: boolean
@@ -82,31 +89,36 @@ export function OnboardingTourStep({
 
   return (
     <div className="flex h-full min-h-[430px] flex-col">
-      <div className="mx-auto flex w-full max-w-[560px] flex-col items-center gap-5 pt-16 text-center">
-        <div className="space-y-2">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            Interested in Orca&apos;s advanced features?
-          </h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Take a short workflow tour before choosing your first project.
-          </p>
+      <div className="grid w-full grid-cols-1 items-start gap-10 md:grid-cols-[1fr_minmax(0,340px)]">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm font-medium text-foreground">Learn how Orca can help you…</p>
+          <ul className="flex flex-col gap-2.5">
+            {TOUR_LEARNING_POINTS.map((point) => (
+              <li key={point} className="flex items-start gap-3">
+                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06] text-foreground">
+                  <Check className="size-2.5" strokeWidth={3} />
+                </span>
+                <span className="text-sm leading-snug text-foreground">{point}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex items-center gap-3">
+            <Button
+              variant="default"
+              onClick={handleStartTour}
+              disabled={Boolean(busyLabel)}
+              className="gap-2"
+            >
+              Take the tour
+              <ArrowRight className="size-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground">~ 60 seconds</span>
+          </div>
         </div>
-
-        <div className="flex w-full flex-col items-center gap-3">
-          <FeatureTourPreview className="w-full max-w-[360px]" />
-          <Button
-            variant="default"
-            onClick={handleStartTour}
-            disabled={Boolean(busyLabel)}
-            className="w-full max-w-[360px] justify-center gap-2"
-          >
-            Take the tour
-            <ArrowRight className="size-4" />
-          </Button>
-        </div>
+        <FeatureTourPreview className="w-full" />
       </div>
 
-      <p className="mx-auto mt-auto max-w-[560px] text-center text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-auto max-w-[560px] text-left text-xs leading-relaxed text-muted-foreground">
         This tour can be seen anytime under Help &gt; Explore Orca.
       </p>
     </div>
