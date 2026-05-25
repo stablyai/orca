@@ -123,6 +123,12 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  /* Glass theme controls. Default to "no glass" so non-glass themes are
+     unaffected. backdrop-filter: blur(0) is a no-op the browser short-circuits. */
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-inner-glow: transparent;
+  --glass-shadow: var(--border);
   --terminal-pane-locate: var(--color-blue-600);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
@@ -167,6 +173,89 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #f59e0b;
+}
+
+/* ── Glass Light (warm cream tint, macOS only) ────────── */
+
+.glass-light {
+  /* Re-map role tokens to semi-transparent warm cream. Components keep
+     referencing the same role tokens (--background, --sidebar, --card, etc.)
+     — only the values behind them change. */
+  --background: rgba(252, 244, 230, 0.7);
+  --foreground: rgba(50, 30, 10, 0.95);
+  --editor-surface: rgba(252, 244, 230, 0.85);
+  --card: rgba(255, 248, 235, 0.62);
+  --card-foreground: rgba(50, 30, 10, 0.95);
+  --popover: rgba(255, 248, 232, 0.72);
+  --popover-foreground: rgba(50, 30, 10, 0.95);
+  --primary: rgba(60, 40, 20, 0.95);
+  --primary-foreground: rgba(252, 244, 230, 0.98);
+  --secondary: rgba(255, 255, 255, 0.55);
+  --secondary-foreground: rgba(60, 40, 20, 0.9);
+  --muted: rgba(255, 255, 255, 0.5);
+  --muted-foreground: rgba(100, 70, 40, 0.65);
+  --accent: rgba(255, 255, 255, 0.55);
+  --accent-foreground: rgba(50, 30, 10, 0.95);
+  --destructive: #c41020;
+  --destructive-foreground: rgba(252, 244, 230, 0.98);
+  --border: rgba(180, 140, 90, 0.18);
+  --input: rgba(180, 140, 90, 0.2);
+  --ring: rgba(180, 140, 90, 0.55);
+
+  --sidebar: rgba(255, 248, 235, 0.55);
+  --sidebar-foreground: rgba(60, 40, 20, 0.92);
+  --sidebar-primary: rgba(60, 40, 20, 0.95);
+  --sidebar-primary-foreground: rgba(252, 244, 230, 0.98);
+  --sidebar-accent: rgba(255, 255, 255, 0.55);
+  --sidebar-accent-foreground: rgba(50, 30, 10, 0.95);
+  --sidebar-border: rgba(180, 140, 90, 0.18);
+  --sidebar-ring: rgba(180, 140, 90, 0.55);
+
+  /* Activate glass */
+  --glass-blur: 28px;
+  --glass-saturate: 150%;
+  --glass-inner-glow: rgba(255, 255, 255, 0.55);
+  --glass-shadow: rgba(120, 80, 40, 0.18);
+}
+
+/* ── Glass Dark (cool midnight blue tint, macOS only) ─── */
+
+.glass-dark {
+  --background: rgba(15, 18, 32, 0.74);
+  --foreground: rgba(220, 230, 250, 0.92);
+  --editor-surface: rgba(15, 18, 32, 0.85);
+  --card: rgba(28, 34, 52, 0.65);
+  --card-foreground: rgba(220, 230, 250, 0.92);
+  --popover: rgba(28, 34, 52, 0.72);
+  --popover-foreground: rgba(220, 230, 250, 0.92);
+  --primary: rgba(220, 230, 250, 0.92);
+  --primary-foreground: rgba(18, 22, 38, 0.95);
+  --secondary: rgba(40, 50, 80, 0.55);
+  --secondary-foreground: rgba(220, 230, 250, 0.92);
+  --muted: rgba(40, 50, 80, 0.5);
+  --muted-foreground: rgba(160, 180, 220, 0.65);
+  --accent: rgba(60, 80, 130, 0.55);
+  --accent-foreground: rgba(220, 230, 250, 0.95);
+  --destructive: #ff6568;
+  --destructive-foreground: rgba(220, 230, 250, 0.95);
+  --border: rgba(140, 170, 230, 0.14);
+  --input: rgba(140, 170, 230, 0.2);
+  --ring: rgba(140, 170, 230, 0.5);
+
+  --sidebar: rgba(18, 22, 38, 0.62);
+  --sidebar-foreground: rgba(220, 230, 250, 0.92);
+  --sidebar-primary: rgba(40, 100, 220, 0.85);
+  --sidebar-primary-foreground: rgba(220, 230, 250, 0.98);
+  --sidebar-accent: rgba(40, 50, 80, 0.55);
+  --sidebar-accent-foreground: rgba(220, 230, 250, 0.95);
+  --sidebar-border: rgba(140, 170, 230, 0.12);
+  --sidebar-ring: rgba(140, 170, 230, 0.4);
+
+  /* Activate glass */
+  --glass-blur: 28px;
+  --glass-saturate: 150%;
+  --glass-inner-glow: rgba(140, 170, 230, 0.12);
+  --glass-shadow: rgba(0, 0, 30, 0.5);
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -276,6 +365,45 @@
 
   :where(button:disabled) {
     cursor: default;
+  }
+}
+
+/* Why: any surface that should "be glass" wears this class. backdrop-filter
+   reads the values from the active theme's --glass-* tokens, so the same
+   class is a no-op outside glass themes (blur(0) is short-circuited by the
+   browser). Surfaces that nest another .glass-surface descendant double up
+   the blur — keep popovers, dropdowns, and dialogs in Radix portals so they
+   are siblings of the app root, not descendants of an already-glassy
+   container. */
+.glass-surface {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Why: respect the user's system-level reduce-transparency setting. macOS
+   independently pauses window-level vibrancy when this is on, so the OS and
+   renderer layers degrade together — surfaces become opaque tinted colors
+   with no backdrop-filter cost. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-light {
+    --background: #fcf4e6;
+    --foreground: #322110;
+    --editor-surface: #fdf6eb;
+    --card: #fff8eb;
+    --popover: #fff8e8;
+    --sidebar: #fff8eb;
+    --glass-blur: 0px;
+    --glass-saturate: 100%;
+  }
+  .glass-dark {
+    --background: #0f1220;
+    --foreground: #dce6fa;
+    --editor-surface: #131628;
+    --card: #1c2234;
+    --popover: #1c2234;
+    --sidebar: #121626;
+    --glass-blur: 0px;
+    --glass-saturate: 100%;
   }
 }
 
@@ -473,6 +601,8 @@
   flex-direction: row;
   align-items: center;
   background: var(--bg-titlebar, var(--card));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -492,6 +622,8 @@
   overflow: hidden;
   flex-shrink: 0;
   background: var(--bg-titlebar, var(--card));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   /* Why: draw the divider via inset shadow instead of border-bottom so the
      flex content area spans the full 36px. With border-bottom + border-box,
      the content area shrinks to 35px and flex-centered controls land at
