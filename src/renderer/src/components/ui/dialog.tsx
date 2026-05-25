@@ -31,7 +31,11 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        // Why: 'dialog-overlay-dim' lets a glass-theme override drop the
+        // opacity. bg-black/50 is right for opaque light/dark themes but
+        // blacks out the entire window under glass (where the app surface
+        // is already translucent over the wallpaper).
+        'dialog-overlay-dim fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         className
       )}
       {...props}

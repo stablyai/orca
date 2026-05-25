@@ -458,6 +458,16 @@
    gutter with the same color the terminal theme paints so the strip
    visually disappears. Also override scrollbar-color so the track is
    transparent (overlay-like) while the thumb gets a subtle neutral tint. */
+/* Why: Dialog / Sheet overlays default to bg-black/50 (50% solid black)
+   which, layered over a translucent glass app, blacks out the whole
+   window when a dialog opens. Under glass themes the dialog itself is a
+   distinct frosted panel — the overlay only needs a very light dim to
+   focus attention on it. */
+:root.glass-light .dialog-overlay-dim,
+:root.glass-dark .dialog-overlay-dim {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
 :root.glass-light .xterm-viewport {
   background: rgba(255, 255, 255, 0.15);
   scrollbar-color: rgba(120, 120, 120, 0.35) transparent;
