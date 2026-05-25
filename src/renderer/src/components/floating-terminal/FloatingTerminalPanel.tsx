@@ -3,13 +3,15 @@
  * handling in one surface so the floating worktree does not drift from the
  * main tab model while still keeping the DOM-mounted panes local. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Globe, TerminalSquare } from 'lucide-react'
+import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
+import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget
 } from '@/lib/floating-workspace-terminal-actions'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
@@ -48,6 +51,11 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  keybindingMatchesAction,
+  type KeybindingActionId,
+  type KeybindingContext
+} from '../../../../shared/keybindings'
 import type {
   BrowserTab as BrowserTabState,
   Tab,
@@ -110,6 +118,11 @@ export function FloatingTerminalPanel({
   const openFile = useAppStore((s) => s.openFile)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '')
+  const newTerminalShortcutKeys = useShortcutKeys('tab.newTerminal')
+  const newBrowserShortcutKeys = useShortcutKeys('tab.newBrowser')
+  const newMarkdownShortcutKeys = useShortcutKeys('tab.newMarkdown')
+  const openMarkdownShortcutKeys = useShortcutKeys('tab.openMarkdown')
+  const closeShortcutKeys = useShortcutKeys('tab.close')
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
@@ -213,6 +226,12 @@ export function FloatingTerminalPanel({
         .filter((file): file is OpenFile & { tabId: string } => file !== null),
     [floatingFiles, groupTabs]
   )
+  // Why: restored sessions can retain unified tabs whose backing terminal/file/browser
+  // records are gone; the empty landing should follow what the user can see.
+  const hasVisibleFloatingTabs =
+    terminalItems.length > 0 || browserItems.length > 0 || editorItems.length > 0
+  const visibleFloatingItemCount = terminalItems.length + browserItems.length + editorItems.length
+  const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
       (activeGroup?.tabOrder ?? []).map((tabId) => {
@@ -350,6 +369,15 @@ export function FloatingTerminalPanel({
     }
     focusTerminalTabSurface(activeTerminalId)
   }, [activeTerminalId, open])
+
+  useEffect(() => {
+    if (!open || hasVisibleFloatingTabs) {
+      return
+    }
+    // Why: opening an empty floating workspace from the global shortcut leaves
+    // focus on the previous page; focus the panel so immediate tab shortcuts work.
+    panelRef.current?.focus({ preventScroll: true })
+  }, [hasVisibleFloatingTabs, open])
 
   const refreshOrchestrationSetupVisibility = useCallback(async (): Promise<void> => {
     if (isOrchestrationSetupDismissed()) {
@@ -646,9 +674,10 @@ export function FloatingTerminalPanel({
     )
   }, [activeGroup, closeFloatingItems])
 
-  const focusPanelForShortcuts = useCallback(() => {
+  const focusPanelForShortcuts = useCallback((preserveExistingPanelFocus = true) => {
     const active = document.activeElement
     if (
+      preserveExistingPanelFocus &&
       active instanceof HTMLElement &&
       active.closest('[data-floating-terminal-panel]') !== null
     ) {
@@ -658,6 +687,18 @@ export function FloatingTerminalPanel({
     }
     panelRef.current?.focus({ preventScroll: true })
   }, [])
+
+  const focusPanelForShortcutsAfterClose = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const focusPanel = (): void => focusPanelForShortcuts(false)
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusPanel)
+      return
+    }
+    globalThis.setTimeout(focusPanel, 0)
+  }, [focusPanelForShortcuts])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
     window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
@@ -703,31 +744,165 @@ export function FloatingTerminalPanel({
         createFloatingMarkdownTab()
         return
       }
+      if (event.shiftKey && key === 'o') {
+        event.preventDefault()
+        openFloatingMarkdownTab()
+        return
+      }
       if (!event.shiftKey && key === 'w') {
         event.preventDefault()
-        if (activeTab) {
-          closeFloatingItem(activeTab.id)
+        if (activeClosableTab) {
+          closeFloatingItem(activeClosableTab.id)
+          if (visibleFloatingItemCount <= 1) {
+            // Why: closing the final xterm removes the focused textarea; keep
+            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
+            focusPanelForShortcutsAfterClose()
+          }
         } else {
           onOpenChange(false)
         }
       }
     },
     [
-      activeTab,
+      activeClosableTab,
       closeFloatingItem,
       createFloatingBrowserTab,
       createFloatingMarkdownTab,
       createFloatingTerminalTab,
+      focusPanelForShortcutsAfterClose,
       onOpenChange,
-      open
+      openFloatingMarkdownTab,
+      open,
+      visibleFloatingItemCount
     ]
   )
+
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') {
+      return
+    }
+
+    const handleFloatingPanelKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.repeat) {
+        return
+      }
+      const panel = panelRef.current
+      const active = document.activeElement
+      if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
+        return
+      }
+
+      const state = useAppStore.getState()
+      const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
+        ? 'terminal'
+        : 'app'
+      const matches = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(actionId, event, getShortcutPlatform(), state.keybindings, {
+          context,
+          terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+        })
+      const consume = (): void => {
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+      }
+
+      if (matches('tab.newTerminal')) {
+        consume()
+        createFloatingTerminalTab()
+        return
+      }
+      if (matches('tab.newBrowser')) {
+        consume()
+        createFloatingBrowserTab()
+        return
+      }
+      if (matches('tab.newMarkdown')) {
+        consume()
+        createFloatingMarkdownTab()
+        return
+      }
+      if (matches('tab.openMarkdown')) {
+        consume()
+        openFloatingMarkdownTab()
+        return
+      }
+      if (matches('tab.close')) {
+        consume()
+        if (activeClosableTab) {
+          closeFloatingItem(activeClosableTab.id)
+          if (visibleFloatingItemCount <= 1) {
+            // Why: closing the final xterm removes the focused textarea; keep
+            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
+            focusPanelForShortcutsAfterClose()
+          }
+        } else {
+          onOpenChange(false)
+        }
+      }
+    }
+
+    // Why: the main Terminal view is not mounted on Landing/Settings, but the
+    // floating workspace must still own its tab shortcuts while it has focus.
+    window.addEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
+    return () =>
+      window.removeEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
+  }, [
+    activeClosableTab,
+    closeFloatingItem,
+    createFloatingBrowserTab,
+    createFloatingMarkdownTab,
+    createFloatingTerminalTab,
+    focusPanelForShortcutsAfterClose,
+    onOpenChange,
+    openFloatingMarkdownTab,
+    open,
+    visibleFloatingItemCount
+  ])
 
   useEffect(() => {
     if (!open) {
       window.api.ui.setFloatingTerminalInputFocused(false)
     }
     return () => window.api.ui.setFloatingTerminalInputFocused(false)
+  }, [open])
+
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') {
+      return
+    }
+
+    const handleOutsidePointerDown = (event: PointerEvent): void => {
+      const panel = panelRef.current
+      if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
+        return
+      }
+      window.api.ui.setFloatingTerminalInputFocused(false)
+      const active = document.activeElement
+      if (active instanceof HTMLElement && panel.contains(active)) {
+        // Why: regular tab strip items are non-focusable, so clicking them can
+        // leave xterm's hidden textarea focused unless we explicitly release it.
+        active.blur()
+      }
+    }
+    const handleWindowBlur = (): void => {
+      const panel = panelRef.current
+      const active = document.activeElement
+      if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
+        return
+      }
+      // Why: browser webviews focus out-of-process and do not emit renderer
+      // pointerdown events, so release floating ownership on renderer blur too.
+      window.api.ui.setFloatingTerminalInputFocused(false)
+      active.blur()
+    }
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true)
+    window.addEventListener('blur', handleWindowBlur)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
   }, [open])
 
   const toggleMaximized = useCallback(() => {
@@ -807,7 +982,7 @@ export function FloatingTerminalPanel({
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-50 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-50 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -954,7 +1129,7 @@ export function FloatingTerminalPanel({
               </Suspense>
             </div>
           ) : null}
-          {unifiedTabs.length === 0 ? (
+          {!hasVisibleFloatingTabs ? (
             <FloatingTerminalEmptyState
               onNewTerminal={() => createFloatingTerminalTab()}
               onNewMarkdown={createFloatingMarkdownTab}
@@ -962,6 +1137,11 @@ export function FloatingTerminalPanel({
               onNewBrowser={createFloatingBrowserTab}
               onClose={() => onOpenChange(false)}
               onFocusPanel={focusPanelForShortcuts}
+              newTerminalShortcutKeys={newTerminalShortcutKeys}
+              newBrowserShortcutKeys={newBrowserShortcutKeys}
+              newMarkdownShortcutKeys={newMarkdownShortcutKeys}
+              openMarkdownShortcutKeys={openMarkdownShortcutKeys}
+              closeShortcutKeys={closeShortcutKeys}
             />
           ) : null}
         </div>
@@ -1058,7 +1238,12 @@ function FloatingTerminalEmptyState({
   onOpenMarkdown,
   onNewBrowser,
   onClose,
-  onFocusPanel
+  onFocusPanel,
+  newTerminalShortcutKeys,
+  newBrowserShortcutKeys,
+  newMarkdownShortcutKeys,
+  openMarkdownShortcutKeys,
+  closeShortcutKeys
 }: {
   onNewTerminal: () => void
   onNewMarkdown: () => void
@@ -1066,6 +1251,11 @@ function FloatingTerminalEmptyState({
   onNewBrowser: () => void
   onClose: () => void
   onFocusPanel: () => void
+  newTerminalShortcutKeys: string[]
+  newBrowserShortcutKeys: string[]
+  newMarkdownShortcutKeys: string[]
+  openMarkdownShortcutKeys: string[]
+  closeShortcutKeys: string[]
 }): React.JSX.Element {
   return (
     <div
@@ -1073,52 +1263,71 @@ function FloatingTerminalEmptyState({
       data-floating-terminal-shortcut-surface
       onPointerDown={onFocusPanel}
     >
-      <div className="flex w-[230px] flex-col items-center gap-1.5" data-floating-terminal-no-drag>
+      <div className="flex w-[360px] flex-col items-center gap-1.5" data-floating-terminal-no-drag>
         <Button
           type="button"
           variant="ghost"
-          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewTerminal}
         >
           <TerminalSquare className="size-3.5 opacity-80" />
-          New Terminal
+          <span className="truncate text-left leading-none">New Terminal</span>
+          <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewBrowser}
         >
           <Globe className="size-3.5 opacity-80" />
-          New Browser
+          <span className="truncate text-left leading-none">New Browser</span>
+          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewMarkdown}
         >
           <FileText className="size-3.5 opacity-80" />
-          New Markdown Note
+          <span className="truncate text-left leading-none">New Markdown Note</span>
+          <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onOpenMarkdown}
         >
           <FileText className="size-3.5 opacity-80" />
-          Open Markdown Note
+          <span className="truncate text-left leading-none">Open Markdown Note</span>
+          <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onClose}
         >
-          Minimize
+          <Minus className="size-3.5 opacity-80" />
+          <span className="truncate text-left leading-none">Minimize</span>
+          <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
       </div>
     </div>
+  )
+}
+
+function FloatingEmptyStateShortcut({ keys }: { keys: string[] }): React.JSX.Element {
+  if (keys.length === 0) {
+    return <span aria-hidden />
+  }
+  return (
+    <ShortcutKeyCombo
+      keys={keys}
+      className="self-center justify-self-end opacity-75"
+      separatorClassName="mx-0 text-[9px] text-muted-foreground"
+    />
   )
 }

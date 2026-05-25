@@ -112,6 +112,13 @@ describe('isFloatingWorkspacePanelFocused', () => {
     expect(isFloatingWorkspacePanelFocused({ activeElement } as never)).toBe(true)
     expect(activeElement.closest).toHaveBeenCalledWith('[data-floating-terminal-panel]')
   })
+
+  it('ignores focus outside the floating workspace panel', () => {
+    installFakeHTMLElement()
+    const activeElement = makeElement({})
+
+    expect(isFloatingWorkspacePanelFocused({ activeElement } as never)).toBe(false)
+  })
 })
 
 describe('isFloatingWorkspaceTerminalInputTarget', () => {
@@ -166,7 +173,9 @@ describe('isFloatingWorkspacePanelShortcut', () => {
     ['Cmd+Shift+B', true, { key: 'b', metaKey: true, shiftKey: true }],
     ['Ctrl+Shift+B', false, { key: 'b', ctrlKey: true, shiftKey: true }],
     ['Cmd+Shift+M', true, { key: 'm', metaKey: true, shiftKey: true }],
-    ['Ctrl+Shift+M', false, { key: 'm', ctrlKey: true, shiftKey: true }]
+    ['Ctrl+Shift+M', false, { key: 'm', ctrlKey: true, shiftKey: true }],
+    ['Cmd+Shift+O', true, { key: 'o', metaKey: true, shiftKey: true }],
+    ['Ctrl+Shift+O', false, { key: 'o', ctrlKey: true, shiftKey: true }]
   ])('claims %s', (_label, isMacPlatform, overrides) => {
     expect(isFloatingWorkspacePanelShortcut(shortcutSurfaceEvent(overrides), isMacPlatform)).toBe(
       true

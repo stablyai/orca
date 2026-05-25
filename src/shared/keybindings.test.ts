@@ -81,6 +81,11 @@ describe('keybindings', () => {
     expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
   })
 
+  it('defines a default shortcut for opening markdown notes', () => {
+    expect(getEffectiveKeybindingsForAction('tab.openMarkdown', 'darwin')).toEqual(['Mod+Shift+O'])
+    expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
+  })
+
   it('uses overrides as the complete effective binding list for an action', () => {
     const overrides = {
       'worktree.quickOpen': ['Ctrl+Alt+O', 'not-a-shortcut']

@@ -69,7 +69,9 @@ export function isFloatingWorkspacePanelShortcut(
   }
 
   const key = event.key.toLowerCase()
-  const claimedChord = event.shiftKey ? key === 'b' || key === 'm' : key === 't' || key === 'w'
+  const claimedChord = event.shiftKey
+    ? key === 'b' || key === 'm' || key === 'o'
+    : key === 't' || key === 'w'
   return claimedChord && isFloatingWorkspacePanelShortcutTarget(event.target, panelRoot)
 }
 

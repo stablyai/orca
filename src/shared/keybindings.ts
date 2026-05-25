@@ -50,6 +50,7 @@ export type KeybindingActionId =
   | 'tab.newTerminal'
   | 'tab.newBrowser'
   | 'tab.newMarkdown'
+  | 'tab.openMarkdown'
   | 'tab.close'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -384,6 +385,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'new'],
     defaultBindings: platformBindings(['Mod+Shift+M'])
+  },
+  {
+    id: 'tab.openMarkdown',
+    title: 'Open markdown tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'open'],
+    defaultBindings: platformBindings(['Mod+Shift+O'])
   },
   {
     id: 'tab.close',

@@ -73,7 +73,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelVisible
+  isFloatingWorkspacePanelFocused
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   keybindingMatchesAction,
@@ -1127,7 +1127,7 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newTerminal')
-        if (isFloatingWorkspacePanelVisible()) {
+        if (isFloatingWorkspacePanelFocused()) {
           void createFloatingWorkspaceTerminalTab(useAppStore.getState())
           return
         }
