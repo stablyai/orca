@@ -45,7 +45,11 @@ function SheetOverlay({
 }
 
 const sheetContentVariants = cva(
-  'fixed z-50 flex flex-col gap-0 bg-background shadow-lg outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
+  // Why: bg-popover (frosted-floating tier ~0.65 alpha) so sheets read as
+  // distinct surfaces under glass themes instead of nearly transparent.
+  // glass-surface-strong is appended separately so it doesn't conflict
+  // with CVA variant resolution.
+  'fixed z-50 flex flex-col gap-0 bg-popover text-popover-foreground shadow-lg outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
   {
     variants: {
       side: {

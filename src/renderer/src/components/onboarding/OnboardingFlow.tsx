@@ -169,7 +169,10 @@ export default function OnboardingFlow({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+      // Why: bg-popover + glass-surface-strong so onboarding reads as a
+      // proper frosted overlay over the app behind it, not a transparent
+      // window the user can see straight through.
+      className="glass-surface-strong fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-popover p-4 text-popover-foreground"
       data-onboarding-overlay
       onPointerDown={(event) => {
         if (event.button !== 0) {
