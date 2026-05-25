@@ -108,7 +108,7 @@ Don't add a fourth level. If something needs more emphasis than "floating," you'
 
 ## Glass surfaces (macOS 26 themes)
 
-When the user picks the `glass-light` or `glass-dark` theme on macOS, surfaces that should "be glass" wear the `.glass-surface` utility class. The class reads three CSS variables — `--glass-blur`, `--glass-saturate`, and `--glass-inner-glow` — that the glass theme blocks set to non-zero values. Outside glass themes the variables stay at no-op defaults (`blur(0)`), so the utility is safe to apply unconditionally.
+When the user picks the `glass-light` or `glass-dark` theme on macOS, surfaces that should "be glass" wear the `.glass-surface` utility class. The class reads two CSS variables — `--glass-blur` and `--glass-saturate` — that the glass theme blocks set to non-zero values. Outside glass themes the variables stay at no-op defaults (`blur(0)`), so the utility is safe to apply unconditionally.
 
 ```css
 .glass-surface {
@@ -131,7 +131,7 @@ Practical consequence: under glass themes, dropdown and context menus stay at 40
 
 Glass themes re-map existing role tokens (`--background`, `--card`, `--sidebar`, `--popover`, `--editor-surface`, etc.) to semi-transparent RGBA values. **Do not introduce new glass-specific surface tokens** — keep components referencing the same role tokens, and let the theme block under `.glass-light` / `.glass-dark` swap the values.
 
-The only theme-specific token additions are the four `--glass-*` controls listed above. Add new ones only when a new surface needs a different blur/saturation level than the global one.
+The theme blocks declare four `--glass-*` controls: `--glass-blur` and `--glass-saturate` (consumed by `.glass-surface` and the titlebar CSS), plus `--glass-inner-glow` and `--glass-shadow` (declared for future per-surface refinements — e.g., a custom glass surface that wants its own edge highlight or drop shadow tint — but unused today). Add new `--glass-*` tokens only when a new surface needs a different blur/saturation level than the global one.
 
 ### `prefers-reduced-transparency`
 
