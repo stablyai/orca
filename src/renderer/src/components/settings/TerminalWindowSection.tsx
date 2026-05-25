@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings, TerminalColorOverrides } from '../../../../shared/types'
+import { isGlassTheme } from '../../../../shared/glass-theme'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { ColorField, NumberField } from './SettingsFormControls'
@@ -80,7 +81,7 @@ export function TerminalWindowSection({
   // Why: glass themes force vibrancy on at window creation regardless of the
   // standalone windowBackgroundBlur setting, so the toggle is meaningless
   // (always effectively on) while a glass theme is active.
-  const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
+  const themeIsGlass = isGlassTheme(settings.theme)
   const effectiveBlur = themeIsGlass || (settings.windowBackgroundBlur ?? false)
   // Why: windowBackgroundBlur is only read by createMainWindow() at startup
   // (macOS vibrancy / Windows acrylic both require window creation options),

@@ -1,6 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/types'
+import { isGlassTheme } from '../../../shared/glass-theme'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -126,7 +127,7 @@ export function resolvePaneStyleOptions(
   // wallpaper bleed, looking like a colour change. Force both opacities
   // to 1 so focus state never changes the rendered alpha. Non-glass
   // themes still honour the user's preference.
-  const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
+  const themeIsGlass = isGlassTheme(settings.theme)
   return {
     inactivePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalInactivePaneOpacity, 0, 1),
     activePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalActivePaneOpacity, 0, 1),

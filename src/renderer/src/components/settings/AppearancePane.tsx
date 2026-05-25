@@ -6,6 +6,7 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { isGlassTheme } from '../../../../shared/glass-theme'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
@@ -81,9 +82,7 @@ export function AppearancePane({
   // detect crossings of the glass boundary that require a window relaunch.
   // Mirrors the pattern used for windowBackgroundBlur in TerminalWindowSection.
   const bootThemeRef = useRef<GlobalSettings['theme']>(settings.theme)
-  const themeIsGlass = (t: GlobalSettings['theme']): boolean =>
-    t === 'glass-light' || t === 'glass-dark'
-  const glassBoundaryCrossed = themeIsGlass(settings.theme) !== themeIsGlass(bootThemeRef.current)
+  const glassBoundaryCrossed = isGlassTheme(settings.theme) !== isGlassTheme(bootThemeRef.current)
   const [relaunching, setRelaunching] = useState(false)
 
   useEffect(() => {
