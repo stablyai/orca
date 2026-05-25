@@ -169,10 +169,9 @@ export default function OnboardingFlow({
 
   return (
     <div
-      // Why: bg-popover + glass-surface-strong so onboarding reads as a
-      // proper frosted overlay over the app behind it, not a transparent
-      // window the user can see straight through.
-      className="glass-surface-strong fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-popover p-4 text-popover-foreground"
+      // Why: onboarding must fully block worktrees / terminals behind it
+      // under glass themes while users configure their initial setup.
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-[var(--background-opaque,var(--background))] p-4 text-foreground"
       data-onboarding-overlay
       onPointerDown={(event) => {
         if (event.button !== 0) {
