@@ -216,9 +216,15 @@ function RightSidebarInner(): React.JSX.Element {
         )}
       >
         {activityBarPosition === 'top' ? (
-          /* ── Top activity bar: horizontal icon row ── */
+          /* ── Top activity bar: horizontal icon row
+              Why: explicit 'right-sidebar-top-activity-bar' class so the
+              glass override in main.css can paint this bar with the same
+              bg as the titlebar (var(--bg-titlebar, var(--card))) — that
+              way the top of the right rail visually continues the
+              titlebar instead of looking like a slightly different
+              region due to bg-sidebar inheritance stacking. */
           <ContextMenu>
-            <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+            <div className="right-sidebar-top-activity-bar flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
               {!isWindows && (
                 <TooltipProvider delayDuration={400}>
                   <ContextMenuTrigger asChild>

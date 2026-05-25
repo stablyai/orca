@@ -438,6 +438,18 @@
 :root.glass-dark .right-sidebar-panel-content {
   border-left: none;
 }
+/* Why: the right rail's top activity bar inherits bg from
+   right-sidebar-panel-content (bg-sidebar). That stacks 15%+15% = ~28%
+   alpha over wallpaper, which reads a different shade than the titlebar
+   on the left (which paints bg-card 15% over body 15% = also ~28%, but
+   the visual hue can drift if intermediate layers paint anything). Set
+   the top activity bar to paint with the same --bg-titlebar fallback as
+   the titlebar so they read as one continuous strip across the window. */
+:root.glass-light .right-sidebar-top-activity-bar,
+:root.glass-dark .right-sidebar-top-activity-bar {
+  background: var(--bg-titlebar, var(--card));
+  border-bottom: none;
+}
 
 /* Why: xterm-viewport uses overflow-y:scroll (forced reserved gutter for
    the scrollbar). The gutter sits on top of xterm-viewport's transparent
