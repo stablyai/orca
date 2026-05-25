@@ -36,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -291,6 +291,7 @@ export default function AutomationsPage(): React.JSX.Element {
     workspaceMode: 'existing',
     workspaceId: '',
     baseBranch: '',
+    reuseSession: false,
     preset: 'weekdays',
     time: DEFAULT_TIME,
     dayOfWeek: '1',
@@ -556,16 +557,25 @@ export default function AutomationsPage(): React.JSX.Element {
       if (inFlight.has(run.id)) {
         return false
       }
+      const dispatchedAt = run.dispatchedAt ?? null
+      if (dispatchedAt === null) {
+        return false
+      }
       const paneKeyPrefix = `${run.terminalSessionId}:`
       const liveDone = Object.entries(agentStatusByPaneKey).some(
-        ([paneKey, entry]) => paneKey.startsWith(paneKeyPrefix) && entry.state === 'done'
+        ([paneKey, entry]) =>
+          paneKey.startsWith(paneKeyPrefix) &&
+          entry.state === 'done' &&
+          entry.updatedAt >= dispatchedAt
       )
       if (liveDone) {
         return true
       }
       return Object.entries(retainedAgentsByPaneKey).some(
         ([paneKey, retained]) =>
-          paneKey.startsWith(paneKeyPrefix) && retained.entry.state === 'done'
+          paneKey.startsWith(paneKeyPrefix) &&
+          retained.entry.state === 'done' &&
+          retained.entry.updatedAt >= dispatchedAt
       )
     })
     if (completedRuns.length === 0) {
@@ -642,7 +652,8 @@ export default function AutomationsPage(): React.JSX.Element {
       setDraft((current) => ({
         ...current,
         agentId: 'hermes',
-        workspaceMode: 'existing'
+        workspaceMode: 'existing',
+        reuseSession: false
       }))
     }
   }, [])
@@ -661,6 +672,7 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,
       baseBranch: '',
+      reuseSession: false,
       preset: 'weekdays',
       time: DEFAULT_TIME,
       dayOfWeek: '1',
@@ -712,6 +724,7 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
       baseBranch: latest.baseBranch ?? '',
+      reuseSession: latest.workspaceMode === 'existing' && latest.reuseSession,
       preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
       time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : DEFAULT_TIME,
       dayOfWeek: String(schedule?.dayOfWeek ?? 1),
@@ -756,6 +769,7 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: 'existing',
       workspaceId,
       baseBranch: '',
+      reuseSession: false,
       preset: hasCustomSchedule ? 'custom' : 'weekdays',
       time: DEFAULT_TIME,
       dayOfWeek: '1',
@@ -915,6 +929,7 @@ export default function AutomationsPage(): React.JSX.Element {
         workspaceMode: draft.workspaceMode,
         workspaceId: draft.workspaceId,
         baseBranch: draft.baseBranch.trim() || null,
+        reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
         timezone,
         missedRunGraceMinutes
       }
@@ -936,6 +951,7 @@ export default function AutomationsPage(): React.JSX.Element {
             workspaceMode: draft.workspaceMode,
             workspaceId: draft.workspaceId,
             baseBranch: draft.baseBranch.trim() || null,
+            reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
             timezone,
             rrule,
             dtstart: now,
@@ -1480,10 +1496,10 @@ export default function AutomationsPage(): React.JSX.Element {
                         </span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                           {automationRepo ? (
-                            <RepoDotLabel
+                            <RepoBadgeLabel
                               name={automationRepo.displayName}
                               color={automationRepo.badgeColor}
-                              dotClassName="size-1.5"
+                              badgeClassName="size-1.5"
                             />
                           ) : (
                             <span>Unknown project</span>

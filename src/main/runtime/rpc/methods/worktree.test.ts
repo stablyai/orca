@@ -25,8 +25,11 @@ describe('worktree RPC methods', () => {
         setupDecision: 'skip',
         displayName: 'Feature title',
         workspaceStatus: 'in-review',
+        manualOrder: 123_456,
         linkedIssue: 123,
         linkedPR: 456,
+        linkedGitLabIssue: 789,
+        linkedGitLabMR: 321,
         sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
         parentWorktree: 'id:parent'
@@ -41,9 +44,12 @@ describe('worktree RPC methods', () => {
       linkedIssue: 123,
       linkedPR: 456,
       linkedLinearIssue: undefined,
+      linkedGitLabIssue: 789,
+      linkedGitLabMR: 321,
       comment: undefined,
       displayName: 'Feature title',
       workspaceStatus: 'in-review',
+      manualOrder: 123_456,
       sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
       pushTarget: { remoteName: 'fork', branchName: 'feature' },
       runHooks: false,
@@ -51,6 +57,7 @@ describe('worktree RPC methods', () => {
       setupDecision: 'skip',
       createdWithAgent: undefined,
       startup: undefined,
+      startupDraft: undefined,
       lineage: {
         parentWorktree: 'id:parent',
         noParent: false,
@@ -58,6 +65,35 @@ describe('worktree RPC methods', () => {
         orchestrationContext: undefined
       }
     })
+  })
+
+  it('forwards task startup drafts to runtime worktree creation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'issue-123',
+        startupDraft: 'https://github.com/stablyai/orca/issues/123',
+        createdWithAgent: 'codex',
+        activate: true
+      })
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'repo-1',
+        name: 'issue-123',
+        activate: true,
+        createdWithAgent: 'codex',
+        startup: undefined,
+        startupDraft: 'https://github.com/stablyai/orca/issues/123'
+      })
+    )
   })
 
   it('rejects worktree.create when both parent and no-parent are supplied', async () => {
@@ -79,6 +115,56 @@ describe('worktree RPC methods', () => {
     expect(response).toMatchObject({ ok: false })
     expect(JSON.stringify(response)).toContain('Choose either --parent-worktree or --no-parent')
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('passes explicit repo selectors to PR base resolution', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveManagedPrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/pr-head' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.resolvePrBase', {
+        repo: 'id:repo-1',
+        prNumber: 42,
+        headRefName: 'feature/pr-head',
+        isCrossRepository: false
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.resolveManagedPrBase).toHaveBeenCalledWith({
+      repoSelector: 'id:repo-1',
+      prNumber: 42,
+      headRefName: 'feature/pr-head',
+      isCrossRepository: false
+    })
+  })
+
+  it('passes explicit repo selectors to MR base resolution', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-head' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.resolveMrBase', {
+        repo: 'id:repo-1',
+        mrIid: 42,
+        sourceBranch: 'feature/mr-head',
+        isCrossRepository: false
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.resolveManagedMrBase).toHaveBeenCalledWith({
+      repoSelector: 'id:repo-1',
+      mrIid: 42,
+      sourceBranch: 'feature/mr-head',
+      isCrossRepository: false
+    })
   })
 
   it('rejects worktree.set when both parent and no-parent are supplied', async () => {

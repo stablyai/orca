@@ -1,13 +1,18 @@
 import { ipcMain, shell, dialog } from 'electron'
 import { spawn } from 'node:child_process'
-import { constants, copyFile, stat } from 'node:fs/promises'
-import { isAbsolute, normalize } from 'node:path'
+import { constants, copyFile, readFile, stat } from 'node:fs/promises'
+import { basename, extname, isAbsolute, normalize, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
+import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import { resolveCliCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
+
+const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png'
+}
 
 async function pathExists(pathValue: string): Promise<boolean> {
   try {
@@ -51,9 +56,26 @@ function resolveExternalEditorCommand(command?: string): string {
   return resolveCliCommand(trimmed || EXTERNAL_EDITOR_CLI_COMMAND)
 }
 
+function getLauncherBaseName(command: string): string {
+  const name = command.includes('\\') ? win32.basename(command) : basename(command)
+  return name.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
+}
+
+function buildExternalEditorArgs(editorCommand: string, pathValue: string): string[] {
+  if (getLauncherBaseName(editorCommand) === 'cursor') {
+    // Why: Cursor can route bare folder launches through the last active
+    // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
+    return ['--new-window', pathValue]
+  }
+  return [pathValue]
+}
+
 async function launchExternalEditor(pathValue: string, command?: string): Promise<void> {
   const editorCommand = resolveExternalEditorCommand(command)
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(editorCommand, [pathValue])
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+    editorCommand,
+    buildExternalEditorArgs(editorCommand, pathValue)
+  )
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(spawnCmd, spawnArgs, {
@@ -219,6 +241,37 @@ export function registerShellHandlers(): void {
     }
     return result.filePaths[0]
   })
+
+  ipcMain.handle(
+    'shell:pickRepoIconImage',
+    async (): Promise<{ dataUrl: string; fileName: string } | null> => {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return null
+      }
+
+      const filePath = result.filePaths[0]
+      const extension = extname(filePath).toLowerCase()
+      const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
+      if (!mimeType) {
+        throw new Error('Repo icons must be PNG files.')
+      }
+
+      const stats = await stat(filePath)
+      if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+        throw new Error('Repo icon image must be 256KB or smaller.')
+      }
+
+      const buffer = await readFile(filePath)
+      return {
+        dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+        fileName: basename(filePath)
+      }
+    }
+  )
 
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({

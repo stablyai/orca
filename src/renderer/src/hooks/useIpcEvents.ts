@@ -13,19 +13,28 @@ import {
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
-import type { UpdateStatus, WorkspaceSessionState } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  UpdateStatus,
+  WorkspaceSessionState
+} from '../../../shared/types'
 import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
 } from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
+import type {
+  RuntimeBrowserDriverState,
+  RuntimeTerminalDriverState
+} from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import {
+  handleSwitchRecentTab,
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
@@ -37,9 +46,14 @@ import {
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  hydrateBrowserDrivers,
+  setDriverForBrowserPage
+} from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
@@ -48,13 +62,168 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import type { AppState } from '../store/types'
+import {
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
+import {
+  createFloatingWorkspaceTerminalTab,
+  isFloatingWorkspacePanelVisible
+} from '@/lib/floating-workspace-terminal-actions'
+import {
+  observeAgentHookCompletionForNotification,
+  resetAgentHookCompletionNotificationCoordinators,
+  syncAgentHookCompletionNotificationSettings
+} from './agent-hook-completion-notifications'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+
+function getShortcutPlatform(): NodeJS.Platform {
+  if (navigator.userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (navigator.userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  return 'linux'
+}
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
 const ZOOM_STEP = 0.5
+const PENDING_AGENT_STATUS_RETRY_MS = 100
+const PENDING_AGENT_STATUS_TTL_MS = 15_000
+const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
+
+function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
+  const detected = state.detectedWorktreesByRepo[repoId]
+  if (detected?.authoritative !== true) {
+    return null
+  }
+  return new Set(detected.worktrees.map((worktree) => worktree.id))
+}
+
+function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
+  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+}
+
+type TerminalSplitDirection = 'horizontal' | 'vertical'
+
+function insertLeafAfterSource(
+  node: TerminalPaneLayoutNode,
+  sourceLeafId: string,
+  newLeafId: string,
+  direction: TerminalSplitDirection
+): { node: TerminalPaneLayoutNode; inserted: boolean } {
+  if (node.type === 'leaf') {
+    if (node.leafId !== sourceLeafId) {
+      return { node, inserted: false }
+    }
+    return {
+      node: {
+        type: 'split',
+        direction,
+        first: node,
+        second: { type: 'leaf', leafId: newLeafId },
+        ratio: 0.5
+      },
+      inserted: true
+    }
+  }
+
+  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
+  if (first.inserted) {
+    return { node: { ...node, first: first.node }, inserted: true }
+  }
+  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
+  if (second.inserted) {
+    return { node: { ...node, second: second.node }, inserted: true }
+  }
+  return { node, inserted: false }
+}
+
+function addSplitLeafToLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  sourceLeafId: string,
+  newLeafId: string,
+  ptyId: string,
+  direction: TerminalSplitDirection,
+  title?: string | null,
+  activateNewLeaf = true
+): TerminalLayoutSnapshot {
+  const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
+  const existingLeafIds = collectLeafIdsInOrder(root)
+  const nextActiveLeafId =
+    activateNewLeaf || !layout?.activeLeafId || !existingLeafIds.includes(layout.activeLeafId)
+      ? newLeafId
+      : layout.activeLeafId
+  const nextRoot = existingLeafIds.includes(newLeafId)
+    ? root
+    : (() => {
+        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
+        if (inserted.inserted) {
+          return inserted.node
+        }
+        return {
+          type: 'split' as const,
+          direction,
+          first: root,
+          second: { type: 'leaf' as const, leafId: newLeafId },
+          ratio: 0.5
+        }
+      })()
+  return {
+    ...(layout ?? { root: null, activeLeafId: null, expandedLeafId: null }),
+    root: nextRoot,
+    activeLeafId: nextActiveLeafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout?.ptyIdsByLeafId,
+      [newLeafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout?.titlesByLeafId,
+            [newLeafId]: title
+          }
+        }
+      : {})
+  }
+}
+
+function activateExistingLeafInLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  leafId: string,
+  ptyId: string,
+  title?: string | null
+): TerminalLayoutSnapshot | null {
+  if (!layout?.root || !collectLeafIdsInOrder(layout.root).includes(leafId)) {
+    return null
+  }
+  return {
+    ...layout,
+    activeLeafId: leafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout.ptyIdsByLeafId,
+      [leafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout.titlesByLeafId,
+            [leafId]: title
+          }
+        }
+      : {})
+  }
+}
 
 export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
   return (
@@ -226,9 +395,6 @@ async function applyRemoteWorkspaceSnapshot(
 
 async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> {
   const store = useAppStore.getState()
-  if (store.sshTargetRemoteSyncEnabled.get(targetId) !== true) {
-    return
-  }
   if (!(await prepareRemoteWorkspaceTarget(targetId))) {
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: 'error',
@@ -319,13 +485,48 @@ function applyRemoteWorkspacePatchStatus(
   })
 }
 
+type BrowserSessionTabTarget =
+  | { kind: 'unified-browser'; unifiedTabId: string; workspaceId: string; groupId: string }
+  | { kind: 'fallback-browser'; workspaceId: string }
+
+export function resolveBrowserSessionTabTarget(
+  state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  tabId: string
+): BrowserSessionTabTarget | null {
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
+  if (tab?.contentType === 'browser') {
+    return {
+      kind: 'unified-browser',
+      unifiedTabId: tab.id,
+      workspaceId: tab.entityId,
+      groupId: tab.groupId
+    }
+  }
+  const fallbackBrowser = (state.browserTabsByWorktree[worktreeId] ?? []).find(
+    (workspace) => workspace.id === tabId
+  )
+  return fallbackBrowser ? { kind: 'fallback-browser', workspaceId: fallbackBrowser.id } : null
+}
+
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+}
+
+function getActiveRuntimeEnvironmentId(): string | null {
+  return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
+    type PendingAgentStatusEvent = {
+      data: AgentStatusIpcPayload
+      firstSeenAt: number
+    }
+    type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
+    const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
+    let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -355,11 +556,16 @@ export function useIpcEvents(): void {
         // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
         // misclassifying the zombie as bound (design §2c, §4.4).
         const state = useAppStore.getState()
-        const before = new Set((state.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const before =
+          getAuthoritativeDetectedWorktreeIds(state, data.repoId) ??
+          getVisibleWorktreeIdsForRepo(state, data.repoId)
         await state.fetchWorktrees(data.repoId)
         await useAppStore.getState().fetchWorktreeLineage()
         const afterState = useAppStore.getState()
-        const after = new Set((afterState.worktreesByRepo[data.repoId] ?? []).map((w) => w.id))
+        const after = getAuthoritativeDetectedWorktreeIds(afterState, data.repoId)
+        if (!after) {
+          return
+        }
         const removed: string[] = []
         for (const id of before) {
           if (!after.has(id)) {
@@ -395,6 +601,14 @@ export function useIpcEvents(): void {
       })
     )
 
+    if (window.api.gh?.onPRRefreshEvent) {
+      unsubs.push(
+        window.api.gh.onPRRefreshEvent((event) => {
+          useAppStore.getState().applyGitHubPRRefreshEvent(event)
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onOpenSettings(() => {
         useAppStore.getState().openSettingsPage()
@@ -404,12 +618,6 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onOpenFeatureTour(() => {
         useAppStore.getState().openModal('feature-wall', { source: 'help_menu' })
-      })
-    )
-
-    unsubs.push(
-      window.api.ui.onShowFeatureTourNudge(() => {
-        useAppStore.getState().showFeatureTourNudge()
       })
     )
 
@@ -436,6 +644,14 @@ export function useIpcEvents(): void {
         })
       })
     )
+
+    if (window.api.keybindings) {
+      unsubs.push(
+        window.api.keybindings.onChanged((snapshot) => {
+          useAppStore.getState().setKeybindingSnapshot(snapshot)
+        })
+      )
+    }
 
     unsubs.push(
       window.api.ui.onToggleLeftSidebar(() => {
@@ -466,6 +682,18 @@ export function useIpcEvents(): void {
       })
     )
 
+    if (window.api.ui.onTerminalShortcutCaptured) {
+      unsubs.push(
+        window.api.ui.onTerminalShortcutCaptured(({ actionId }) => {
+          showTerminalShortcutCaptureNotification({
+            actionId,
+            platform: getShortcutPlatform(),
+            keybindings: useAppStore.getState().keybindings
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onOpenQuickOpen(() => {
         const store = useAppStore.getState()
@@ -477,17 +705,26 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
-        // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
-        // composer when there is at least one real git repo configured, so
-        // users on a fresh install don't get a modal with nothing to target.
+        // Why: keep the global shortcut quiet on a fresh install, but allow
+        // both Git projects and plain folder projects to create workspaces.
         const store = useAppStore.getState()
-        if (!store.repos.some((repo) => isGitRepoKind(repo))) {
+        if (store.repos.length === 0) {
           return
         }
         if (store.activeModal === 'new-workspace-composer') {
           return
         }
         store.openModal('new-workspace-composer', { telemetrySource: 'shortcut' })
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenTasks(() => {
+        const store = useAppStore.getState()
+        if (store.activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
+          return
+        }
+        store.openTaskPage()
       })
     )
 
@@ -556,7 +793,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCreateTerminal(
-        ({ requestId, worktreeId, command, title, ptyId, activate, tabId, leafId }) => {
+        ({
+          requestId,
+          worktreeId,
+          command,
+          title,
+          ptyId,
+          activate,
+          tabId,
+          leafId,
+          splitFromLeafId,
+          splitDirection
+        }) => {
           try {
             if (isRuntimeEnvironmentActive()) {
               if (requestId) {
@@ -585,8 +833,16 @@ export function useIpcEvents(): void {
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
                 )
               : undefined
+            const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
+            const splitTargetTab = isSplitReveal
+              ? (store.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tabId)
+              : undefined
+            if (isSplitReveal && !splitTargetTab) {
+              throw new Error(`Terminal tab ${tabId} not found`)
+            }
+            const reusedTab = existingTab ?? splitTargetTab
             const tab =
-              existingTab ??
+              reusedTab ??
               (ptyId
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
@@ -615,14 +871,58 @@ export function useIpcEvents(): void {
             // Existing tabs may have a user customTitle (set via UI rename) that
             // the runtime's stored title would otherwise silently overwrite on
             // every focus.
-            if (title && !existingTab) {
+            if (title && !reusedTab) {
               store.setTabCustomTitle(tab.id, title)
             }
             if (leafId && ptyId) {
-              // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
-              // tab mounts TerminalPane, so the adopted UUID leaf must exist
-              // in layout state for paneKey validation to accept them.
-              store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+              if (splitFromLeafId) {
+                // Why: runtime-spawned split PTYs already carry the parent tab's
+                // paneKey. Reusing the existing tab preserves native split-pane
+                // behavior instead of letting createTab mint a collision tab.
+                store.updateTabPtyId(tab.id, ptyId)
+                store.setTabLayout(
+                  tab.id,
+                  addSplitLeafToLayout(
+                    store.terminalLayoutsByTabId?.[tab.id],
+                    splitFromLeafId,
+                    leafId,
+                    ptyId,
+                    splitDirection ?? 'horizontal',
+                    title,
+                    shouldActivate
+                  )
+                )
+                window.dispatchEvent(
+                  new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
+                    detail: {
+                      tabId: tab.id,
+                      paneRuntimeId: -1,
+                      direction: splitDirection ?? 'horizontal',
+                      sourceLeafId: splitFromLeafId,
+                      newLeafId: leafId,
+                      ptyId
+                    }
+                  })
+                )
+              } else {
+                // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
+                // tab mounts TerminalPane, so the adopted UUID leaf must exist
+                // in layout state for paneKey validation to accept them.
+                const existingLayout = reusedTab
+                  ? activateExistingLeafInLayout(
+                      store.terminalLayoutsByTabId?.[tab.id],
+                      leafId,
+                      ptyId,
+                      title
+                    )
+                  : null
+                if (existingLayout) {
+                  store.updateTabPtyId(tab.id, ptyId)
+                  store.setTabLayout(tab.id, existingLayout)
+                } else {
+                  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+                }
+              }
             }
             if (command) {
               store.queueTabStartupCommand(tab.id, { command })
@@ -687,7 +987,7 @@ export function useIpcEvents(): void {
           }
           const tab = store.createTab(
             worktreeId,
-            undefined,
+            data.targetGroupId,
             undefined,
             shouldActivate ? undefined : { activate: false }
           )
@@ -755,19 +1055,38 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onFocusTerminal(({ tabId, worktreeId, leafId }) => {
-        const store = useAppStore.getState()
-        store.setActiveWorktree(worktreeId)
-        // Why: CLI-driven focus is a user-initiated switch; stamp focus
-        // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        store.setActiveTab(tabId)
-        store.revealWorktreeInSidebar(worktreeId)
-        if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-          focusTerminalTabSurface(tabId, leafId)
+      window.api.ui.onFocusTerminal(
+        ({
+          tabId,
+          worktreeId,
+          leafId,
+          ackPaneKeyOnSuccess,
+          flashFocusedPane,
+          scrollToBottomIfOutputSinceLastView
+        }) => {
+          const store = useAppStore.getState()
+          store.setActiveWorktree(worktreeId)
+          // Why: CLI-driven focus is a user-initiated switch; stamp focus
+          // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
+          store.markWorktreeVisited(worktreeId)
+          store.setActiveView('terminal')
+          store.setActiveTab(tabId)
+          store.revealWorktreeInSidebar(worktreeId)
+          if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
+            activateTabAndFocusPane(tabId, leafId ?? null, {
+              ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
+              ...(flashFocusedPane ? { flashFocusedPane: true } : {}),
+              ...(scrollToBottomIfOutputSinceLastView
+                ? { scrollToBottomIfOutputSinceLastView: true }
+                : {})
+            })
+            return
+          }
+          if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+            focusTerminalTabSurface(tabId, leafId)
+          }
         }
-      })
+      )
     )
 
     unsubs.push(
@@ -776,7 +1095,18 @@ export function useIpcEvents(): void {
         const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
           (item) => item.id === tabId
         )
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
         if (!tab) {
+          if (browserTarget) {
+            // Why: older/mobile fallback snapshots can identify browser tabs
+            // by workspace id when no unified tab wrapper exists.
+            store.setActiveWorktree(worktreeId)
+            store.markWorktreeVisited(worktreeId)
+            store.setActiveView('terminal')
+            store.setActiveBrowserTab(browserTarget.workspaceId)
+            store.setActiveTabType('browser')
+            store.revealWorktreeInSidebar(worktreeId)
+          }
           return
         }
         store.setActiveWorktree(worktreeId)
@@ -784,15 +1114,45 @@ export function useIpcEvents(): void {
         store.setActiveView('terminal')
         store.focusGroup(worktreeId, tab.groupId)
         store.activateTab(tab.id)
-        store.setActiveFile(tab.entityId)
-        store.setActiveTabType('editor')
+        if (browserTarget) {
+          // Why: mobile session tabs reuse this IPC for renderer-owned
+          // unified tabs. Browser tabs need their own active-page state,
+          // not the editor file activation path.
+          store.setActiveBrowserTab(browserTarget.workspaceId)
+          store.setActiveTabType('browser')
+        } else {
+          store.setActiveFile(tab.entityId)
+          store.setActiveTabType('editor')
+        }
         store.revealWorktreeInSidebar(worktreeId)
       })
     )
 
     unsubs.push(
-      window.api.ui.onCloseSessionTab(({ tabId }) => {
-        useAppStore.getState().closeUnifiedTab(tabId)
+      window.api.ui.onCloseSessionTab(({ tabId, worktreeId }) => {
+        const store = useAppStore.getState()
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+        if (browserTarget) {
+          store.closeBrowserTab(browserTarget.workspaceId)
+          return
+        }
+        store.closeUnifiedTab(tabId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onMoveSessionTab((move) => {
+        const { tabId, targetGroupId } = move
+        const store = useAppStore.getState()
+        if (move.kind === 'reorder') {
+          store.reorderUnifiedTabs(targetGroupId, move.tabOrder)
+          return
+        }
+        store.dropUnifiedTab(tabId, {
+          groupId: targetGroupId,
+          ...(move.kind === 'move-to-group' ? { index: move.index } : {}),
+          ...(move.kind === 'split' ? { splitDirection: move.splitDirection } : {})
+        })
       })
     )
 
@@ -813,6 +1173,22 @@ export function useIpcEvents(): void {
           language: detectLanguage(basename),
           mode: 'edit'
         })
+        store.setActiveTabType('editor')
+        store.revealWorktreeInSidebar(worktreeId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenDiffFromMobile(({ worktreeId, filePath, relativePath, staged }) => {
+        const store = useAppStore.getState()
+        const language = detectLanguage(relativePath)
+        store.setActiveWorktree(worktreeId)
+        store.markWorktreeVisited(worktreeId)
+        store.setActiveView('terminal')
+        // Why: mobile renders diff tabs from diff metadata. The desktop
+        // markdown Changes-mode shortcut is editor-local and would publish
+        // plain markdown content back to mobile.
+        store.openDiff(worktreeId, filePath, relativePath, language, staged)
         store.setActiveTabType('editor')
         store.revealWorktreeInSidebar(worktreeId)
       })
@@ -956,12 +1332,29 @@ export function useIpcEvents(): void {
     // capture keyboard focus and bypass the renderer's window-level keydown.
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
-        if (isRuntimeEnvironmentActive()) {
-          return
-        }
         const store = useAppStore.getState()
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
+          if (isRuntimeEnvironmentActive()) {
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
+                title: 'New Browser Tab',
+                focusAddressBar: true
+              })
+              return
+            }
+            void (async () => {
+              // Why: paired web browser tabs are host-owned and arrive through
+              // session.tabs. On RPC failure we leave local state unchanged so
+              // the next host snapshot remains authoritative.
+              await createWebRuntimeSessionBrowserTab({
+                worktreeId,
+                url: store.browserDefaultUrl ?? 'about:blank'
+              })
+            })()
+            return
+          }
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
             title: 'New Browser Tab',
             focusAddressBar: true
@@ -1137,35 +1530,50 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onNewTerminalTab(() => {
         const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelVisible()) {
+          void createFloatingWorkspaceTerminalTab(store)
+          return
+        }
         const worktreeId = store.activeWorktreeId
         if (!worktreeId) {
           return
         }
-        const newTab = store.createTab(worktreeId)
-        store.setActiveTabType('terminal')
-        // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
-        // so the new tab appends at the visual end instead of jumping to index 0
-        // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
-        const currentTerminals = store.tabsByWorktree[worktreeId] ?? []
-        const currentEditors = store.openFiles.filter((f) => f.worktreeId === worktreeId)
-        const currentBrowsers = store.browserTabsByWorktree[worktreeId] ?? []
-        const stored = store.tabBarOrderByWorktree[worktreeId]
-        const termIds = currentTerminals.map((t) => t.id)
-        const editorIds = currentEditors.map((f) => f.id)
-        const browserIds = currentBrowsers.map((tab) => tab.id)
-        const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-        const base = (stored ?? []).filter((id) => validIds.has(id))
-        const inBase = new Set(base)
-        for (const id of [...termIds, ...editorIds, ...browserIds]) {
-          if (!inBase.has(id)) {
-            base.push(id)
-            inBase.add(id)
+        void (async () => {
+          if (
+            await createWebRuntimeSessionTerminal({
+              worktreeId,
+              activate: true
+            })
+          ) {
+            return
           }
-        }
-        const order = base.filter((id) => id !== newTab.id)
-        order.push(newTab.id)
-        store.setTabBarOrder(worktreeId, order)
-        focusTerminalTabSurface(newTab.id)
+          const newTab = store.createTab(worktreeId)
+          store.setActiveTabType('terminal')
+          // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
+          // so the new tab appends at the visual end instead of jumping to index 0
+          // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
+          const freshStore = useAppStore.getState()
+          const currentTerminals = freshStore.tabsByWorktree[worktreeId] ?? []
+          const currentEditors = freshStore.openFiles.filter((f) => f.worktreeId === worktreeId)
+          const currentBrowsers = freshStore.browserTabsByWorktree[worktreeId] ?? []
+          const stored = freshStore.tabBarOrderByWorktree[worktreeId]
+          const termIds = currentTerminals.map((t) => t.id)
+          const editorIds = currentEditors.map((f) => f.id)
+          const browserIds = currentBrowsers.map((tab) => tab.id)
+          const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+          const base = (stored ?? []).filter((id) => validIds.has(id))
+          const inBase = new Set(base)
+          for (const id of [...termIds, ...editorIds, ...browserIds]) {
+            if (!inBase.has(id)) {
+              base.push(id)
+              inBase.add(id)
+            }
+          }
+          const order = base.filter((id) => id !== newTab.id)
+          order.push(newTab.id)
+          freshStore.setTabBarOrder(worktreeId, order)
+          focusTerminalTabSurface(newTab.id)
+        })()
       })
     )
 
@@ -1173,6 +1581,20 @@ export function useIpcEvents(): void {
       window.api.ui.onCloseActiveTab(() => {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
+          if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.closeBrowserTab(store.activeBrowserTabId)
+              return
+            }
+            void (async () => {
+              await closeWebRuntimeSessionTab({
+                worktreeId: store.activeWorktreeId!,
+                tabId: store.activeBrowserTabId!
+              })
+            })()
+            return
+          }
           store.closeBrowserTab(store.activeBrowserTabId)
         }
       })
@@ -1180,6 +1602,7 @@ export function useIpcEvents(): void {
 
     unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
     unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
+    unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
     unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
 
     // Hydrate initial rate limit state then subscribe to push updates
@@ -1231,14 +1654,12 @@ export function useIpcEvents(): void {
                 useAppStore.getState().setPortForwards(target.id, forwards)
                 useAppStore.getState().setDetectedPorts(target.id, detected)
               }
-              if (target.remoteWorkspaceSyncEnabled) {
-                void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
-                  useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
-                    phase: 'error',
-                    message: err instanceof Error ? err.message : 'Workspace sync failed'
-                  })
+              void syncRemoteWorkspaceAfterConnect(target.id).catch((err) => {
+                useAppStore.getState().setRemoteWorkspaceSyncStatus(target.id, {
+                  phase: 'error',
+                  message: err instanceof Error ? err.message : 'Workspace sync failed'
                 })
-              }
+              })
             }
           }
         }
@@ -1271,98 +1692,124 @@ export function useIpcEvents(): void {
       })
     )
 
+    const applySshConnectionStateChange = (targetId: string, state: SshConnectionState): void => {
+      const store = useAppStore.getState()
+      store.setSshConnectionState(targetId, state)
+      const remoteRepos = store.repos.filter((r) => r.connectionId === targetId)
+
+      if (['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)) {
+        // Why: the remote agent list is tied to a live SSH connection. On
+        // disconnect the relay is gone, so clear the cached list and dedup
+        // promise. When the user reconnects and opens the quick-launch menu,
+        // ensureRemoteDetectedAgents will re-detect against the new relay.
+        store.clearRemoteDetectedAgents(targetId)
+
+        // Why: defensive — clear port forward and detected port state in case
+        // the broadcast from removeAllForwards races with the state change.
+        store.clearPortForwards(targetId)
+        store.setDetectedPorts(targetId, [])
+
+        // Why: an explicit disconnect or terminal failure tears down the SSH
+        // PTY provider without emitting per-PTY exit events. Clear the stale
+        // PTY ids in renderer state so a later reconnect remounts TerminalPane
+        // instead of keeping a dead remote PTY attached to the tab.
+        const remoteWorktreeIds = new Set(
+          Object.values(store.worktreesByRepo)
+            .flat()
+            .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
+            .map((w) => w.id)
+        )
+        for (const worktreeId of remoteWorktreeIds) {
+          const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+          for (const tab of tabs) {
+            if (tab.ptyId) {
+              useAppStore.getState().clearTabPtyId(tab.id)
+            }
+          }
+        }
+      }
+
+      if (state.status === 'connected') {
+        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
+          await useAppStore.getState().fetchWorktreeLineage()
+          // Why: terminal panes that failed to spawn (no PTY provider on cold
+          // start) sit inert. Bumping generation forces TerminalPane to remount
+          // and retry pty:spawn. Only bump tabs with no live ptyId.
+          const freshStore = useAppStore.getState()
+          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
+          const worktreeIds = Object.values(freshStore.worktreesByRepo)
+            .flat()
+            .filter((w) => remoteRepoIds.has(w.repoId))
+            .map((w) => w.id)
+
+          for (const worktreeId of worktreeIds) {
+            const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
+            const hasDead = tabs.some((t) => !t.ptyId)
+            if (hasDead) {
+              useAppStore.setState((s) => ({
+                tabsByWorktree: {
+                  ...s.tabsByWorktree,
+                  [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
+                    t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
+                  )
+                }
+              }))
+            }
+          }
+          void syncRemoteWorkspaceAfterConnect(targetId).catch((err) => {
+            useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+              phase: 'error',
+              message: err instanceof Error ? err.message : 'Workspace sync failed'
+            })
+          })
+        })
+      }
+    }
+
+    let sshTargetStateEventId = 0
+    const latestSshTargetStateEventByTargetId = new Map<string, number>()
+
     unsubs.push(
       window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
         const store = useAppStore.getState()
         const state = data.state as SshConnectionState
-        store.setSshConnectionState(data.targetId, state)
-        const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
-
-        // Why: targets added after boot aren't in the labels map. Re-fetch
-        // so the status bar popover shows the new target immediately.
+        const stateEventId = ++sshTargetStateEventId
+        latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
         if (!store.sshTargetLabels.has(data.targetId)) {
+          // Why: targets added after boot aren't in the labels map, while
+          // removed targets can still race a final disconnect event. Confirm
+          // with main before mutating renderer state for an unknown target id.
           window.api.ssh
             .listTargets()
+            // Why: this refresh is now a deletion guard, not just a label fetch.
+            // Retry once so a transient IPC failure does not drop a real added-target event.
+            .catch(() => window.api.ssh.listTargets())
             .then((targets) => {
-              useAppStore.getState().setSshTargetsMetadata(targets)
-            })
-            .catch(() => {})
-        }
-
-        if (
-          ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)
-        ) {
-          // Why: the remote agent list is tied to a live SSH connection. On
-          // disconnect the relay is gone, so clear the cached list and dedup
-          // promise. When the user reconnects and opens the quick-launch menu,
-          // ensureRemoteDetectedAgents will re-detect against the new relay.
-          store.clearRemoteDetectedAgents(data.targetId)
-
-          // Why: defensive — clear port forward and detected port state in case
-          // the broadcast from removeAllForwards races with the state change.
-          store.clearPortForwards(data.targetId)
-          store.setDetectedPorts(data.targetId, [])
-
-          // Why: an explicit disconnect or terminal failure tears down the SSH
-          // PTY provider without emitting per-PTY exit events. Clear the stale
-          // PTY ids in renderer state so a later reconnect remounts TerminalPane
-          // instead of keeping a dead remote PTY attached to the tab.
-          const remoteWorktreeIds = new Set(
-            Object.values(store.worktreesByRepo)
-              .flat()
-              .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
-              .map((w) => w.id)
-          )
-          for (const worktreeId of remoteWorktreeIds) {
-            const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-            for (const tab of tabs) {
-              if (tab.ptyId) {
-                useAppStore.getState().clearTabPtyId(tab.id)
+              if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
+                return
               }
-            }
-          }
-        }
-
-        if (state.status === 'connected') {
-          // Why: the file explorer may have tried (and failed) to load the tree
-          // before the SSH connection was established. Bumping the generation
-          // lets it detect that providers are now available and retry.
-          store.bumpSshConnectedGeneration()
-
-          void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
-            await useAppStore.getState().fetchWorktreeLineage()
-            // Why: terminal panes that failed to spawn (no PTY provider on cold
-            // start) sit inert. Bumping generation forces TerminalPane to remount
-            // and retry pty:spawn. Only bump tabs with no live ptyId.
-            const freshStore = useAppStore.getState()
-            const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
-            const worktreeIds = Object.values(freshStore.worktreesByRepo)
-              .flat()
-              .filter((w) => remoteRepoIds.has(w.repoId))
-              .map((w) => w.id)
-
-            for (const worktreeId of worktreeIds) {
-              const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
-              const hasDead = tabs.some((t) => !t.ptyId)
-              if (hasDead) {
-                useAppStore.setState((s) => ({
-                  tabsByWorktree: {
-                    ...s.tabsByWorktree,
-                    [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                      t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
-                    )
-                  }
-                }))
+              latestSshTargetStateEventByTargetId.delete(data.targetId)
+              const latestStore = useAppStore.getState()
+              if (!targets.some((target) => target.id === data.targetId)) {
+                // Why: disconnect/state events can race after target removal.
+                // Treat absence from main's target list as deletion, not a new target.
+                latestStore.clearRemovedSshTargetState(data.targetId)
+                return
               }
-            }
-            void syncRemoteWorkspaceAfterConnect(data.targetId).catch((err) => {
-              useAppStore.getState().setRemoteWorkspaceSyncStatus(data.targetId, {
-                phase: 'error',
-                message: err instanceof Error ? err.message : 'Workspace sync failed'
-              })
+              latestStore.setSshTargetsMetadata(targets)
+              applySshConnectionStateChange(data.targetId, state)
             })
-          })
+            .catch(() => {
+              if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
+                latestSshTargetStateEventByTargetId.delete(data.targetId)
+                applySshConnectionStateChange(data.targetId, state)
+              }
+            })
+          return
         }
+
+        latestSshTargetStateEventByTargetId.delete(data.targetId)
+        applySshConnectionStateChange(data.targetId, state)
       })
     )
 
@@ -1454,13 +1901,55 @@ export function useIpcEvents(): void {
     // hook callback or an OSC fallback path. Startup pushes are ignored until
     // workspace session hydration finishes; the snapshot pull below replays the
     // main-process cache after tab identity is available.
+    function schedulePendingAgentStatusFlush(): void {
+      if (pendingAgentStatusRetryTimer !== null || pendingAgentStatusEvents.length === 0) {
+        return
+      }
+      pendingAgentStatusRetryTimer = globalThis.setTimeout(() => {
+        pendingAgentStatusRetryTimer = null
+        flushPendingAgentStatuses()
+      }, PENDING_AGENT_STATUS_RETRY_MS)
+    }
+
+    function enqueuePendingAgentStatus(data: AgentStatusIpcPayload): void {
+      pendingAgentStatusEvents.push({ data, firstSeenAt: Date.now() })
+      while (pendingAgentStatusEvents.length > MAX_PENDING_AGENT_STATUS_EVENTS) {
+        pendingAgentStatusEvents.shift()
+      }
+      schedulePendingAgentStatusFlush()
+    }
+
+    function flushPendingAgentStatuses(): void {
+      if (pendingAgentStatusEvents.length === 0) {
+        return
+      }
+      const now = Date.now()
+      const remaining: PendingAgentStatusEvent[] = []
+      for (const event of pendingAgentStatusEvents) {
+        if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
+          continue
+        }
+        const result = applyAgentStatus(event.data, { retry: true })
+        if (result === 'pending') {
+          remaining.push(event)
+        }
+      }
+      pendingAgentStatusEvents.length = 0
+      pendingAgentStatusEvents.push(...remaining)
+      if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
+        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+        pendingAgentStatusRetryTimer = null
+      }
+      schedulePendingAgentStatusFlush()
+    }
+
     const applyAgentStatus = (
       data: AgentStatusIpcPayload,
-      options?: { replay?: boolean }
-    ): void => {
+      options?: { replay?: boolean; retry?: boolean }
+    ): AgentStatusApplyResult => {
       const store = useAppStore.getState()
       if (!store.workspaceSessionReady) {
-        return
+        return 'dropped'
       }
       const payload = normalizeAgentStatusPayload({
         state: data.state,
@@ -1472,7 +1961,7 @@ export function useIpcEvents(): void {
         interrupted: data.interrupted
       })
       if (!payload) {
-        return
+        return 'dropped'
       }
       const { exists, title, repoConnectionId, repoConnectionResolved, owningWorktreeId } =
         resolvePaneKey(store, data.paneKey)
@@ -1484,9 +1973,23 @@ export function useIpcEvents(): void {
         // include entries whose tabs were closed before this session — that
         // reconciliation miss is not a regression signal.
         if (options?.replay !== true) {
-          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+          if (options?.retry !== true) {
+            track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+            // Why: live hook IPC can beat the renderer's tab/layout hydration.
+            // Main already cached the event; retry locally so a transient
+            // pane-key miss does not drop Droid/Codex completion state.
+            enqueuePendingAgentStatus(data)
+          }
+          return 'pending'
         }
-        return
+        return 'dropped'
+      }
+      if (options?.replay !== true && options?.retry !== true) {
+        for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+          if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
+            pendingAgentStatusEvents.splice(index, 1)
+          }
+        }
       }
       // Why: drop in-flight events from a connection that no longer owns
       // this pane. After an SSH disconnect (or tab destroy/recreate during
@@ -1513,12 +2016,27 @@ export function useIpcEvents(): void {
         data.connectionId !== repoConnectionId &&
         !canAcceptPendingRemoteOwnership
       ) {
-        return
+        return 'dropped'
       }
-      store.setAgentStatus(data.paneKey, payload, title, {
+      const statusPayload = data.orchestration
+        ? { ...payload, orchestration: data.orchestration }
+        : payload
+      store.setAgentStatus(data.paneKey, statusPayload, title, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
       })
+      const statusWorktreeId = data.worktreeId ?? owningWorktreeId
+      if (options?.replay !== true && statusWorktreeId) {
+        // Why: local Codex/Claude hooks arrive through this main-process IPC
+        // path, not the PTY OSC fallback, so task-complete notifications must
+        // observe accepted hook state here as well.
+        observeAgentHookCompletionForNotification({
+          paneKey: data.paneKey,
+          worktreeId: statusWorktreeId,
+          payload
+        })
+      }
+      return 'applied'
     }
 
     let snapshotRequestedForReadyWindow = false
@@ -1611,7 +2129,13 @@ export function useIpcEvents(): void {
     // can be safely ignored instead of buffered against partially hydrated
     // renderer state.
     requestAgentStatusSnapshotIfReady()
-    unsubs.push(useAppStore.subscribe(() => requestAgentStatusSnapshotIfReady()))
+    unsubs.push(
+      useAppStore.subscribe(() => {
+        requestAgentStatusSnapshotIfReady()
+        flushPendingAgentStatuses()
+        syncAgentHookCompletionNotificationSettings()
+      })
+    )
 
     let mobileStateHydrated = isRuntimeEnvironmentActive()
     type PendingMobileStateEvent =
@@ -1631,6 +2155,13 @@ export function useIpcEvents(): void {
             driver: RuntimeTerminalDriverState
           }
         }
+      | {
+          kind: 'browser-driver'
+          event: {
+            browserPageId: string
+            driver: RuntimeBrowserDriverState
+          }
+        }
     const pendingMobileStateEvents: PendingMobileStateEvent[] = []
 
     const applyPendingMobileStateEvents = (): void => {
@@ -1638,8 +2169,10 @@ export function useIpcEvents(): void {
         if (pending.kind === 'fit') {
           const { ptyId, mode, cols, rows } = pending.event
           setFitOverride(ptyId, mode, cols, rows)
-        } else {
+        } else if (pending.kind === 'driver') {
           setDriverForPty(pending.event.ptyId, pending.event.driver)
+        } else {
+          setDriverForBrowserPage(pending.event.browserPageId, pending.event.driver)
         }
       }
       pendingMobileStateEvents.length = 0
@@ -1675,17 +2208,32 @@ export function useIpcEvents(): void {
       })
     )
 
+    unsubs.push(
+      window.api.runtime.onBrowserDriverChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (!mobileStateHydrated) {
+          pendingMobileStateEvents.push({ kind: 'browser-driver', event })
+          return
+        }
+        setDriverForBrowserPage(event.browserPageId, event.driver)
+      })
+    )
+
     // Why: hydrate mobile-owned terminal state on renderer reload. Subscribe
     // first and buffer live events during the snapshot round trip; otherwise an
     // older snapshot could overwrite a newer live lock and hide the overlay.
     if (!isRuntimeEnvironmentActive()) {
       void Promise.all([
         window.api.runtime.getTerminalFitOverrides(),
-        window.api.runtime.getTerminalDrivers()
+        window.api.runtime.getTerminalDrivers(),
+        window.api.runtime.getBrowserDrivers()
       ])
-        .then(([overrides, drivers]) => {
+        .then(([overrides, drivers, browserDrivers]) => {
           hydrateOverrides(overrides)
           hydrateDrivers(drivers)
+          hydrateBrowserDrivers(browserDrivers)
           mobileStateHydrated = true
           applyPendingMobileStateEvents()
         })
@@ -1696,7 +2244,14 @@ export function useIpcEvents(): void {
         })
     }
 
-    return () => unsubs.forEach((fn) => fn())
+    return () => {
+      if (pendingAgentStatusRetryTimer !== null) {
+        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+      }
+      pendingAgentStatusEvents.length = 0
+      unsubs.forEach((fn) => fn())
+      resetAgentHookCompletionNotificationCoordinators()
+    }
   }, [])
 }
 
@@ -1733,24 +2288,6 @@ function resolvePaneKey(
   }
   const { tabId, leafId } = parsed
   const layout = store.terminalLayoutsByTabId?.[tabId]
-  const leafExists = collectLeafIdsInOrder(layout?.root).includes(leafId)
-  if (!leafExists) {
-    return {
-      exists: false,
-      title: undefined,
-      repoConnectionId: null,
-      repoConnectionResolved: false,
-      owningWorktreeId: undefined
-    }
-  }
-  // Why: replay can remint numeric pane ids, so status title recovery must use
-  // persisted leaf-keyed titles when crossing from hook state into tab state.
-  const rawPaneTitle = layout?.titlesByLeafId?.[leafId]
-  // Why: treat an empty-string paneTitle as "no title" so the tab-level
-  // fallback still fires. `paneTitle ?? tabTitle` alone would short-circuit on
-  // '' and also erase any previously-cached terminalTitle in the store
-  // (`terminalTitle ?? existing?.terminalTitle` resolves to '').
-  const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
   let exists = false
   let tabTitle: string | undefined
   let owningWorktreeId: string | undefined
@@ -1781,6 +2318,33 @@ function resolvePaneKey(
       repoConnectionId = repo?.connectionId ?? null
     }
   }
+  if (!exists) {
+    return {
+      exists: false,
+      title: undefined,
+      repoConnectionId,
+      repoConnectionResolved,
+      owningWorktreeId
+    }
+  }
+  const leafExists = layout ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
+  if (!leafExists) {
+    return {
+      exists: false,
+      title: undefined,
+      repoConnectionId,
+      repoConnectionResolved,
+      owningWorktreeId
+    }
+  }
+  // Why: inactive worktrees can have a durable tab and live PTY while their
+  // terminal layout is temporarily unmounted. Hook state must still land there.
+  const rawPaneTitle = layout?.titlesByLeafId?.[leafId]
+  // Why: treat an empty-string paneTitle as "no title" so the tab-level
+  // fallback still fires. `paneTitle ?? tabTitle` alone would short-circuit on
+  // '' and also erase any previously-cached terminalTitle in the store
+  // (`terminalTitle ?? existing?.terminalTitle` resolves to '').
+  const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
   return {
     exists,
     title: paneTitle ?? tabTitle,

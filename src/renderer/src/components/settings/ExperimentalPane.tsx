@@ -23,7 +23,7 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.pet])
-  const showActivity = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.activity])
+  const showAgentsView = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.activity])
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_SEARCH_ENTRY.symlinks
   ])
@@ -35,7 +35,7 @@ export function ExperimentalPane({
           title="Pet"
           description="Floating animated pet in the bottom-right corner."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.pet.keywords}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
           id="experimental-pet"
         >
           <div className="flex items-start justify-between gap-4">
@@ -69,18 +69,18 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
-      {showActivity ? (
+      {showAgentsView ? (
         <SearchableSetting
-          title="Activity Page"
-          description="Slack-style worktree activity feed for agent completions and blocking states."
+          title="Agents View"
+          description="Threaded left-sidebar feed for agent completions and blocking states."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.activity.keywords}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
-              <Label>Activity Page</Label>
+              <Label>Agents View</Label>
               <p className="text-xs text-muted-foreground">
-                Adds an Activity entry under Tasks with a threaded worktree feed for completed
+                Adds an Agents entry to the left sidebar with a threaded worktree feed for completed
                 agents, blocking questions, unread state, and worktree creation events. Experimental
                 — the event model and UI may change.
               </p>
@@ -113,7 +113,7 @@ export function ExperimentalPane({
           title="Symlinks on worktrees"
           description="Automatically symlink configured files or folders into newly created worktrees."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.symlinks.keywords}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">

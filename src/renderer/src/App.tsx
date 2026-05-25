@@ -44,7 +44,6 @@ import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
-import { FeatureTourNudge } from './components/feature-wall/FeatureTourNudge'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
@@ -56,8 +55,16 @@ import {
   FloatingTerminalToggleButton
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  isFloatingWorkspacePanelFocused,
+  isFloatingWorkspacePanelShortcut,
+  isFloatingWorkspaceTerminalInputTarget,
+  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
+} from '@/lib/floating-workspace-terminal-actions'
 import { DictationController } from './components/dictation/DictationController'
+import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
+import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
@@ -68,13 +75,16 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import {
+  canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
+import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
@@ -88,6 +98,12 @@ import {
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
+import { useShortcutLabel } from './hooks/useShortcutLabel'
+import {
+  folderRelativePathToIncludeGlob,
+  selectedExplorerFolderRelativePath
+} from './components/right-sidebar/file-search-include-pattern'
+import { shouldShowWorktreeHistoryControls } from './lib/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
@@ -95,9 +111,25 @@ import {
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
+import {
+  keybindingMatchesAction,
+  type KeybindingActionId,
+  type KeybindingContext
+} from '../../shared/keybindings'
+import { isGitRepoKind } from '../../shared/repo-kind'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
+const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+function getKeybindingContext(target: EventTarget | null): KeybindingContext {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+    ? 'terminal'
+    : 'app'
+}
 
 // Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
 // so we render our own minimize/maximize/close buttons.  These SVG icons match
@@ -172,6 +204,7 @@ const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityP
 const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
+const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
@@ -179,6 +212,7 @@ const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
+const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -219,6 +253,8 @@ function applyRemoteWorkspacePatchStatus(
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  useRadixBodyPointerEventsRecovery()
+  useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
@@ -232,8 +268,11 @@ function App(): React.JSX.Element {
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
+      fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
       refreshAllGitHub: s.refreshAllGitHub,
+      reportVisibleGitHubPRRefreshCandidates: s.reportVisibleGitHubPRRefreshCandidates,
+      bumpGitHubPRVisibleRefreshGeneration: s.bumpGitHubPRVisibleRefreshGeneration,
       hydrateWorkspaceSession: s.hydrateWorkspaceSession,
       hydrateTabsSession: s.hydrateTabsSession,
       hydrateEditorSession: s.hydrateEditorSession,
@@ -246,10 +285,12 @@ function App(): React.JSX.Element {
       setHydrationSucceeded: s.setHydrationSucceeded,
       openModal: s.openModal,
       closeModal: s.closeModal,
+      markFeatureTipsSeen: s.markFeatureTipsSeen,
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
       seedFileSearchQuery: s.seedFileSearchQuery,
+      seedFileSearchIncludePattern: s.seedFileSearchIncludePattern,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -259,6 +300,7 @@ function App(): React.JSX.Element {
 
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
+  const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -266,10 +308,18 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const floatingUnifiedTabCount = useAppStore(
+    (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const keybindings = useAppStore((s) => s.keybindings)
+  const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
+  const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
+  const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
+  const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -278,7 +328,7 @@ function App(): React.JSX.Element {
   const showFloatingTerminalButton =
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
-  // Why: the floating terminal is a transient overlay; hotkey minimize should
+  // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
 
@@ -342,7 +392,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -363,6 +413,9 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const featureTipsPromptedThisSessionRef = useRef(false)
+  const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
+  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -392,6 +445,45 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
+  }, [])
+
+  useEffect(() => {
+    const featureTipsDecision = getFeatureTipsAppOpenDecision({
+      activeModal,
+      featureTipsSeenIds,
+      onboarding,
+      persistedUIReady,
+      promptedThisSession: featureTipsPromptedThisSessionRef.current,
+      settings,
+      suppressedByOnboardingThisSession: featureTipsSuppressedByOnboardingThisSessionRef.current
+    })
+
+    if (featureTipsDecision.kind === 'suppress-for-onboarding') {
+      // Why: first-download users should finish onboarding without a second
+      // education modal appearing later in the same first-run session.
+      featureTipsSuppressedByOnboardingThisSessionRef.current = true
+      return
+    }
+
+    if (featureTipsDecision.kind !== 'open') {
+      return
+    }
+
+    featureTipsPromptedThisSessionRef.current = true
+    // Why: once a tip is visible, app quit/crash should not make it reappear
+    // on the next launch just because the user never clicked a dismiss button.
+    actions.markFeatureTipsSeen([featureTipsDecision.tipId])
+    actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
+  }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
+
+  useEffect(() => {
+    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
+      setOnboardingSettingsDetour(false)
+    }
+  }, [activeView, onboarding])
+
+  const beginOnboardingSettingsDetour = useCallback(() => {
+    setOnboardingSettingsDetour(true)
   }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
@@ -445,6 +537,7 @@ function App(): React.JSX.Element {
           hydratePersistedUI: actions.hydratePersistedUI
         })
         const session = await window.api.session.get()
+        await actions.fetchKeybindings()
         if (!cancelled) {
           actions.hydrateWorkspaceSession(session)
           actions.hydrateTabsSession(session)
@@ -685,20 +778,7 @@ function App(): React.JSX.Element {
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (
-        state.tabsByWorktree === previousState.tabsByWorktree &&
-        state.groupsByWorktree === previousState.groupsByWorktree &&
-        state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
-        state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
-        state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
-        state.activeFileId === previousState.activeFileId &&
-        state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
-        state.openFiles === previousState.openFiles &&
-        state.editorDrafts === previousState.editorDrafts &&
-        state.activeTabId === previousState.activeTabId &&
-        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
-        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
-      ) {
+      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
         return
       }
       const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
@@ -813,7 +893,9 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
-        showActiveOnly,
+        showActiveOnly: false,
+        hideSleepingWorkspaces: !showSleepingWorkspaces,
+        showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         filterRepoIds,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
@@ -832,7 +914,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
-    showActiveOnly,
+    showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -872,6 +954,9 @@ function App(): React.JSX.Element {
     const handler = (): void => {
       if (document.visibilityState === 'visible') {
         actions.refreshAllGitHub()
+        actions.bumpGitHubPRVisibleRefreshGeneration()
+      } else {
+        actions.reportVisibleGitHubPRRefreshCandidates([], Date.now())
       }
     }
     document.addEventListener('visibilitychange', handler)
@@ -911,7 +996,8 @@ function App(): React.JSX.Element {
     activeView !== 'activity' &&
     activeView !== 'automations' &&
     activeView !== 'space' &&
-    activeView !== 'skills'
+    activeView !== 'skills' &&
+    activeView !== 'mobile'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -936,21 +1022,47 @@ function App(): React.JSX.Element {
       if (e.defaultPrevented) {
         return
       }
-      // Accept Cmd on macOS, Ctrl on other platforms
-      const mod = isMac ? e.metaKey : e.ctrlKey
+      // Why: the Settings recorder intentionally captures existing app
+      // shortcuts, so global handlers must not fire while its button has focus.
+      if (
+        e.target instanceof Element &&
+        e.target.closest('[data-shortcut-recorder-active]') !== null
+      ) {
+        return
+      }
+      const context = getKeybindingContext(e.target)
 
       // Note: some app-level shortcuts are also intercepted via
       // before-input-event in createMainWindow.ts so they still work when a
       // browser guest has focus. The renderer keeps matching handlers for
       // local-focus cases and to preserve the same guards in one place.
 
-      const isSearchShortcut = e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f'
+      const matchShortcut = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(actionId, e, shortcutPlatform, keybindings, {
+          context,
+          terminalShortcutPolicy: settings?.terminalShortcutPolicy
+        })
+      const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
+        if (
+          context !== 'terminal' ||
+          (settings?.terminalShortcutPolicy ?? 'orca-first') !== 'orca-first'
+        ) {
+          return
+        }
+        showTerminalShortcutCaptureNotification({
+          actionId,
+          platform: shortcutPlatform,
+          keybindings
+        })
+      }
+
       const canRevealRightSidebar =
         activeView !== 'tasks' &&
         activeView !== 'activity' &&
         activeView !== 'automations' &&
         activeView !== 'space' &&
-        activeView !== 'skills'
+        activeView !== 'skills' &&
+        activeView !== 'mobile'
 
       const openSearchSidebar = (query: string | null): void => {
         if (query && activeWorktreeId) {
@@ -960,10 +1072,30 @@ function App(): React.JSX.Element {
         actions.setRightSidebarOpen(true)
       }
 
-      if (mod && isSearchShortcut && canRevealRightSidebar) {
+      if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
+        // Why: when focus is inside the file explorer and a folder is selected,
+        // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
+        // with that folder instead of treating the chord as a text-search seed.
+        const selectedFolderRelativePath =
+          document.activeElement instanceof Element
+            ? selectedExplorerFolderRelativePath(document.activeElement)
+            : null
+        if (selectedFolderRelativePath !== null && activeWorktreeId) {
+          e.preventDefault()
+          notifyTerminalCapture('sidebar.search.toggle')
+          actions.seedFileSearchIncludePattern(
+            activeWorktreeId,
+            folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+          )
+          actions.setRightSidebarTab('search')
+          actions.setRightSidebarOpen(true)
+          return
+        }
+
         const selectedText = getSelectedTextForFileSearch()
         if (selectedText) {
           e.preventDefault()
+          notifyTerminalCapture('sidebar.search.toggle')
           openSearchSidebar(selectedText)
           return
         }
@@ -979,24 +1111,25 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. Handled before the
-      // `mod && !alt` branch below since this is the one renderer-side shortcut
-      // that intentionally requires Alt.
-      if (
-        e.altKey &&
-        !e.shiftKey &&
-        (isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) &&
-        (e.code === 'ArrowLeft' || e.code === 'ArrowRight')
-      ) {
-        // Why: Back/Forward traverse mixed worktree + Tasks visits, so the
+      // Why: xterm's helper textarea is intentionally not a generic editable
+      // target, but floating-terminal SSH/tmux control chords must still reach
+      // the terminal instead of app-level chrome shortcuts.
+      if (isFloatingWorkspaceTerminalInputTarget(e.target)) {
+        return
+      }
+
+      // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. This stays before
+      // right-sidebar shortcuts because it is navigation, not sidebar reveal.
+      if (matchShortcut('worktree.history.back') || matchShortcut('worktree.history.forward')) {
+        // Why: Back/Forward traverse mixed worktree + page visits, so the
         // shortcut is active wherever the titlebar button cluster is (terminal
-        // or tasks). Still suppressed in Settings to keep that view modal-ish.
-        if (activeView !== 'terminal' && activeView !== 'tasks' && activeView !== 'automations') {
+        // or stack-backed pages). Still suppressed in Settings.
+        if (!shouldShowWorktreeHistoryControls(activeView)) {
           return
         }
         e.preventDefault()
         const store = useAppStore.getState()
-        if (e.code === 'ArrowLeft') {
+        if (matchShortcut('worktree.history.back')) {
           store.goBackWorktree()
         } else {
           store.goForwardWorktree()
@@ -1004,13 +1137,37 @@ function App(): React.JSX.Element {
         return
       }
 
-      if (!mod) {
+      // Why: only short-circuit chords the floating panel's own keydown
+      // handler claims (Cmd/Ctrl+T, Cmd/Ctrl+W, Cmd/Ctrl+Shift+B/M). Other
+      // app-level mod shortcuts (B, L, Shift+E/F/G) have no panel-level
+      // counterpart, so suppressing them here would silently no-op when
+      // focus lives inside the floating panel.
+      if (isFloatingWorkspacePanelFocused()) {
+        if (isFloatingWorkspacePanelShortcut(e, isMac)) {
+          return
+        }
+      }
+
+      // Why: after the last floating tab is closed, the empty overlay has no
+      // pane-level handler; Cmd/Ctrl+W should minimize only that landing state.
+      if (
+        matchShortcut('tab.close') &&
+        shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
+          activeView,
+          activeWorktreeId,
+          floatingTerminalOpen,
+          floatingUnifiedTabCount
+        })
+      ) {
+        e.preventDefault()
+        setFloatingTerminalOpenWithFocus(false)
         return
       }
 
       // Cmd/Ctrl+B — toggle left sidebar
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+      if (matchShortcut('sidebar.left.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
         return
       }
@@ -1023,28 +1180,41 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
+      if (matchShortcut('view.tasks') && activeView !== 'settings') {
+        const store = useAppStore.getState()
+        if (store.repos.some((repo) => isGitRepoKind(repo))) {
+          e.preventDefault()
+          notifyTerminalCapture('view.tasks')
+          store.openTaskPage()
+        }
+        return
+      }
+
       if (!canRevealRightSidebar) {
         return
       }
 
       // Cmd/Ctrl+L — toggle right sidebar
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (matchShortcut('sidebar.right.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.right.toggle')
         actions.toggleRightSidebar()
         return
       }
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
+      if (matchShortcut('sidebar.explorer.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.explorer.toggle')
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
         return
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (isSearchShortcut) {
+      if (matchShortcut('sidebar.search.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.search.toggle')
         openSearchSidebar(null)
         return
       }
@@ -1054,12 +1224,21 @@ function App(): React.JSX.Element {
       // in that context (handled by keyboard-handlers.ts). Both listeners share
       // the window capture phase and registration order can vary with React
       // effect re-runs, so a DOM check is the reliable coordination mechanism.
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
+      if (matchShortcut('sidebar.sourceControl.toggle')) {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
         e.preventDefault()
+        notifyTerminalCapture('sidebar.sourceControl.toggle')
         actions.setRightSidebarTab('source-control')
+        actions.setRightSidebarOpen(true)
+        return
+      }
+
+      if (matchShortcut('sidebar.checks.toggle')) {
+        e.preventDefault()
+        notifyTerminalCapture('sidebar.checks.toggle')
+        actions.setRightSidebarTab('checks')
         actions.setRightSidebarOpen(true)
         return
       }
@@ -1067,8 +1246,9 @@ function App(): React.JSX.Element {
       // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
-      if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
+      if (matchShortcut('sidebar.ports.toggle')) {
         e.preventDefault()
+        notifyTerminalCapture('sidebar.ports.toggle')
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
       }
@@ -1076,7 +1256,16 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeView, activeWorktreeId, actions])
+  }, [
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalOpen,
+    floatingUnifiedTabCount,
+    keybindings,
+    settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus
+  ])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current
@@ -1102,7 +1291,8 @@ function App(): React.JSX.Element {
       activeModal !== 'worktree-palette' &&
       activeModal !== 'new-workspace-composer' &&
       activeModal !== 'workspace-cleanup' &&
-      activeModal !== 'feature-wall'
+      activeModal !== 'feature-wall' &&
+      activeModal !== 'feature-tips'
     ) {
       return
     }
@@ -1198,17 +1388,15 @@ function App(): React.JSX.Element {
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
+              {`Toggle sidebar (${leftSidebarShortcutLabel})`}
             </TooltipContent>
           </Tooltip>
         )}
       </div>
-      {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
-          cluster is shown wherever the history shortcut is live (terminal or
-          tasks). Hidden in Settings to keep that view modal-ish, and in
-          Activity since that page owns its own back-out via the Close button
-          in ActivityTitlebarControls. */}
-      {(activeView === 'terminal' || activeView === 'tasks') && (
+      {/* Why: Back/Forward traverse mixed worktree + page history, so the
+          cluster is shown wherever the history shortcut is live. Hidden in
+          Settings and non-stack page views. */}
+      {shouldShowWorktreeHistoryControls(activeView) && (
         // Why: when the workspace sidebar is collapsed, this header shrink-wraps
         // and ml-auto has no spare width; keep a fixed gutter before Back.
         <div className="ml-auto mr-3 flex items-center pl-2">
@@ -1224,7 +1412,7 @@ function App(): React.JSX.Element {
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Go back (${isMac ? '⌘⌥←' : 'Ctrl+Alt+←'})`}
+              {`Go back (${historyBackShortcutLabel})`}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -1239,7 +1427,7 @@ function App(): React.JSX.Element {
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Go forward (${isMac ? '⌘⌥→' : 'Ctrl+Alt+→'})`}
+              {`Go forward (${historyForwardShortcutLabel})`}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -1259,7 +1447,7 @@ function App(): React.JSX.Element {
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
+        {`Toggle right sidebar (${rightSidebarShortcutLabel})`}
       </TooltipContent>
     </Tooltip>
   ) : null
@@ -1270,7 +1458,8 @@ function App(): React.JSX.Element {
         activeView === 'activity' ||
         activeView === 'automations' ||
         activeView === 'space' ||
-        activeView === 'skills') &&
+        activeView === 'skills' ||
+        activeView === 'mobile') &&
       rightSidebarOpen
     ) {
       // Why: hide the right sidebar immediately when entering full-page
@@ -1296,66 +1485,68 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
-        {/* Why: leaf-mounted retention sync keeps agent-status retention
+        <ConfirmationDialogProvider>
+          <WorkspacePortScanner />
+          {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
-        <RetainedAgentsSyncGate />
-        <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-          {/* Why: the non-workspace titlebar lives inside this left+center
+          <RetainedAgentsSyncGate />
+          <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+            {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
               when the right sidebar is open, its own header anchors at the
               top alongside the titlebar instead of being pushed below it. */}
-          <div className="flex flex-col flex-1 min-w-0 min-h-0">
-            {/* Why: in workspace view (split groups always enabled), the
+            <div className="flex flex-col flex-1 min-w-0 min-h-0">
+              {/* Why: in workspace view (split groups always enabled), the
                 full-width titlebar is removed so tab groups + terminal extend
                 to the top of the window. Left titlebar controls move to a
                 header above the sidebar. Settings, landing, and the tasks
                 page keep the titlebar. */}
-            {!workspaceActive ? (
-              <div className="titlebar">
-                <div
-                  className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
-                  style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
-                >
-                  {titlebarLeftControls}
-                </div>
-                {activeView === 'activity' ? (
-                  <ActivityTitlebarControls />
-                ) : (
+              {!workspaceActive ? (
+                <div className="titlebar">
                   <div
-                    id="titlebar-tabs"
-                    className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-                  />
-                )}
-                {showTitlebarExpandButton && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        className="titlebar-icon-button"
-                        onClick={handleToggleExpand}
-                        aria-label="Collapse pane"
-                        disabled={!activeTabCanExpand}
-                      >
-                        <Minimize2 size={14} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Collapse pane
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {/* Why: when the right sidebar is open, its own header renders
+                    className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
+                    style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
+                  >
+                    {titlebarLeftControls}
+                  </div>
+                  {activeView === 'activity' ? (
+                    <ActivityTitlebarControls />
+                  ) : (
+                    <div
+                      id="titlebar-tabs"
+                      className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+                    />
+                  )}
+                  {showTitlebarExpandButton && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="titlebar-icon-button"
+                          onClick={handleToggleExpand}
+                          aria-label="Collapse pane"
+                          disabled={!activeTabCanExpand}
+                        >
+                          <Minimize2 size={14} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Collapse pane
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {/* Why: when the right sidebar is open, its own header renders
                     an identical close button — hide this copy so only one is
                     visible at a time. */}
-                {!rightSidebarOpen && rightSidebarToggle}
-                {/* Why: reserve space so content is not obscured by the
+                  {!rightSidebarOpen && rightSidebarToggle}
+                  {/* Why: reserve space so content is not obscured by the
                     fixed-position window-controls overlay on Windows. */}
-                {isWindows && <div className="window-controls-titlebar-spacer" />}
-              </div>
-            ) : null}
-            <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-              {showSidebar ? (
-                workspaceActive ? (
-                  /* Why: left column wraps the sidebar with a titlebar-height
+                  {isWindows && <div className="window-controls-titlebar-spacer" />}
+                </div>
+              ) : null}
+              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+                {showSidebar ? (
+                  workspaceActive ? (
+                    /* Why: left column wraps the sidebar with a titlebar-height
                      header above it. The header holds the same controls
                      (traffic lights, sidebar toggle, "Orca" title, agent badge)
                      that the full-width titlebar held while the center and right
@@ -1363,168 +1554,173 @@ function App(): React.JSX.Element {
                      When the sidebar is collapsed, take this header out of flex
                      layout so the terminal/editor reclaim the left edge instead of
                      leaving behind a content-width blank strip. */
-                  <div
-                    className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                  >
                     <div
-                      // Why: when the sidebar is collapsed, titlebar-left floats
-                      // absolutely on top of the center column's own `border-l`
-                      // (see TabGroupSplitLayout), occluding that seam. Add a
-                      // `border-r` in the floating state so the vertical line
-                      // between the traffic-light/nav cluster and the tab strip
-                      // stays visible in both states. w-max keeps the floating
-                      // header sized to its own controls instead of the w-0
-                      // sidebar wrapper.
-                      className={`titlebar-left${
-                        sidebarOpen
-                          ? ''
-                          : ' absolute top-0 left-0 z-10 w-max border-r border-border'
-                      }`}
-                      style={{
-                        // Why: the Sidebar resize hook updates the sidebar DOM width
-                        // directly during drag and only persists to Zustand on
-                        // mouseup. In workspace view, size this header from the
-                        // wrapper's live width so it tracks those in-flight resizes
-                        // instead of leaving a stale-width gap until the drag ends.
-                        width: sidebarOpen ? '100%' : undefined
-                      }}
+                      className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
                     >
-                      {titlebarLeftControls}
-                    </div>
-                    <div className="flex min-h-0 flex-1">
-                      {/* Why: the workspace-view wrapper adds a fixed 36px header
+                      <div
+                        // Why: when the sidebar is collapsed, titlebar-left floats
+                        // absolutely on top of the center column's own `border-l`
+                        // (see TabGroupSplitLayout), occluding that seam. Add a
+                        // `border-r` in the floating state so the vertical line
+                        // between the traffic-light/nav cluster and the tab strip
+                        // stays visible in both states. w-max keeps the floating
+                        // header sized to its own controls instead of the w-0
+                        // sidebar wrapper.
+                        className={`titlebar-left${
+                          sidebarOpen
+                            ? ''
+                            : ' absolute top-0 left-0 z-10 w-max border-r border-border'
+                        }`}
+                        style={{
+                          // Why: the Sidebar resize hook updates the sidebar DOM width
+                          // directly during drag and only persists to Zustand on
+                          // mouseup. In workspace view, size this header from the
+                          // wrapper's live width so it tracks those in-flight resizes
+                          // instead of leaving a stale-width gap until the drag ends.
+                          width: sidebarOpen ? '100%' : undefined
+                        }}
+                      >
+                        {titlebarLeftControls}
+                      </div>
+                      <div className="flex min-h-0 flex-1">
+                        {/* Why: the workspace-view wrapper adds a fixed 36px header
                           above the sidebar. Without a flex-1/min-h-0 slot here,
                           the sidebar falls back to its content height, so the
                           worktree list loses its scroll viewport and the fixed
                           bottom toolbar (including Add Project) gets pushed offscreen. */}
-                      <Sidebar
-                        worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                        worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                      />
+                        <Sidebar
+                          worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                          worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <Sidebar
-                    worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                    worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                  />
-                )
-              ) : null}
-              <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                {/* Why: right sidebar toggle floats at the top-right of the center
+                  ) : (
+                    <Sidebar
+                      worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                      worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                    />
+                  )
+                ) : null}
+                <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                  {/* Why: right sidebar toggle floats at the top-right of the center
                     column so it's always accessible whether the right sidebar is
                     open or closed. Match the RightSidebar header's 36px height and
                     top-0 anchor so the icon's vertical center is identical between
                     open and closed states — otherwise toggling makes the icon jump
                     a few pixels, which reads as layout jitter. */}
-                {workspaceActive && !rightSidebarOpen && (
-                  <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
-                    style={
-                      {
-                        // Why: right: var(--window-controls-width) is the single
-                        // mechanism that keeps the toggle clear of the
-                        // fixed-position window-controls overlay on Windows (138px)
-                        // and sits at the right edge on non-Windows (0px). No
-                        // internal spacer needed — adding one would push the button
-                        // a further 138px to the left and cover the pane-actions
-                        // Ellipsis button with an un-clickable div.
-                        right: 'var(--window-controls-width)',
-                        WebkitAppRegion: 'no-drag'
-                      } as React.CSSProperties
-                    }
-                  >
-                    {rightSidebarToggle}
+                  {workspaceActive && !rightSidebarOpen && (
+                    <div
+                      className="absolute top-0 z-10 flex items-center h-[36px]"
+                      style={
+                        {
+                          // Why: right: var(--window-controls-width) is the single
+                          // mechanism that keeps the toggle clear of the
+                          // fixed-position window-controls overlay on Windows (138px)
+                          // and sits at the right edge on non-Windows (0px). No
+                          // internal spacer needed — adding one would push the button
+                          // a further 138px to the left and cover the pane-actions
+                          // Ellipsis button with an un-clickable div.
+                          right: 'var(--window-controls-width)',
+                          WebkitAppRegion: 'no-drag'
+                        } as React.CSSProperties
+                      }
+                    >
+                      {rightSidebarToggle}
+                    </div>
+                  )}
+                  <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                    <div
+                      className={
+                        activeView !== 'terminal' || !activeWorktreeId
+                          ? 'hidden flex-1 min-w-0 min-h-0'
+                          : 'flex flex-1 min-w-0 min-h-0'
+                      }
+                    >
+                      <Terminal />
+                    </div>
+                    <Suspense fallback={null}>
+                      {activeView === 'settings' ? <Settings /> : null}
+                      {activeView === 'skills' ? <SkillsPage /> : null}
+                      {activeView === 'tasks' ? <TaskPage /> : null}
+                      {activeView === 'automations' ? <AutomationsPage /> : null}
+                      {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                      {activeView === 'space' ? <WorkspaceSpacePage /> : null}
+                      {activeView === 'mobile' ? <MobilePage /> : null}
+                      {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                    </Suspense>
                   </div>
-                )}
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-                  <div
-                    className={
-                      activeView !== 'terminal' || !activeWorktreeId
-                        ? 'hidden flex-1 min-w-0 min-h-0'
-                        : 'flex flex-1 min-w-0 min-h-0'
-                    }
-                  >
-                    <Terminal />
-                  </div>
-                  <Suspense fallback={null}>
-                    {activeView === 'settings' ? <Settings /> : null}
-                    {activeView === 'skills' ? <SkillsPage /> : null}
-                    {activeView === 'tasks' ? <TaskPage /> : null}
-                    {activeView === 'automations' ? <AutomationsPage /> : null}
-                    {activeView === 'activity' ? <ActivityPrototypePage /> : null}
-                    {activeView === 'space' ? <WorkspaceSpacePage /> : null}
-                    {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
-                  </Suspense>
+                  {showFloatingTerminalButton ? (
+                    <FloatingTerminalToggleButton
+                      open={floatingTerminalOpen}
+                      onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
+                    />
+                  ) : null}
                 </div>
-                {showFloatingTerminalButton ? (
-                  <FloatingTerminalToggleButton
-                    // Why: anchor the floating trigger to the center surface so it
-                    // cannot cover the worktree sidebar or right sidebar.
-                    className="absolute bottom-8 right-3"
-                    open={floatingTerminalOpen}
-                    onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
-                  />
-                ) : null}
               </div>
             </div>
-          </div>
-          {/* Why: keep RightSidebar mounted even when closed so that its
+            {/* Why: keep RightSidebar mounted even when closed so that its
               child components (FileExplorer, SourceControl, etc.) and their
               filesystem watchers + cached directory trees survive across
               open/close toggles. Unmount on the tasks view since that
               surface is intentionally distraction-free. */}
-          {showRightSidebarControls ? <RightSidebar /> : null}
-        </div>
-        {floatingTerminalEnabled ? (
-          <FloatingTerminalPanel
-            open={floatingTerminalOpen}
-            onOpenChange={setFloatingTerminalOpenWithFocus}
-          />
-        ) : null}
-        <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
-        {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
+            {showRightSidebarControls ? <RightSidebar /> : null}
+          </div>
+          {floatingTerminalEnabled ? (
+            <FloatingTerminalPanel
+              open={floatingTerminalOpen}
+              onOpenChange={setFloatingTerminalOpenWithFocus}
+            />
+          ) : null}
+          <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
+          {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
-        <Suspense fallback={null}>
-          {mountedLazyModalIds.has('new-workspace-composer') ? <NewWorkspaceComposerModal /> : null}
-          {mountedLazyModalIds.has('workspace-cleanup') ? <WorkspaceCleanupDialog /> : null}
-        </Suspense>
-        <Suspense fallback={null}>
-          {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
-          {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
-          {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
-        </Suspense>
-        {/* Why: mount PetOverlay only when the experimental flag is on AND
+          <Suspense fallback={null}>
+            {mountedLazyModalIds.has('new-workspace-composer') ? (
+              <NewWorkspaceComposerModal />
+            ) : null}
+            {mountedLazyModalIds.has('workspace-cleanup') ? <WorkspaceCleanupDialog /> : null}
+          </Suspense>
+          <Suspense fallback={null}>
+            {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
+            {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
+            {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
+            {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
+          </Suspense>
+          {/* Why: mount PetOverlay only when the experimental flag is on AND
           the user hasn't hit "Hide pet" in the status-bar menu. Both
           conditions must be true — see design doc (pet-overlay.md) on why
           the two toggles are kept independent. */}
-        {petEnabled && petVisible ? (
-          <Suspense fallback={null}>
-            <PetOverlay />
-          </Suspense>
-        ) : null}
-        <UpdateCard />
-        <FeatureTourNudge />
-        <StarNagCard />
-        {/* Why: the existing-user opt-in banner mounts at App root so it
+          {petEnabled && petVisible ? (
+            <Suspense fallback={null}>
+              <PetOverlay />
+            </Suspense>
+          ) : null}
+          <UpdateCard />
+          <StarNagCard />
+          {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates
           internally on the cohort markers populated by the migration,
           so it only shows for users who installed before the telemetry
           release and have not yet resolved consent. New users get no
           first-launch surface — see telemetry-plan.md §First-launch
           experience. */}
-        <TelemetryFirstLaunchSurface />
-        <ZoomOverlay />
-        <SshPassphraseDialog />
-        <DeleteWorktreeDialog />
-        <CrashReportDialog />
-        {onboarding && shouldShowOnboarding(onboarding) ? (
-          <Suspense fallback={null}>
-            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
-          </Suspense>
-        ) : null}
-        <DictationController />
-        <RecentTabSwitcher />
+          <TelemetryFirstLaunchSurface />
+          <ZoomOverlay />
+          <SshPassphraseDialog />
+          <DeleteWorktreeDialog />
+          <CrashReportDialog />
+          {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
+            <Suspense fallback={null}>
+              <OnboardingFlow
+                onboarding={onboarding}
+                onOnboardingChange={setOnboarding}
+                onSettingsDetourStart={beginOnboardingSettingsDetour}
+              />
+            </Suspense>
+          ) : null}
+          <DictationController />
+          <RecentTabSwitcher />
+        </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements

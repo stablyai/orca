@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: editor tab rendering, drag behavior, rename handling, and its context menu share one tightly-coupled tab surface. */
 import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import {
@@ -27,6 +28,7 @@ import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
+import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -230,6 +232,7 @@ export default function EditorFileTab({
               e.preventDefault()
             }
           }}
+          onMouseUp={preventMiddleButtonDefault}
           onAuxClick={(e) => {
             if (e.button === 1) {
               e.preventDefault()
@@ -379,13 +382,16 @@ export default function EditorFileTab({
               <DropdownMenuItem
                 onSelect={() => {
                   onActivate()
-                  openMarkdownPreview({
-                    filePath: file.filePath,
-                    relativePath: file.relativePath,
-                    worktreeId: file.worktreeId,
-                    runtimeEnvironmentId: file.runtimeEnvironmentId,
-                    language: resolvedLanguage
-                  })
+                  openMarkdownPreview(
+                    {
+                      filePath: file.filePath,
+                      relativePath: file.relativePath,
+                      worktreeId: file.worktreeId,
+                      runtimeEnvironmentId: file.runtimeEnvironmentId,
+                      language: resolvedLanguage
+                    },
+                    { sourceFileId: file.id }
+                  )
                 }}
               >
                 Open Markdown Preview

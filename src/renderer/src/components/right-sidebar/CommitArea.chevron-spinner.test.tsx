@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
@@ -27,10 +28,13 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
   return {
     worktreeId: 'wt-1',
+    groupId: 'group-1',
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    commitFailureRecoveryPrompt: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    isFixingCommitFailureWithAI: false,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -44,6 +48,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
+    onFixCommitFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
@@ -54,7 +59,13 @@ function buttons(markup: string): string[] {
 }
 
 function renderButtons(props: ReturnType<typeof baseProps>): string[] {
-  return buttons(renderToStaticMarkup(<CommitArea {...props} />))
+  return buttons(
+    renderToStaticMarkup(
+      <TooltipProvider>
+        <CommitArea {...props} />
+      </TooltipProvider>
+    )
+  )
 }
 
 describe('CommitArea chevron spinner', () => {

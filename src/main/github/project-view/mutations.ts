@@ -323,6 +323,10 @@ export async function updatePullRequestBySlug(
     patchArgs.push('--raw-field', `body=${args.updates.body}`)
     fieldCount++
   }
+  if (args.updates.state !== undefined) {
+    patchArgs.push('--raw-field', `state=${args.updates.state}`)
+    fieldCount++
+  }
   if (fieldCount === 0) {
     // No fields to update — nothing to do.
     return { ok: true }
@@ -835,7 +839,7 @@ export async function getWorkItemDetailsBySlug(
     // Why: PR files/checks/review-thread tabs depend on a local repo path and
     // are out of Project-mode slug scope for v1. Omit them here; the dialog
     // branches on their absence and hides those tabs.
-    ...(args.type === 'issue' ? { assignees } : {})
+    assignees
   }
   return { ok: true, details }
 }

@@ -42,6 +42,7 @@ import {
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
+import type { KeybindingOverrides } from '../../shared/keybindings'
 
 // Why: mobile presets need a touch-capable UA or responsive sites serve the
 // desktop variant based on UA sniffing. This is the Chrome DevTools default
@@ -96,6 +97,7 @@ function safeOrigin(rawUrl: string): string {
 }
 
 export class BrowserManager {
+  private settingsResolver: (() => { keybindings?: KeybindingOverrides }) | null = null
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
@@ -132,6 +134,10 @@ export class BrowserManager {
   private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
+
+  setSettingsResolver(resolver: () => { keybindings?: KeybindingOverrides }): void {
+    this.settingsResolver = resolver
+  }
 
   // Why: Page.addScriptToEvaluateOnNewDocument (via the CDP debugger) is the
   // only reliable way to run JS before page scripts on every navigation.
@@ -1258,7 +1264,8 @@ export class BrowserManager {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId)
+        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
+        getKeybindings: () => this.settingsResolver?.().keybindings
       })
     )
   }
@@ -1282,7 +1289,8 @@ export class BrowserManager {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false
+        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+        getKeybindings: () => this.settingsResolver?.().keybindings
       })
     )
   }

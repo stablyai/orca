@@ -2,6 +2,7 @@
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -21,6 +22,7 @@ import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 type WatchState = {
   rootPath: string
@@ -63,6 +65,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -107,6 +110,10 @@ export class FsHandler {
     const filePath = expandTilde(params.filePath as string)
     const ctx = context ?? { clientId: 0, isStale: () => false }
     return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
+  }
+
+  private async tempDir(): Promise<string> {
+    return tmpdir()
   }
 
   private cancelStream(params: Record<string, unknown>): void {
@@ -260,8 +267,11 @@ export class FsHandler {
     // Without this, a git subdirectory would fall through to readdir and
     // surface .gitignore'd build artifacts.
     const isGitRepo = await new Promise<boolean>((resolve) => {
-      execFile('git', ['rev-parse', '--is-inside-work-tree'], { cwd: rootPath }, (err) =>
-        resolve(!err)
+      execFile(
+        'git',
+        ['rev-parse', '--is-inside-work-tree'],
+        { cwd: rootPath, env: buildRelayCommandEnv() },
+        (err) => resolve(!err)
       )
     })
     if (isGitRepo) {

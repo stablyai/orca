@@ -42,12 +42,12 @@ describe('flashFocusedPaneRim', () => {
     const pane = createPaneElement()
 
     flashFocusedPaneRim(pane)
-    vi.advanceTimersByTime(800)
+    vi.advanceTimersByTime(FOCUSED_PANE_FLASH_MS - 100)
     flashFocusedPaneRim(pane)
-    vi.advanceTimersByTime(600)
+    vi.advanceTimersByTime(FOCUSED_PANE_FLASH_MS - 100)
 
     expect(pane.classList.contains('pane-focus-rim-flash')).toBe(true)
-    vi.advanceTimersByTime(900)
+    vi.advanceTimersByTime(100)
     expect(pane.classList.contains('pane-focus-rim-flash')).toBe(false)
   })
 })

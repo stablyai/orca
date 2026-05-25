@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
@@ -9,6 +10,10 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
+let tabsByWorktree: Record<string, { id: string }[]> = {}
+let ptyIdsByTabId: Record<string, string[]> = {}
+let browserTabsByWorktree: Record<string, { id: string }[]> = {}
+let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -24,6 +29,9 @@ vi.mock('@/store', () => ({
       settings: null,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
+      browserTabsByWorktree,
+      ptyIdsByTabId,
+      tabsByWorktree,
       updateWorktreeMeta,
       worktreeCardProperties
     })
@@ -58,7 +66,8 @@ vi.mock('./SshDisconnectedDialog', () => ({
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
+  WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
 function makeRepo(): Repo {
@@ -95,19 +104,84 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('WorktreeCard quick actions', () => {
+  beforeAll(async () => {
+    WorktreeCard = (await import('./WorktreeCard')).default
+  }, 20_000)
+
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'unread']
+    tabsByWorktree = {}
+    ptyIdsByTabId = {}
+    browserTabsByWorktree = {}
   })
 
-  it('marks the unread toggle as a workspace-board-preserving action', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
+  it('marks the unread toggle as a workspace-board-preserving action', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('shows delete as the top-right quick action for an inactive workspace', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('shows delete as the quick action for inactive folder workspace instances', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'repo-1::/repo::workspace:123e4567-e89b-12d3-a456-426614174000',
+          path: '/repo',
+          isMainWorktree: false
+        })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not replace sleep with delete for a workspace with live activity', () => {
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show sleep as the top-right quick action for an active workspace', () => {
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show delete when the workspace is current but not selected in the sidebar', () => {
+    const worktree = makeWorktree()
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} isCurrentWorktree />
+    )
+
+    expect(markup).not.toContain('aria-label="Delete workspace"')
   })
 })

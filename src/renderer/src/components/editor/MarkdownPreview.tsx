@@ -12,7 +12,6 @@ import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
-import GithubSlugger from 'github-slugger'
 import { extractFrontMatter } from './markdown-frontmatter'
 import {
   Check,
@@ -64,6 +63,7 @@ import {
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -80,10 +80,15 @@ import {
 } from '@/lib/markdown-review-notes'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { dirname } from '@/lib/path'
 
 type MarkdownPreviewProps = {
   content: string
   filePath: string
+  sourceFileId?: string | null
+  sourceWorktreeId?: string | null
+  sourceRuntimeEnvironmentId?: string | null
   scrollCacheKey: string
   initialAnchor?: string | null
   showTableOfContents?: boolean
@@ -100,6 +105,74 @@ type MarkdownPreviewPositionNode = {
     end?: { line?: number }
   }
   children?: MarkdownPreviewPositionNode[]
+}
+
+type MarkdownPreviewSourceOpenFile = {
+  id: string
+  filePath: string
+  relativePath: string
+  worktreeId: string
+  runtimeEnvironmentId?: string | null
+  mode: string
+  markdownPreviewSourceFileId?: string
+}
+
+export function findMarkdownPreviewSourceOpenFile(
+  openFiles: MarkdownPreviewSourceOpenFile[],
+  params: {
+    sourceFileId: string | null
+    filePath: string
+    sourceWorktreeId: string | null
+    sourceRuntimeEnvironmentId: string | null | undefined
+  }
+): MarkdownPreviewSourceOpenFile | undefined {
+  const ownerMatches = (file: MarkdownPreviewSourceOpenFile): boolean =>
+    (!params.sourceWorktreeId || file.worktreeId === params.sourceWorktreeId) &&
+    (params.sourceRuntimeEnvironmentId === undefined ||
+      (file.runtimeEnvironmentId ?? null) === (params.sourceRuntimeEnvironmentId ?? null))
+
+  if (params.sourceFileId) {
+    const idMatch = openFiles.find((file) => file.id === params.sourceFileId && ownerMatches(file))
+    return (
+      idMatch ??
+      openFiles.find(
+        (file) =>
+          file.mode === 'markdown-preview' &&
+          file.filePath === params.filePath &&
+          file.markdownPreviewSourceFileId === params.sourceFileId &&
+          ownerMatches(file)
+      ) ??
+      openFiles.find((file) => file.id === params.sourceFileId)
+    )
+  }
+
+  return openFiles.find((file) => file.filePath === params.filePath && ownerMatches(file))
+}
+
+export function findMarkdownPreviewOpenedEditFileId(
+  openFiles: MarkdownPreviewSourceOpenFile[],
+  activeFileIdByWorktree: Record<string, string | null>,
+  params: { filePath: string; worktreeId: string }
+): string {
+  const activeFileId = activeFileIdByWorktree[params.worktreeId]
+  const activeFile = openFiles.find(
+    (file) =>
+      file.id === activeFileId &&
+      file.filePath === params.filePath &&
+      file.worktreeId === params.worktreeId &&
+      file.mode === 'edit'
+  )
+  if (activeFile) {
+    return activeFile.id
+  }
+  return (
+    openFiles.find(
+      (file) =>
+        file.filePath === params.filePath &&
+        file.worktreeId === params.worktreeId &&
+        file.mode === 'edit'
+    )?.id ?? params.filePath
+  )
 }
 
 function getMarkdownPreviewBlockRange(
@@ -157,27 +230,6 @@ const markdownPreviewSanitizeSchema = {
   }
 }
 
-function getMarkdownPreviewNodeText(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') {
-    return String(node)
-  }
-  if (Array.isArray(node)) {
-    return node.map((child) => getMarkdownPreviewNodeText(child)).join('')
-  }
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
-    return getMarkdownPreviewNodeText(node.props.children)
-  }
-  return ''
-}
-
-// Why: use the same GithubSlugger that rehype-slug uses internally so
-// heading IDs match standard GitHub/VS Code anchor links. The custom
-// slugger previously stripped punctuation differently, breaking links
-// like `#a--b` for headings containing `A & B`.
-function createMarkdownPreviewHeadingId(headingText: string, slugger: GithubSlugger): string {
-  return slugger.slug(headingText)
-}
-
 function parseLineTarget(hash: string): { line: number; column?: number } | null {
   if (!hash) {
     return null
@@ -192,6 +244,44 @@ function parseLineTarget(hash: string): { line: number; column?: number } | null
 
 function normalizeMarkdownPreviewAbsolutePath(absolutePath: string): string {
   return absolutePath.replaceAll('\\', '/')
+}
+
+function normalizeMarkdownPreviewRelativePath(relativePath: string): string {
+  return relativePath.replaceAll('\\', '/').replace(/^\/+/, '')
+}
+
+function isMarkdownPreviewAbsolutePathLike(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+function formatMarkdownPreviewRootPath(rootPath: string): string {
+  if (rootPath === '') {
+    return '/'
+  }
+  if (/^[A-Za-z]:$/.test(rootPath)) {
+    return `${rootPath}/`
+  }
+  return rootPath
+}
+
+export function deriveMarkdownPreviewSourceRoot(
+  filePath: string,
+  relativePath: string | null | undefined
+): string {
+  const normalizedFilePath = normalizeMarkdownPreviewAbsolutePath(filePath)
+  const normalizedRelativePath =
+    relativePath && !isMarkdownPreviewAbsolutePathLike(relativePath)
+      ? normalizeMarkdownPreviewRelativePath(relativePath)
+      : ''
+
+  if (normalizedRelativePath) {
+    const suffix = `/${normalizedRelativePath}`
+    if (normalizedFilePath.endsWith(suffix)) {
+      return formatMarkdownPreviewRootPath(normalizedFilePath.slice(0, -suffix.length))
+    }
+  }
+
+  return formatMarkdownPreviewRootPath(normalizeMarkdownPreviewAbsolutePath(dirname(filePath)))
 }
 
 function findWorktreeForMarkdownPreviewPath(
@@ -220,9 +310,24 @@ function findWorktreeForMarkdownPreviewPath(
   return bestMatch
 }
 
+export function resolveMarkdownPreviewSourceWorktree(
+  worktreesByRepo: Record<string, Worktree[]>,
+  sourceWorktreeId: string | null | undefined,
+  filePath: string
+): Worktree | null {
+  const sourceWorktree = sourceWorktreeId
+    ? (findWorktreeById(worktreesByRepo, sourceWorktreeId) ?? null)
+    : null
+
+  return sourceWorktree ?? findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+}
+
 export default function MarkdownPreview({
   content,
   filePath,
+  sourceFileId = null,
+  sourceWorktreeId = null,
+  sourceRuntimeEnvironmentId = undefined,
   scrollCacheKey,
   initialAnchor = null,
   showTableOfContents = false,
@@ -249,17 +354,37 @@ export default function MarkdownPreview({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
-    const worktree = findWorktreeForMarkdownPreviewPath(s.worktreesByRepo, filePath)
-    return worktree?.diffComments
-  })
+  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
+  const keybindings = useAppStore((s) => s.keybindings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const sourceRuntimeEnvironmentId = useAppStore(
-    (s) => s.openFiles.find((file) => file.filePath === filePath)?.runtimeEnvironmentId
+  const sourceOpenFile = useAppStore((s) =>
+    findMarkdownPreviewSourceOpenFile(s.openFiles, {
+      sourceFileId,
+      filePath,
+      sourceWorktreeId,
+      sourceRuntimeEnvironmentId
+    })
   )
-  const sourceWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
-  const sourceConnectionId = sourceWorktree ? getConnectionId(sourceWorktree.id) : null
-  const worktreeRoot = sourceWorktree?.path ?? null
+  const resolvedSourceWorktreeId = sourceWorktreeId ?? sourceOpenFile?.worktreeId ?? null
+  const resolvedSourceRuntimeEnvironmentId =
+    sourceRuntimeEnvironmentId !== undefined
+      ? sourceRuntimeEnvironmentId
+      : sourceOpenFile?.runtimeEnvironmentId
+  const sourceWorktree = resolveMarkdownPreviewSourceWorktree(
+    worktreesByRepo,
+    resolvedSourceWorktreeId,
+    filePath
+  )
+  const allDiffComments = sourceWorktree?.diffComments
+  const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
+  const sourceConnectionId = sourceRoutingWorktreeId
+    ? (getConnectionId(sourceRoutingWorktreeId) ?? null)
+    : null
+  const worktreeRoot =
+    sourceWorktree?.path ??
+    (sourceRoutingWorktreeId
+      ? deriveMarkdownPreviewSourceRoot(filePath, sourceOpenFile?.relativePath)
+      : null)
   const sourceRelativePath = useMemo(() => {
     if (!sourceWorktree) {
       return null
@@ -284,15 +409,21 @@ export default function MarkdownPreview({
   const settings = useAppStore((s) => s.settings)
   const imageRuntimeContext = useMemo(
     () =>
-      sourceWorktree
+      sourceRoutingWorktreeId && worktreeRoot
         ? {
-            settings: settingsForRuntimeOwner(settings, sourceRuntimeEnvironmentId),
-            worktreeId: sourceWorktree.id,
-            worktreePath: sourceWorktree.path,
+            settings: settingsForRuntimeOwner(settings, resolvedSourceRuntimeEnvironmentId),
+            worktreeId: sourceRoutingWorktreeId,
+            worktreePath: worktreeRoot,
             connectionId: sourceConnectionId
           }
         : undefined,
-    [settings, sourceConnectionId, sourceRuntimeEnvironmentId, sourceWorktree]
+    [
+      settings,
+      sourceConnectionId,
+      resolvedSourceRuntimeEnvironmentId,
+      sourceRoutingWorktreeId,
+      worktreeRoot
+    ]
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
@@ -320,7 +451,6 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  const sluggerRef = useRef(new GithubSlugger())
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(false)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
@@ -332,6 +462,18 @@ export default function MarkdownPreview({
   const markdownReviewPrompt = useMemo(
     () => formatMarkdownReviewNotes(markdownReviewNotes, renderedContent),
     [markdownReviewNotes, renderedContent]
+  )
+  const unsentMarkdownReviewNotes = useMemo(
+    () => markdownReviewNotes.filter((note) => !note.sentAt),
+    [markdownReviewNotes]
+  )
+  const unsentMarkdownReviewNoteIds = useMemo(
+    () => unsentMarkdownReviewNotes.map((note) => note.id),
+    [unsentMarkdownReviewNotes]
+  )
+  const unsentMarkdownReviewPrompt = useMemo(
+    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
+    [renderedContent, unsentMarkdownReviewNotes]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
@@ -542,7 +684,7 @@ export default function MarkdownPreview({
       const targetInsidePreview = target instanceof Node && root.contains(target)
 
       if (
-        isMarkdownPreviewFindShortcut(event, navigator.userAgent.includes('Mac')) &&
+        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
         targetInsidePreview
       ) {
         event.preventDefault()
@@ -565,7 +707,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, openSearch])
+  }, [closeSearch, isSearchOpen, keybindings, openSearch])
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {
@@ -669,6 +811,7 @@ export default function MarkdownPreview({
                 lineNumber={comment.lineNumber}
                 startLine={comment.startLine}
                 body={comment.body}
+                sentAt={comment.sentAt}
                 onDelete={() => void deleteDiffComment(sourceWorktree.id, comment.id)}
                 onSubmitEdit={(body) => updateDiffComment(sourceWorktree.id, comment.id, body)}
               />
@@ -720,8 +863,6 @@ export default function MarkdownPreview({
   )
 
   const components: Components = useMemo(() => {
-    sluggerRef.current.reset()
-    const slugger = sluggerRef.current
     return {
       a: ({ href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
@@ -790,7 +931,7 @@ export default function MarkdownPreview({
                 isLocalPathOpenBlocked(
                   settingsForRuntimeOwner(
                     useAppStore.getState().settings,
-                    sourceRuntimeEnvironmentId
+                    resolvedSourceRuntimeEnvironmentId
                   ),
                   { connectionId: sourceConnectionId }
                 )
@@ -857,12 +998,15 @@ export default function MarkdownPreview({
 
           const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
           if (!targetWorktree) {
-            if (sourceWorktree) {
+            if (sourceRoutingWorktreeId && worktreeRoot) {
+              // Why: floating markdown files are owned by a synthetic workspace,
+              // so there may be no repo worktree even though Orca can stat/open
+              // links relative to the source file root.
               void activateMarkdownLink(href, {
                 sourceFilePath: filePath,
-                worktreeId: sourceWorktree.id,
-                worktreeRoot: sourceWorktree.path,
-                runtimeEnvironmentId: sourceRuntimeEnvironmentId
+                worktreeId: sourceRoutingWorktreeId,
+                worktreeRoot,
+                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
               })
               return
             }
@@ -870,7 +1014,7 @@ export default function MarkdownPreview({
               isLocalPathOpenBlocked(
                 settingsForRuntimeOwner(
                   useAppStore.getState().settings,
-                  sourceRuntimeEnvironmentId
+                  resolvedSourceRuntimeEnvironmentId
                 ),
                 { connectionId: sourceConnectionId }
               )
@@ -891,7 +1035,7 @@ export default function MarkdownPreview({
               {
                 settings: settingsForRuntimeOwner(
                   useAppStore.getState().settings,
-                  sourceRuntimeEnvironmentId
+                  resolvedSourceRuntimeEnvironmentId
                 ),
                 worktreeId: targetWorktree.id,
                 worktreePath: targetWorktree.path,
@@ -911,22 +1055,29 @@ export default function MarkdownPreview({
           // Why: line targets like #L10 and path.ts:10 should reveal in Monaco,
           // not open a preview tab or a literal path with the suffix included.
           if (lineTarget) {
-            if (language === 'markdown') {
-              setMarkdownViewMode(absolutePath, 'source')
-            }
             openFile({
               filePath: absolutePath,
               relativePath,
               worktreeId: targetWorktree.id,
-              runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+              runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
               language,
               mode: 'edit'
             })
+            const openedState = useAppStore.getState()
+            const targetFileId = findMarkdownPreviewOpenedEditFileId(
+              openedState.openFiles,
+              openedState.activeFileIdByWorktree,
+              { filePath: absolutePath, worktreeId: targetWorktree.id }
+            )
+            if (language === 'markdown') {
+              setMarkdownViewMode(targetFileId, 'source')
+            }
             setPendingEditorReveal(null)
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 setPendingEditorReveal({
                   filePath: absolutePath,
+                  fileId: targetFileId,
                   line: lineTarget.line,
                   column: lineTarget.column ?? 1,
                   matchLength: 0
@@ -942,7 +1093,7 @@ export default function MarkdownPreview({
                 filePath: absolutePath,
                 relativePath,
                 worktreeId: targetWorktree.id,
-                runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
                 language
               },
               { anchor: target.hash ? target.hash.slice(1) : null }
@@ -954,7 +1105,7 @@ export default function MarkdownPreview({
             filePath: absolutePath,
             relativePath,
             worktreeId: targetWorktree.id,
-            runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
             language,
             mode: 'edit'
           })
@@ -982,7 +1133,7 @@ export default function MarkdownPreview({
             return
           }
 
-          if (!src || !sourceWorktree) {
+          if (!src || !sourceRoutingWorktreeId || !worktreeRoot) {
             return
           }
 
@@ -990,9 +1141,9 @@ export default function MarkdownPreview({
           event.stopPropagation()
           void activateMarkdownLink(src, {
             sourceFilePath: filePath,
-            worktreeId: sourceWorktree.id,
-            worktreeRoot: sourceWorktree.path,
-            runtimeEnvironmentId: sourceRuntimeEnvironmentId
+            worktreeId: sourceRoutingWorktreeId,
+            worktreeRoot,
+            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
           })
         }
 
@@ -1065,61 +1216,55 @@ export default function MarkdownPreview({
         )
       },
       h1: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h1',
           node as MarkdownPreviewPositionNode,
-          <h1 {...props} id={id} tabIndex={-1}>
+          <h1 {...props} tabIndex={-1}>
             {children}
           </h1>
         )
       },
       h2: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h2',
           node as MarkdownPreviewPositionNode,
-          <h2 {...props} id={id} tabIndex={-1}>
+          <h2 {...props} tabIndex={-1}>
             {children}
           </h2>
         )
       },
       h3: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h3',
           node as MarkdownPreviewPositionNode,
-          <h3 {...props} id={id} tabIndex={-1}>
+          <h3 {...props} tabIndex={-1}>
             {children}
           </h3>
         )
       },
       h4: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h4',
           node as MarkdownPreviewPositionNode,
-          <h4 {...props} id={id} tabIndex={-1}>
+          <h4 {...props} tabIndex={-1}>
             {children}
           </h4>
         )
       },
       h5: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h5',
           node as MarkdownPreviewPositionNode,
-          <h5 {...props} id={id} tabIndex={-1}>
+          <h5 {...props} tabIndex={-1}>
             {children}
           </h5>
         )
       },
       h6: ({ node, children, ...props }) => {
-        const id = createMarkdownPreviewHeadingId(getMarkdownPreviewNodeText(children), slugger)
         return wrapAnnotatedBlock(
           'h6',
           node as MarkdownPreviewPositionNode,
-          <h6 {...props} id={id} tabIndex={-1}>
+          <h6 {...props} tabIndex={-1}>
             {children}
           </h6>
         )
@@ -1143,8 +1288,8 @@ export default function MarkdownPreview({
     setMarkdownViewMode,
     setPendingEditorReveal,
     sourceConnectionId,
-    sourceRuntimeEnvironmentId,
-    sourceWorktree,
+    resolvedSourceRuntimeEnvironmentId,
+    sourceRoutingWorktreeId,
     worktreeRoot,
     worktreesByRepo,
     wrapAnnotatedBlock
@@ -1259,8 +1404,12 @@ export default function MarkdownPreview({
                   <button
                     type="button"
                     className="markdown-review-icon-button"
-                    disabled={markdownReviewNotes.length === 0}
-                    title="Send notes to a new agent"
+                    disabled={unsentMarkdownReviewNotes.length === 0}
+                    title={
+                      unsentMarkdownReviewNotes.length === 0
+                        ? 'All notes sent'
+                        : 'Send notes to a new agent'
+                    }
                     aria-label="Send notes to a new agent"
                   >
                     <Send className="size-3.5" />
@@ -1271,8 +1420,12 @@ export default function MarkdownPreview({
                     worktreeId={sourceWorktree.id}
                     groupId={sourceWorktree.id}
                     onFocusTerminal={focusTerminalTabSurface}
-                    prompt={markdownReviewPrompt}
+                    prompt={unsentMarkdownReviewPrompt}
+                    promptDelivery="submit-after-ready"
                     launchSource="notes_send"
+                    onPromptDelivered={() =>
+                      void markDiffCommentsSent(sourceWorktree.id, unsentMarkdownReviewNoteIds)
+                    }
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1332,8 +1485,9 @@ export default function MarkdownPreview({
           onSelect={scrollToReviewNote}
           onDelete={(id) => void deleteDiffComment(sourceWorktree.id, id)}
           onSubmitEdit={(id, body) => updateDiffComment(sourceWorktree.id, id, body)}
-          prompt={markdownReviewPrompt}
+          sendPrompt={unsentMarkdownReviewPrompt}
           worktreeId={sourceWorktree.id}
+          unsentNoteIds={unsentMarkdownReviewNoteIds}
         />
       ) : null}
       {showTableOfContents ? (
@@ -1357,8 +1511,9 @@ function MarkdownReviewNotesPanel({
   onSelect,
   onDelete,
   onSubmitEdit,
-  prompt,
-  worktreeId
+  sendPrompt,
+  worktreeId,
+  unsentNoteIds
 }: {
   notes: MarkdownReviewNote[]
   content: string
@@ -1369,9 +1524,11 @@ function MarkdownReviewNotesPanel({
   onSelect: (note: MarkdownReviewNote) => void
   onDelete: (id: string) => void
   onSubmitEdit: (id: string, body: string) => Promise<boolean>
-  prompt: string
+  sendPrompt: string
   worktreeId: string
+  unsentNoteIds: readonly string[]
 }): React.JSX.Element {
+  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
   return (
     <aside className="markdown-review-panel">
       <div className="markdown-review-panel-header">
@@ -1396,8 +1553,8 @@ function MarkdownReviewNotesPanel({
               <button
                 type="button"
                 className="markdown-review-icon-button"
-                disabled={notes.length === 0}
-                title="Send notes to a new agent"
+                disabled={unsentNoteIds.length === 0}
+                title={unsentNoteIds.length === 0 ? 'All notes sent' : 'Send notes to a new agent'}
                 aria-label="Send notes to a new agent"
               >
                 <Send className="size-3.5" />
@@ -1408,8 +1565,10 @@ function MarkdownReviewNotesPanel({
                 worktreeId={worktreeId}
                 groupId={worktreeId}
                 onFocusTerminal={focusTerminalTabSurface}
-                prompt={prompt}
+                prompt={sendPrompt}
+                promptDelivery="submit-after-ready"
                 launchSource="notes_send"
+                onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1449,6 +1608,7 @@ function MarkdownReviewNotesPanel({
                 lineNumber={note.lineNumber}
                 startLine={note.startLine}
                 body={note.body}
+                sentAt={note.sentAt}
                 onDelete={() => onDelete(note.id)}
                 onSubmitEdit={(body) => onSubmitEdit(note.id, body)}
               />

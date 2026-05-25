@@ -250,26 +250,36 @@ describe('createMainWindow', () => {
 
     const beforeInputEvent = windowHandlers['before-input-event']
 
+    const primary =
+      process.platform === 'darwin'
+        ? { control: false, meta: true }
+        : { control: true, meta: false }
+
     for (const input of [
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '-' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '_' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Minus' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Subtract' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'Minus' },
-      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'NumpadSubtract' }
+      { type: 'keyDown', ...primary, alt: false, key: '-' },
+      { type: 'keyDown', ...primary, alt: false, key: 'Minus' },
+      { type: 'keyDown', ...primary, alt: false, key: 'Subtract' },
+      { type: 'keyDown', ...primary, alt: false, key: '', code: 'Minus' },
+      { type: 'keyDown', ...primary, alt: false, key: '', code: 'NumpadSubtract' }
     ]) {
       const preventDefault = vi.fn()
       beforeInputEvent({ preventDefault } as never, input as never)
       expect(preventDefault).toHaveBeenCalledTimes(1)
     }
 
-    expect(webContents.send).toHaveBeenCalledTimes(6)
+    expect(webContents.send).toHaveBeenCalledTimes(5)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(6, 'terminal:zoom', 'out')
+
+    const undoPreventDefault = vi.fn()
+    beforeInputEvent(
+      { preventDefault: undoPreventDefault } as never,
+      { type: 'keyDown', ...primary, alt: false, shift: true, key: '_' } as never
+    )
+    expect(undoPreventDefault).not.toHaveBeenCalled()
   })
 
   it('routes Electron zoom command events to terminal zoom', () => {
@@ -312,6 +322,51 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledTimes(2)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'in')
+  })
+
+  it('respects custom zoom bindings for Electron zoom command fallbacks', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, {
+      getKeybindings: () => ({
+        'zoom.in': ['Mod+Y'],
+        'zoom.out': []
+      })
+    })
+
+    const onZoomChanged = windowHandlers['zoom-changed']
+    const preventDefault = vi.fn()
+    onZoomChanged({ preventDefault } as never, 'out')
+    onZoomChanged({ preventDefault } as never, 'in')
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalled()
   })
 
   it('does not intercept ctrl/cmd+r in before-input-event', () => {
@@ -441,6 +496,59 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyDown', { shiftKey: true })
     expect(webContents.send).toHaveBeenNthCalledWith(3, 'ui:ctrlTabKeyUp')
+  })
+
+  it('does not hardcode Ctrl+Tab when the recent-tab binding is disabled', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getKeybindings: () => ({ 'tab.previousRecent': [] }) })
+
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'Tab',
+        key: 'Tab',
+        control: true,
+        meta: false,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyDown', expect.anything())
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:switchRecentTab')
   })
 
   it('only intercepts the dictation chord when enabled toggle mode can handle it', () => {
@@ -597,6 +705,133 @@ describe('createMainWindow', () => {
 
     expect(webContents.send).toHaveBeenCalledTimes(2)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:toggleWorktreePalette')
+    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
+  })
+
+  it('lets Terminal-first pass risky app shortcuts through when terminal input is focused', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}),
+      getSettings: () => ({ terminalShortcutPolicy: 'terminal-first' })
+    } as never)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const preventDefault = vi.fn()
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyJ',
+        key: 'j',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: !isDarwin
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('notifies before Orca-first captures a risky terminal-focused shortcut', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}),
+      getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+    } as never)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const preventDefault = vi.fn()
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyJ',
+        key: 'j',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: !isDarwin
+      } as never
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {
+      actionId: 'worktree.palette'
+    })
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
   })
 
@@ -1061,6 +1296,142 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
+  it('lets the shortcut recorder capture app shortcuts before main interception', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setShortcutRecorderFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const preventDefault = vi.fn()
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
+  })
+
+  it('skips Cmd+B interception when floating terminal input is focused', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setFloatingTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const preventDefault = vi.fn()
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
+
+    webContents.send.mockClear()
+    const newWorkspacePreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: newWorkspacePreventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyN',
+        key: 'n',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(newWorkspacePreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:openNewWorkspace')
+  })
+
   it('still intercepts Cmd+Shift+B and Cmd+Alt+B when the markdown editor is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -1390,6 +1761,7 @@ describe('createMainWindow', () => {
   it('notifies the caller when the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 142,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -1422,12 +1794,117 @@ describe('createMainWindow', () => {
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     windowHandlers['render-process-gone']?.({} as never, details)
 
-    expect(onRendererProcessGone).toHaveBeenCalledWith(details)
+    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
+  })
+
+  it('passes the renderer webContents id through crash classification callbacks', () => {
+    vi.useFakeTimers()
+
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      id: 424,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+    const shouldRecordRendererCrash = vi.fn(() => true)
+    const shouldRecoverRenderer = vi.fn(() => true)
+
+    try {
+      createMainWindow(null, {
+        onRendererProcessGone,
+        shouldRecordRendererCrash,
+        shouldRecoverRenderer
+      })
+
+      const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+
+      expect(shouldRecordRendererCrash).toHaveBeenCalledWith(details, 424)
+      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
+      expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('does not notify the crash recorder for an expected renderer teardown', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+
+    createMainWindow(null, {
+      onRendererProcessGone,
+      shouldRecordRendererCrash: () => false
+    })
+
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'killed',
+        exitCode: 15
+      } as Electron.RenderProcessGoneDetails
+    )
+
+    expect(onRendererProcessGone).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
   })
 
   const createRendererRecoveryWindowHarness = () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 143,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),

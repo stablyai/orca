@@ -1,9 +1,11 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
 import type { WorktreeLineage } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
@@ -32,6 +34,7 @@ const env2Lineage: WorktreeLineage = {
 }
 
 beforeEach(() => {
+  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
@@ -67,11 +70,29 @@ beforeEach(() => {
                 totalCount: 1,
                 truncated: false
               }
-            : method === 'browser.profile.list'
-              ? { profiles: [] }
-              : method === 'worktree.lineageList'
-                ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                : {}
+            : method === 'worktree.detectedList'
+              ? {
+                  repoId: 'repo-env-2',
+                  authoritative: true,
+                  source: 'git',
+                  worktrees: [
+                    {
+                      ...makeWorktree({
+                        id: 'repo-env-2::/env-2/repo',
+                        repoId: 'repo-env-2',
+                        path: '/env-2/repo'
+                      }),
+                      ownership: 'orca-managed',
+                      selectedCheckout: true,
+                      visible: true
+                    }
+                  ]
+                }
+              : method === 'browser.profile.list'
+                ? { profiles: [] }
+                : method === 'worktree.lineageList'
+                  ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                  : {}
     return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
   })
   vi.stubGlobal('window', {
@@ -83,6 +104,29 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('repairs drifted task provider settings before sending updates', async () => {
+    settingsSet.mockResolvedValueOnce({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github'
+      } as AppState['settings']
+    })
+
+    await store.getState().updateSettings({
+      visibleTaskProviders: ['linear']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+  })
+
   it('rebases local state to the authoritative settings:set response', async () => {
     settingsSet.mockResolvedValueOnce({
       openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],
@@ -200,6 +244,62 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().linearIssueCache).toEqual({})
   })
 
+  it('does not close host-owned mirrored resources when a paired web client switches servers', async () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
+      worktreesByRepo: {
+        'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
+      },
+      activeWorktreeId: 'repo-env-1::/env-1/repo',
+      tabsByWorktree: {
+        'repo-env-1::/env-1/repo': [
+          {
+            id: 'web-terminal-host-tab-1',
+            ptyId: 'remote:env-1@@terminal-a',
+            worktreeId: 'repo-env-1::/env-1/repo',
+            title: 'Terminal 1',
+            defaultTitle: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'web-terminal-host-tab-1': ['remote:env-1@@terminal-a'] },
+      terminalLayoutsByTabId: {
+        'web-terminal-host-tab-1': {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'pane:1': 'remote:env-1@@terminal-a' }
+        }
+      },
+      browserTabsByWorktree: { 'repo-env-1::/env-1/repo': [{ id: 'browser-env-1' }] as never },
+      browserPagesByWorkspace: {
+        'browser-env-1': [{ id: 'page-env-1', worktreeId: 'repo-env-1::/env-1/repo' }] as never
+      },
+      remoteBrowserPageHandlesByPageId: {
+        'page-env-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
+      }
+    })
+
+    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+
+    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'browser.tabClose' })
+    )
+    expect(store.getState().ptyIdsByTabId).toEqual({})
+    expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({})
+  })
+
   it('refuses to switch environments while editor tabs have unsaved state', async () => {
     const store = createTestStore()
     store.setState({
@@ -262,7 +362,7 @@ describe('createSettingsSlice runtime switching', () => {
           ? {
               runtimeId: 'runtime-old',
               graphStatus: 'ready',
-              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION - 1,
+              runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
               minCompatibleRuntimeClientVersion: 0
             }
           : {}

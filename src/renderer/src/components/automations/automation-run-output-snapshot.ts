@@ -17,6 +17,31 @@ export type AutomationRunOutputSnapshotBuffer = {
   snapshot: () => AutomationRunOutputSnapshot | null
 }
 
+export function createAutomationRunOutputSnapshotFromText(
+  content: string,
+  truncated = false
+): AutomationRunOutputSnapshot | null {
+  const trimmed = content.trim()
+  if (!trimmed) {
+    return null
+  }
+  return {
+    format: 'plain_text',
+    content: trimmed,
+    capturedAt: Date.now(),
+    truncated
+  }
+}
+
+export function selectAutomationRunOutputSnapshot(
+  assistantMessage: string | null | undefined,
+  terminalSnapshot: AutomationRunOutputSnapshot | null
+): AutomationRunOutputSnapshot | null {
+  // Why: raw hidden-PTY captures include full-screen TUI redraws; hook
+  // transcript text is the user-facing automation result when available.
+  return createAutomationRunOutputSnapshotFromText(assistantMessage ?? '') ?? terminalSnapshot
+}
+
 function stripTerminalControls(value: string): string {
   return value
     .replace(OSC_SEQUENCE_PATTERN, '')
@@ -52,15 +77,7 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
     },
     snapshot() {
       const content = stripTerminalControls(chunks.join('')).trim()
-      if (!content) {
-        return null
-      }
-      return {
-        format: 'plain_text',
-        content,
-        capturedAt: Date.now(),
-        truncated
-      }
+      return createAutomationRunOutputSnapshotFromText(content, truncated)
     }
   }
 }

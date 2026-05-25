@@ -1,13 +1,11 @@
 import { useState } from 'react'
-import type { OrcaHooks, Repo, RepoHookSettings, SetupRunPolicy } from '../../../../shared/types'
+import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
-import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
@@ -16,11 +14,14 @@ import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { getRepositoryIconSectionId } from './repository-settings-targets'
+import { RepositoryIconPicker } from './RepositoryIconPicker'
 
 type RepositoryPaneProps = {
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
+  hooksInspectionReady: boolean
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeRepo: (repoId: string) => void
@@ -31,13 +32,21 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
   return [
     {
       title: 'Display Name',
-      description: 'Repo-specific display details for the sidebar and tabs.',
-      keywords: [repo.displayName, repo.path, 'repository name']
+      description: 'Project-specific display details for the sidebar and tabs.',
+      keywords: [repo.displayName, repo.path, 'project name', 'repository name']
     },
     {
-      title: 'Badge Color',
-      description: 'Repo color used in the sidebar and tabs.',
-      keywords: [repo.displayName, 'color', 'badge']
+      title: 'Project Icon',
+      description: 'Project icon and color used in the sidebar and tabs.',
+      keywords: [
+        repo.displayName,
+        'project icon',
+        'repository icon',
+        'color',
+        'badge',
+        'emoji',
+        'favicon'
+      ]
     },
     ...(isFolder
       ? []
@@ -63,9 +72,9 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           }
         ]),
     {
-      title: 'Remove Repo',
-      description: 'Remove this repository from Orca.',
-      keywords: [repo.displayName, 'delete', 'repository']
+      title: 'Remove Project',
+      description: 'Remove this project from Orca.',
+      keywords: [repo.displayName, 'delete', 'project', 'repository']
     },
     ...(isFolder
       ? []
@@ -86,7 +95,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           },
           {
             title: 'MCP Configs',
-            description: 'Inspect repo-level MCP server config files.',
+            description: 'Inspect project-level MCP server config files.',
             keywords: [
               repo.displayName,
               'mcp',
@@ -98,18 +107,51 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             ]
           },
           {
-            title: 'orca.yaml hooks',
-            description: 'Shared setup and archive hook commands for this repository.',
-            keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
+            title: 'Setup Script',
+            description: 'Local and shared scripts that run after a new worktree is created.',
+            keywords: [
+              repo.displayName,
+              'hooks',
+              'setup',
+              'setup script',
+              'setup command',
+              'local settings scripts',
+              'orca.yaml hooks',
+              'yaml'
+            ]
           },
           {
-            title: 'Legacy Repo-Local Hooks',
-            description: 'Older setup and archive hook scripts stored in local repo settings.',
-            keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
+            title: 'Archive Script',
+            description: 'Local and shared scripts that run before a worktree is archived.',
+            keywords: [
+              repo.displayName,
+              'hooks',
+              'archive',
+              'archive script',
+              'archive command',
+              'local settings scripts',
+              'orca.yaml hooks',
+              'yaml'
+            ]
+          },
+          {
+            title: 'Advanced',
+            description: 'Command source and orca.yaml details.',
+            keywords: [
+              repo.displayName,
+              'advanced',
+              'command source',
+              'local',
+              'orca.yaml',
+              'shared',
+              'both',
+              'source',
+              'authoritative'
+            ]
           },
           {
             title: 'When to Run Setup',
-            description: 'Choose the default behavior when a setup command is available.',
+            description: 'Choose the default behavior when a setup script is available.',
             keywords: [
               repo.displayName,
               'setup run policy',
@@ -140,6 +182,7 @@ export function RepositoryPane({
   repo,
   yamlHooks,
   hasHooksFile,
+  hooksInspectionReady,
   mayNeedUpdate,
   updateRepo,
   removeRepo
@@ -160,18 +203,7 @@ export function RepositoryPane({
     setConfirmingRemove(repoId)
   }
 
-  const updateSelectedRepoHookSettings = (
-    updates: Partial<Pick<RepoHookSettings, 'setupRunPolicy'>>
-  ) => {
-    // Why: persisted repos may still carry legacy UI hook fields from the old dual-source
-    // design. We preserve them when saving so existing local state stays loadable, but the
-    // product now treats `orca.yaml` as the only supported hook definition surface.
-    const nextSettings: RepoHookSettings = {
-      ...DEFAULT_REPO_HOOK_SETTINGS,
-      ...repo.hookSettings,
-      ...updates
-    }
-
+  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateRepo(repo.id, {
       hookSettings: nextSettings
     })
@@ -189,33 +221,20 @@ export function RepositoryPane({
     window.setTimeout(() => setCopiedTemplate(false), 1500)
   }
 
-  const handleClearLegacyHooks = () => {
-    // Why: legacy repo-local commands are still honored as a compatibility fallback.
-    // Keep them visible and removable here so the settings surface matches runtime behavior.
-    updateRepo(repo.id, {
-      hookSettings: {
-        ...DEFAULT_REPO_HOOK_SETTINGS,
-        ...repo.hookSettings,
-        scripts: {
-          ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
-          setup: '',
-          archive: ''
-        }
-      }
-    })
-  }
-
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
+    ['Display Name', 'Project Icon', 'Default Worktree Base', 'Remove Project'].includes(
+      entry.title
+    )
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
   const hooksEntries = allEntries.filter((entry) =>
     [
-      'orca.yaml hooks',
-      'Legacy Repo-Local Hooks',
+      'Setup Script',
+      'Archive Script',
+      'Advanced',
       'When to Run Setup',
       'Custom GitHub Issue Command'
     ].includes(entry.title)
@@ -223,6 +242,24 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
 
+  const hooksSection =
+    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
+      <RepositoryHooksSection
+        key="hooks"
+        repo={repo}
+        yamlHooks={yamlHooks}
+        hasHooksFile={hasHooksFile}
+        hooksInspectionReady={hooksInspectionReady}
+        mayNeedUpdate={mayNeedUpdate}
+        copiedTemplate={copiedTemplate}
+        onCopyTemplate={() => void handleCopyTemplate()}
+        onUpdateHookSettings={updateSelectedRepoHookSettings}
+      />
+    ) : null
+
+  // Why: Identity (name, icon, base ref) stays at the top so it's the first
+  // thing a user sees. Setup commands follow immediately because they're the
+  // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
       <section key="identity" className="space-y-8">
@@ -230,7 +267,7 @@ export function RepositoryPane({
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
-              Repo-specific display details for the sidebar and tabs.
+              Project-specific display details for the sidebar and tabs.
             </p>
             <p className="text-xs text-muted-foreground">
               Type: <span className="text-foreground">{getRepoKindLabel(repo)}</span>
@@ -242,9 +279,9 @@ export function RepositoryPane({
             ) : null}
           </div>
           <SearchableSetting
-            title="Remove Repo"
-            description="Remove this repository from Orca."
-            keywords={[repo.displayName, 'delete', 'repository']}
+            title="Remove Project"
+            description="Remove this project from Orca."
+            keywords={[repo.displayName, 'delete', 'project', 'repository']}
           >
             <Button
               variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
@@ -254,15 +291,15 @@ export function RepositoryPane({
               className="gap-2"
             >
               <Trash2 className="size-3.5" />
-              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Repo'}
+              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Project'}
             </Button>
           </SearchableSetting>
         </div>
 
         <SearchableSetting
           title="Display Name"
-          description="Repo-specific display details for the sidebar and tabs."
-          keywords={[repo.displayName, repo.path, 'repository name']}
+          description="Project-specific display details for the sidebar and tabs."
+          keywords={[repo.displayName, repo.path, 'project name', 'repository name']}
           className="space-y-2"
         >
           <Label className="text-sm font-semibold">Display Name</Label>
@@ -278,27 +315,22 @@ export function RepositoryPane({
         </SearchableSetting>
 
         <SearchableSetting
-          title="Badge Color"
-          description="Repo color used in the sidebar and tabs."
-          keywords={[repo.displayName, 'color', 'badge']}
+          title="Project Icon"
+          description="Project icon and color used in the sidebar and tabs."
+          keywords={[
+            repo.displayName,
+            repo.path,
+            'project icon',
+            'repository icon',
+            'color',
+            'badge',
+            'emoji',
+            'favicon'
+          ]}
           className="space-y-2"
+          id={getRepositoryIconSectionId(repo.id)}
         >
-          <Label className="text-sm font-semibold">Badge Color</Label>
-          <div className="flex flex-wrap gap-2">
-            {REPO_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => updateRepo(repo.id, { badgeColor: color })}
-                className={`size-7 rounded-full transition-all ${
-                  repo.badgeColor === color
-                    ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                    : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
-                }`}
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
-          </div>
+          <RepositoryIconPicker repo={repo} updateRepo={updateRepo} />
         </SearchableSetting>
 
         {!isFolder ? (
@@ -319,6 +351,7 @@ export function RepositoryPane({
         ) : null}
       </section>
     ) : null,
+    hooksSection,
     !isFolder &&
     !repo.connectionId &&
     symlinksEnabled &&
@@ -330,21 +363,6 @@ export function RepositoryPane({
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, mcpEntries) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
-    ) : null,
-    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
-      <RepositoryHooksSection
-        key="hooks"
-        repo={repo}
-        yamlHooks={yamlHooks}
-        hasHooksFile={hasHooksFile}
-        mayNeedUpdate={mayNeedUpdate}
-        copiedTemplate={copiedTemplate}
-        onCopyTemplate={() => void handleCopyTemplate()}
-        onClearLegacyHooks={handleClearLegacyHooks}
-        onUpdateSetupRunPolicy={(policy) =>
-          updateSelectedRepoHookSettings({ setupRunPolicy: policy as SetupRunPolicy })
-        }
-      />
     ) : null
   ].filter(Boolean)
 

@@ -290,14 +290,14 @@ describe('SshRelaySession', () => {
       attach: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
-    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:target-1@@pty-1'])
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
 
     expect(mockAttach).toHaveBeenCalledWith('pty-1')
-    expect(setPtyOwnership).toHaveBeenCalledWith('pty-1', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'target-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-1', 'attached')
   })
 
@@ -321,7 +321,7 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
-    expect(setPtyOwnership).toHaveBeenCalledWith('pty-live', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
   })
 
@@ -411,10 +411,10 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-stale')
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(clearProviderPtyState).toHaveBeenCalledWith('pty-stale')
-    expect(deletePtyOwnership).toHaveBeenCalledWith('pty-stale')
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
-      id: 'pty-stale',
+      id: 'ssh:target-1@@pty-stale',
       code: -1
     })
   })

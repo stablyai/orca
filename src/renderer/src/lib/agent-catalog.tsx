@@ -62,6 +62,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://github.com/google-gemini/gemini-cli'
   },
   {
+    id: 'antigravity',
+    label: 'Antigravity',
+    cmd: 'agy',
+    faviconDomain: 'antigravity.google',
+    homepageUrl: 'https://antigravity.google/docs/cli-overview'
+  },
+  {
     id: 'aider',
     label: 'Aider',
     cmd: 'aider',

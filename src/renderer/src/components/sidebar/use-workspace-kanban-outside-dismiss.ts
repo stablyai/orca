@@ -11,6 +11,7 @@ const WORKSPACE_BOARD_KEEP_OPEN_SELECTOR = [
   '[data-slot="popover-content"]',
   '[data-slot="dialog-content"]',
   '[data-slot="dialog-overlay"]',
+  '[data-sonner-toast]',
   '[role="dialog"][data-state="open"]',
   '[role="alertdialog"][data-state="open"]',
   '[role="menu"][data-state="open"]'

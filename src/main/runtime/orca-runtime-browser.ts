@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this file is a command adapter for one external surface, Agent Browser automation. It stays separate from OrcaRuntimeService so runtime state does not grow further while browser routing remains easy to scan in one place. */
 import { randomUUID } from 'crypto'
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain, webContents, type BrowserWindow } from 'electron'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type {
   BrowserBackResult,
@@ -33,6 +33,7 @@ import type {
   BrowserProfileListResult,
   BrowserReloadResult,
   BrowserScreenshotResult,
+  BrowserScreencastResult,
   BrowserScrollResult,
   BrowserSelectAllResult,
   BrowserSelectResult,
@@ -52,6 +53,10 @@ import type {
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/cdp-bridge'
+import {
+  startBrowserScreencast,
+  type BrowserScreencastSession
+} from '../browser/browser-screencast-stream'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   detectInstalledBrowsers,
@@ -70,6 +75,69 @@ type ResolvedBrowserCommandTarget = {
   browserPageId?: string
 }
 
+type ResolvedBrowserPageWebContents = {
+  browserPageId: string
+  webContents: Electron.WebContents
+}
+
+type BrowserScreencastParams = {
+  format: 'jpeg' | 'png'
+  quality?: number
+  maxWidth?: number
+  maxHeight?: number
+  viewportWidth?: number
+  viewportHeight?: number
+  deviceScaleFactor?: number
+  mobile?: boolean
+  everyNthFrame?: number
+  minFrameIntervalMs?: number
+} & BrowserCommandTargetParams
+
+type BrowserScreencastStartResult = {
+  subscriptionId: string
+  ready: Extract<BrowserScreencastResult, { type: 'ready' }>
+  session: BrowserScreencastSession
+}
+
+type ActiveBrowserScreencastPage = {
+  stop: () => void
+  done: Promise<void>
+}
+
+function clampInteger(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback
+  }
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function clampOptionalInteger(
+  value: number | undefined,
+  min: number,
+  max: number
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function clampOptionalNumber(
+  value: number | undefined,
+  min: number,
+  max: number
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.min(max, Math.max(min, value))
+}
+
 export type RuntimeBrowserCommandHost = {
   getAgentBrowserBridge(): AgentBrowserBridge | null
   resolveWorktreeSelector(selector: string): Promise<{ id: string }>
@@ -78,6 +146,10 @@ export type RuntimeBrowserCommandHost = {
 }
 
 export class RuntimeBrowserCommands {
+  private readonly activeScreencastPageIds = new Set<string>()
+  private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
+  private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
+
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
 
   private requireAgentBrowserBridge(): AgentBrowserBridge {
@@ -147,6 +219,33 @@ export class RuntimeBrowserCommands {
         : undefined,
       browserPageId
     }
+  }
+
+  private resolveBrowserPageWebContents(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined
+  ): ResolvedBrowserPageWebContents {
+    const bridge = this.requireAgentBrowserBridge()
+    const resolvedPageId = browserPageId ?? bridge.getActivePageId(worktreeId)
+    if (!resolvedPageId) {
+      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
+    }
+    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(resolvedPageId)
+    if (webContentsId == null) {
+      const scope = worktreeId ? ' in this worktree' : ''
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${resolvedPageId} was not found${scope}`
+      )
+    }
+    const guest = webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${resolvedPageId} is no longer available`
+      )
+    }
+    return { browserPageId: resolvedPageId, webContents: guest }
   }
 
   // Why: browser tabs only mount (and become operable) when their worktree is
@@ -330,6 +429,136 @@ export class RuntimeBrowserCommands {
       target.worktreeId,
       target.browserPageId
     )
+  }
+
+  async browserScreencast(
+    params: BrowserScreencastParams,
+    stream: {
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+      emit?: (event: BrowserScreencastResult) => void
+    }
+  ): Promise<BrowserScreencastStartResult> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    const { browserPageId, webContents: guest } = this.resolveBrowserPageWebContents(
+      target.worktreeId,
+      target.browserPageId
+    )
+    let stopping = this.stoppingScreencastPageIds.get(browserPageId)
+    if (stopping) {
+      await stopping
+    }
+    let active = this.activeScreencastsByPageId.get(browserPageId)
+    while (active) {
+      // Why: CDP only allows one Page.startScreencast per page. Treat a new
+      // subscriber as taking over from a stale/hidden paired client instead of
+      // surfacing an already-active error in the browser pane.
+      active.stop()
+      await active.done
+      stopping = this.stoppingScreencastPageIds.get(browserPageId)
+      if (stopping) {
+        await stopping
+      }
+      active = this.activeScreencastsByPageId.get(browserPageId)
+    }
+    this.activeScreencastPageIds.add(browserPageId)
+    const format = params.format
+    const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
+    let session: BrowserScreencastSession | null = null
+    let resolveActiveDone!: () => void
+    const activeDone = new Promise<void>((resolve) => {
+      resolveActiveDone = resolve
+    })
+    let cancelledBeforeStart = false
+    const activeRecord: ActiveBrowserScreencastPage = {
+      stop: () => {
+        if (session) {
+          session.stop()
+          return
+        }
+        cancelledBeforeStart = true
+      },
+      done: activeDone
+    }
+    this.activeScreencastsByPageId.set(browserPageId, activeRecord)
+    try {
+      session = await startBrowserScreencast(guest, {
+        format,
+        quality: clampInteger(params.quality, 10, 100, 70),
+        maxWidth: clampInteger(params.maxWidth, 320, 3840, 1440),
+        maxHeight: clampInteger(params.maxHeight, 240, 2160, 1200),
+        viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
+        viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
+        deviceScaleFactor: clampOptionalNumber(params.deviceScaleFactor, 1, 4),
+        mobile: params.mobile === true,
+        everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
+        minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
+        onFrame: stream.sendBinary,
+        onEvent: stream.emit,
+        onError: (message) => stream.emit?.({ type: 'error', message })
+      })
+      if (cancelledBeforeStart) {
+        session.stop()
+        await session.done
+        throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
+      }
+    } catch (error) {
+      this.activeScreencastPageIds.delete(browserPageId)
+      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
+        this.activeScreencastsByPageId.delete(browserPageId)
+      }
+      resolveActiveDone()
+      throw error
+    }
+    let stoppingPromise: Promise<void> | null = null
+    const clearPageGate = (): void => {
+      this.activeScreencastPageIds.delete(browserPageId)
+      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
+        this.activeScreencastsByPageId.delete(browserPageId)
+      }
+      if (
+        stoppingPromise &&
+        this.stoppingScreencastPageIds.get(browserPageId) === stoppingPromise
+      ) {
+        this.stoppingScreencastPageIds.delete(browserPageId)
+      }
+      resolveActiveDone()
+    }
+    const markStopping = (): void => {
+      if (stoppingPromise || !session) {
+        return
+      }
+      // Why: mobile can unsubscribe and immediately resubscribe on rotation.
+      // New streams wait for CDP teardown instead of failing with already-active.
+      stoppingPromise = session.done.finally(clearPageGate)
+      this.stoppingScreencastPageIds.set(browserPageId, stoppingPromise)
+    }
+    void session.done.finally(() => {
+      clearPageGate()
+    })
+
+    try {
+      return {
+        subscriptionId,
+        session: {
+          done: session.done,
+          stop: () => {
+            markStopping()
+            session?.stop()
+          }
+        },
+        ready: {
+          type: 'ready',
+          subscriptionId,
+          browserPageId,
+          format,
+          tab: this.describeBrowserTab(browserPageId, target.worktreeId)
+        }
+      }
+    } catch (error) {
+      markStopping()
+      session.stop()
+      throw error
+    }
   }
 
   async browserEval(
@@ -765,6 +994,20 @@ export class RuntimeBrowserCommands {
     )
   }
 
+  async browserMouseClick(
+    params: { x: number; y: number; button?: string; radius?: number } & BrowserCommandTargetParams
+  ): Promise<unknown> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    return this.requireAgentBrowserBridge().mouseClick(
+      params.x,
+      params.y,
+      params.button,
+      target.worktreeId,
+      target.browserPageId,
+      clampOptionalNumber(params.radius, 0, 64)
+    )
+  }
+
   async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseUp(
@@ -1024,6 +1267,7 @@ export class RuntimeBrowserCommands {
     url?: string
     worktree?: string
     profileId?: string
+    waitForRegistration?: boolean
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
@@ -1046,12 +1290,14 @@ export class RuntimeBrowserCommands {
     // tab is operable by subsequent CLI commands (snapshot, click, etc.).
     // If registration doesn't complete within timeout, return the ID anyway — the
     // tab exists in the UI but may not be ready for automation commands yet.
-    try {
-      await waitForTabRegistration(browserPageId)
-    } catch {
-      // Tab was created in the renderer but the webview hasn't finished mounting.
-      // Return success since the tab exists; subsequent commands will fail with a
-      // clear "tab not available" error if the webview never loads.
+    if (params.waitForRegistration !== false) {
+      try {
+        await waitForTabRegistration(browserPageId)
+      } catch {
+        // Tab was created in the renderer but the webview hasn't finished mounting.
+        // Return success since the tab exists; subsequent commands will fail with a
+        // clear "tab not available" error if the webview never loads.
+      }
     }
 
     // Why: newly created tabs should be auto-activated so subsequent commands

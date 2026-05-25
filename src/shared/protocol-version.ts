@@ -17,15 +17,18 @@
 // this client build requires a newer server. Exact app-version equality is
 // never required; these numbers define the supported compatibility window.
 
-export const RUNTIME_PROTOCOL_VERSION = 2
+export const RUNTIME_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
   'runtime.environments.v1',
+  'browser.screencast.v1',
   'terminal.binary-stream.v1',
-  'terminal.multiplex.v1'
+  'terminal.multiplex.v1',
+  'workspace-ports.v1',
+  'mobile.tasks.v1'
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   checkRuntimeHooks,
+  inspectRuntimeSetupScriptImports,
   readRuntimeIssueCommand,
   writeRuntimeIssueCommand
 } from './runtime-hooks-client'
@@ -13,6 +14,7 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 const hooksCheck = vi.fn()
+const hooksInspectSetupScriptImports = vi.fn()
 const hooksReadIssueCommand = vi.fn()
 const hooksWriteIssueCommand = vi.fn()
 
@@ -21,6 +23,7 @@ beforeEach(() => {
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   hooksCheck.mockReset()
+  hooksInspectSetupScriptImports.mockReset()
   hooksReadIssueCommand.mockReset()
   hooksWriteIssueCommand.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -31,6 +34,7 @@ beforeEach(() => {
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
       hooks: {
         check: hooksCheck,
+        inspectSetupScriptImports: hooksInspectSetupScriptImports,
         readIssueCommand: hooksReadIssueCommand,
         writeIssueCommand: hooksWriteIssueCommand
       }
@@ -41,6 +45,7 @@ beforeEach(() => {
 describe('runtime hooks client', () => {
   it('uses local hook IPC when no runtime environment is active', async () => {
     hooksCheck.mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+    hooksInspectSetupScriptImports.mockResolvedValue([])
     hooksReadIssueCommand.mockResolvedValue({
       localContent: null,
       sharedContent: null,
@@ -50,10 +55,12 @@ describe('runtime hooks client', () => {
     })
 
     await checkRuntimeHooks({ activeRuntimeEnvironmentId: null }, 'repo-1')
+    await inspectRuntimeSetupScriptImports({ activeRuntimeEnvironmentId: null }, 'repo-1')
     await readRuntimeIssueCommand({ activeRuntimeEnvironmentId: null }, 'repo-1')
     await writeRuntimeIssueCommand({ activeRuntimeEnvironmentId: null }, 'repo-1', 'Fix it')
 
     expect(hooksCheck).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(hooksInspectSetupScriptImports).toHaveBeenCalledWith({ repoId: 'repo-1' })
     expect(hooksReadIssueCommand).toHaveBeenCalledWith({ repoId: 'repo-1' })
     expect(hooksWriteIssueCommand).toHaveBeenCalledWith({ repoId: 'repo-1', content: 'Fix it' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -68,6 +75,7 @@ describe('runtime hooks client', () => {
     })
 
     await checkRuntimeHooks({ activeRuntimeEnvironmentId: 'env-1' }, 'repo-1')
+    await inspectRuntimeSetupScriptImports({ activeRuntimeEnvironmentId: 'env-1' }, 'repo-1')
     await readRuntimeIssueCommand({ activeRuntimeEnvironmentId: 'env-1' }, 'repo-1')
     await writeRuntimeIssueCommand({ activeRuntimeEnvironmentId: 'env-1' }, 'repo-1', 'Fix it')
 
@@ -79,17 +87,24 @@ describe('runtime hooks client', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
-      method: 'repo.issueCommandRead',
+      method: 'repo.setupScriptImports',
       params: { repo: 'repo-1' },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+      selector: 'env-1',
+      method: 'repo.issueCommandRead',
+      params: { repo: 'repo-1' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
       selector: 'env-1',
       method: 'repo.issueCommandWrite',
       params: { repo: 'repo-1', content: 'Fix it' },
       timeoutMs: 15_000
     })
     expect(hooksCheck).not.toHaveBeenCalled()
+    expect(hooksInspectSetupScriptImports).not.toHaveBeenCalled()
     expect(hooksReadIssueCommand).not.toHaveBeenCalled()
     expect(hooksWriteIssueCommand).not.toHaveBeenCalled()
   })

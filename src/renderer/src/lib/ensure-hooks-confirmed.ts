@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/types'
+import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 
@@ -38,6 +39,17 @@ export async function ensureHooksConfirmed(
         }
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
+        const repo = state.repos.find((r) => r.id === repoId)
+        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+        const sourcePolicy = resolveHookCommandSourcePolicy(
+          repo?.hookSettings?.commandSourcePolicy,
+          {
+            hasLocalScript: Boolean(localScript)
+          }
+        )
+        if (sourcePolicy === 'local-only') {
+          return 'run'
+        }
         const result = await checkRuntimeHooks(state.settings, repoId)
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
         scriptContent = (yamlHooks?.scripts?.[scriptKind] ?? '').trim()

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
@@ -23,7 +24,8 @@ export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
-  closeModal: () => void
+  closeModal: () => void,
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -126,6 +128,7 @@ export function useRemoteRepo(
 
       toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
+      setExistingWorkspaceSource?.('ssh_remote_path')
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
@@ -145,7 +148,15 @@ export function useRemoteRepo(
     } finally {
       setIsAddingRemote(false)
     }
-  }, [selectedTargetId, remotePath, fetchWorktrees, setStep, setAddedRepo, closeModal])
+  }, [
+    selectedTargetId,
+    remotePath,
+    fetchWorktrees,
+    setStep,
+    setAddedRepo,
+    closeModal,
+    setExistingWorkspaceSource
+  ])
 
   return {
     sshTargets,
@@ -240,7 +251,7 @@ export function RemoteStep({
               </Button>
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
               {sshTargets.map((target) => (
                 <SshTargetRow
                   key={target.id}

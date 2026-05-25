@@ -1,12 +1,19 @@
 import { e2eConfig } from '@/lib/e2e-config'
+import {
+  discardForegroundRenderSettle,
+  suppressTerminalCursorUntilOutputSettles,
+  writeForegroundTerminalChunk,
+  type ForegroundTerminalOutputTarget
+} from './pane-terminal-foreground-render-settle'
 
-type TerminalOutputTarget = {
-  write(data: string, callback?: () => void): void
-}
+type TerminalOutputTarget = ForegroundTerminalOutputTarget
+
+type TerminalOutputBeforeWrite = (data: string) => void
 
 type QueueEntry = {
   terminal: TerminalOutputTarget
   chunks: string[]
+  beforeWrite?: TerminalOutputBeforeWrite
 }
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
@@ -111,6 +118,7 @@ function writeQueuedChunk(entry: QueueEntry): boolean {
     return false
   }
   try {
+    entry.beforeWrite?.(data)
     entry.terminal.write(data)
   } catch {
     // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
@@ -155,7 +163,7 @@ function drainQueuedOutput(): void {
 export function writeTerminalOutput(
   terminal: TerminalOutputTarget,
   data: string,
-  options: { foreground: boolean }
+  options: { foreground: boolean; beforeWrite?: TerminalOutputBeforeWrite }
 ): void {
   exposeDebugApi()
   if (!data) {
@@ -167,14 +175,17 @@ export function writeTerminalOutput(
     if (debugEnabled) {
       debugState.foregroundWriteCount++
     }
-    terminal.write(data)
+    options.beforeWrite?.(data)
+    writeForegroundTerminalChunk(terminal, data)
     return
   }
 
   let entry = queuedByTerminal.get(terminal)
   if (!entry) {
-    entry = { terminal, chunks: [] }
+    entry = { terminal, chunks: [], beforeWrite: options.beforeWrite }
     queuedByTerminal.set(terminal, entry)
+  } else {
+    entry.beforeWrite = options.beforeWrite
   }
   entry.chunks.push(data)
   if (debugEnabled) {
@@ -200,6 +211,7 @@ export function flushTerminalOutput(terminal: TerminalOutputTarget): void {
       debugState.flushWriteCount++
     }
     try {
+      entry.beforeWrite?.(data)
       terminal.write(data)
     } catch {
       // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
@@ -239,6 +251,8 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   queuedByTerminal.delete(terminal)
+  discardForegroundRenderSettle(terminal)
 }
 
 exposeDebugApi()
+export { suppressTerminalCursorUntilOutputSettles }

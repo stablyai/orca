@@ -5,6 +5,7 @@
 @import './rich-markdown-editor.css';
 @import './markdown-preview.css';
 @import './terminal.css';
+@import './mobile-page.css';
 
 @font-face {
   font-family: 'Geist';
@@ -57,6 +58,24 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-terminal-pane-title-on-dark-fg: var(--terminal-pane-title-on-dark-fg);
+  --color-terminal-pane-title-on-dark-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --color-terminal-pane-title-on-dark-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --color-terminal-pane-title-on-dark-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --color-terminal-pane-title-on-dark-button-hover-fg: var(
+    --terminal-pane-title-on-dark-button-hover-fg
+  );
+  --color-terminal-pane-title-on-dark-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --color-terminal-pane-title-on-dark-separator: var(--terminal-pane-title-on-dark-separator);
+  --color-terminal-pane-title-on-light-fg: var(--terminal-pane-title-on-light-fg);
+  --color-terminal-pane-title-on-light-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --color-terminal-pane-title-on-light-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --color-terminal-pane-title-on-light-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --color-terminal-pane-title-on-light-button-hover-fg: var(
+    --terminal-pane-title-on-light-button-hover-fg
+  );
+  --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -65,6 +84,7 @@
   --color-git-graph-lane-3: var(--git-graph-lane-3);
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
+  --color-annotation-highlight: var(--annotation-highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -103,6 +123,7 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --terminal-pane-locate: var(--color-blue-600);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -116,6 +137,20 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
@@ -131,6 +166,7 @@
   --git-graph-lane-3: #994f00;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #f59e0b;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -156,6 +192,7 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --terminal-pane-locate: var(--color-blue-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -169,6 +206,20 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
@@ -184,6 +235,7 @@
   --git-graph-lane-3: #ce9178;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #fbbf24;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
@@ -218,11 +270,11 @@
     list-style: none;
   }
 
-  button:not(:disabled) {
+  :where(button:not(:disabled)) {
     cursor: pointer;
   }
 
-  button:disabled {
+  :where(button:disabled) {
     cursor: default;
   }
 }
@@ -251,6 +303,21 @@
   min-height: 28px;
 }
 
+/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
+.scrollbar-sleek-lg {
+  scrollbar-width: auto;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  min-height: 36px;
+}
+
 .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }
@@ -267,7 +334,7 @@
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
   /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 6px;
+  padding-right: 2px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
@@ -346,6 +413,18 @@
 }
 
 .terminal-tab-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.project-view-tab-strip {
+  /* Why: project views load after the table shell; keeping the row stable
+     prevents the list below from jumping when the tabs arrive. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -645,6 +724,8 @@
 
 .editor-header-path {
   display: block;
+  min-width: 0;
+  flex: 0 1 auto;
   padding: 0;
   max-width: 100%;
   border: none;
@@ -737,31 +818,40 @@
   animation: settings-shell-enter 180ms ease-out;
 }
 
-/* Why: after clicking a sidebar item we center the target section and briefly
-   pulse its border so the user can see exactly which section their click
-   landed on — the scroll destination alone is subtle when the section is
-   already partially visible. */
-@keyframes settings-section-flash {
-  0% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
+.collapsible-height-content {
+  overflow: hidden;
+}
+
+.collapsible-height-content[data-state='open'] {
+  animation: collapsible-down 200ms ease-out;
+}
+
+.collapsible-height-content[data-state='closed'] {
+  animation: collapsible-up 180ms ease-out;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
   }
-  60% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
-  }
-  100% {
-    border-color: var(--border);
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
   }
 }
 
-.settings-section-flash {
-  animation: settings-section-flash 900ms ease-out;
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+
+  to {
+    height: 0;
+    opacity: 0;
+  }
 }
 
 .sidebar.collapsed {
@@ -866,6 +956,72 @@
 
 [data-workspace-board-card-drag-preview='true'] * {
   cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-preview='true'] {
+  z-index: 2147483000;
+  overflow: visible;
+  border-radius: var(--radius);
+  opacity: 0.96;
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--foreground) 18%, transparent));
+  will-change: transform;
+}
+
+[data-worktree-sidebar-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-count='true'] {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  color: var(--sidebar);
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--sidebar);
+}
+
+[data-workspace-board-card-drop-indicator='true'] {
+  z-index: 2147483646;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 24%, transparent),
+    0 8px 20px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+  opacity: 0;
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 80ms ease-out;
+  will-change: transform, width, opacity;
+}
+
+[data-workspace-board-card-drop-indicator='true']::before,
+[data-workspace-board-card-drop-indicator='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  transform: translateY(-50%);
+}
+
+[data-workspace-board-card-drop-indicator='true']::before {
+  left: -1px;
+}
+
+[data-workspace-board-card-drop-indicator='true']::after {
+  right: -1px;
 }
 
 [data-workspace-board-card-drag-count='true'] {
@@ -1156,6 +1312,774 @@
   animation: update-card-exit 150ms ease-in both;
 }
 
+/* Waveform bars in the FeatureTipsModal voice tip — purely decorative. */
+@keyframes waveform {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-waveform {
+  animation: waveform 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* ── Feature wall: agents-orchestration animations ───────────────── */
+
+/* Why: drives the supported-agents marquee on page 1 of the agents tile.
+   Track is duplicated in the DOM so a -50% translate loops seamlessly. */
+@keyframes feature-wall-marquee-flow {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.feature-wall-marquee-track {
+  animation: feature-wall-marquee-flow 36s linear infinite;
+}
+
+/* Shared click pulse for feature-wall fake cursors. Matches the Editor tour
+   ring so every animated mouse click reads as the same interaction. */
+.feature-wall-click-ring {
+  animation: feature-wall-click-ring 460ms ease-out forwards;
+}
+
+@keyframes feature-wall-click-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Why: smooth reveal for the Tasks-tile workspace card so it eases in once the
+   workspace flips from "Creating" to "Ready" instead of popping in. */
+@keyframes tasks-workspace-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Why: orchestrator → child connector arrows. Faint dashed strokes drawn in
+   JS so endpoints follow the real card geometry as cards animate between
+   phase 1 (parent + nested child) and phase 2 (parent + spawned peer). */
+.feature-wall-orch-arrows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 280ms ease;
+}
+.feature-wall-orch-arrows[data-fading='true'] {
+  opacity: 0;
+}
+.feature-wall-orch-arrows path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--foreground) 32%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+/* Message envelope that travels along the dashed connector. Position is
+   driven by `offset-path` so the bubble visibly follows the same shape the
+   connector drew. */
+.feature-wall-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 6px 16px rgba(24, 24, 27, 0.22),
+    0 1px 2px rgba(24, 24, 27, 0.12);
+  opacity: 0;
+  offset-rotate: 0deg;
+  offset-distance: 0%;
+  pointer-events: none;
+  will-change: offset-distance, opacity, transform;
+  transform: translate(-12px, -12px) scale(0.7);
+}
+.feature-wall-bubble svg {
+  width: 13px;
+  height: 13px;
+}
+.feature-wall-bubble.in-flight {
+  opacity: 1;
+  offset-distance: 100%;
+  transform: translate(-12px, -12px) scale(1);
+  transition:
+    offset-distance 1500ms cubic-bezier(0.25, 0.6, 0.25, 1),
+    transform 280ms ease,
+    opacity 280ms ease;
+}
+.feature-wall-bubble.landed {
+  opacity: 0;
+  offset-distance: 100%;
+  transform: translate(-12px, -12px) scale(0.85);
+  transition: opacity 320ms ease 80ms;
+}
+
+/* When a message just lands, briefly tint the recipient line so the new
+   text reads as a fresh inbound message rather than ambient text. */
+@keyframes feature-wall-msg-pop {
+  0% {
+    color: rgb(180 83 9);
+  }
+  70% {
+    color: rgb(180 83 9);
+  }
+  100% {
+    color: var(--foreground);
+  }
+}
+.feature-wall-msg-received {
+  animation: feature-wall-msg-pop 1100ms ease-out;
+}
+
+@keyframes feature-wall-orch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.feature-wall-spawn-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgb(245 158 11);
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: feature-wall-orch-spin 800ms linear infinite;
+}
+
+/* "Creating workspaces…" placeholder shown before the child workspaces
+   reveal. Once the orchestrator finishes spawning, the wrapper collapses
+   and the real child cards take its place. */
+.feature-wall-creating-children {
+  overflow: hidden;
+  opacity: 1;
+  max-height: 60px;
+  transition:
+    opacity 220ms ease,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.feature-wall-creating-children[data-hidden='true'] {
+  opacity: 0;
+  max-height: 0;
+  pointer-events: none;
+}
+
+/* Children container fades in once the orchestrator finishes creating. */
+.feature-wall-children-wrapper {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+.feature-wall-children-wrapper[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Each child agent row stays collapsed until *its* dispatch bubble lands on
+   it, so the child workspace visibly gains an agent as work arrives. */
+.feature-wall-spawn-row {
+  overflow: hidden;
+  opacity: 1;
+  max-height: 60px;
+  transform: none;
+  transition:
+    opacity 320ms ease 80ms,
+    transform 320ms ease 80ms,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms,
+    margin 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms,
+    padding 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms;
+}
+.feature-wall-spawn-row[data-pending='true'] {
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    padding 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Brief one-shot pulse when the Codex limits popover swaps accounts and the
+   "100% left" label flashes from red to green. */
+@keyframes feature-wall-meta-pulse {
+  0% {
+    color: rgb(220 38 38);
+    transform: scale(1);
+  }
+  20% {
+    color: rgb(22 163 74);
+    transform: scale(1.08);
+  }
+  100% {
+    color: rgb(22 163 74);
+    transform: scale(1);
+  }
+}
+
+.feature-wall-meta-pulse {
+  color: rgb(22 163 74);
+  font-weight: 600;
+  animation: feature-wall-meta-pulse 1100ms ease-out 1;
+}
+
+/* Onboarding step 5: the compact "Take the tour" intro expands into the
+   full tour shell, so animate the browser snapshots to avoid a hard jump. */
+html.onboarding-tour-start-transition::view-transition-old(root),
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-duration: 760ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+html.onboarding-tour-start-transition::view-transition-old(root) {
+  animation-name: onboarding-tour-start-old;
+}
+
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-name: onboarding-tour-start-new;
+}
+
+@keyframes onboarding-tour-start-old {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  28% {
+    opacity: 0.9;
+    transform: translateY(-2px) scale(0.998);
+  }
+  42% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+}
+
+@keyframes onboarding-tour-start-new {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  34% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Feature tour nudge: cycling preview ─────────────────────────── */
+
+/* Why: the bottom-right nudge cycles through 4 silhouette frames
+   (Workspace → Orchestration → Tasks → Terminal). Each frame is visible for
+   1/4 of the cycle. Holding fade-out late (24%–25%) gives the user dwell
+   time on the resolved state before swapping. Uses CSS-driven timing rather
+   than React state so we stay cheap when the popup is mounted but idle. */
+:root {
+  --feature-tour-cycle: 16s;
+}
+
+.feature-tour-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-frame[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-frame[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-frame[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-frame[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+@keyframes feature-tour-frame-fade {
+  0% {
+    opacity: 0;
+  }
+  1.5% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.feature-tour-copy-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-copy-slide[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-copy-slide[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-copy-slide[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-copy-slide[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+.feature-tour-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  animation: feature-tour-dot-pulse var(--feature-tour-cycle) linear infinite;
+}
+.feature-tour-dot[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-dot[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-dot[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-dot[data-frame='4'] {
+  animation-delay: 12s;
+}
+@keyframes feature-tour-dot-pulse {
+  0%,
+  24% {
+    background: var(--primary);
+    transform: scale(1.05);
+  }
+  25%,
+  100% {
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+    transform: scale(1);
+  }
+}
+
+/* Frame 1 — Workspace: agent-state dot pulses while a "fix login race"
+   workspace shows two agent rows working in parallel. */
+.feature-tour-ws-status {
+  animation: feature-tour-status-pulse 1.6s ease-in-out infinite;
+}
+@keyframes feature-tour-status-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+/* Frame 2 — Orchestration: child cards flash as bubbles land along the
+   dashed paths fanning down from the coordinator. */
+.feature-tour-orch-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  offset-rotate: 0deg;
+  z-index: 4;
+  animation: feature-tour-orch-travel var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+}
+.feature-tour-orch-bubble.left {
+  offset-path: path('M 168 36 C 132 56, 102 66, 72 86');
+  offset-anchor: center;
+  animation-delay: 4s;
+}
+.feature-tour-orch-bubble.right {
+  offset-path: path('M 168 36 C 204 56, 234 66, 264 86');
+  offset-anchor: center;
+  animation-delay: 4s;
+}
+.feature-tour-orch-bubble.left.b2 {
+  animation-delay: calc(4s + 0.55s);
+}
+.feature-tour-orch-bubble.right.b2 {
+  animation-delay: calc(4s + 0.75s);
+}
+@keyframes feature-tour-orch-travel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  2% {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+  6.5% {
+    offset-distance: 100%;
+    opacity: 1;
+  }
+  7.5% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+.feature-tour-orch-child {
+  animation: feature-tour-orch-child-flash var(--feature-tour-cycle) linear infinite;
+  animation-delay: 4s;
+}
+.feature-tour-orch-child.right {
+  animation-delay: calc(4s + 0.2s);
+}
+@keyframes feature-tour-orch-child-flash {
+  0%,
+  6% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  7% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+  9% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  25%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+}
+
+/* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
+   to a dark "Start workspace →" pill, then a workspace card slides in. */
+.feature-tour-tasks-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 8;
+  transform: translate(20px, 8px);
+  opacity: 0;
+  animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
+    infinite;
+  animation-delay: 8s;
+}
+.feature-tour-tasks-cursor svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+@keyframes feature-tour-tasks-cursor {
+  0% {
+    transform: translate(20px, 8px);
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  5% {
+    transform: translate(120px, 60px);
+    opacity: 1;
+  }
+  8% {
+    transform: translate(238px, 60px);
+    opacity: 1;
+  }
+  23.5% {
+    transform: translate(238px, 60px);
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    transform: translate(238px, 60px);
+    opacity: 0;
+  }
+}
+
+.feature-tour-tasks-row {
+  animation: feature-tour-tasks-row-hover var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-row-hover {
+  0%,
+  4% {
+    background: transparent;
+    box-shadow: none;
+  }
+  6% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  23.5% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  25%,
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.feature-tour-tasks-pill {
+  animation: feature-tour-tasks-pill-morph var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-morph {
+  0%,
+  6% {
+    width: 36px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+  }
+  8% {
+    width: 110px;
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  23.5% {
+    width: 110px;
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  25%,
+  100% {
+    width: 36px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+  }
+}
+
+.feature-tour-tasks-pill-label {
+  opacity: 0;
+  animation: feature-tour-tasks-pill-label var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-label {
+  0%,
+  7% {
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  23.5% {
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Click ring fires when the cursor "clicks" the morphed pill on the tasks
+   row. Positioned to overlay the right-side pill of the second task. */
+.feature-tour-tasks-click-ring {
+  position: absolute;
+  right: 14px;
+  top: 50px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  opacity: 0;
+  z-index: 7;
+  pointer-events: none;
+  animation: feature-tour-tasks-click-ring var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-click-ring {
+  0%,
+  7% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  8% {
+    opacity: 0.85;
+    transform: scale(0.6);
+  }
+  10% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* Newly-created workspace card slides in beneath the task row once the
+   user clicks "Start workspace" — sells the "task → workspace" jump. */
+.feature-tour-tasks-workspace {
+  opacity: 0;
+  transform: translateY(-6px);
+  animation: feature-tour-tasks-workspace var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-workspace {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Frame 4 — Terminal: command stays anchored while the split panes stream
+   Playwright and Claude activity. */
+.feature-tour-terminal-line {
+  width: 23ch;
+}
+
+.feature-tour-terminal-output {
+  opacity: 0;
+  transform: translateY(2px);
+  animation: feature-tour-terminal-output var(--feature-tour-cycle) linear infinite;
+  animation-delay: 12s;
+}
+.feature-tour-terminal-output[data-line='1'] {
+  animation-delay: calc(12s + 0.05s);
+}
+.feature-tour-terminal-output[data-line='2'] {
+  animation-delay: calc(12s + 0.25s);
+}
+.feature-tour-terminal-output[data-line='3'] {
+  animation-delay: calc(12s + 0.45s);
+}
+@keyframes feature-tour-terminal-output {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-tour-frame,
+  .feature-tour-copy-slide,
+  .feature-tour-dot,
+  .feature-tour-ws-status,
+  .feature-tour-orch-bubble,
+  .feature-tour-orch-child,
+  .feature-tour-tasks-cursor,
+  .feature-tour-tasks-row,
+  .feature-tour-tasks-pill,
+  .feature-tour-tasks-pill-label,
+  .feature-tour-tasks-click-ring,
+  .feature-tour-tasks-workspace,
+  .feature-tour-terminal-output {
+    animation: none !important;
+  }
+  .feature-tour-frame[data-frame='1'],
+  .feature-tour-copy-slide[data-frame='1'] {
+    opacity: 1;
+  }
+  .feature-tour-dot[data-frame='1'] {
+    background: var(--primary);
+  }
+}
+
 /* ── Diff comment decorations ────────────────────────────────────── */
 
 /* Why: the "+" button is appended into Monaco's editor DOM node by
@@ -1263,6 +2187,63 @@
   letter-spacing: 0.03em;
 }
 
+.orca-diff-comment-author-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.orca-diff-comment-avatar {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  background: var(--muted);
+}
+
+.orca-diff-comment-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.orca-diff-comment-author {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orca-diff-comment-created-at {
+  flex: 0 0 auto;
+}
+
+.orca-diff-comment-link {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.orca-diff-comment-link:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
 /* Why: keep edit + delete close together but visually distinct from the meta
    label. Both share the same subtle button styling; only delete recolours on
    hover (destructive intent). */
@@ -1326,6 +2307,10 @@
   color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.orca-diff-comment-review-body {
+  padding-left: 24px;
 }
 
 /* Why: mirror the saved-note card treatment so the "entering" and "saved"

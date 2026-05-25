@@ -145,4 +145,26 @@ describe('rich markdown key handler', () => {
       editor.destroy()
     }
   })
+
+  it('dismisses the slash menu on Escape even when search has no matches', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '/zzz' }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(5)
+      const ctx = createContext(editor, false)
+      ctx.slashMenuRef.current = { query: 'zzz', from: 1, to: 5, left: 0, top: 0 }
+      ctx.filteredSlashCommandsRef.current = []
+      ctx.setSlashMenu = vi.fn()
+      const event = keyEvent('Escape')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.setSlashMenu).toHaveBeenCalledWith(null)
+    } finally {
+      editor.destroy()
+    }
+  })
 })

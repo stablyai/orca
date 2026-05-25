@@ -57,6 +57,23 @@ export const Screenshot = BrowserTarget.extend({
     .optional()
 })
 
+export const Screencast = BrowserTarget.extend({
+  format: z
+    .unknown()
+    .optional()
+    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
+    .pipe(z.enum(['png', 'jpeg'])),
+  quality: OptionalFiniteNumber,
+  maxWidth: OptionalFiniteNumber,
+  maxHeight: OptionalFiniteNumber,
+  viewportWidth: OptionalFiniteNumber,
+  viewportHeight: OptionalFiniteNumber,
+  deviceScaleFactor: OptionalFiniteNumber,
+  mobile: OptionalBoolean,
+  everyNthFrame: OptionalFiniteNumber,
+  minFrameIntervalMs: OptionalFiniteNumber
+})
+
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
@@ -69,9 +86,7 @@ export const Eval = BrowserTarget.extend({
   expression: requiredString('Missing required --expression')
 })
 
-export const TabList = z.object({
-  worktree: OptionalString
-})
+export const TabList = z.object({ worktree: OptionalString })
 
 // Why: --index xor --page must be present. The refine guards that invariant
 // so the dispatcher surfaces a single legible error instead of either shape
@@ -102,7 +117,8 @@ export const TabSwitch = BrowserTarget.extend({
 export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
-  profileId: OptionalString
+  profileId: OptionalString,
+  waitForRegistration: z.boolean().optional()
 })
 
 export const TabShow = z.object({
@@ -110,9 +126,7 @@ export const TabShow = z.object({
   worktree: OptionalString
 })
 
-export const TabCurrent = z.object({
-  worktree: OptionalString
-})
+export const TabCurrent = z.object({ worktree: OptionalString })
 
 export const TabClose = z.object({
   index: z

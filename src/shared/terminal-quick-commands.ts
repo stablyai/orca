@@ -1,7 +1,8 @@
-import type { TerminalQuickCommand } from './types'
+import type { TerminalQuickCommand, TerminalQuickCommandScope } from './types'
 
 const MAX_QUICK_COMMANDS = 40
 const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
+const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
 const MAX_QUICK_COMMAND_TEXT_LENGTH = 4000
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 
@@ -9,6 +10,35 @@ export const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
 
 export function getDefaultTerminalQuickCommands(): TerminalQuickCommand[] {
   return DEFAULT_TERMINAL_QUICK_COMMANDS.map((command) => ({ ...command }))
+}
+
+function normalizeTerminalQuickCommandScope(input: unknown): TerminalQuickCommandScope {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { type: 'global' }
+  }
+  const record = input as Record<string, unknown>
+  if (record.type !== 'repo') {
+    return { type: 'global' }
+  }
+  const repoId = typeof record.repoId === 'string' ? record.repoId.trim() : ''
+  if (!repoId) {
+    return { type: 'global' }
+  }
+  return { type: 'repo', repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH) }
+}
+
+export function getTerminalQuickCommandScope(
+  command: TerminalQuickCommand
+): TerminalQuickCommandScope {
+  return normalizeTerminalQuickCommandScope(command.scope)
+}
+
+export function terminalQuickCommandMatchesRepo(
+  command: TerminalQuickCommand,
+  repoId: string | null
+): boolean {
+  const scope = getTerminalQuickCommandScope(command)
+  return scope.type === 'global' || (repoId !== null && scope.repoId === repoId)
 }
 
 export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCommand[] {
@@ -51,7 +81,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
       id,
       label: label.slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH),
       command: command.slice(0, MAX_QUICK_COMMAND_TEXT_LENGTH),
-      appendEnter: record.appendEnter !== false
+      appendEnter: record.appendEnter !== false,
+      scope: normalizeTerminalQuickCommandScope(record.scope)
     })
 
     if (normalized.length >= MAX_QUICK_COMMANDS) {

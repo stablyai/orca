@@ -5,21 +5,34 @@ place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
+  AlertCircle,
+  ArrowDownUp,
   ArrowRight,
+  Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  Clock3,
   EllipsisVertical,
   ExternalLink,
+  Eye,
+  Files,
   Github,
   Gitlab,
+  GitMerge,
   GitPullRequest,
+  LayoutGrid,
+  List,
   LoaderCircle,
   Lock,
+  Minus,
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
+  Users,
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -46,20 +59,40 @@ import {
 } from '@/components/ui/dialog'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
-import { stripRepoQualifiers } from '../../../shared/task-query'
-import GitHubItemDialog from '@/components/GitHubItemDialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import {
+  getGitHubPRPrimaryReviewer,
+  getGitHubPRReviewLabel,
+  normalizeGitHubReviewerLogins,
+  type GitHubPRPrimaryReviewer
+} from '@/components/github-pr-reviewer-display'
+import {
+  getLinearStateMarkerStyle,
+  getLinearStatePillStyle
+} from '@/components/linear-state-pill-style'
+import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
+import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
+import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
+import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
@@ -76,41 +109,89 @@ import {
   buildTaskPageRepoSourceState,
   findTaskPageDialogWorkItem,
   findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh,
+  reconcileTaskPagePagesAfterLandingRefresh,
+  reconcileTaskPagePagesWithWorkItemsCache,
+  shouldResetTaskPagePaginationAfterLandingRefresh,
   selectTaskPageWorkItemsCacheEntries,
+  shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
+import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import type {
   GitHubOwnerRepo,
+  GitHubAssignableUser,
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
   LinearIssue,
   LinearTeam,
+  LinearWorkflowState,
   Repo,
   TaskProvider,
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
-import { linearCreateIssue, linearGetIssue, linearListTeams } from '@/runtime/runtime-linear-client'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useTeamStates } from '@/hooks/useIssueMetadata'
+import {
+  linearCreateIssue,
+  linearGetIssue,
+  linearTeamStates,
+  linearUpdateIssue
+} from '@/runtime/runtime-linear-client'
 import {
   normalizeVisibleTaskProviders,
+  restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 
 type TaskSource = TaskProvider
 
 type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
+type GitLabIssueFilter = 'opened' | 'assigned-to-me'
 
-const GITLAB_TASK_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
+const GITLAB_MR_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
   { id: 'opened', label: 'Open' },
   { id: 'merged', label: 'Merged' },
   { id: 'closed', label: 'Closed' },
   { id: 'all', label: 'All' }
 ]
+
+const GITLAB_ISSUE_FILTERS: { id: GitLabIssueFilter; label: string }[] = [
+  { id: 'opened', label: 'Open' },
+  { id: 'assigned-to-me', label: 'Assigned to me' }
+]
+
+function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
+  return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
+}
+
+function isGitLabIssueFilter(
+  value: GitLabTaskFilter | GitLabIssueFilter
+): value is GitLabIssueFilter {
+  return value === 'opened' || value === 'assigned-to-me'
+}
 type TaskQueryPreset = {
   id: TaskViewPresetId
   label: string
   query: string
+}
+type GitHubTaskKind = 'issues' | 'prs'
+
+const ISSUE_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
+  { id: 'issues', label: 'Open', query: getTaskPresetQuery('issues') },
+  { id: 'my-issues', label: 'Assigned to me', query: getTaskPresetQuery('my-issues') }
+]
+
+const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
+  { id: 'prs', label: 'Open', query: getTaskPresetQuery('prs') },
+  { id: 'my-prs', label: 'Mine', query: getTaskPresetQuery('my-prs') },
+  { id: 'review', label: 'Needs review', query: getTaskPresetQuery('review') }
+]
+
+function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
+  return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
 }
 
 function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
@@ -158,15 +239,6 @@ const SOURCE_OPTIONS: SourceOption[] = [
   }
 ]
 
-const TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  { id: 'all', label: 'All', query: getTaskPresetQuery('all') },
-  { id: 'issues', label: 'Issues', query: getTaskPresetQuery('issues') },
-  { id: 'my-issues', label: 'My Issues', query: getTaskPresetQuery('my-issues') },
-  { id: 'review', label: 'Needs My Review', query: getTaskPresetQuery('review') },
-  { id: 'prs', label: 'PRs', query: getTaskPresetQuery('prs') },
-  { id: 'my-prs', label: 'My PRs', query: getTaskPresetQuery('my-prs') }
-]
-
 type LinearPresetId = 'assigned' | 'created' | 'all' | 'completed'
 type LinearPreset = { id: LinearPresetId; label: string }
 
@@ -179,6 +251,86 @@ const LINEAR_PRESETS: LinearPreset[] = [
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
+const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
+
+const GITHUB_TASK_GRID_CLASS =
+  'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
+const GITHUB_PR_TASK_GRID_CLASS =
+  'min-w-[1020px] grid-cols-[72px_minmax(360px,2fr)_132px_128px_132px_92px_158px]'
+const GITHUB_TASK_ROW_SURFACE_CLASS =
+  '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
+const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
+  'group-hover/github-task-row:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))]'
+// Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
+// edge and the sticky ID column; without a covering ::before, scrolled cell text
+// bleeds through that strip. Same trick as the title column for its 8px gap.
+const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
+  'sticky left-3 z-30 before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_TITLE_HEADER_CLASS = cn(
+  'sticky left-[92px] z-30 border-r border-border/50 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_ID_CELL_CLASS = cn(
+  'sticky left-3 z-20 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS,
+  GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
+)
+const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
+  'sticky left-[92px] z-20 min-w-0 border-r border-border/50 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  GITHUB_TASK_ROW_SURFACE_CLASS,
+  GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
+)
+
+type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
+
+const GITHUB_MODE_BUTTONS: GitHubModeButton[] = [
+  { id: 'issues', label: 'Issues' },
+  { id: 'prs', label: 'PRs' },
+  { id: 'project', label: 'Projects' }
+]
+
+function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
+  if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
+    return true
+  }
+  const parsed = parseTaskQuery(query)
+  return (
+    parsed.scope === 'pr' ||
+    parsed.state === 'merged' ||
+    parsed.draft ||
+    parsed.reviewRequested !== null ||
+    parsed.reviewedBy !== null
+  )
+}
+
+function normalizeGitHubTaskPreset(preset: TaskViewPresetId | null | undefined): TaskViewPresetId {
+  // Why: the split Issues/PRs tabs no longer have a mixed "All" view, so
+  // legacy saved defaults should land on the first tab instead of mixing rows.
+  return !preset || preset === 'all' ? 'issues' : preset
+}
+
+function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {
+  return isPRFocusedTaskView(preset, query) ? 'prs' : 'issues'
+}
+
+function getDefaultPresetForGitHubTaskKind(kind: GitHubTaskKind): TaskViewPresetId {
+  return kind === 'prs' ? 'prs' : 'issues'
+}
+
+function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return getTaskPresetQuery(getDefaultPresetForGitHubTaskKind(kind))
+  }
+  if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
+    return trimmed
+  }
+  const parsed = parseTaskQuery(trimmed)
+  const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
+  return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
+}
 
 // Why: Intl.RelativeTimeFormat allocation is non-trivial, and previously we
 // built a new formatter per work-item row render. Hoisting to module scope
@@ -207,26 +359,6 @@ function formatRelativeTime(input: string): string {
   return relativeTimeFormatter.format(diffDays, 'day')
 }
 
-function getTaskStatusLabel(item: GitHubWorkItem): string {
-  if (item.type === 'issue') {
-    return 'Open'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return 'Ready'
-}
-
-function getTaskStatusTone(item: GitHubWorkItem): string {
-  if (item.type === 'issue') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (item.state === 'draft') {
-    return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
-  }
-  return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
-}
-
 // Why: Linear encodes priority as an integer (0–4). Map to human-readable
 // labels so the table column is scannable without memorising the scale.
 const LINEAR_PRIORITY_LABELS: Record<number, string> = {
@@ -237,18 +369,315 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   4: 'Low'
 }
 
+type LinearViewMode = 'list' | 'board'
+type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
+type LinearOrderBy = 'priority' | 'updated' | 'identifier'
+type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
+
+type LinearGroupSection = {
+  key: string
+  label: string
+  issues: LinearIssue[]
+}
+
+type LinearIssueListRow =
+  | { type: 'section'; key: string; label: string; count: number }
+  | { type: 'issue'; issue: LinearIssue }
+
+const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+
+const LINEAR_VIEW_OPTIONS: {
+  id: LinearViewMode
+  label: string
+  Icon: typeof List
+}[] = [
+  { id: 'list', label: 'List', Icon: List },
+  { id: 'board', label: 'Board', Icon: LayoutGrid }
+]
+
+const LINEAR_GROUP_OPTIONS: { id: LinearGroupBy; label: string }[] = [
+  { id: 'none', label: 'No grouping' },
+  { id: 'status', label: 'Status' },
+  { id: 'assignee', label: 'Assignee' },
+  { id: 'priority', label: 'Priority' },
+  { id: 'team', label: 'Team' }
+]
+
+const LINEAR_ORDER_OPTIONS: { id: LinearOrderBy; label: string }[] = [
+  { id: 'priority', label: 'Priority' },
+  { id: 'updated', label: 'Updated' },
+  { id: 'identifier', label: 'Identifier' }
+]
+
+const LINEAR_DISPLAY_PROPERTIES: { id: LinearDisplayProperty; label: string }[] = [
+  { id: 'state', label: 'Status' },
+  { id: 'priority', label: 'Priority' },
+  { id: 'assignee', label: 'Assignee' },
+  { id: 'team', label: 'Team' },
+  { id: 'labels', label: 'Labels' },
+  { id: 'updated', label: 'Updated' }
+]
+
+const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
+  'state',
+  'priority',
+  'assignee',
+  'team',
+  'labels',
+  'updated'
+]
+
 function getLinearPriorityLabel(priority: number): string {
   return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
 }
 
-// Why: Linear state colors come from the user's workspace, so derive the
-// quiet pill tint from the source color instead of inventing app-local tones.
-function getLinearStatePillStyle(color: string): React.CSSProperties {
-  return {
-    borderColor: `color-mix(in srgb, ${color} 28%, transparent)`,
-    backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
-    color
+function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
+  if (!section.key.startsWith('status:')) {
+    return null
   }
+  return section.issues[0]?.state ?? null
+}
+
+function findLinearWorkflowStateForStatus(
+  states: LinearWorkflowState[],
+  targetState: LinearIssue['state']
+): LinearWorkflowState | undefined {
+  return (
+    states.find((state) => state.name === targetState.name && state.type === targetState.type) ??
+    states.find((state) => state.name === targetState.name)
+  )
+}
+
+function LinearStateCell({
+  issue,
+  className
+}: {
+  issue: LinearIssue
+  className?: string
+}): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
+  const states = useTeamStates(issue.team.id, settings, issue.workspaceId)
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
+  const reqRef = useRef(0)
+
+  const currentStateId = states.data.find(
+    (s) => s.name === issue.state.name && s.type === issue.state.type
+  )?.id
+
+  const handleStateChange = useCallback(
+    (stateId: string) => {
+      const newState = states.data.find((s) => s.id === stateId)
+      if (!newState || stateId === currentStateId || pending) {
+        return
+      }
+
+      reqRef.current += 1
+      const reqId = reqRef.current
+      const previousState = issue.state
+      const nextState: LinearIssue['state'] = {
+        name: newState.name,
+        type: newState.type,
+        color: newState.color
+      }
+
+      setPending(true)
+      patchLinearIssue(issue.id, { state: nextState })
+      void linearUpdateIssue(settings, issue.id, { stateId }, issue.workspaceId)
+        .then((result) => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          if (result.ok === false) {
+            patchLinearIssue(issue.id, { state: previousState })
+            toast.error(result.error ?? 'Failed to update Linear state')
+          }
+        })
+        .catch(() => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          patchLinearIssue(issue.id, { state: previousState })
+          toast.error('Failed to update Linear state')
+        })
+        .finally(() => {
+          if (reqId === reqRef.current) {
+            setPending(false)
+          }
+        })
+    },
+    [
+      currentStateId,
+      issue.id,
+      issue.state,
+      issue.workspaceId,
+      patchLinearIssue,
+      pending,
+      settings,
+      states.data
+    ]
+  )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            'inline-flex min-w-0 cursor-pointer! items-center gap-1 rounded-full border text-[11px] font-medium transition-[background-color,border-color,color,box-shadow] hover:[--linear-state-pill-current-background:var(--linear-state-pill-hover-background)] hover:[--linear-state-pill-current-border:var(--linear-state-pill-hover-border)] hover:[--linear-state-pill-current-foreground:var(--linear-state-pill-hover-foreground)] hover:ring-1 hover:ring-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default! disabled:opacity-80 [&_*]:cursor-pointer! disabled:[&_*]:cursor-default!',
+            className
+          )}
+          style={{
+            ...getLinearStatePillStyle(issue.state.color),
+            cursor: pending ? 'default' : 'pointer'
+          }}
+          aria-label={`Change Linear state from ${issue.state.name}`}
+          aria-busy={pending || states.loading}
+        >
+          <span
+            className="size-1.5 shrink-0 rounded-full"
+            style={getLinearStateMarkerStyle(issue.state.color)}
+          />
+          <span className="truncate">{issue.state.name}</span>
+          {pending || states.loading ? (
+            <LoaderCircle className="size-3 shrink-0 animate-spin opacity-70" />
+          ) : (
+            <ChevronDown className="size-3 shrink-0 opacity-55" />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="popover-scroll-content scrollbar-sleek w-48 p-1"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {states.error ? (
+          <div className="px-2 py-3 text-center text-[12px] text-destructive">{states.error}</div>
+        ) : states.loading ? (
+          <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+            <LoaderCircle className="size-3 animate-spin" />
+            Loading states
+          </div>
+        ) : states.data.length > 0 ? (
+          states.data.map((state) => (
+            <button
+              key={state.id}
+              type="button"
+              onClick={() => {
+                handleStateChange(state.id)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent',
+                currentStateId === state.id && 'bg-accent/50'
+              )}
+            >
+              <span
+                className="inline-block size-2 rounded-full"
+                style={{ backgroundColor: state.color }}
+              />
+              {state.name}
+            </button>
+          ))
+        ) : (
+          <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+            No states found
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function getLinearPriorityRank(priority: number): number {
+  return priority === 0 ? 5 : priority
+}
+
+function compareLinearIssues(a: LinearIssue, b: LinearIssue, orderBy: LinearOrderBy): number {
+  if (orderBy === 'updated') {
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  }
+  if (orderBy === 'identifier') {
+    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
+  }
+
+  const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
+  if (priorityDelta !== 0) {
+    return priorityDelta
+  }
+  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+}
+
+function getLinearIssueGroup(
+  issue: LinearIssue,
+  groupBy: LinearGroupBy
+): { key: string; label: string } {
+  if (groupBy === 'status') {
+    return { key: `status:${issue.state.name}`, label: issue.state.name }
+  }
+  if (groupBy === 'assignee') {
+    return {
+      key: `assignee:${issue.assignee?.id ?? 'unassigned'}`,
+      label: issue.assignee?.displayName ?? 'Unassigned'
+    }
+  }
+  if (groupBy === 'priority') {
+    return {
+      key: `priority:${issue.priority}`,
+      label: getLinearPriorityLabel(issue.priority)
+    }
+  }
+  if (groupBy === 'team') {
+    return { key: `team:${issue.team.id}`, label: issue.team.name }
+  }
+  return { key: 'all', label: 'Issues' }
+}
+
+function groupLinearIssues(
+  issues: LinearIssue[],
+  groupBy: LinearGroupBy,
+  orderBy: LinearOrderBy
+): LinearGroupSection[] {
+  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
+  if (groupBy === 'none') {
+    return [{ key: 'all', label: 'Issues', issues: sorted }]
+  }
+
+  const sections = new Map<string, LinearGroupSection>()
+  for (const issue of sorted) {
+    const group = getLinearIssueGroup(issue, groupBy)
+    const section = sections.get(group.key)
+    if (section) {
+      section.issues.push(issue)
+    } else {
+      sections.set(group.key, { key: group.key, label: group.label, issues: [issue] })
+    }
+  }
+  return [...sections.values()]
+}
+
+function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplayProperty>): string {
+  const columns = ['96px', 'minmax(180px,1.4fr)']
+  if (visibleProperties.has('state')) {
+    columns.push('140px')
+  }
+  if (visibleProperties.has('priority')) {
+    columns.push('92px')
+  }
+  if (visibleProperties.has('assignee')) {
+    columns.push('150px')
+  }
+  if (visibleProperties.has('team')) {
+    columns.push('160px')
+  }
+  if (visibleProperties.has('updated')) {
+    columns.push('100px')
+  }
+  columns.push('72px')
+  return columns.join(' ')
 }
 
 function GHStatusCell({
@@ -275,7 +704,7 @@ function GHStatusCell({
       reqRef.current += 1
       const reqId = reqRef.current
       setLocalState(newState)
-      patchWorkItem(item.id, { state: newState })
+      patchWorkItem(item.id, { state: newState }, item.repoId)
       const target = getActiveRuntimeTarget(useAppStore.getState().settings)
       const updatePromise =
         target.kind === 'environment'
@@ -299,7 +728,11 @@ function GHStatusCell({
           const typed = result as { ok?: boolean; error?: string }
           if (typed && typed.ok === false) {
             setLocalState(newState === 'closed' ? 'open' : 'closed')
-            patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+            patchWorkItem(
+              item.id,
+              { state: newState === 'closed' ? 'open' : 'closed' },
+              item.repoId
+            )
             toast.error(typed.error ?? 'Failed to update state')
           }
         })
@@ -308,22 +741,17 @@ function GHStatusCell({
             return
           }
           setLocalState(newState === 'closed' ? 'open' : 'closed')
-          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' }, item.repoId)
           toast.error('Failed to update state')
         })
     },
-    [item.id, item.number, item.type, localState, repo, patchWorkItem]
+    [item.id, item.number, item.repoId, item.type, localState, repo, patchWorkItem]
   )
 
   if (item.type !== 'issue' || !repo) {
     return (
-      <span
-        className={cn(
-          'rounded-full border px-2 py-0.5 text-[10px] font-medium opacity-70',
-          getTaskStatusTone(item)
-        )}
-      >
-        {getTaskStatusLabel(item)}
+      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 opacity-70 dark:text-emerald-200">
+        Open
       </span>
     )
   }
@@ -335,7 +763,7 @@ function GHStatusCell({
           type="button"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+            'group/status inline-flex cursor-pointer items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
             localState === 'closed'
               ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
@@ -379,6 +807,1008 @@ function GHStatusCell({
   )
 }
 
+function formatPRDelta(item: GitHubWorkItem): string | null {
+  const parts: string[] = []
+  if (typeof item.additions === 'number') {
+    parts.push(`+${item.additions}`)
+  }
+  if (typeof item.deletions === 'number') {
+    parts.push(`-${item.deletions}`)
+  }
+  if (typeof item.changedFiles === 'number') {
+    parts.push(`${item.changedFiles} ${item.changedFiles === 1 ? 'file' : 'files'}`)
+  }
+  return parts.length > 0 ? parts.join(' ') : null
+}
+
+function getReviewTone(item: GitHubWorkItem): string {
+  if (item.reviewDecision === 'APPROVED') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  }
+  if (item.reviewDecision === 'CHANGES_REQUESTED') {
+    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+  }
+  if (item.reviewRequests && item.reviewRequests.length > 0) {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  }
+  return 'border-border/60 bg-background/70 text-muted-foreground'
+}
+
+function ReviewChipAvatar({
+  reviewer
+}: {
+  reviewer: GitHubPRPrimaryReviewer | null
+}): React.JSX.Element {
+  if (reviewer?.avatarUrl) {
+    return (
+      <img
+        src={reviewer.avatarUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        title={reviewer.name ? `${reviewer.name} (${reviewer.login})` : reviewer.login}
+        className="size-3.5 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+      />
+    )
+  }
+  if (reviewer?.login) {
+    return (
+      <span
+        title={reviewer.login}
+        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[8px] font-medium text-muted-foreground"
+      >
+        {reviewer.login.slice(0, 1).toUpperCase()}
+      </span>
+    )
+  }
+  return <Users className="size-3 shrink-0" />
+}
+
+function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }): React.JSX.Element {
+  if (assignee.avatarUrl) {
+    return (
+      <img
+        src={assignee.avatarUrl}
+        alt={assignee.login}
+        loading="lazy"
+        decoding="async"
+        title={assignee.name ? `${assignee.name} (${assignee.login})` : assignee.login}
+        className="size-5 rounded-full border border-border/40 bg-muted object-cover"
+      />
+    )
+  }
+  return (
+    <span
+      title={assignee.login}
+      className="inline-flex size-5 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
+    >
+      {assignee.login.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+function GHAssigneesCell({
+  item,
+  repo
+}: {
+  item: GitHubWorkItem
+  repo: Repo | null
+}): React.JSX.Element {
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const settings = useAppStore((s) => s.settings)
+  const [open, setOpen] = useState(false)
+  const [pendingLogin, setPendingLogin] = useState<string | null>(null)
+  const assignees = useMemo(() => item.assignees ?? [], [item.assignees])
+  const parsed = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
+  const owner = parsed?.slug.owner ?? null
+  const repoName = parsed?.slug.repo ?? null
+  const seedLogins = useMemo(
+    () =>
+      assignees
+        .map((a) => a.login)
+        .sort()
+        .filter(Boolean),
+    [assignees]
+  )
+  const metadata = useRepoAssigneesBySlug(
+    open ? owner : null,
+    open ? repoName : null,
+    seedLogins,
+    settings
+  )
+
+  const toggleAssignee = useCallback(
+    async (user: GitHubAssignableUser): Promise<void> => {
+      if (item.type !== 'issue' || pendingLogin) {
+        return
+      }
+      const userLoginKey = user.login.toLowerCase()
+      const isOn = assignees.some((a) => a.login.toLowerCase() === userLoginKey)
+      const previousAssignees = assignees
+      const nextAssignees = isOn
+        ? assignees.filter((a) => a.login.toLowerCase() !== userLoginKey)
+        : [...assignees, user]
+      setPendingLogin(user.login)
+      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId)
+
+      try {
+        const updates = isOn ? { removeAssignees: [user.login] } : { addAssignees: [user.login] }
+        const target = getActiveRuntimeTarget(settings)
+        if (owner && repoName) {
+          const args = {
+            owner,
+            repo: repoName,
+            number: item.number,
+            updates
+          }
+          const res =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
+                  target,
+                  'github.project.updateIssueBySlug',
+                  args,
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updateIssueBySlug(args)
+          if (!res.ok) {
+            throw new Error(res.error.message)
+          }
+        } else if (repo) {
+          const res =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<{ ok?: boolean; error?: string }>(
+                  target,
+                  'github.updateIssue',
+                  { repo: repo.id, number: item.number, updates },
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updateIssue({
+                  repoPath: repo.path,
+                  repoId: repo.id,
+                  number: item.number,
+                  updates
+                })
+          if (res && res.ok === false) {
+            throw new Error(res.error)
+          }
+        } else {
+          throw new Error('No GitHub repository context available for this issue.')
+        }
+      } catch (err) {
+        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId)
+        toast.error(err instanceof Error ? err.message : 'Failed to update assignees.')
+      } finally {
+        setPendingLogin(null)
+      }
+    },
+    [
+      assignees,
+      item.id,
+      item.number,
+      item.repoId,
+      item.type,
+      owner,
+      patchWorkItem,
+      pendingLogin,
+      repo,
+      repoName,
+      settings
+    ]
+  )
+
+  const triggerContent =
+    assignees.length > 0 ? (
+      <>
+        <div className="flex min-w-0 -space-x-1 overflow-hidden">
+          {assignees.slice(0, 3).map((assignee) => (
+            <GitHubAssigneeAvatar key={assignee.login} assignee={assignee} />
+          ))}
+        </div>
+        {assignees.length > 3 ? (
+          <span className="ml-1 shrink-0 text-[10px] font-medium text-muted-foreground">
+            +{assignees.length - 3}
+          </span>
+        ) : null}
+      </>
+    ) : (
+      <span className="text-xs text-muted-foreground/60">-</span>
+    )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={
+            assignees.length
+              ? `Assigned to ${assignees.map((a) => a.login).join(', ')}`
+              : 'Assign issue'
+          }
+          aria-busy={pendingLogin !== null}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          className={cn(
+            'inline-flex h-6 max-w-full items-center gap-1 text-left transition disabled:opacity-60',
+            assignees.length > 0
+              ? 'rounded-full border border-border/40 bg-background/70 px-1.5 hover:bg-muted/60'
+              : 'w-full rounded-sm border border-transparent bg-transparent px-1 hover:bg-muted/40'
+          )}
+        >
+          {triggerContent}
+          {pendingLogin ? (
+            <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+          ) : assignees.length > 0 ? (
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="popover-scroll-content scrollbar-sleek w-64 p-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {!owner || !repoName ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">Issue has no repo slug.</div>
+        ) : metadata.loading ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">Loading…</div>
+        ) : metadata.error ? (
+          <div className="px-2 py-2 text-xs text-destructive">{metadata.error}</div>
+        ) : metadata.data.length === 0 ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">No assignable users.</div>
+        ) : (
+          metadata.data.map((user) => {
+            const isOn = assignees.some((a) => a.login.toLowerCase() === user.login.toLowerCase())
+            const pending = pendingLogin === user.login
+            return (
+              <button
+                key={user.login}
+                type="button"
+                disabled={pendingLogin !== null}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted/50 disabled:opacity-60"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void toggleAssignee(user)
+                }}
+              >
+                <span
+                  className={cn(
+                    'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+                    isOn ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                  )}
+                >
+                  {pending ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : isOn ? (
+                    <Check className="size-3" />
+                  ) : null}
+                </span>
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+                ) : (
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+                    {user.login.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{user.login}</span>
+                  {user.name ? (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {user.name}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function getChecksLabel(item: GitHubWorkItem): string {
+  const summary = item.checksSummary
+  if (!summary) {
+    return 'Checks'
+  }
+  if (summary.total === 0) {
+    return 'No checks'
+  }
+  if (summary.failed > 0) {
+    return `${summary.failed} failing`
+  }
+  if (summary.pending > 0) {
+    return `${summary.pending} pending`
+  }
+  return `${summary.passed}/${summary.total} passed`
+}
+
+function getChecksTone(item: GitHubWorkItem): string {
+  const state = item.checksSummary?.state
+  if (state === 'success') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  }
+  if (state === 'failure') {
+    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+  }
+  if (state === 'pending') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  }
+  return 'border-border/60 bg-background/70 text-muted-foreground'
+}
+
+function sameOptionalGitHubOwnerRepo(
+  left: GitHubOwnerRepo | null | undefined,
+  right: GitHubOwnerRepo | null | undefined
+): boolean {
+  const leftValue = left ?? null
+  const rightValue = right ?? null
+  return leftValue === null && rightValue === null
+    ? true
+    : sameGitHubOwnerRepo(leftValue, rightValue)
+}
+
+function getMergeLabel(item: GitHubWorkItem): string {
+  if (item.state === 'merged') {
+    return 'Merged'
+  }
+  if (item.state === 'closed') {
+    return 'Closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge'
+  }
+  if (item.mergeable === 'CONFLICTING') {
+    return 'Conflicts'
+  }
+  if (item.mergeStateStatus === 'BEHIND') {
+    return 'Behind'
+  }
+  if (item.mergeStateStatus === 'BLOCKED') {
+    return 'Blocked'
+  }
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'Able to merge'
+  }
+  return 'Unknown'
+}
+
+function getMergeTone(item: GitHubWorkItem): string {
+  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
+    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+  }
+  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  }
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  }
+  return 'border-border/60 bg-background/70 text-muted-foreground'
+}
+
+function getMergeTooltip(item: GitHubWorkItem): string {
+  if (item.state === 'merged') {
+    return 'This pull request is already merged'
+  }
+  if (item.state === 'closed') {
+    return 'This pull request is closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge status is unavailable for this PR'
+  }
+  if (item.mergeable === 'CONFLICTING') {
+    return 'GitHub reports merge conflicts'
+  }
+  if (item.mergeStateStatus === 'BEHIND') {
+    return 'Update the branch before merging'
+  }
+  if (item.mergeStateStatus === 'BLOCKED') {
+    return 'GitHub reports this pull request is blocked'
+  }
+  if (item.checksSummary?.state === 'pending') {
+    return 'GitHub says this PR can merge, but checks are still running'
+  }
+  if (item.checksSummary?.state === 'success') {
+    return 'GitHub says this PR can merge and checks passed'
+  }
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'GitHub says this PR can merge'
+  }
+  return 'GitHub has not reported a final merge status'
+}
+
+function mergeReviewerSuggestions(
+  users: GitHubAssignableUser[],
+  seedUsers: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of [...seedUsers, ...users]) {
+    const key = user.login.toLowerCase()
+    const existing = byLogin.get(key)
+    if (!existing) {
+      byLogin.set(key, user)
+      continue
+    }
+    if (!existing.avatarUrl && user.avatarUrl) {
+      byLogin.set(key, { ...existing, avatarUrl: user.avatarUrl })
+    }
+  }
+  return Array.from(byLogin.values()).sort((a, b) => a.login.localeCompare(b.login))
+}
+
+function buildRequestedReviewUsers(
+  logins: string[],
+  candidates: GitHubAssignableUser[],
+  existingRequests: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of existingRequests) {
+    byLogin.set(user.login.toLowerCase(), user)
+  }
+  const candidatesByLogin = new Map(candidates.map((user) => [user.login.toLowerCase(), user]))
+  for (const login of logins) {
+    const key = login.toLowerCase()
+    if (byLogin.has(key)) {
+      continue
+    }
+    byLogin.set(key, candidatesByLogin.get(key) ?? { login, name: null, avatarUrl: '' })
+  }
+  return Array.from(byLogin.values())
+}
+
+function PRReviewCell({
+  item,
+  repo
+}: {
+  item: GitHubWorkItem
+  repo: Repo | null
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [reviewerInput, setReviewerInput] = useState('')
+  const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
+    () => item.reviewRequests ?? []
+  )
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const settings = useAppStore((s) => s.settings)
+  const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    setLocalReviewRequests(item.reviewRequests ?? [])
+  }, [item.id, item.reviewRequests])
+
+  const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
+    const byLogin = new Map<string, GitHubAssignableUser>()
+    const add = (user: GitHubAssignableUser): void => {
+      if (!user.login) {
+        return
+      }
+      byLogin.set(user.login.toLowerCase(), user)
+    }
+    for (const user of localReviewRequests) {
+      add(user)
+    }
+    for (const review of item.latestReviews ?? []) {
+      add({
+        login: review.login,
+        name: null,
+        avatarUrl: review.avatarUrl ?? ''
+      })
+    }
+    if (item.author) {
+      add({ login: item.author, name: null, avatarUrl: '' })
+    }
+    return Array.from(byLogin.values())
+  }, [item.author, item.latestReviews, localReviewRequests])
+
+  const reviewSlug = useMemo(() => parseGitHubIssueOrPRLink(item.url)?.slug ?? null, [item.url])
+  const reviewerMetadata = useRepoAssigneesBySlug(
+    open && reviewSlug ? reviewSlug.owner : null,
+    open && reviewSlug ? reviewSlug.repo : null,
+    reviewerSeedUsers.map((user) => user.login),
+    settings
+  )
+
+  const authorLogin = item.author?.toLowerCase() ?? null
+  const reviewerCandidates = useMemo(
+    () =>
+      mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
+        (user) => user.login.toLowerCase() !== authorLogin
+      ),
+    [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
+  )
+  const reviewerCandidatesByLogin = useMemo(
+    () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
+    [reviewerCandidates]
+  )
+  const selectedReviewerLogins = useMemo(
+    () =>
+      new Set(
+        localReviewRequests.map((reviewer) => reviewer.login.trim().toLowerCase()).filter(Boolean)
+      ),
+    [localReviewRequests]
+  )
+  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
+  const filteredReviewerCandidates = useMemo(() => {
+    const query = reviewerQuery
+    return reviewerCandidates
+      .filter((user) => {
+        const login = user.login.toLowerCase()
+        return (
+          query.length === 0 ||
+          login.includes(query) ||
+          (user.name ?? '').toLowerCase().includes(query)
+        )
+      })
+      .sort((a, b) => {
+        const aLogin = a.login.toLowerCase()
+        const bLogin = b.login.toLowerCase()
+        const aStarts = aLogin.startsWith(query)
+        const bStarts = bLogin.startsWith(query)
+        if (aStarts !== bStarts) {
+          return aStarts ? -1 : 1
+        }
+        return a.login.localeCompare(b.login)
+      })
+  }, [reviewerCandidates, reviewerQuery])
+  const suggestedReviewerRows = useMemo(
+    () =>
+      reviewerQuery.length === 0
+        ? reviewerSeedUsers
+            .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
+            .filter((user) => user.login.toLowerCase() !== authorLogin)
+            .map((user) => reviewerCandidatesByLogin.get(user.login.toLowerCase()) ?? user)
+            .slice(0, 1)
+        : [],
+    [
+      authorLogin,
+      reviewerCandidatesByLogin,
+      reviewerQuery.length,
+      reviewerSeedUsers,
+      selectedReviewerLogins
+    ]
+  )
+  const everyoneElseReviewerRows = useMemo(() => {
+    const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+    return filteredReviewerCandidates.filter(
+      (user) => !suggestedLogins.has(user.login.toLowerCase())
+    )
+  }, [filteredReviewerCandidates, suggestedReviewerRows])
+  const actionableReviewerRows = useMemo(
+    () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
+    [everyoneElseReviewerRows, suggestedReviewerRows]
+  )
+
+  useEffect(() => {
+    setActiveReviewerIndex(0)
+  }, [reviewerQuery, actionableReviewerRows.length])
+
+  if (item.type !== 'pr') {
+    return <span className="text-[11px] text-muted-foreground">Issue</span>
+  }
+
+  const itemWithLocalReviewRequests = { ...item, reviewRequests: localReviewRequests }
+  const primaryReviewer = getGitHubPRPrimaryReviewer(itemWithLocalReviewRequests)
+  const hasReviewerMetadata =
+    item.reviewDecision !== undefined ||
+    localReviewRequests.length > 0 ||
+    item.reviewRequests !== undefined ||
+    item.latestReviews !== undefined
+
+  const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
+    if (!repo || submitting) {
+      return
+    }
+    const logins = normalizeGitHubReviewerLogins(
+      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      selectedReviewerLogins
+    )
+    if (logins.length === 0) {
+      toast.error('Enter a reviewer')
+      return
+    }
+    if (localReviewRequests.length + logins.length > 15) {
+      toast.error('You can request up to 15 reviewers')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const target = getActiveRuntimeTarget(settings)
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.requestPRReviewers',
+              { repo: repo.id, prNumber: item.number, reviewers: logins },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.requestPRReviewers({
+              repoPath: repo.path,
+              repoId: repo.id,
+              prNumber: item.number,
+              reviewers: logins
+            })
+      if (result.ok) {
+        toast.success('Reviewer requested')
+        const nextReviewRequests = buildRequestedReviewUsers(
+          logins,
+          reviewerCandidates,
+          localReviewRequests
+        )
+        setLocalReviewRequests(nextReviewRequests)
+        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+        setReviewerInput('')
+      } else {
+        toast.error(result.error)
+      }
+    } catch {
+      toast.error('Failed to request reviewer')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const requestReviewer = async (reviewer: GitHubAssignableUser): Promise<void> => {
+    if (selectedReviewerLogins.has(reviewer.login.toLowerCase())) {
+      return
+    }
+    // Close the popover immediately so the UI feels responsive; the GitHub
+    // request runs in the background and toasts on completion.
+    setOpen(false)
+    setReviewerInput('')
+    await handleRequestReview([reviewer.login])
+  }
+
+  const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      return
+    }
+    setReviewerInput('')
+  }
+
+  const renderReviewerPickerRow = (
+    reviewer: GitHubAssignableUser,
+    options: { suggested: boolean; activeIndex: number }
+  ): React.JSX.Element => {
+    const selected = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+    const active = actionableReviewerRows[activeReviewerIndex]?.login === reviewer.login
+    return (
+      <button
+        key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
+        type="button"
+        className={cn(
+          'flex min-h-10 w-full items-center gap-2 border-b border-border/50 px-3 py-2 text-left text-[13px] outline-none last:border-b-0 hover:bg-accent/70',
+          active && 'bg-accent text-accent-foreground',
+          selected && 'font-medium'
+        )}
+        onMouseEnter={() => setActiveReviewerIndex(options.activeIndex)}
+        onMouseDown={(event) => {
+          event.preventDefault()
+          void requestReviewer(reviewer)
+        }}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
+          {selected ? <Check className="size-3.5" /> : null}
+        </span>
+        {reviewer.avatarUrl ? (
+          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+        ) : (
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+            {reviewer.login.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">
+            <span className="font-semibold text-foreground">{reviewer.login}</span>
+            {reviewer.name ? (
+              <span className="ml-1 font-normal text-muted-foreground">{reviewer.name}</span>
+            ) : null}
+          </span>
+          {options.suggested ? (
+            <span className="block truncate text-[12px] leading-4 text-muted-foreground">
+              Recently active in this pull request
+            </span>
+          ) : null}
+        </span>
+      </button>
+    )
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(event) => event.stopPropagation()}
+          className={cn(
+            'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-110',
+            getReviewTone(itemWithLocalReviewRequests)
+          )}
+        >
+          <ReviewChipAvatar reviewer={primaryReviewer} />
+          <span className="truncate">{getGitHubPRReviewLabel(itemWithLocalReviewRequests)}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[330px] overflow-hidden rounded-md border-border/70 p-0"
+        align="start"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-border/70 px-3 py-2">
+          <div className="text-[13px] font-semibold text-foreground">
+            Request up to 15 reviewers
+          </div>
+        </div>
+        <div className="border-b border-border/70 p-3">
+          <Input
+            ref={reviewerInputRef}
+            value={reviewerInput}
+            onChange={(event) => setReviewerInput(event.target.value)}
+            placeholder="Type or choose a user"
+            disabled={!repo || submitting}
+            className="h-8 rounded-md bg-background px-2 text-[13px]"
+            aria-label="Type or choose a user"
+            aria-autocomplete="list"
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                event.preventDefault()
+                setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
+                return
+              }
+              if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                event.preventDefault()
+                setActiveReviewerIndex(
+                  (current) =>
+                    (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
+                )
+                return
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                if (activeReviewer) {
+                  void requestReviewer(activeReviewer)
+                  return
+                }
+                void handleRequestReview()
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                handleReviewerPickerOpenChange(false)
+              }
+            }}
+          />
+        </div>
+        <div className="max-h-[300px] overflow-y-auto scrollbar-sleek">
+          {reviewerMetadata.loading ? (
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading…</div>
+          ) : filteredReviewerCandidates.length > 0 ? (
+            <>
+              {suggestedReviewerRows.length > 0 ? (
+                <>
+                  <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                    Suggestions
+                  </div>
+                  {suggestedReviewerRows.map((reviewer, index) =>
+                    renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                  )}
+                </>
+              ) : null}
+              <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                Everyone else
+              </div>
+              {everyoneElseReviewerRows.length > 0 ? (
+                everyoneElseReviewerRows.map((reviewer, index) =>
+                  renderReviewerPickerRow(reviewer, {
+                    suggested: false,
+                    activeIndex: suggestedReviewerRows.length + index
+                  })
+                )
+              ) : (
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  No matching reviewers.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">
+              {reviewerMetadata.error ??
+                (hasReviewerMetadata
+                  ? 'No matching reviewers.'
+                  : 'Open the PR details to view current reviewers.')}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function PRChecksCell({
+  item,
+  onOpen,
+  onLoadChecks
+}: {
+  item: GitHubWorkItem
+  onOpen: () => void
+  onLoadChecks: () => void
+}): React.JSX.Element {
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (item.type !== 'pr' || item.checksSummary) {
+      return
+    }
+    const node = triggerRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      return
+    }
+    let requested = false
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (requested || !entries.some((entry) => entry.isIntersecting)) {
+          return
+        }
+        requested = true
+        onLoadChecks()
+        observer.disconnect()
+      },
+      { rootMargin: '160px 0px' }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [item.checksSummary, item.type, onLoadChecks])
+
+  if (item.type !== 'pr') {
+    return <span className="text-[11px] text-muted-foreground">Issue</span>
+  }
+  const summary = item.checksSummary
+  const Icon =
+    summary?.state === 'success'
+      ? CheckCircle2
+      : summary?.state === 'failure'
+        ? AlertCircle
+        : summary?.state === 'pending'
+          ? Clock3
+          : Minus
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          ref={triggerRef}
+          type="button"
+          onFocus={onLoadChecks}
+          onMouseEnter={onLoadChecks}
+          onClick={(event) => {
+            event.stopPropagation()
+            onLoadChecks()
+            onOpen()
+          }}
+          className={cn(
+            'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-110',
+            getChecksTone(item)
+          )}
+        >
+          <Icon className="size-3" />
+          <span className="truncate">{getChecksLabel(item)}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        Open PR checks
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function PRMergeCell({
+  item,
+  repo,
+  onRefresh
+}: {
+  item: GitHubWorkItem
+  repo: Repo | null
+  onRefresh: () => void
+}): React.JSX.Element {
+  const [merging, setMerging] = useState(false)
+  const confirm = useConfirmationDialog()
+  if (item.type !== 'pr') {
+    return <span className="text-[11px] text-muted-foreground">Issue</span>
+  }
+  const mergeDisabled =
+    !repo ||
+    merging ||
+    item.state === 'closed' ||
+    item.state === 'merged' ||
+    item.mergeable === 'CONFLICTING'
+
+  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+    if (!repo || mergeDisabled) {
+      return
+    }
+    const label =
+      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const confirmed = await confirm({
+      title: `${label} PR #${item.number}?`,
+      description: 'This will update the pull request on GitHub.',
+      confirmLabel: label
+    })
+    if (!confirmed) {
+      return
+    }
+    setMerging(true)
+    try {
+      const result = await window.api.gh.mergePR({
+        repoPath: repo.path,
+        repoId: repo.id,
+        prNumber: item.number,
+        method
+      })
+      if (result.ok) {
+        toast.success('Pull request merged')
+        onRefresh()
+      } else {
+        toast.error(result.error)
+      }
+    } catch {
+      toast.error('Failed to merge pull request')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  return (
+    <DropdownMenu modal={false}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={(event) => event.stopPropagation()}
+              className={cn(
+                'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-110',
+                getMergeTone(item)
+              )}
+            >
+              {merging ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <GitMerge className="size-3" />
+              )}
+              <span className="truncate">{getMergeLabel(item)}</span>
+              <ChevronDown className="size-2.5 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {getMergeTooltip(item)}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
+          <GitMerge className="size-4" />
+          Squash and merge
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
+          <GitMerge className="size-4" />
+          Create merge commit
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
+          <GitMerge className="size-4" />
+          Rebase and merge
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+          <ExternalLink className="size-4" />
+          Open GitHub merge box
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 // Why: builds the page number array with ellipsis gaps, matching GitHub's
 // pagination pattern: always show first page, last page, and a window of
 // pages around the current page with "..." gaps between distant ranges.
@@ -416,7 +1846,7 @@ function PaginationBar({
 }): React.JSX.Element {
   const pageNumbers = getPageNumbers(currentPage, totalPages)
   const btnClass =
-    'inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+    'inline-flex w-24 items-center justify-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
   const numClass = (page: number): string =>
     cn(
       'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
@@ -512,6 +1942,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeState = useAppStore((s) => s.taskResumeState)
   const setTaskResumeState = useAppStore((s) => s.setTaskResumeState)
   const pageData = useAppStore((s) => s.taskPageData)
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
@@ -519,6 +1950,7 @@ export default function TaskPage(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
+  const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
   // Why: bumped by `setIssueSourcePreference` after cache eviction so the
@@ -528,11 +1960,19 @@ export default function TaskPage(): React.JSX.Element {
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
+  const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
+  const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
+  const listLinearTeams = useAppStore((s) => s.listLinearTeams)
+  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
   // Why: initial selection resolution honors (1) an explicit preselection from
@@ -609,9 +2049,27 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.activeWorkspaceId ??
     linearWorkspaces[0]?.id ??
     null
-  const visibleTaskProviders = useMemo(
+  const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
+  )
+  const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const visibleTaskProviders = useMemo(
+    () =>
+      restoreAvailableDefaultTaskProvider(
+        preferredVisibleTaskProviders,
+        {
+          gitlabInstalled: preflightStatus?.glab?.installed === true,
+          linearConnected: linearStatus.connected === true
+        },
+        defaultTaskSource
+      ),
+    [
+      defaultTaskSource,
+      linearStatus.connected,
+      preferredVisibleTaskProviders,
+      preflightStatus?.glab?.installed
+    ]
   )
   const visibleSourceOptions = useMemo(
     () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
@@ -623,13 +2081,15 @@ export default function TaskPage(): React.JSX.Element {
   // query. Previously a separate effect "re-seeded" these after mount, which
   // caused a throwaway empty-query fetch followed by a second fetch for the
   // real default — doubling the time-to-first-paint of the list.
-  const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
+  const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
-  const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
   const [taskSource, setTaskSource] = useState<TaskSource>(
-    resolveVisibleTaskProvider(pageData.taskSource ?? defaultTaskSource, visibleTaskProviders)
+    resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+  const taskSourceManuallyChangedRef = useRef(false)
+  const lastPageTaskSourceRef = useRef(pageData.taskSource)
   const taskResumeAppliedRef = useRef(false)
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
@@ -639,10 +2099,29 @@ export default function TaskPage(): React.JSX.Element {
   // icon in the sidebar while the task page is already open. useState only
   // initializes once, so sync from the store when the value changes.
   useEffect(() => {
+    const pageTaskSourceChanged = lastPageTaskSourceRef.current !== pageData.taskSource
+    lastPageTaskSourceRef.current = pageData.taskSource
     if (pageData.taskSource) {
+      if (pageTaskSourceChanged) {
+        taskSourceManuallyChangedRef.current = false
+      } else if (taskSourceManuallyChangedRef.current) {
+        return
+      }
       setTaskSource(resolveVisibleTaskProvider(pageData.taskSource, visibleTaskProviders))
     }
   }, [pageData.taskSource, visibleTaskProviders])
+
+  useEffect(() => {
+    if (taskSourceManuallyChangedRef.current) {
+      return
+    }
+    // Why: GitLab/Linear availability hydrates after mount. If the saved
+    // default was unavailable during the first render, restore it once the
+    // relevant check proves the provider can be shown.
+    if (visibleTaskProviders.includes(preferredTaskSource) && taskSource !== preferredTaskSource) {
+      setTaskSource(preferredTaskSource)
+    }
+  }, [preferredTaskSource, taskSource, visibleTaskProviders])
 
   useEffect(() => {
     if (!visibleTaskProviders.includes(taskSource)) {
@@ -660,7 +2139,7 @@ export default function TaskPage(): React.JSX.Element {
   // Why: parallel to Linear's slim per-source state. Skips workItemsCache
   // and cross-repo aggregation in v1 — the GitLab list fetches directly
   // from `window.api.gl.listMRs` / `listIssues` for the primary repo.
-  const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter>('opened')
+  const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
@@ -674,9 +2153,33 @@ export default function TaskPage(): React.JSX.Element {
   // Why: GitLab tab has two sub-views — the project's MR/issue list,
   // and the user's cross-project Todos (gitlab.com/dashboard/todos).
   // 'project' is default; 'todos' fetches a separate stream.
-  const [gitlabView, setGitlabView] = useState<'project' | 'todos'>('project')
+  const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
+
+  // Why: Issues and MRs expose different filter sets. Reset before fetching
+  // so a stale chip cannot become an invalid glab CLI flag.
+  useEffect(() => {
+    const filterIsValid =
+      gitlabView === 'issues'
+        ? isGitLabIssueFilter(gitlabFilter)
+        : gitlabView === 'mrs'
+          ? isGitLabMRFilter(gitlabFilter)
+          : true
+    if (!filterIsValid) {
+      setGitlabFilter('opened')
+    }
+  }, [gitlabView, gitlabFilter])
+
+  const displayedGitLabItems = useMemo(() => {
+    if (gitlabView === 'issues') {
+      return gitlabItems.filter((item) => item.type === 'issue')
+    }
+    if (gitlabView === 'mrs') {
+      return gitlabItems.filter((item) => item.type === 'mr')
+    }
+    return gitlabItems
+  }, [gitlabItems, gitlabView])
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
@@ -685,6 +2188,8 @@ export default function TaskPage(): React.JSX.Element {
     defaultTaskViewPreset
   )
   const [tasksLoading, setTasksLoading] = useState(false)
+  const [tasksRefreshing, setTasksRefreshing] = useState(false)
+  const [tasksFiltering, setTasksFiltering] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
   // Why: per-repo failure count surfaced through the "N of M" banner. IPC-level
   // rejections populate tasksError instead — the two are mutually exclusive so
@@ -701,6 +2206,10 @@ export default function TaskPage(): React.JSX.Element {
   // collapse onto a stale in-flight request that resolved against the
   // pre-flip source).
   const lastFetchedInvalidationNonceRef = useRef(0)
+  // Why: entering Tasks with fresh cache should still verify remote status
+  // once, but the result is reconciled into existing rows to avoid a full
+  // table shuffle when only status/key fields changed.
+  const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   // Why: pages holds all fetched pages of work items. Page 0 is seeded from
   // cache for instant first paint; subsequent pages are loaded via date cursors.
   const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
@@ -731,11 +2240,12 @@ export default function TaskPage(): React.JSX.Element {
   // this dialog for a read/review surface. The dialog's "Use" button routes
   // through the same direct-launch flow as the row-level "Use" CTA so
   // behavior is consistent regardless of entry point.
-  const [dialogWorkItemKey, setDialogWorkItemKey] = useState<{
-    id: string
-    repoId: string
-  } | null>(null)
-  const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+  const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
+  const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
+  const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
+  const dialogWorkItemKey = githubTaskDrawerWorkItem
+    ? { id: githubTaskDrawerWorkItem.id, repoId: githubTaskDrawerWorkItem.repoId }
+    : null
 
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
@@ -761,12 +2271,74 @@ export default function TaskPage(): React.JSX.Element {
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
-  const dialogWorkItem = dialogWorkItemKey ? (cachedDialogWorkItem ?? dialogWorkItemFallback) : null
+  const dialogWorkItem = dialogWorkItemKey
+    ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
+    : null
+  const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
 
-  const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
-    setDialogWorkItemFallback(item)
-  }, [])
+  const setDialogWorkItem = useCallback(
+    (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
+      setDialogInitialTab(item ? initialTab : 'conversation')
+      setGithubTaskDrawerWorkItem(item)
+    },
+    [setGithubTaskDrawerWorkItem]
+  )
+
+  useEffect(() => {
+    if (!pageData.openGitHubWorkItem) {
+      setDialogWorkItem(null)
+      return
+    }
+    setGithubMode('items')
+    setDialogWorkItem(pageData.openGitHubWorkItem, pageData.openGitHubInitialTab)
+  }, [pageData.openGitHubInitialTab, pageData.openGitHubWorkItem, setDialogWorkItem])
+
+  const openGitHubDetailPage = useCallback(
+    (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
+      openTaskPage({
+        taskSource: 'github',
+        preselectedRepoId: item.repoId,
+        openGitHubWorkItem: item,
+        openGitHubInitialTab: initialTab
+      })
+    },
+    [openTaskPage]
+  )
+
+  const patchTaskPageWorkItemRows = useCallback(
+    (
+      itemKey: { id: string; repoId: string },
+      patch: Partial<GitHubWorkItem>,
+      shouldPatch?: (item: GitHubWorkItem) => boolean
+    ): void => {
+      setPages((current) => {
+        let changed = false
+        const nextPages = current.map((page) => {
+          let pageChanged = false
+          const nextPage = page.map((item) => {
+            if (item.id !== itemKey.id || item.repoId !== itemKey.repoId) {
+              return item
+            }
+            if (shouldPatch && !shouldPatch(item)) {
+              return item
+            }
+            pageChanged = true
+            changed = true
+            return { ...item, ...patch }
+          })
+          return pageChanged ? nextPage : page
+        })
+        return changed ? nextPages : current
+      })
+    },
+    []
+  )
+  const handleDialogReviewRequestsChange = useCallback(
+    (itemKey: { id: string; repoId: string }, reviewRequests: GitHubAssignableUser[]): void => {
+      patchTaskPageWorkItemRows(itemKey, { reviewRequests })
+    },
+    [patchTaskPageWorkItemRows]
+  )
 
   // Why: feature 1 — render the "Issues from {owner}/{repo}" indicator per
   // selected repo whose issue-source and PR-source slugs differ, and surface
@@ -781,6 +2353,17 @@ export default function TaskPage(): React.JSX.Element {
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
   )
+
+  useEffect(() => {
+    if (taskSource !== 'github' || githubMode !== 'items') {
+      return
+    }
+    // Why: inline/dialog edits patch `workItemsCache`; the paged table renders
+    // from a local snapshot so it needs the patched row objects copied across.
+    setPages((current) =>
+      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries)
+    )
+  }, [githubMode, selectedWorkItemsCacheEntries, taskSource])
 
   // Why: surface a one-time toast per session per repo when the user's
   // preferred `'upstream'` is no longer configured and we fell back to
@@ -841,6 +2424,10 @@ export default function TaskPage(): React.JSX.Element {
     },
     [selectedRepos]
   )
+  const handleRefreshGithubTasks = useCallback((): void => {
+    setTasksRefreshing(true)
+    setTaskRefreshNonce((current) => current + 1)
+  }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -858,6 +2445,7 @@ export default function TaskPage(): React.JSX.Element {
   const [selectedLinearIssueId, setSelectedLinearIssueId] = useState<string | null>(null)
   const [selectedLinearIssueFallback, setSelectedLinearIssueFallback] =
     useState<LinearIssue | null>(null)
+  const [selectedLinearIssueCanFloat, setSelectedLinearIssueCanFloat] = useState(false)
 
   // Why: the Linear list keeps its own fetched array, while cell edits patch
   // the shared caches. Subscribing to just the Linear caches lets the list and
@@ -877,10 +2465,65 @@ export default function TaskPage(): React.JSX.Element {
     ? (cachedSelectedLinearIssue ?? selectedLinearIssueFallback)
     : null
 
-  const setSelectedLinearIssue = useCallback((issue: LinearIssue | null) => {
-    setSelectedLinearIssueId(issue?.id ?? null)
-    setSelectedLinearIssueFallback(issue)
+  const setSelectedLinearIssue = useCallback(
+    (issue: LinearIssue | null, options?: { allowOutsideList?: boolean }) => {
+      setSelectedLinearIssueCanFloat(Boolean(issue && options?.allowOutsideList))
+      setSelectedLinearIssueId(issue?.id ?? null)
+      setSelectedLinearIssueFallback(issue)
+    },
+    []
+  )
+
+  const clearSelectedLinearIssue = useCallback(() => {
+    setSelectedLinearIssueCanFloat(false)
+    setSelectedLinearIssueId(null)
+    setSelectedLinearIssueFallback(null)
   }, [])
+
+  useEffect(() => {
+    if (!pageData.openLinearIssue) {
+      clearSelectedLinearIssue()
+      return
+    }
+    setSelectedLinearIssue(pageData.openLinearIssue, { allowOutsideList: true })
+  }, [clearSelectedLinearIssue, pageData.openLinearIssue, setSelectedLinearIssue])
+
+  const openLinearDetailPage = useCallback(
+    (issue: LinearIssue) => {
+      openTaskPage({ taskSource: 'linear', openLinearIssue: issue })
+    },
+    [openTaskPage]
+  )
+
+  const openRelatedLinearIssue = useCallback(
+    (issue: LinearIssue) => {
+      openLinearDetailPage(issue)
+    },
+    [openLinearDetailPage]
+  )
+
+  const closeTaskDetailPage = useCallback(() => {
+    const state = useAppStore.getState()
+    const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+    if (
+      typeof currentEntry === 'object' &&
+      currentEntry.kind === 'task-detail' &&
+      state.worktreeNavHistoryIndex > 0
+    ) {
+      state.goBackWorktree()
+      return
+    }
+    setDialogWorkItem(null)
+    clearSelectedLinearIssue()
+    useAppStore.setState((s) => ({
+      taskPageData: {
+        ...s.taskPageData,
+        openGitHubWorkItem: undefined,
+        openGitHubInitialTab: undefined,
+        openLinearIssue: undefined
+      }
+    }))
+  }, [clearSelectedLinearIssue, setDialogWorkItem])
 
   // Linear tab state
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
@@ -889,7 +2532,21 @@ export default function TaskPage(): React.JSX.Element {
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
+  const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
+  const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
+  const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
+  const [linearDisplayProperties, setLinearDisplayProperties] = useState<
+    ReadonlySet<LinearDisplayProperty>
+  >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
+  const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const [linearBoardDraggingIssueId, setLinearBoardDraggingIssueId] = useState<string | null>(null)
+  const [linearBoardDragOverKey, setLinearBoardDragOverKey] = useState<string | null>(null)
+  const [linearBoardUpdatingIssueIds, setLinearBoardUpdatingIssueIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
+  const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
+  const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -914,7 +2571,7 @@ export default function TaskPage(): React.JSX.Element {
       setAppliedTaskSearch(query)
       setActiveTaskPreset(null)
     } else {
-      const presetId = preset ?? settings.defaultTaskViewPreset
+      const presetId = normalizeGitHubTaskPreset(preset ?? settings.defaultTaskViewPreset)
       const query = getTaskPresetQuery(presetId)
       setTaskSearchInput(query)
       setAppliedTaskSearch(query)
@@ -954,10 +2611,12 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     let cancelled = false
+    const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId)
     // Why: workspace switches must not leave the prior workspace's teams
-    // available for new-issue creation while the replacement fetch is pending.
-    setAvailableTeams([])
-    void linearListTeams(settings, selectedLinearWorkspaceId)
+    // available for new-issue creation while the replacement fetch is pending,
+    // but a workspace-scoped cache can keep the selector usable immediately.
+    setAvailableTeams(cachedTeams ?? [])
+    void listLinearTeams(selectedLinearWorkspaceId)
       .then((teams) => {
         if (!cancelled) {
           setAvailableTeams(teams)
@@ -972,7 +2631,14 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, taskSource, linearStatus.connected, selectedLinearWorkspaceId, taskResumeApplied])
+  }, [
+    taskSource,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    taskResumeApplied,
+    getCachedLinearTeams,
+    listLinearTeams
+  ])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -983,20 +2649,30 @@ export default function TaskPage(): React.JSX.Element {
     [selectedRepos]
   )
 
-  // Why: GitLab task-source data fetch. Pulls MRs (filtered by state)
-  // Why: fetch in parallel across every selected non-remote repo and
-  // merge the results, mirroring the GitHub side's cross-repo
-  // aggregation. Each repo's project is resolved from its git remote
-  // by the main process — non-GitLab remotes return an error envelope
-  // which we silently drop (filter chips on a GitHub-only repo
-  // shouldn't surface "no GitLab project" banners).
+  // Why: GitLab task-source data fetch. Issues and MRs are fetched
+  // separately (mirrors GitHub's separate Issues / PRs endpoints) so
+  // errors are isolated per tab and the backend doesn't need a combined
+  // merge+sort that can hide failures.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
     }
-    // Why: GitLab queries don't work over SSH-relay (yet) and folder-
-    // mode repos have no remotes to derive a project from. Filter both.
-    const eligibleRepos = selectedRepos.filter((r) => !r.connectionId)
+    if (gitlabView === 'todos') {
+      return
+    }
+    const activeIssueFilter =
+      gitlabView === 'issues' && isGitLabIssueFilter(gitlabFilter) ? gitlabFilter : null
+    const activeMRFilter =
+      gitlabView === 'mrs' && isGitLabMRFilter(gitlabFilter) ? gitlabFilter : null
+    if (
+      (gitlabView === 'issues' && !activeIssueFilter) ||
+      (gitlabView === 'mrs' && !activeMRFilter)
+    ) {
+      return
+    }
+    // Why: folder-mode repos have no remotes to derive a GitLab project from;
+    // SSH-backed Git repos go through the same provider-aware IPC path.
+    const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -1006,28 +2682,48 @@ export default function TaskPage(): React.JSX.Element {
     let stale = false
     setGitlabLoading(true)
     setGitlabError(null)
-    void Promise.allSettled(
-      eligibleRepos.map((repo) =>
-        window.api.gl
-          .listWorkItems({
-            repoPath: repo.path,
-            state: gitlabFilter,
-            page: 1,
-            perPage: 50
-          })
-          .then((result) => ({
-            repoId: repo.id,
-            items: (result as { items: GitLabWorkItem[] }).items,
-            // Why: not_found just means "this repo isn't a GitLab project"
-            // (e.g. a GitHub-only repo in a mixed selection). Drop it
-            // silently so the GitLab list doesn't show false errors.
-            error:
-              (result as { error?: { type?: string; message: string } }).error?.type === 'not_found'
-                ? undefined
-                : (result as { error?: { message: string } }).error
-          }))
-      )
-    )
+
+    const fetchItems =
+      gitlabView === 'issues'
+        ? (repo: (typeof eligibleRepos)[0]) => {
+            const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
+            return window.api.gl
+              .listIssues({
+                repoPath: repo.path,
+                state: 'opened',
+                assignee: isAssignedToMe ? '@me' : undefined,
+                limit: 50
+              })
+              .then((result) => {
+                const typed = result as {
+                  items: GitLabWorkItem[]
+                  error?: { type?: string; message: string }
+                }
+                // Why: not_found just means "this repo isn't a GitLab project"
+                // (e.g. a GitHub-only repo in a mixed selection). Drop it
+                // silently so the GitLab list doesn't show false errors.
+                const error = typed.error?.type === 'not_found' ? undefined : typed.error
+                return { repoId: repo.id, items: typed.items, error }
+              })
+          }
+        : (repo: (typeof eligibleRepos)[0]) =>
+            window.api.gl
+              .listMRs({
+                repoPath: repo.path,
+                state: activeMRFilter ?? 'opened',
+                page: 1,
+                perPage: 50
+              })
+              .then((result) => {
+                const typed = result as {
+                  items: GitLabWorkItem[]
+                  error?: { type?: string; message: string }
+                }
+                const error = typed.error?.type === 'not_found' ? undefined : typed.error
+                return { repoId: repo.id, items: typed.items, error }
+              })
+
+    void Promise.allSettled(eligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return
@@ -1048,10 +2744,9 @@ export default function TaskPage(): React.JSX.Element {
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
-        // Why: only surface an error banner when EVERY eligible repo
-        // failed — partial failure (one of three GitLab projects has
-        // a permission issue) is better signaled by the bare row count
-        // than a banner that overshadows the working repos.
+        // Why: only surface an error banner when EVERY eligible repo failed.
+        // Mixed selections often include non-GitLab repos, and a partial
+        // banner would hide the working rows.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
         }
@@ -1065,7 +2760,7 @@ export default function TaskPage(): React.JSX.Element {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [taskSource, gitlabView, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
 
   // Why: Todos fetch lives in its own effect — different trigger
   // condition from the project view (no chip filter dependence) and a
@@ -1111,15 +2806,6 @@ export default function TaskPage(): React.JSX.Element {
     return new Set(defaultLinearTeamSelection)
   })
 
-  // Why: team IDs belong to one Linear workspace. Switching workspaces while a
-  // saved subset exists must not leave the task list filtered by stale team IDs.
-  useEffect(() => {
-    if (availableTeams.length === 0) {
-      return
-    }
-    setLinearTeamSelection(reconcileLinearTeamSelection(availableTeams, defaultLinearTeamSelection))
-  }, [availableTeams, defaultLinearTeamSelection])
-
   const displayedLinearIssues = useMemo(
     () =>
       linearIssues.map(
@@ -1133,10 +2819,240 @@ export default function TaskPage(): React.JSX.Element {
     [linearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
   )
 
-  const filteredLinearIssues = useMemo(
-    () => displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id)),
-    [displayedLinearIssues, linearTeamSelection]
+  const linearIssueTeams = useMemo(() => {
+    const seen = new Set<string>()
+    const teams: LinearTeam[] = []
+    for (const issue of displayedLinearIssues) {
+      if (!issue.team.id || seen.has(issue.team.id)) {
+        continue
+      }
+      seen.add(issue.team.id)
+      teams.push({
+        id: issue.team.id,
+        workspaceId: issue.workspaceId,
+        workspaceName: issue.workspaceName,
+        name: issue.team.name,
+        key: issue.team.key
+      })
+    }
+    return teams.sort((a, b) => a.name.localeCompare(b.name))
+  }, [displayedLinearIssues])
+
+  // Why: the full Linear team fetch is async and can temporarily be empty.
+  // Keep the selector usable from issue metadata until the complete list lands.
+  const linearTeamOptions = availableTeams.length > 0 ? availableTeams : linearIssueTeams
+
+  // Why: team IDs belong to one Linear workspace. Switching workspaces while a
+  // saved subset exists must not leave the task list filtered by stale team IDs.
+  useEffect(() => {
+    if (linearTeamOptions.length === 0) {
+      return
+    }
+    setLinearTeamSelection(
+      reconcileLinearTeamSelection(linearTeamOptions, defaultLinearTeamSelection)
+    )
+  }, [linearTeamOptions, defaultLinearTeamSelection])
+
+  const filteredLinearIssues = useMemo(() => {
+    // Why: team options can be derived after issue rows render. Treat an
+    // empty selection as "all" until reconciliation has a concrete team set.
+    if (displayedLinearIssues.length > 0 && linearTeamSelection.size === 0) {
+      return displayedLinearIssues
+    }
+    return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
+  }, [displayedLinearIssues, linearTeamSelection])
+
+  const effectiveLinearDisplayProperties = useMemo(() => {
+    const next = new Set(linearDisplayProperties)
+    const groupedProperty =
+      linearGroupBy === 'status'
+        ? 'state'
+        : linearGroupBy === 'assignee' || linearGroupBy === 'priority' || linearGroupBy === 'team'
+          ? linearGroupBy
+          : null
+    if (groupedProperty) {
+      next.delete(groupedProperty)
+    }
+
+    // Why: a Team column repeats the same value when one team is selected.
+    // Keep it hidden until the user explicitly opts back into that property.
+    if (linearTeamSelection.size <= 1 && !linearTeamPropertyTouched) {
+      next.delete('team')
+    } else if (linearTeamSelection.size > 1 && !linearTeamPropertyTouched) {
+      next.add('team')
+    }
+    return next
+  }, [linearDisplayProperties, linearGroupBy, linearTeamPropertyTouched, linearTeamSelection.size])
+  const linearIssueGridTemplate = useMemo(
+    () => getLinearIssueGridTemplate(effectiveLinearDisplayProperties),
+    [effectiveLinearDisplayProperties]
   )
+  const linearIssueGridStyle = useMemo(
+    () =>
+      ({
+        '--linear-grid-template': linearIssueGridTemplate
+      }) as React.CSSProperties,
+    [linearIssueGridTemplate]
+  )
+  const linearIssueSections = useMemo(
+    () => groupLinearIssues(filteredLinearIssues, linearGroupBy, linearOrderBy),
+    [filteredLinearIssues, linearGroupBy, linearOrderBy]
+  )
+  const linearIssueListRows = useMemo<LinearIssueListRow[]>(
+    () =>
+      linearIssueSections.flatMap((section) => {
+        const issueRows = section.issues.map((issue) => ({ type: 'issue' as const, issue }))
+        if (linearGroupBy === 'none') {
+          return issueRows
+        }
+        return [
+          {
+            type: 'section' as const,
+            key: section.key,
+            label: section.label,
+            count: section.issues.length
+          },
+          ...issueRows
+        ]
+      }),
+    [linearGroupBy, linearIssueSections]
+  )
+  const linearBoardSections = useMemo(
+    () =>
+      groupLinearIssues(
+        filteredLinearIssues,
+        linearGroupBy === 'none' ? 'status' : linearGroupBy,
+        linearOrderBy
+      ),
+    [filteredLinearIssues, linearGroupBy, linearOrderBy]
+  )
+  const linearStatusBoardEnabled = linearGroupBy === 'none' || linearGroupBy === 'status'
+
+  const handleLinearBoardCardDragStart = useCallback(
+    (issue: LinearIssue, event: React.DragEvent<HTMLDivElement>) => {
+      if (!linearStatusBoardEnabled || linearBoardUpdatingIssueIds.has(issue.id)) {
+        event.preventDefault()
+        return
+      }
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issue.id)
+      event.dataTransfer.setData('text/plain', issue.id)
+      setLinearBoardDraggingIssueId(issue.id)
+    },
+    [linearBoardUpdatingIssueIds, linearStatusBoardEnabled]
+  )
+
+  const handleLinearBoardDragOver = useCallback(
+    (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
+      if (!linearStatusBoardEnabled || !getLinearStatusSectionState(section)) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setLinearBoardDragOverKey(section.key)
+    },
+    [linearStatusBoardEnabled]
+  )
+
+  const handleLinearBoardDrop = useCallback(
+    async (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setLinearBoardDragOverKey(null)
+
+      const targetState = getLinearStatusSectionState(section)
+      if (!linearStatusBoardEnabled || !targetState) {
+        return
+      }
+
+      const issueId =
+        event.dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME) || linearBoardDraggingIssueId
+      const issue = filteredLinearIssues.find((item) => item.id === issueId)
+      if (
+        !issue ||
+        linearBoardUpdatingIssueIds.has(issue.id) ||
+        (issue.state.name === targetState.name && issue.state.type === targetState.type)
+      ) {
+        return
+      }
+
+      setLinearBoardUpdatingIssueIds((prev) => {
+        const next = new Set(prev)
+        next.add(issue.id)
+        return next
+      })
+
+      const previousState = issue.state
+      const applyFallbackState = (state: LinearIssue['state']) => {
+        setSelectedLinearIssueFallback((prev) =>
+          prev?.id === issue.id ? { ...prev, state } : prev
+        )
+      }
+
+      try {
+        const states = await linearTeamStates(settings, issue.team.id, issue.workspaceId)
+        const workflowState = findLinearWorkflowStateForStatus(states, targetState)
+        if (!workflowState) {
+          toast.error(`"${targetState.name}" is not available for ${issue.team.name}`)
+          return
+        }
+
+        const nextState: LinearIssue['state'] = {
+          name: workflowState.name,
+          type: workflowState.type,
+          color: workflowState.color
+        }
+
+        patchLinearIssue(issue.id, { state: nextState })
+        applyFallbackState(nextState)
+
+        const result = await linearUpdateIssue(
+          settings,
+          issue.id,
+          { stateId: workflowState.id },
+          issue.workspaceId
+        )
+        if (result.ok === false) {
+          patchLinearIssue(issue.id, { state: previousState })
+          applyFallbackState(previousState)
+          toast.error(result.error ?? 'Failed to update Linear state')
+        }
+      } catch {
+        patchLinearIssue(issue.id, { state: previousState })
+        applyFallbackState(previousState)
+        toast.error('Failed to update Linear state')
+      } finally {
+        setLinearBoardUpdatingIssueIds((prev) => {
+          const next = new Set(prev)
+          next.delete(issue.id)
+          return next
+        })
+      }
+    },
+    [
+      filteredLinearIssues,
+      linearBoardDraggingIssueId,
+      linearBoardUpdatingIssueIds,
+      linearStatusBoardEnabled,
+      patchLinearIssue,
+      settings
+    ]
+  )
+
+  const toggleLinearDisplayProperty = useCallback((property: LinearDisplayProperty): void => {
+    if (property === 'team') {
+      setLinearTeamPropertyTouched(true)
+    }
+    setLinearDisplayProperties((prev) => {
+      const next = new Set(prev)
+      if (next.has(property)) {
+        next.delete(property)
+      } else {
+        next.add(property)
+      }
+      return next
+    })
+  }, [])
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
@@ -1156,30 +3072,18 @@ export default function TaskPage(): React.JSX.Element {
   )
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
+  const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
+
   // Why: defense-in-depth safety net applied to the current page's items.
-  // The server-side query now includes is:issue / is:pr qualifiers so this
-  // filter is a no-op in the happy path. Kept as a guard against parser
-  // regressions or stale cache contamination.
+  // The active tab scopes requests to issues or PRs, and this keeps stale
+  // cache rows from leaking across the split tabs.
   const applyTypeFilter = useCallback(
     (items: GitHubWorkItem[]) => {
-      if (!activeTaskPreset) {
-        return items
-      }
       return items.filter((item) => {
-        if (activeTaskPreset === 'issues' || activeTaskPreset === 'my-issues') {
-          return item.type === 'issue'
-        }
-        if (
-          activeTaskPreset === 'prs' ||
-          activeTaskPreset === 'my-prs' ||
-          activeTaskPreset === 'review'
-        ) {
-          return item.type === 'pr'
-        }
-        return true
+        return activeGithubTaskKind === 'prs' ? item.type === 'pr' : item.type === 'issue'
       })
     },
-    [activeTaskPreset]
+    [activeGithubTaskKind]
   )
 
   const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
@@ -1188,14 +3092,106 @@ export default function TaskPage(): React.JSX.Element {
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
   )
+  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  const loadedGitHubAuthorLogins = useMemo(() => {
+    const seen = new Set<string>()
+    const logins: string[] = []
+    for (const page of pages) {
+      for (const item of page) {
+        if (
+          !item.author ||
+          (activeGithubTaskKind === 'prs' ? item.type !== 'pr' : item.type !== 'issue')
+        ) {
+          continue
+        }
+        const key = item.author.toLowerCase()
+        if (seen.has(key)) {
+          continue
+        }
+        seen.add(key)
+        logins.push(item.author)
+      }
+    }
+    return logins
+  }, [activeGithubTaskKind, pages])
+  const primaryGithubFilterSlug = useMemo(() => {
+    for (const state of perRepoSourceState) {
+      const source = activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
+      if (source) {
+        return source
+      }
+    }
+    return null
+  }, [activeGithubTaskKind, perRepoSourceState])
+  const showPRManagementColumns = activeGithubTaskKind === 'prs'
+  const githubTaskGridClass = showPRManagementColumns
+    ? GITHUB_PR_TASK_GRID_CLASS
+    : GITHUB_TASK_GRID_CLASS
 
-  // Why: totalPages is derived from the search API count when available,
-  // so the pagination bar shows the full range (with ellipsis) upfront.
-  // Falls back to the loaded page count when the count hasn't returned yet.
+  const ensurePRChecksLoaded = useCallback(
+    (item: GitHubWorkItem): void => {
+      if (item.type !== 'pr' || item.checksSummary) {
+        return
+      }
+      const repo = repoMap.get(item.repoId)
+      if (!repo) {
+        return
+      }
+      const requestedHeadSha = item.headSha
+      const requestedPRRepo = item.prRepo ?? null
+      void fetchPRChecks(
+        repo.path,
+        item.number,
+        item.branchName,
+        item.headSha,
+        item.prRepo ?? null,
+        { repoId: repo.id }
+      ).then((checks) => {
+        patchTaskPageWorkItemRows(
+          { id: item.id, repoId: item.repoId },
+          { checksSummary: deriveTaskPagePRCheckSummary(checks) },
+          (currentItem) =>
+            currentItem.type === 'pr' &&
+            currentItem.headSha === requestedHeadSha &&
+            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo)
+        )
+      })
+    },
+    [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
+  )
+
+  useEffect(() => {
+    if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {
+      return
+    }
+
+    for (const item of filteredWorkItems.slice(0, PR_CHECKS_EAGER_PREFETCH_LIMIT)) {
+      ensurePRChecksLoaded(item)
+    }
+  }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
+
+  // Why: each page is bounded by both the per-repo fetch budget (so a single
+  // repo can yield at most PER_REPO_FETCH_LIMIT rows per page) and the
+  // post-merge display cap. Dividing the total by CROSS_REPO_DISPLAY_LIMIT
+  // alone under-counts pages when the per-repo budget is the tighter bound —
+  // e.g. one repo with 60 open PRs yielded 36 rows on page 0 and ceil(60/100)
+  // = 1 total pages, hiding the pager entirely.
+  const effectivePageSize = Math.max(
+    1,
+    Math.min(PER_REPO_FETCH_LIMIT * Math.max(1, selectedRepos.length), CROSS_REPO_DISPLAY_LIMIT)
+  )
+  // Why: if the search-API count is unavailable (rate-limited, transient
+  // failure — `countWorkItemsAcrossRepos` swallows errors and returns 0),
+  // infer there's at least one more page whenever the last loaded page
+  // filled to the per-page capacity. Otherwise pagination would silently
+  // hide and trap the user on page 0 with no way to advance.
+  const lastPageFull = (pages.at(-1)?.length ?? 0) >= effectivePageSize
   const totalPages =
-    totalItemCount !== null
-      ? Math.max(pages.length, Math.ceil(totalItemCount / CROSS_REPO_DISPLAY_LIMIT))
-      : pages.length
+    totalItemCount && totalItemCount > 0
+      ? Math.max(pages.length, Math.ceil(totalItemCount / effectivePageSize))
+      : lastPageFull
+        ? pages.length + 1
+        : pages.length
 
   // Why: loads the next page using the oldest item's updatedAt as a cursor.
   // When targetPage is provided (from clicking a numbered page beyond loaded
@@ -1259,10 +3255,14 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     const timeout = window.setTimeout(() => {
-      setAppliedTaskSearch(taskSearchInput)
+      const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+      if (scoped !== appliedTaskSearch) {
+        setTasksFiltering(true)
+      }
+      setAppliedTaskSearch(scoped)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [taskSearchInput, taskResumeApplied])
+  }, [activeGithubTaskKind, appliedTaskSearch, taskSearchInput, taskResumeApplied])
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -1295,10 +3295,14 @@ export default function TaskPage(): React.JSX.Element {
     // button would stay stuck in its disabled/Retrying state indefinitely.
     if (taskSource !== 'github' || githubMode !== 'items') {
       setRetryingRepoPaths(new Set())
+      setTasksRefreshing(false)
+      setTasksFiltering(false)
       return
     }
     if (selectedRepos.length === 0) {
       setRetryingRepoPaths(new Set())
+      setTasksRefreshing(false)
+      setTasksFiltering(false)
       return
     } // unreachable — multi-combobox forbids empty
 
@@ -1314,11 +3318,13 @@ export default function TaskPage(): React.JSX.Element {
     // to this pre-paint; the fetch will fill it in.
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
+    let anyRepoCached = false
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
+        anyRepoCached = true
         preMerged.push(...cached)
       }
     }
@@ -1348,8 +3354,22 @@ export default function TaskPage(): React.JSX.Element {
     const preferenceInvalidated =
       workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
     lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
-
+    const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+    const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
+    const shouldProbeOnLanding =
+      !forcedFetch && anyRepoCached && !landingGitHubRefreshKeysRef.current.has(landingRefreshKey)
+    if (shouldProbeOnLanding) {
+      landingGitHubRefreshKeysRef.current = new Set([
+        ...landingGitHubRefreshKeysRef.current,
+        landingRefreshKey
+      ])
+    }
+    // Why: manual refresh keeps cached rows visible, so the normal
+    // `tasksLoading` flag may stay false. Track the forced fetch separately
+    // so the toolbar still shows a refresh-in-progress affordance.
+    setTasksRefreshing(forcedFetch)
+
     // Why: snapshot the retrying paths at effect-dispatch so overlapping
     // retries don't clear each other's pending state. An earlier cancelled
     // effect settling after a newer retry starts would otherwise wipe the
@@ -1357,7 +3377,7 @@ export default function TaskPage(): React.JSX.Element {
     // when this effect dispatched preserves later additions.
     const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+      force: forcedFetch || shouldProbeOnLanding
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear only the repos this effect was responsible for
@@ -1379,10 +3399,21 @@ export default function TaskPage(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPages([items])
-        setCurrentPage(0)
+        if (shouldProbeOnLanding) {
+          const replaceFirstPage = shouldReplaceTaskPageItemsAfterRefresh(page0, items)
+          const resetPagination = shouldResetTaskPagePaginationAfterLandingRefresh(page0, items)
+          setPages((current) => reconcileTaskPagePagesAfterLandingRefresh(current, items))
+          if (replaceFirstPage || resetPagination) {
+            setCurrentPage(0)
+          }
+        } else {
+          setPages([items])
+          setCurrentPage(0)
+        }
         setFailedCount(failed)
         setTasksLoading(false)
+        setTasksRefreshing(false)
+        setTasksFiltering(false)
       })
       .catch((err) => {
         // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
@@ -1409,6 +3440,8 @@ export default function TaskPage(): React.JSX.Element {
         setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
         setFailedCount(0) // the per-repo banner would be misleading next to tasksError
         setTasksLoading(false)
+        setTasksRefreshing(false)
+        setTasksFiltering(false)
       })
 
     // Why: fire-and-forget count query in parallel with the items fetch.
@@ -1441,14 +3474,68 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied
   ])
 
+  const applyPRFilterChange = useCallback(
+    (change: PRFilterChange): void => {
+      let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+      // Why: each filter dropdown contributes an independent qualifier patch.
+      // `withQualifier` round-trips through parseTaskQuery so prior filters and
+      // free-text are preserved.
+      if ('author' in change) {
+        next = withQualifier(next, 'author', change.author ?? null)
+      }
+      if ('assignee' in change) {
+        next = withQualifier(next, 'assignee', change.assignee ?? null)
+      }
+      if ('labels' in change) {
+        next = withQualifier(next, 'labels', change.labels ?? [])
+      }
+      if ('state' in change && change.state) {
+        next = withQualifier(next, 'state', change.state)
+        if (change.state !== 'open') {
+          next = withQualifier(next, 'draft', null)
+        }
+      }
+      if ('draft' in change) {
+        next = withQualifier(next, 'draft', change.draft ? 'true' : 'false')
+      }
+      if ('reviewer' in change) {
+        // Why: the two reviewer qualifiers (review-requested vs reviewed-by) are
+        // mutually exclusive in the PR-list UX — clear the other axis whenever
+        // one is set so the chip's visible state matches the actual query.
+        const reviewer = change.reviewer ?? null
+        if (reviewer === null) {
+          next = withQualifier(next, 'reviewRequested', null)
+          next = withQualifier(next, 'reviewedBy', null)
+        } else if (reviewer.kind === 'requested') {
+          next = withQualifier(next, 'reviewedBy', null)
+          next = withQualifier(next, 'reviewRequested', reviewer.login)
+        } else {
+          next = withQualifier(next, 'reviewRequested', null)
+          next = withQualifier(next, 'reviewedBy', reviewer.login)
+        }
+      }
+      setTaskSearchInput(next)
+      setAppliedTaskSearch(next)
+      setActiveTaskPreset(null)
+      setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: next })
+      // Why: filter changes replace the meaning of every row. Showing stale
+      // rows while the filtered query resolves reads like the filter did
+      // nothing, so render the same skeleton used for an uncached initial load.
+      setTasksFiltering(true)
+      setTaskRefreshNonce((current) => current + 1)
+    },
+    [activeGithubTaskKind, setTaskResumeState, taskSearchInput]
+  )
+
   const handleApplyTaskSearch = useCallback((): void => {
-    const trimmed = taskSearchInput.trim()
-    setTaskSearchInput(trimmed)
-    setAppliedTaskSearch(trimmed)
+    const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+    setTaskSearchInput(scoped)
+    setAppliedTaskSearch(scoped)
     setActiveTaskPreset(null)
-    setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: trimmed })
+    setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: scoped })
+    setTasksFiltering(true)
     setTaskRefreshNonce((current) => current + 1)
-  }, [setTaskResumeState, taskSearchInput])
+  }, [activeGithubTaskKind, setTaskResumeState, taskSearchInput])
 
   const handleTaskSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
     const next = event.target.value
@@ -1467,6 +3554,27 @@ export default function TaskPage(): React.JSX.Element {
     },
     [updateSettings]
   )
+
+  const handleSelectGithubTaskKind = useCallback(
+    (kind: GitHubTaskKind): void => {
+      const preset = getDefaultPresetForGitHubTaskKind(kind)
+      const query = getTaskPresetQuery(preset)
+      setTaskSearchInput(query)
+      setAppliedTaskSearch(query)
+      setActiveTaskPreset(preset)
+      setTaskResumeState({
+        githubItemsPreset: preset,
+        githubItemsQuery: query
+      })
+      setTasksFiltering(true)
+      setTaskRefreshNonce((current) => current + 1)
+    },
+    [setTaskResumeState]
+  )
+
+  const handleResetGithubTaskSearch = useCallback((): void => {
+    handleSelectGithubTaskKind(activeGithubTaskKind)
+  }, [activeGithubTaskKind, handleSelectGithubTaskKind])
 
   const handleTaskSearchKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -1563,6 +3671,31 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForItem]
   )
 
+  const openComposerForGitLabItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: getLinkedWorkItemSuggestedName(item),
+        initialRepoId: item.repoId,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
+
+  const handleUseGitLabItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      openComposerForGitLabItem(item)
+    },
+    [openComposerForGitLabItem]
+  )
+
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
     if (!newIssueTargetRepo) {
       return
@@ -1620,7 +3753,7 @@ export default function TaskPage(): React.JSX.Element {
         updatedAt: new Date().toISOString(),
         author: null
       }
-      setDialogWorkItem(stub)
+      openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
       const fullIssuePromise = target
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
@@ -1650,7 +3783,14 @@ export default function TaskPage(): React.JSX.Element {
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDialogWorkItem])
+  }, [
+    newIssueBody,
+    newIssueSubmitting,
+    newIssueTargetRepo,
+    newIssueTitle,
+    openGitHubDetailPage,
+    setDialogWorkItem
+  ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
     if (!newLinearIssueTargetTeam) {
@@ -1690,7 +3830,7 @@ export default function TaskPage(): React.JSX.Element {
       void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
         .then((full) => {
           if (full) {
-            setSelectedLinearIssue(full)
+            openLinearDetailPage(full)
           }
         })
         .catch(() => {})
@@ -1702,9 +3842,11 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueSubmitting,
     newLinearIssueTargetTeam,
     newLinearIssueTitle,
-    settings,
-    setSelectedLinearIssue
+    openLinearDetailPage,
+    settings
   ])
+
+  const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
@@ -1757,12 +3899,14 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearIssue
   ])
 
-  // Why: check Linear connection status on mount so the UI can show the
-  // correct connected/disconnected state without requiring a settings visit.
   useEffect(() => {
-    void checkLinearConnection()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (!preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
+    if (!linearStatusChecked) {
+      void checkLinearConnection()
+    }
+  }, [checkLinearConnection, linearStatusChecked, preflightStatusChecked, refreshPreflightStatus])
 
   // Why: debounce the Linear search input so we don't fire a request on every
   // keystroke — matches the 300ms cadence used for GitHub search.
@@ -1802,21 +3946,64 @@ export default function TaskPage(): React.JSX.Element {
     }
 
     let cancelled = false
-    setLinearLoading(true)
     setLinearError(null)
 
     const trimmed = appliedLinearSearch.trim()
-    const request =
+    const readArgs =
       trimmed.length > 0
-        ? searchLinearIssues(trimmed, LINEAR_ITEM_LIMIT)
-        : listLinearIssues(activeLinearPreset, LINEAR_ITEM_LIMIT)
+        ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
+        : ({ kind: 'list', filter: activeLinearPreset, limit: LINEAR_ITEM_LIMIT } as const)
+    const cachedIssues = getCachedLinearIssues(readArgs)
+    if (cachedIssues) {
+      setLinearIssues(cachedIssues)
+    }
+
+    const requestSignature =
+      trimmed.length > 0
+        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}`
+        : `${selectedLinearWorkspaceId ?? 'default'}::list::${activeLinearPreset}`
+    const previousRequest = lastLinearRequestRef.current
+    const forceRefresh =
+      linearRefreshNonce > 0 &&
+      previousRequest?.nonce !== linearRefreshNonce &&
+      previousRequest?.signature === requestSignature
+    lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
+    const shouldProbeOnLanding =
+      !forceRefresh &&
+      cachedIssues !== null &&
+      !landingLinearRefreshKeysRef.current.has(requestSignature)
+    if (shouldProbeOnLanding) {
+      landingLinearRefreshKeysRef.current = new Set([
+        ...landingLinearRefreshKeysRef.current,
+        requestSignature
+      ])
+    }
+
+    // Why: cached rows should remain visible on navigation. Only an explicit
+    // refresh or a true cache miss needs the blocking loading state.
+    setLinearLoading(forceRefresh || cachedIssues === null)
+
+    const request =
+      readArgs.kind === 'search'
+        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
+        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
 
     void request
       .then((issues) => {
         if (cancelled) {
           return
         }
-        setLinearIssues(issues)
+        if (shouldProbeOnLanding) {
+          setLinearIssues((current) =>
+            reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
+          )
+        } else {
+          setLinearIssues(issues)
+        }
         setLinearLoading(false)
       })
       .catch((err) => {
@@ -1840,7 +4027,8 @@ export default function TaskPage(): React.JSX.Element {
     appliedLinearSearch,
     activeLinearPreset,
     linearRefreshNonce,
-    taskResumeApplied
+    taskResumeApplied,
+    getCachedLinearIssues
   ])
 
   useEffect(() => {
@@ -1848,34 +4036,34 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
 
-    if (!linearStatus.connected || filteredLinearIssues.length === 0) {
-      if (selectedLinearIssueId !== null) {
-        setSelectedLinearIssueId(null)
-      }
-      if (selectedLinearIssueFallback !== null) {
-        setSelectedLinearIssueFallback(null)
+    if (!linearStatus.connected) {
+      clearSelectedLinearIssue()
+      return
+    }
+
+    if (filteredLinearIssues.length === 0) {
+      if (!selectedLinearIssueCanFloat) {
+        clearSelectedLinearIssue()
       }
       return
     }
 
     // Why: the corrected Linear surface is list-first. Keep an open inspector
     // only while its issue remains in the current filter instead of auto-opening
-    // the first row and turning the list back into navigation chrome.
+    // the first row and turning the list back into navigation chrome. Related
+    // sub-issue navigation is allowed to stay open because it is user-directed.
     if (
       selectedLinearIssueId &&
+      !selectedLinearIssueCanFloat &&
       !filteredLinearIssues.some((issue) => issue.id === selectedLinearIssueId)
     ) {
-      if (selectedLinearIssueId !== null) {
-        setSelectedLinearIssueId(null)
-      }
-      if (selectedLinearIssueFallback !== null) {
-        setSelectedLinearIssueFallback(null)
-      }
+      clearSelectedLinearIssue()
     }
   }, [
+    clearSelectedLinearIssue,
     filteredLinearIssues,
     linearStatus.connected,
-    selectedLinearIssueFallback,
+    selectedLinearIssueCanFloat,
     selectedLinearIssueId,
     taskResumeApplied,
     taskSource
@@ -1939,19 +4127,27 @@ export default function TaskPage(): React.JSX.Element {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Why: pt-1.5 vertically centers this row's 32px icon cluster (X +
             source toggles) with the sidebar's "Tasks" nav row. Sidebar Tasks
             center sits 22px below the titlebar (pt-2 + py-1.5 + half size-4
             icon). Matching that here needs 6px top padding above the 32px
             cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
             too low, breaking the visual band across the top chrome. */}
-        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
-          <div className="flex-none flex flex-col gap-3">
+        <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
+          <div
+            className={cn(
+              'flex-none flex flex-col gap-3',
+              // Why: GitHub detail views (PR + Issue) fill the entire right
+              // pane — the list filter row above them is not relevant and
+              // would visually duplicate the detail page's own breadcrumb.
+              taskSource === 'github' && dialogWorkItem && 'hidden'
+            )}
+          >
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {/* Why: Close is anchored left in the same row as the
                         source icons so the top chrome is one compact band.
                         Left-aligned keeps it clear of the app sidebar on the
@@ -1982,7 +4178,8 @@ export default function TaskPage(): React.JSX.Element {
                               type="button"
                               disabled={source.disabled}
                               onClick={() => {
-                                setTaskSource(source.id)
+                                taskSourceManuallyChangedRef.current = true
+                                openTaskPage({ taskSource: source.id })
                                 void updateSettings({ defaultTaskSource: source.id }).catch(() => {
                                   toast.error('Failed to save default task source.')
                                 })
@@ -2012,8 +4209,7 @@ export default function TaskPage(): React.JSX.Element {
                         <Select
                           value={selectedLinearWorkspaceId ?? undefined}
                           onValueChange={(value) => {
-                            setSelectedLinearIssueId(null)
-                            setSelectedLinearIssueFallback(null)
+                            clearSelectedLinearIssue()
                             setLinearIssues([])
                             setLinearError(null)
                             setLinearLoading(true)
@@ -2035,48 +4231,53 @@ export default function TaskPage(): React.JSX.Element {
                           </SelectContent>
                         </Select>
                       ) : null}
-                      {availableTeams.length > 0 ? (
-                        <div className="w-[200px]">
-                          <TeamMultiCombobox
-                            teams={availableTeams}
-                            selected={linearTeamSelection}
-                            onChange={(next) => {
-                              setLinearTeamSelection(next)
-                              void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
-                                () => {
-                                  toast.error('Failed to save team selection.')
-                                }
-                              )
-                            }}
-                            onSelectAll={() => {
-                              setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
-                              void updateSettings({ defaultLinearTeamSelection: null }).catch(
-                                () => {
-                                  toast.error('Failed to save team selection.')
-                                }
-                              )
-                            }}
-                            triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                          />
-                        </div>
-                      ) : null}
+                      <div className="min-w-0 w-full sm:w-[200px]">
+                        <TeamMultiCombobox
+                          teams={linearTeamOptions}
+                          selected={linearTeamSelection}
+                          onChange={(next) => {
+                            setLinearTeamSelection(next)
+                            void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
+                              () => {
+                                toast.error('Failed to save team selection.')
+                              }
+                            )
+                          }}
+                          onSelectAll={() => {
+                            setLinearTeamSelection(new Set(linearTeamOptions.map((t) => t.id)))
+                            void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
+                              toast.error('Failed to save team selection.')
+                            })
+                          }}
+                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </div>
 
                 {taskSource === 'github' ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {projectModeVisible ? (
                       <div className="flex items-center gap-1 text-xs">
-                        {(['items', 'project'] as const).map((mode) => {
-                          const active = githubMode === mode
+                        {GITHUB_MODE_BUTTONS.map((mode) => {
+                          const active =
+                            mode.id === 'project'
+                              ? githubMode === 'project'
+                              : githubMode === 'items' && activeGithubTaskKind === mode.id
                           return (
                             <button
-                              key={mode}
+                              key={mode.id}
                               type="button"
                               onClick={() => {
-                                setGithubMode(mode)
-                                setTaskResumeState({ githubMode: mode })
+                                if (mode.id === 'project') {
+                                  setGithubMode('project')
+                                  setTaskResumeState({ githubMode: 'project' })
+                                  return
+                                }
+                                setGithubMode('items')
+                                setTaskResumeState({ githubMode: 'items' })
+                                handleSelectGithubTaskKind(mode.id)
                               }}
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
@@ -2085,7 +4286,7 @@ export default function TaskPage(): React.JSX.Element {
                                   : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                               )}
                             >
-                              {mode === 'items' ? 'Issues/PRs' : 'Project'}
+                              {mode.label}
                             </button>
                           )
                         })}
@@ -2097,24 +4298,24 @@ export default function TaskPage(): React.JSX.Element {
                         inert — hide it to avoid suggesting it does
                         something. */}
                     {githubMode !== 'project' && (
-                      <div className="w-[200px]">
+                      <div className="min-w-0 max-w-[220px] shrink-0">
                         <RepoMultiCombobox
                           repos={eligibleRepos}
                           selected={repoSelection}
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
-                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                          triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
                         />
                       </div>
                     )}
@@ -2122,43 +4323,76 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {taskSource === 'github' && githubMode === 'items' ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {TASK_QUERY_PRESETS.map((option) => {
-                          const active = activeTaskPreset === option.id
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => {
-                                const query = option.query
-                                setTaskSearchInput(query)
-                                setAppliedTaskSearch(query)
-                                setActiveTaskPreset(option.id)
-                                setTaskResumeState({
-                                  githubItemsPreset: option.id,
-                                  githubItemsQuery: query
-                                })
-                                setTaskRefreshNonce((current) => current + 1)
-                              }}
-                              onContextMenu={(event) => {
-                                event.preventDefault()
-                                handleSetDefaultTaskPreset(option.id)
-                              }}
-                              className={cn(
-                                'rounded-md border px-2 py-1 text-xs transition',
-                                active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                              )}
-                            >
-                              {option.label}
-                            </button>
-                          )
-                        })}
+                  <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
+                        const active = activeTaskPreset === option.id
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              const query = option.query
+                              setTaskSearchInput(query)
+                              setAppliedTaskSearch(query)
+                              setActiveTaskPreset(option.id)
+                              setTaskResumeState({
+                                githubItemsPreset: option.id,
+                                githubItemsQuery: query
+                              })
+                              setTaskRefreshNonce((current) => current + 1)
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              handleSetDefaultTaskPreset(option.id)
+                            }}
+                            className={cn(
+                              'rounded-md border px-2 py-1 text-xs transition',
+                              active
+                                ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <PRFilterDropdowns
+                        parsed={parseTaskQuery(taskSearchInput)}
+                        kind={activeGithubTaskKind}
+                        authorLogins={loadedGitHubAuthorLogins}
+                        primarySlug={primaryGithubFilterSlug}
+                        settings={settings}
+                        onChange={(change) => applyPRFilterChange(change)}
+                      />
+                      <div className="relative min-w-0 flex-1 basis-64">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          ref={taskSearchInputRef}
+                          data-github-items-search-input
+                          value={taskSearchInput}
+                          onChange={handleTaskSearchChange}
+                          onKeyDown={handleTaskSearchKeyDown}
+                          placeholder={
+                            activeGithubTaskKind === 'prs'
+                              ? 'Search GitHub PRs...'
+                              : 'Search GitHub issues...'
+                          }
+                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                        />
+                        {taskSearchInput || appliedTaskSearch ? (
+                          <button
+                            type="button"
+                            aria-label="Clear search"
+                            onClick={handleResetGithubTaskSearch}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        ) : null}
                       </div>
-
                       <div className="flex shrink-0 items-center gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -2173,7 +4407,7 @@ export default function TaskPage(): React.JSX.Element {
                               }}
                               disabled={!newIssueTargetRepo}
                               aria-label="New GitHub issue"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
@@ -2187,12 +4421,15 @@ export default function TaskPage(): React.JSX.Element {
                             <Button
                               variant="outline"
                               size="icon"
-                              onClick={() => setTaskRefreshNonce((current) => current + 1)}
-                              disabled={tasksLoading}
-                              aria-label="Refresh GitHub work"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              onClick={handleRefreshGithubTasks}
+                              disabled={githubTasksBusy}
+                              aria-busy={githubTasksBusy}
+                              aria-label={
+                                githubTasksBusy ? 'Refreshing GitHub work' : 'Refresh GitHub work'
+                              }
+                              className="size-8 cursor-pointer border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md disabled:pointer-events-auto disabled:cursor-wait supports-[backdrop-filter]:bg-transparent"
                             >
-                              {tasksLoading ? (
+                              {githubTasksBusy ? (
                                 <LoaderCircle className="size-4 animate-spin" />
                               ) : (
                                 <RefreshCw className="size-4" />
@@ -2200,40 +4437,9 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh GitHub work
+                            {githubTasksBusy ? 'Refreshing GitHub work…' : 'Refresh GitHub work'}
                           </TooltipContent>
                         </Tooltip>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <div className="relative min-w-[320px] flex-1">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          ref={taskSearchInputRef}
-                          data-github-items-search-input
-                          value={taskSearchInput}
-                          onChange={handleTaskSearchChange}
-                          onKeyDown={handleTaskSearchKeyDown}
-                          placeholder="GitHub search, e.g. assignee:@me is:open"
-                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
-                        />
-                        {taskSearchInput || appliedTaskSearch ? (
-                          <button
-                            type="button"
-                            aria-label="Clear search"
-                            onClick={() => {
-                              setTaskSearchInput('')
-                              setAppliedTaskSearch('')
-                              setActiveTaskPreset(null)
-                              setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: '' })
-                              setTaskRefreshNonce((current) => current + 1)
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-                          >
-                            <X className="size-4" />
-                          </button>
-                        ) : null}
                       </div>
                     </div>
 
@@ -2241,7 +4447,7 @@ export default function TaskPage(): React.JSX.Element {
                       // Why: unify feature 1 (indicator) and feature 2 (selector)
                       // into a single chip per repo. Rendering both separately
                       // produced visually redundant output — two local-repo
-                      // dot-labels, duplicate slugs. The selector's active pill
+                      // badge labels, duplicate slugs. The selector's active pill
                       // + tooltip already announce the source, so the "Issues
                       // from {slug}" chip is only shown when the selector does
                       // not render (no upstream remote — nothing to toggle).
@@ -2255,7 +4461,7 @@ export default function TaskPage(): React.JSX.Element {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {rows.map((s) => {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
-                            const showDotLabel = selectedRepos.length > 1 && repo
+                            const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             // Why: the static indicator has its own wrapping
                             // chip styles, so we render it standalone and don't
@@ -2268,7 +4474,7 @@ export default function TaskPage(): React.JSX.Element {
                                   issues={s.sources.issues}
                                   prs={s.sources.prs}
                                   localRepo={
-                                    showDotLabel && repo
+                                    showRepoBadgeLabel && repo
                                       ? { displayName: repo.displayName, color: repo.badgeColor }
                                       : undefined
                                   }
@@ -2286,11 +4492,11 @@ export default function TaskPage(): React.JSX.Element {
                             // uses `inline-flex`, so the visual rendering is identical.
                             return (
                               <div key={s.repoId} className={issueSourceChipClass}>
-                                {showDotLabel ? (
-                                  <RepoDotLabel
+                                {showRepoBadgeLabel ? (
+                                  <RepoBadgeLabel
                                     name={repo.displayName}
                                     color={repo.badgeColor}
-                                    dotClassName="size-1.5"
+                                    badgeClassName="size-1.5"
                                     className="text-[10px] text-muted-foreground"
                                   />
                                 ) : null}
@@ -2310,7 +4516,7 @@ export default function TaskPage(): React.JSX.Element {
                     })()}
                   </div>
                 ) : taskSource === 'linear' && linearStatus.connected ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                  <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         {LINEAR_PRESETS.map((preset) => {
@@ -2384,8 +4590,8 @@ export default function TaskPage(): React.JSX.Element {
                         </Tooltip>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="relative min-w-[320px] flex-1">
+                    <div className="mt-3 flex min-w-0 items-center gap-3">
+                      <div className="relative min-w-0 flex-1 basis-64">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={linearSearchInput}
@@ -2430,118 +4636,183 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   </div>
                 ) : taskSource === 'gitlab' ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    {/* Why: view toggle — Project = the selected repo's MRs
-                        and issues; My Todos = the user's cross-project
-                        gitlab.com/dashboard/todos stream. They have
-                        different data shapes so we render distinct lists
-                        below. */}
-                    <div className="mb-2 flex items-center gap-2">
-                      {(['project', 'todos'] as const).map((view) => {
-                        const active = gitlabView === view
-                        const label = view === 'project' ? 'Project MRs' : 'My Todos'
-                        return (
-                          <button
-                            key={view}
-                            type="button"
-                            onClick={() => setGitlabView(view)}
-                            className={cn(
-                              'rounded-md border px-2.5 py-1 text-xs transition',
-                              active
-                                ? 'border-foreground/40 bg-foreground/90 text-background'
-                                : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                            )}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {/* Why: state chips only apply to the project view
-                            — todos are filtered to 'pending' state in the
-                            backend and don't have an Open/Merged/Closed
-                            axis. */}
-                        {gitlabView === 'project'
-                          ? GITLAB_TASK_FILTERS.map(({ id, label }) => {
-                              const active = gitlabFilter === id
-                              return (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  onClick={() => {
-                                    setGitlabFilter(id)
-                                    setGitlabRefreshNonce((n) => n + 1)
-                                  }}
-                                  className={cn(
-                                    'rounded-md border px-2 py-1 text-xs transition',
-                                    active
-                                      ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                      : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                                  )}
-                                >
-                                  {label}
-                                </button>
-                              )
-                            })
-                          : null}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => setGitlabRefreshNonce((n) => n + 1)}
-                              disabled={gitlabLoading || gitlabTodosLoading}
-                              aria-label={
-                                gitlabView === 'project'
-                                  ? 'Refresh GitLab work items'
-                                  : 'Refresh My Todos'
-                              }
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                            >
-                              {gitlabLoading || gitlabTodosLoading ? (
-                                <LoaderCircle className="size-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="size-4" />
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1 text-xs">
+                        {(['issues', 'mrs', 'todos'] as const).map((view) => {
+                          const active = gitlabView === view
+                          const label =
+                            view === 'issues' ? 'Issues' : view === 'mrs' ? 'MRs' : 'My Todos'
+                          return (
+                            <button
+                              key={view}
+                              type="button"
+                              onClick={() => setGitlabView(view)}
+                              className={cn(
+                                'rounded-md border px-2.5 py-1 text-xs transition',
+                                active
+                                  ? 'border-foreground/40 bg-foreground/90 text-background'
+                                  : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                               )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {gitlabView === 'project'
-                              ? 'Refresh GitLab work items'
-                              : 'Refresh My Todos'}
-                          </TooltipContent>
-                        </Tooltip>
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="min-w-0 w-full sm:w-[200px]">
+                        <RepoMultiCombobox
+                          repos={eligibleRepos}
+                          selected={repoSelection}
+                          onChange={(next) => {
+                            setRepoSelection(next)
+                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                              toast.error('Failed to save project selection.')
+                            })
+                          }}
+                          onSelectAll={() => {
+                            const allIds = new Set(eligibleRepos.map((r) => r.id))
+                            setRepoSelection(allIds)
+                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                              toast.error('Failed to save project selection.')
+                            })
+                          }}
+                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
                       </div>
                     </div>
-                  </div>
+                    <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {gitlabView === 'issues' || gitlabView === 'mrs'
+                              ? (gitlabView === 'issues'
+                                  ? GITLAB_ISSUE_FILTERS
+                                  : GITLAB_MR_FILTERS
+                                ).map(({ id, label }) => {
+                                  const active = gitlabFilter === id
+                                  return (
+                                    <button
+                                      key={id}
+                                      type="button"
+                                      onClick={() => {
+                                        setGitlabFilter(id)
+                                        setGitlabRefreshNonce((n) => n + 1)
+                                      }}
+                                      className={cn(
+                                        'rounded-md border px-2 py-1 text-xs transition',
+                                        active
+                                          ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                          : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                                      )}
+                                    >
+                                      {label}
+                                    </button>
+                                  )
+                                })
+                              : null}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setGitlabRefreshNonce((n) => n + 1)}
+                                disabled={gitlabLoading || gitlabTodosLoading}
+                                aria-label={
+                                  gitlabView === 'todos'
+                                    ? 'Refresh My Todos'
+                                    : 'Refresh GitLab work items'
+                                }
+                                className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              >
+                                {gitlabLoading || gitlabTodosLoading ? (
+                                  <LoaderCircle className="size-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="size-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {gitlabView === 'todos'
+                                ? 'Refresh My Todos'
+                                : 'Refresh GitLab work items'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 ) : null}
               </div>
             </section>
           </div>
 
-          {taskSource === 'github' && githubMode === 'project' ? (
-            <div className="mt-3 flex min-h-0 max-h-full flex-col rounded-md border border-border/50 bg-muted/50 overflow-hidden shadow-sm">
+          {taskSource === 'github' && dialogWorkItem ? (
+            dialogWorkItem.type === 'pr' ? (
+              <PullRequestPage
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                backLabel="Pull requests"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            ) : (
+              <GitHubItemDialog
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                variant="page"
+                backLabel="GitHub list"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            )
+          ) : taskSource === 'github' && githubMode === 'project' ? (
+            <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
               <ProjectViewWrapper />
             </div>
           ) : taskSource === 'github' ? (
-            <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
-              <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                <span>ID</span>
-                <span>Title / Context</span>
-                <span>Source Branch</span>
-                <span>Status</span>
-                <span>Updated</span>
-                <span />
-              </div>
-
+            <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">
               <div
-                className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
+                className="min-h-0 flex-initial overflow-auto scrollbar-sleek scrollbar-sleek-lg"
                 style={{ scrollbarGutter: 'stable' }}
               >
+                <div
+                  className={cn(
+                    'sticky top-0 z-10 grid gap-2 border-b border-border/50 bg-muted/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground',
+                    githubTaskGridClass
+                  )}
+                >
+                  <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>ID</span>
+                  <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>Title / Context</span>
+                  {activeGithubTaskKind === 'issues' ? <span>Assignees</span> : null}
+                  {showPRManagementColumns ? (
+                    <>
+                      <span>Reviewers</span>
+                      <span>Checks</span>
+                      <span>Merge</span>
+                    </>
+                  ) : (
+                    <span>Status</span>
+                  )}
+                  <span>Updated</span>
+                  <span />
+                </div>
+
                 {tasksError ? (
                   <div className="border-b border-border px-4 py-4 text-sm text-destructive">
                     {tasksError}
@@ -2552,7 +4823,7 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} of {selectedRepos.length} repos failed to load
+                    {failedCount} of {selectedRepos.length} projects failed to load
                   </div>
                 ) : null}
 
@@ -2603,30 +4874,43 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
 
-                {tasksLoading && filteredWorkItems.length === 0 ? (
-                  // Why: shimmer skeleton stands in for the first ~3 rows while
-                  // the initial fetch is in flight, so the card is never empty
-                  // or collapsed during load. Only shown when we have no cached
-                  // items — on revalidate we keep the stale list visible.
+                {showGitHubTaskSkeletons ? (
+                  // Why: render enough shimmer rows to fill a typical viewport
+                  // so the table doesn't visibly grow when results land. A
+                  // 3-row stub jumps to ~30 real rows; matching the steady-
+                  // state height keeps layout stable across the load.
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="grid w-full gap-2 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
-                      >
-                        <div className="flex items-center">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i} className={cn('grid gap-2 px-3 py-2', githubTaskGridClass)}>
+                        <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
                           <div className="h-7 w-16 animate-pulse rounded-lg bg-muted/70" />
                         </div>
-                        <div className="min-w-0">
+                        <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
                           <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
                           <div className="mt-2 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
                         </div>
-                        <div className="flex items-center">
-                          <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
-                        </div>
+                        {!showPRManagementColumns ? (
+                          <div className="flex items-center">
+                            <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+                          </div>
+                        ) : null}
+                        {showPRManagementColumns ? (
+                          <>
+                            <div className="flex items-center">
+                              <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                            </div>
+                            <div className="flex items-center">
+                              <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                            </div>
+                            <div className="flex items-center">
+                              <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center">
+                            <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
+                          </div>
+                        )}
                         <div className="flex items-center">
                           <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
                         </div>
@@ -2644,7 +4928,7 @@ export default function TaskPage(): React.JSX.Element {
                     "No matching GitHub work" next to "Couldn't load issues from X/Y"
                     is contradictory and misleads the user into thinking they
                     typed the wrong query. */}
-                {!tasksLoading &&
+                {!showGitHubTaskSkeletons &&
                 filteredWorkItems.length === 0 &&
                 !tasksError &&
                 failedCount === 0 &&
@@ -2658,137 +4942,191 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 <div className="divide-y divide-border/50">
-                  {filteredWorkItems.map((item) => {
-                    const itemRepo = repoMap.get(item.repoId) ?? null
-                    return (
-                      // Why: the row is a clickable container rather than a
-                      // <button> because it holds nested interactive elements
-                      // (Use button, ellipsis DropdownMenuTrigger, Radix
-                      // TooltipTrigger). A <button> ancestor of another
-                      // <button> is invalid HTML and triggers React hydration
-                      // errors that break rendering of the whole page.
-                      <div
-                        // Why: combine repoId with item.id because two selected repos
-                        // that route issues through the same upstream (e.g. fork +
-                        // non-fork both resolving to stablyai/orca) surface the same
-                        // item.id under different repoIds. React treats a bare id as
-                        // a collision and warns + silently drops rows otherwise.
-                        key={`${item.repoId}:${item.id}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setDialogWorkItem(item)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            setDialogWorkItem(item)
-                          }
-                        }}
-                        className="grid w-full cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
-                      >
-                        <div className="flex items-center">
-                          <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
-                            {item.type === 'pr' ? (
-                              <GitPullRequest className="size-3" />
-                            ) : (
-                              <CircleDot className="size-3" />
-                            )}
-                            <span className="font-mono text-[11px] font-normal">
-                              #{item.number}
-                            </span>
-                          </span>
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate text-[15px] font-semibold text-foreground">
-                              {item.title}
-                            </h3>
-                            {selectedRepos.length > 1 && itemRepo ? (
-                              // Why: disambiguate rows when multiple repos are in
-                              // the merged list — a single-repo view doesn't need it.
-                              <RepoDotLabel
-                                name={itemRepo.displayName}
-                                color={itemRepo.badgeColor}
-                                dotClassName="size-1.5"
-                                className="shrink-0 text-[11px] text-muted-foreground"
-                              />
-                            ) : null}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                            <span>{item.author ?? 'unknown author'}</span>
-                            {selectedRepos.length === 1 && itemRepo ? (
-                              <span>{itemRepo.displayName}</span>
-                            ) : null}
-                            {item.labels.slice(0, 3).map((label) => (
-                              <span
-                                key={label}
-                                className="rounded-full border border-border/50 bg-background/80 px-1.5 py-0 text-[10px] text-muted-foreground"
-                              >
-                                {label}
+                  {!showGitHubTaskSkeletons &&
+                    filteredWorkItems.map((item) => {
+                      const itemRepo = repoMap.get(item.repoId) ?? null
+                      return (
+                        // Why: the row is a clickable container rather than a
+                        // <button> because it holds nested interactive elements
+                        // (Use button, ellipsis DropdownMenuTrigger, Radix
+                        // TooltipTrigger). A <button> ancestor of another
+                        // <button> is invalid HTML and triggers React hydration
+                        // errors that break rendering of the whole page.
+                        <div
+                          // Why: combine repoId with item.id because two selected repos
+                          // that route issues through the same upstream (e.g. fork +
+                          // non-fork both resolving to stablyai/orca) surface the same
+                          // item.id under different repoIds. React treats a bare id as
+                          // a collision and warns + silently drops rows otherwise.
+                          key={`${item.repoId}:${item.id}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openGitHubDetailPage(item)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              openGitHubDetailPage(item)
+                            }
+                          }}
+                          className={cn(
+                            'group/github-task-row grid cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                            githubTaskGridClass
+                          )}
+                        >
+                          <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5',
+                                item.state === 'merged'
+                                  ? 'text-purple-600 dark:text-purple-300'
+                                  : item.state === 'closed'
+                                    ? 'text-rose-600 dark:text-rose-300'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {item.type === 'pr' ? (
+                                <GitPullRequest className="size-3" />
+                              ) : (
+                                <CircleDot className="size-3" />
+                              )}
+                              <span className="font-mono text-[11px] font-normal">
+                                #{item.number}
                               </span>
-                            ))}
+                            </span>
+                          </div>
+
+                          <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate text-sm font-semibold text-foreground">
+                                {item.title}
+                              </h3>
+                              {item.type === 'pr' && item.state === 'draft' ? (
+                                <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+                                  Draft
+                                </span>
+                              ) : null}
+                              {selectedRepos.length > 1 && itemRepo ? (
+                                // Why: disambiguate rows when multiple repos are in
+                                // the merged list — a single-repo view doesn't need it.
+                                <RepoBadgeLabel
+                                  name={itemRepo.displayName}
+                                  color={itemRepo.badgeColor}
+                                  badgeClassName="size-1.5"
+                                  className="shrink-0 text-[11px] text-muted-foreground"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                              <span>{item.author ?? 'unknown author'}</span>
+                              {selectedRepos.length === 1 && itemRepo ? (
+                                <span>{itemRepo.displayName}</span>
+                              ) : null}
+                              {item.type === 'pr' && formatPRDelta(item) ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Files className="size-3" />
+                                  {formatPRDelta(item)}
+                                </span>
+                              ) : null}
+                              {item.labels.slice(0, 3).map((label) => (
+                                <span
+                                  key={label}
+                                  className="rounded-full border border-border/50 bg-background/80 px-1.5 py-0 text-[10px] text-muted-foreground"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {!showPRManagementColumns ? (
+                            <div className="min-w-0 flex items-center text-xs text-muted-foreground">
+                              <GHAssigneesCell item={item} repo={itemRepo ?? null} />
+                            </div>
+                          ) : null}
+
+                          {showPRManagementColumns ? (
+                            <>
+                              <div className="flex min-w-0 items-center">
+                                <PRReviewCell item={item} repo={itemRepo ?? null} />
+                              </div>
+
+                              <div className="flex min-w-0 items-center">
+                                <PRChecksCell
+                                  item={item}
+                                  onOpen={() => openGitHubDetailPage(item, 'checks')}
+                                  onLoadChecks={() => ensurePRChecksLoaded(item)}
+                                />
+                              </div>
+
+                              <div className="flex min-w-0 items-center">
+                                <PRMergeCell
+                                  item={item}
+                                  repo={itemRepo ?? null}
+                                  onRefresh={() => setTaskRefreshNonce((current) => current + 1)}
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center">
+                              <GHStatusCell item={item} repo={itemRepo ?? null} />
+                            </div>
+                          )}
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center text-[11px] text-muted-foreground">
+                                {formatRelativeTime(item.updatedAt)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {new Date(item.updatedAt).toLocaleString()}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <div className="flex items-center justify-start gap-1 lg:justify-end">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleUseWorkItem(item)
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
+                            >
+                              Start
+                              <ArrowRight className="size-3" />
+                            </button>
+                            <DropdownMenu modal={false}>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+                                  aria-label="More actions"
+                                >
+                                  <EllipsisVertical className="size-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onSelect={() => window.api.shell.openUrl(item.url)}
+                                >
+                                  <ExternalLink className="size-4" />
+                                  Open in browser
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
-
-                        <div className="min-w-0 flex items-center text-xs text-muted-foreground">
-                          <span className="truncate">
-                            {item.branchName || item.baseRefName || 'workspace/default'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center">
-                          <GHStatusCell item={item} repo={itemRepo ?? null} />
-                        </div>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center text-[11px] text-muted-foreground">
-                              {formatRelativeTime(item.updatedAt)}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {new Date(item.updatedAt).toLocaleString()}
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <div className="flex items-center justify-start gap-1 lg:justify-end">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleUseWorkItem(item)
-                            }}
-                            className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
-                          >
-                            Use
-                            <ArrowRight className="size-3" />
-                          </button>
-                          <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={(e) => e.stopPropagation()}
-                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
-                                aria-label="More actions"
-                              >
-                                <EllipsisVertical className="size-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
-                                <ExternalLink className="size-4" />
-                                Open in browser
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
                 </div>
+              </div>
 
-                {/* Pagination controls — GitHub-style with ellipsis */}
-                {filteredWorkItems.length > 0 && !tasksLoading && totalPages > 1 ? (
+              {/* Why: pagination sits outside the scroll container so it
+                  remains pinned at the bottom of the panel rather than
+                  hiding below the last row inside the scrolling region. */}
+              {filteredWorkItems.length > 0 && !showGitHubTaskSkeletons && totalPages > 1 ? (
+                <div className="flex-none border-t border-border/50 bg-muted/50">
                   <PaginationBar
                     currentPage={currentPage}
                     totalPages={totalPages}
@@ -2801,8 +5139,8 @@ export default function TaskPage(): React.JSX.Element {
                       }
                     }}
                   />
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
           ) : taskSource === 'gitlab' && gitlabView === 'todos' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
@@ -2819,7 +5157,7 @@ export default function TaskPage(): React.JSX.Element {
               >
                 {gitlabTodosLoading && gitlabTodos.length === 0 ? (
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
                         className="grid w-full gap-3 px-3 py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
@@ -2839,7 +5177,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
                       ? 'No pending todos. You’re all caught up!'
-                      : 'Select a repo so we can authenticate to GitLab.'}
+                      : 'Select a project so we can authenticate to GitLab.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -2905,9 +5243,11 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 {gitlabLoading && gitlabItems.length === 0 ? (
                   // Why: matches the GitHub / Linear shimmer pattern so the card
-                  // never flashes empty during the initial fetch.
+                  // never flashes empty during the initial fetch. Row count is
+                  // tuned to fill the viewport so the table doesn't visibly
+                  // grow when real rows land.
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
                         className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
@@ -2923,15 +5263,19 @@ export default function TaskPage(): React.JSX.Element {
                     ))}
                   </div>
                 ) : null}
-                {!gitlabLoading && gitlabItems.length === 0 && !gitlabError ? (
+                {!gitlabLoading && displayedGitLabItems.length === 0 && !gitlabError ? (
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
-                      ? 'No GitLab work matches this filter.'
-                      : 'Select a repo to see GitLab work items.'}
+                      ? gitlabView === 'issues'
+                        ? 'No GitLab issues match this filter.'
+                        : gitlabView === 'mrs'
+                          ? 'No GitLab MRs match this filter.'
+                          : 'No GitLab work matches this filter.'
+                      : 'Select a project to see GitLab work items.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
-                  {gitlabItems.map((item) => (
+                  {displayedGitLabItems.map((item) => (
                     // Why: row uses a <div role="button"> rather than a
                     // <button> because it nests an inner button for
                     // open-in-browser. Native <button> nesting is invalid
@@ -2964,22 +5308,51 @@ export default function TaskPage(): React.JSX.Element {
                       <span className="text-xs text-muted-foreground">
                         {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void window.api.shell.openUrl(item.url)
-                        }}
-                        aria-label="Open in browser"
-                        className="flex justify-end text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleUseGitLabItem(item)
+                              }}
+                              aria-label={`Start workspace from ${item.type === 'mr' ? 'MR' : 'issue'} ${item.number}`}
+                            >
+                              <ArrowRight className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            Start workspace
+                          </TooltipContent>
+                        </Tooltip>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void window.api.shell.openUrl(item.url)
+                          }}
+                          aria-label="Open in GitLab"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
+          ) : taskSource === 'linear' && selectedLinearIssue ? (
+            <LinearIssueWorkspace
+              issue={selectedLinearIssue}
+              variant="page"
+              backLabel="Linear list"
+              onUse={handleUseLinearItem}
+              onOpenIssue={openRelatedLinearIssue}
+              onClose={closeTaskDetailPage}
+            />
           ) : !linearStatusChecked ? (
             <div className="mt-4 flex items-center justify-center py-14">
               <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
@@ -3009,21 +5382,131 @@ export default function TaskPage(): React.JSX.Element {
                 <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   Linear issues
                 </div>
-                <div className="shrink-0 text-[11px] text-muted-foreground">
-                  {filteredLinearIssues.length} shown
+                <div className="flex shrink-0 items-center gap-2">
+                  <div
+                    className="hidden items-center rounded-md border border-border/50 bg-background/70 p-0.5 md:flex"
+                    aria-label="Linear view mode"
+                  >
+                    {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => {
+                      const active = linearViewMode === id
+                      return (
+                        <Tooltip key={id}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => setLinearViewMode(id)}
+                              aria-label={`${label} view`}
+                              aria-pressed={active}
+                              className={cn(
+                                'inline-flex size-6 items-center justify-center rounded text-muted-foreground transition hover:text-foreground',
+                                active && 'bg-accent text-accent-foreground shadow-xs'
+                              )}
+                            >
+                              <Icon className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {label} view
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    })}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        className="gap-1 border-border/50 bg-background/70 text-[11px]"
+                      >
+                        <SlidersHorizontal className="size-3.5" />
+                        View
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <List className="size-3.5" />
+                        View
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={linearViewMode}
+                        onValueChange={(value) => setLinearViewMode(value as LinearViewMode)}
+                      >
+                        {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => (
+                          <DropdownMenuRadioItem key={id} value={id}>
+                            <Icon className="size-3.5" />
+                            {label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <SlidersHorizontal className="size-3.5" />
+                        Grouping
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={linearGroupBy}
+                        onValueChange={(value) => setLinearGroupBy(value as LinearGroupBy)}
+                      >
+                        {LINEAR_GROUP_OPTIONS.map((option) => (
+                          <DropdownMenuRadioItem key={option.id} value={option.id}>
+                            {option.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <ArrowDownUp className="size-3.5" />
+                        Ordering
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={linearOrderBy}
+                        onValueChange={(value) => setLinearOrderBy(value as LinearOrderBy)}
+                      >
+                        {LINEAR_ORDER_OPTIONS.map((option) => (
+                          <DropdownMenuRadioItem key={option.id} value={option.id}>
+                            {option.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <Eye className="size-3.5" />
+                        Display properties
+                      </DropdownMenuLabel>
+                      {LINEAR_DISPLAY_PROPERTIES.map((property) => (
+                        <DropdownMenuCheckboxItem
+                          key={property.id}
+                          checked={effectiveLinearDisplayProperties.has(property.id)}
+                          onSelect={(event) => event.preventDefault()}
+                          onCheckedChange={() => toggleLinearDisplayProperty(property.id)}
+                        >
+                          {property.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <div className="text-[11px] text-muted-foreground">
+                    {filteredLinearIssues.length} shown
+                  </div>
                 </div>
               </div>
 
-              <div className="grid h-8 flex-none grid-cols-[86px_minmax(0,1fr)_128px_92px_96px_64px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[92px_minmax(0,1.2fr)_132px_92px_136px_96px_64px] xl:grid-cols-[96px_minmax(0,1.4fr)_140px_92px_150px_160px_100px_72px]">
-                <span>Key</span>
-                <span>Issue</span>
-                <span>State</span>
-                <span>Priority</span>
-                <span className="block max-lg:!hidden">Assignee</span>
-                <span className="block max-xl:!hidden">Context</span>
-                <span>Updated</span>
-                <span />
-              </div>
+              {linearViewMode === 'list' && linearGroupBy === 'none' ? (
+                <div
+                  className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
+                  style={linearIssueGridStyle}
+                >
+                  <span>Key</span>
+                  <span>Issue</span>
+                  {effectiveLinearDisplayProperties.has('state') ? <span>Status</span> : null}
+                  {effectiveLinearDisplayProperties.has('priority') ? <span>Priority</span> : null}
+                  {effectiveLinearDisplayProperties.has('assignee') ? <span>Assignee</span> : null}
+                  {effectiveLinearDisplayProperties.has('team') ? <span>Team</span> : null}
+                  {effectiveLinearDisplayProperties.has('updated') ? <span>Updated</span> : null}
+                  <span />
+                </div>
+              ) : null}
 
               <div
                 className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
@@ -3037,7 +5520,7 @@ export default function TaskPage(): React.JSX.Element {
 
                 {linearLoading && linearIssues.length === 0 ? (
                   <div className="divide-y divide-border/50">
-                    {Array.from({ length: 6 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="px-3 py-3">
                         <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
                         <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
@@ -3068,189 +5551,347 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                <div className="divide-y divide-border/50">
-                  {filteredLinearIssues.map((issue) => {
-                    const selected = issue.id === selectedLinearIssueId
-                    const labels = issue.labels.slice(0, 3)
-                    const contextLabel =
-                      selectedLinearWorkspaceId === 'all' && issue.workspaceName
-                        ? `${issue.workspaceName} / ${issue.team.name}`
-                        : issue.team.name
-                    return (
-                      <div
-                        key={issue.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-current={selected ? 'true' : undefined}
-                        data-current={selected ? 'true' : undefined}
-                        onClick={() => {
-                          setSelectedLinearIssue(issue)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.target !== e.currentTarget) {
-                            return
-                          }
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            setSelectedLinearIssue(issue)
-                          }
-                        }}
+                {linearViewMode === 'board' ? (
+                  <div className="grid min-w-0 gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+                    {linearBoardSections.map((section) => (
+                      <section
+                        key={section.key}
+                        onDragOver={(event) => handleLinearBoardDragOver(section, event)}
+                        onDrop={(event) => void handleLinearBoardDrop(section, event)}
                         className={cn(
-                          'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[86px_minmax(0,1fr)_128px_92px_96px_64px] lg:grid-cols-[92px_minmax(0,1.2fr)_132px_92px_136px_96px_64px] xl:grid-cols-[96px_minmax(0,1.4fr)_140px_92px_150px_160px_100px_72px]',
-                          selected && 'bg-accent'
+                          'min-h-0 rounded-md border border-border/50 bg-muted/20 transition-[border-color,box-shadow]',
+                          linearBoardDragOverKey === section.key &&
+                            'border-ring/70 ring-1 ring-ring/70'
                         )}
                       >
-                        <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
-                          {issue.identifier}
-                        </span>
-
-                        <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
-                              {issue.identifier}
-                            </span>
-                            <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                              {issue.title}
-                            </h3>
-                          </div>
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
-                            <span
-                              className="inline-flex min-w-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium"
-                              style={getLinearStatePillStyle(issue.state.color)}
-                            >
-                              <span
-                                className="size-1.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: issue.state.color }}
-                              />
-                              <span className="truncate">{issue.state.name}</span>
+                        <div className="flex h-9 items-center justify-between border-b border-border/50 px-3">
+                          <span className="truncate text-xs font-medium text-foreground">
+                            {section.label}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {section.issues.length}
+                          </span>
+                        </div>
+                        <div className="space-y-2 p-2">
+                          {section.issues.map((issue) => {
+                            const selected = issue.id === selectedLinearIssueId
+                            const labels = issue.labels.slice(0, 2)
+                            const dragging = linearBoardDraggingIssueId === issue.id
+                            const updating = linearBoardUpdatingIssueIds.has(issue.id)
+                            const teamLabel =
+                              selectedLinearWorkspaceId === 'all' && issue.workspaceName
+                                ? `${issue.workspaceName} / ${issue.team.name}`
+                                : issue.team.name
+                            return (
+                              <div
+                                key={issue.id}
+                                role="button"
+                                tabIndex={0}
+                                draggable={linearStatusBoardEnabled && !updating}
+                                aria-current={selected ? 'true' : undefined}
+                                data-current={selected ? 'true' : undefined}
+                                aria-disabled={updating ? 'true' : undefined}
+                                onDragStart={(event) =>
+                                  handleLinearBoardCardDragStart(issue, event)
+                                }
+                                onDragEnd={() => {
+                                  setLinearBoardDraggingIssueId(null)
+                                  setLinearBoardDragOverKey(null)
+                                }}
+                                onClick={() => openLinearDetailPage(issue)}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) {
+                                    return
+                                  }
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    openLinearDetailPage(issue)
+                                  }
+                                }}
+                                className={cn(
+                                  'group/row cursor-pointer rounded-md border border-border/50 bg-background px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                                  linearStatusBoardEnabled &&
+                                    !updating &&
+                                    'cursor-grab active:cursor-grabbing',
+                                  selected && 'bg-accent',
+                                  dragging && 'opacity-50',
+                                  updating && 'cursor-wait opacity-70'
+                                )}
+                              >
+                                <div className="flex min-w-0 items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="font-mono text-[11px] text-muted-foreground">
+                                      {issue.identifier}
+                                    </div>
+                                    <h3 className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-foreground">
+                                      {issue.title}
+                                    </h3>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        handleUseLinearItem(issue)
+                                      }}
+                                      aria-label={`Start workspace from ${issue.identifier}`}
+                                    >
+                                      <ArrowRight className="size-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        window.api.shell.openUrl(issue.url)
+                                      }}
+                                      aria-label={`Open ${issue.identifier} in Linear`}
+                                    >
+                                      <ExternalLink className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  {effectiveLinearDisplayProperties.has('state') ? (
+                                    <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
+                                  ) : null}
+                                  {effectiveLinearDisplayProperties.has('priority') ? (
+                                    <span>{getLinearPriorityLabel(issue.priority)}</span>
+                                  ) : null}
+                                  {effectiveLinearDisplayProperties.has('assignee') ? (
+                                    <span>{issue.assignee?.displayName ?? 'Unassigned'}</span>
+                                  ) : null}
+                                  {effectiveLinearDisplayProperties.has('team') ? (
+                                    <span className="truncate">{teamLabel}</span>
+                                  ) : null}
+                                  {effectiveLinearDisplayProperties.has('updated') ? (
+                                    <span>{formatRelativeTime(issue.updatedAt)}</span>
+                                  ) : null}
+                                </div>
+                                {effectiveLinearDisplayProperties.has('labels') &&
+                                issue.labels.length > 0 ? (
+                                  <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1">
+                                    {labels.map((label) => (
+                                      <span
+                                        key={label}
+                                        className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                      >
+                                        {label}
+                                      </span>
+                                    ))}
+                                    {issue.labels.length > labels.length ? (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        +{issue.labels.length - labels.length}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {linearIssueListRows.map((row) => {
+                      if (row.type === 'section') {
+                        return (
+                          <div
+                            key={row.key}
+                            className="flex h-9 items-center gap-2 bg-muted/35 px-3"
+                          >
+                            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                              {row.label}
                             </span>
                             <span className="shrink-0 text-[11px] text-muted-foreground">
-                              {getLinearPriorityLabel(issue.priority)}
-                            </span>
-                            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                              {issue.assignee?.displayName ?? 'Unassigned'}
+                              {row.count}
                             </span>
                           </div>
-                          <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
-                            <span className="max-w-[160px] truncate text-[10px] text-muted-foreground xl:!hidden">
-                              {contextLabel}
-                            </span>
-                            {labels.map((label) => (
-                              <span
-                                key={label}
-                                className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                              >
-                                {label}
+                        )
+                      }
+
+                      const issue = row.issue
+                      const selected = issue.id === selectedLinearIssueId
+                      const labels = issue.labels.slice(0, 3)
+                      const teamLabel =
+                        selectedLinearWorkspaceId === 'all' && issue.workspaceName
+                          ? `${issue.workspaceName} / ${issue.team.name}`
+                          : issue.team.name
+                      return (
+                        <div
+                          key={issue.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-current={selected ? 'true' : undefined}
+                          data-current={selected ? 'true' : undefined}
+                          onClick={() => {
+                            openLinearDetailPage(issue)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) {
+                              return
+                            }
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              openLinearDetailPage(issue)
+                            }
+                          }}
+                          className={cn(
+                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:grid-cols-[var(--linear-grid-template)]',
+                            selected && 'bg-accent'
+                          )}
+                          style={linearIssueGridStyle}
+                        >
+                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-lg:!hidden">
+                            {issue.identifier}
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground lg:hidden">
+                                {issue.identifier}
                               </span>
-                            ))}
-                            {issue.labels.length > labels.length ? (
-                              <span className="text-[10px] text-muted-foreground">
-                                +{issue.labels.length - labels.length}
-                              </span>
+                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                                {issue.title}
+                              </h3>
+                            </div>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 lg:!hidden">
+                              {effectiveLinearDisplayProperties.has('state') ? (
+                                <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('priority') ? (
+                                <span className="shrink-0 text-[11px] text-muted-foreground">
+                                  {getLinearPriorityLabel(issue.priority)}
+                                </span>
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('assignee') ? (
+                                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                  {issue.assignee?.displayName ?? 'Unassigned'}
+                                </span>
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('team') ? (
+                                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                  {teamLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                            {effectiveLinearDisplayProperties.has('labels') ? (
+                              <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
+                                {labels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                                {issue.labels.length > labels.length ? (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    +{issue.labels.length - labels.length}
+                                  </span>
+                                ) : null}
+                              </div>
                             ) : null}
                           </div>
-                        </div>
 
-                        <div className="flex min-w-0 max-md:!hidden">
-                          <span
-                            className="inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
-                            style={getLinearStatePillStyle(issue.state.color)}
-                          >
-                            <span
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: issue.state.color }}
-                            />
-                            <span className="truncate">{issue.state.name}</span>
-                          </span>
-                        </div>
-
-                        <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-                          {getLinearPriorityLabel(issue.priority)}
-                        </span>
-
-                        <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                          {issue.assignee?.avatarUrl ? (
-                            <img
-                              src={issue.assignee.avatarUrl}
-                              alt={issue.assignee.displayName}
-                              className="size-5 shrink-0 rounded-full"
-                            />
-                          ) : (
-                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                              {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-                            </span>
-                          )}
-                          <span className="truncate">
-                            {issue.assignee?.displayName ?? 'Unassigned'}
-                          </span>
-                        </div>
-
-                        <div className="block min-w-0 text-[12px] text-muted-foreground max-xl:!hidden">
-                          {selectedLinearWorkspaceId === 'all' && issue.workspaceName ? (
-                            <div className="truncate">{issue.workspaceName}</div>
-                          ) : null}
-                          <div className="truncate">{issue.team.name}</div>
-                        </div>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
-                              {formatRelativeTime(issue.updatedAt)}
+                          {effectiveLinearDisplayProperties.has('state') ? (
+                            <div className="flex min-w-0 max-lg:!hidden">
+                              <LinearStateCell issue={issue} className="max-w-full px-2 py-0.5" />
                             </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {new Date(issue.updatedAt).toLocaleString()}
-                          </TooltipContent>
-                        </Tooltip>
+                          ) : null}
 
-                        <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  handleUseLinearItem(issue)
-                                }}
-                                aria-label={`Start workspace from ${issue.identifier}`}
-                              >
-                                <ArrowRight className="size-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" sideOffset={6}>
-                              Start workspace
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  window.api.shell.openUrl(issue.url)
-                                }}
-                                aria-label={`Open ${issue.identifier} in Linear`}
-                              >
-                                <ExternalLink className="size-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" sideOffset={6}>
-                              Open in Linear
-                            </TooltipContent>
-                          </Tooltip>
+                          {effectiveLinearDisplayProperties.has('priority') ? (
+                            <span className="block truncate text-[12px] text-muted-foreground max-lg:!hidden">
+                              {getLinearPriorityLabel(issue.priority)}
+                            </span>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('assignee') ? (
+                            <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
+                              {issue.assignee?.avatarUrl ? (
+                                <img
+                                  src={issue.assignee.avatarUrl}
+                                  alt={issue.assignee.displayName}
+                                  className="size-5 shrink-0 rounded-full"
+                                />
+                              ) : (
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+                                  {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
+                                </span>
+                              )}
+                              <span className="truncate">
+                                {issue.assignee?.displayName ?? 'Unassigned'}
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('team') ? (
+                            <div className="block min-w-0 text-[12px] text-muted-foreground max-lg:!hidden">
+                              <div className="truncate">{teamLabel}</div>
+                            </div>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('updated') ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-lg:!hidden">
+                                  {formatRelativeTime(issue.updatedAt)}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                {new Date(issue.updatedAt).toLocaleString()}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+
+                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleUseLinearItem(issue)
+                                  }}
+                                  aria-label={`Start workspace from ${issue.identifier}`}
+                                >
+                                  <ArrowRight className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                Start
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    window.api.shell.openUrl(issue.url)
+                                  }}
+                                  aria-label={`Open ${issue.identifier} in Linear`}
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                Open in Linear
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <LinearIssueWorkspace
-                issue={selectedLinearIssue}
-                onUse={handleUseLinearItem}
-                onClose={() => setSelectedLinearIssue(null)}
-              />
             </div>
           )}
         </div>
@@ -3267,7 +5908,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewIssue()
             }
@@ -3349,7 +5990,7 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => setNewIssueRepoId(v)}
@@ -3361,7 +6002,7 @@ export default function TaskPage(): React.JSX.Element {
                   <SelectContent>
                     {selectedRepos.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
-                        <RepoDotLabel name={r.displayName} color={r.badgeColor} />
+                        <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -3394,10 +6035,10 @@ export default function TaskPage(): React.JSX.Element {
                 placeholder="What's going on?"
                 rows={6}
                 disabled={newIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
@@ -3435,7 +6076,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewLinearIssue()
             }
@@ -3504,10 +6145,10 @@ export default function TaskPage(): React.JSX.Element {
                 placeholder="What's going on?"
                 rows={6}
                 disabled={newLinearIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
@@ -3536,23 +6177,6 @@ export default function TaskPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      <GitHubItemDialog
-        workItem={dialogWorkItem}
-        repoPath={
-          // Why: the dialog is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the dialog is open.
-          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
-        }
-        repoId={dialogWorkItem?.repoId ?? null}
-        onUse={(item) => {
-          setDialogWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onClose={() => setDialogWorkItem(null)}
-      />
-
       <GitLabItemDialog
         item={gitlabDialogItem}
         // Why: dialog's repoPath has to come from the clicked item's
@@ -3565,6 +6189,10 @@ export default function TaskPage(): React.JSX.Element {
               null)
             : null
         }
+        onCreateWorkspace={(item) => {
+          setGitlabDialogItem(null)
+          handleUseGitLabItem(item)
+        }}
         onClose={() => setGitlabDialogItem(null)}
       />
 

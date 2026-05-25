@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
@@ -66,6 +66,10 @@ function createEvent() {
 }
 
 describe('registerWorkspaceSpaceHandlers', () => {
+  beforeEach(() => {
+    analyzeWorkspaceSpaceMock.mockReset()
+  })
+
   it('shares an in-flight analysis request', async () => {
     const store = {} as Store
     let resolveFirstScan: (analysis: WorkspaceSpaceAnalysis) => void = () => {}

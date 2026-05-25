@@ -10,6 +10,7 @@ let mockAgents = [
     }
   }
 ]
+let mockFocusedAgentPaneKey: string | null = null
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -30,9 +31,15 @@ vi.mock('@/components/dashboard/useNow', () => ({
 }))
 
 vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
-  default: ({ agent }: { agent: { paneKey: string } }) => (
-    <div data-testid="agent-row">{agent.paneKey}</div>
+  default: ({ agent, isFocusedPane }: { agent: { paneKey: string }; isFocusedPane?: boolean }) => (
+    <div data-testid="agent-row" data-focused={isFocusedPane ? 'true' : 'false'}>
+      {agent.paneKey}
+    </div>
   )
+}))
+
+vi.mock('./focused-agent-row-highlight', () => ({
+  useFocusedAgentPaneKey: vi.fn(() => mockFocusedAgentPaneKey)
 }))
 
 describe('WorktreeCardAgents', () => {
@@ -47,6 +54,7 @@ describe('WorktreeCardAgents', () => {
         }
       }
     ]
+    mockFocusedAgentPaneKey = null
   })
 
   it('renders rows in a labeled group without the removed per-card toggle header', async () => {
@@ -59,6 +67,32 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-testid="agent-row"')
     expect(markup).not.toContain('<button')
     expect(markup).not.toContain('aria-expanded')
+  })
+
+  it('marks only the focused agent row', async () => {
+    mockFocusedAgentPaneKey = 'tab-1:2'
+    mockAgents = [
+      {
+        paneKey: 'tab-1:1',
+        tab: { id: 'tab-1' },
+        entry: {
+          stateStartedAt: 1000
+        }
+      },
+      {
+        paneKey: 'tab-1:2',
+        tab: { id: 'tab-1' },
+        entry: {
+          stateStartedAt: 1000
+        }
+      }
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-focused="false">tab-1:1')
+    expect(markup).toContain('data-focused="true">tab-1:2')
   })
 
   it('does not render the labeled wrapper when there are no agent rows', async () => {

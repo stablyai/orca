@@ -69,4 +69,18 @@ describe('runtime terminal owner routing', () => {
     expect(localForeground).not.toHaveBeenCalled()
     expect(localHasChildren).not.toHaveBeenCalled()
   })
+
+  it('treats stale remote terminal handles as gone during process inspection', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: false,
+      error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+    })
+
+    await expect(
+      inspectRuntimeTerminalProcess(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-stale'
+      )
+    ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false })
+  })
 })

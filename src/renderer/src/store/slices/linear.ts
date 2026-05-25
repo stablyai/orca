@@ -7,6 +7,7 @@ import type {
   LinearViewer,
   LinearConnectionStatus,
   LinearIssue,
+  LinearTeam,
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
@@ -17,17 +18,19 @@ import {
   linearDisconnectWorkspace,
   linearGetIssue,
   linearListIssues,
+  linearListTeams,
   linearSearchIssues,
   linearSelectWorkspace,
   linearStatus,
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
 
-const CACHE_TTL = 60_000 // 60s — same as GitHub work-items TTL
+const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
+const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
 const MAX_CACHE_ENTRIES = 500
 
-function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
-  return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL
+function isFresh<T>(entry: CacheEntry<T> | undefined, ttl = CACHE_TTL): entry is CacheEntry<T> {
+  return entry !== undefined && Date.now() - entry.fetchedAt < ttl
 }
 
 function evictStaleEntries<T>(
@@ -52,11 +55,55 @@ function looksLikeAuthError(error: unknown): boolean {
 }
 
 const inflightIssueRequests = new Map<string, Promise<LinearIssue | null>>()
-const inflightSearchRequests = new Map<string, Promise<LinearIssue[]>>()
-const inflightListRequests = new Map<string, Promise<LinearIssue[]>>()
+type InflightLinearListRequest = {
+  promise: Promise<LinearIssue[]>
+  force: boolean
+}
+
+const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
+const inflightListRequests = new Map<string, InflightLinearListRequest>()
+const inflightTeamRequests = new Map<string, Promise<LinearTeam[]>>()
+let inflightStatusRequest: Promise<void> | null = null
+let statusRequestGeneration = 0
 
 function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
+}
+
+function linearSearchCacheKey(
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  query: string,
+  limit: number
+): string {
+  return `${workspaceId ?? 'default'}::search::${query}::${limit}`
+}
+
+function linearListCacheKey(
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  filter: 'assigned' | 'created' | 'all' | 'completed',
+  limit: number
+): string {
+  return `${workspaceId ?? 'default'}::list::${filter}::${limit}`
+}
+
+function linearTeamsCacheKey(workspaceId: LinearWorkspaceSelection | null | undefined): string {
+  return `${workspaceId ?? 'default'}::teams`
+}
+
+type LinearIssueReadArgs =
+  | { kind: 'search'; query: string; limit?: number }
+  | { kind: 'list'; filter?: 'assigned' | 'created' | 'all' | 'completed'; limit?: number }
+
+type LinearFetchOptions = { force?: boolean }
+
+function beginStatusOperation(): number {
+  statusRequestGeneration += 1
+  inflightStatusRequest = null
+  return statusRequestGeneration
+}
+
+function isCurrentStatusOperation(generation: number): boolean {
+  return generation === statusRequestGeneration
 }
 
 export type LinearSlice = {
@@ -64,8 +111,9 @@ export type LinearSlice = {
   linearStatusChecked: boolean
   linearIssueCache: Record<string, CacheEntry<LinearIssue>>
   linearSearchCache: Record<string, CacheEntry<LinearIssue[]>>
+  linearTeamCache: Record<string, CacheEntry<LinearTeam[]>>
 
-  checkLinearConnection: () => Promise<void>
+  checkLinearConnection: (force?: boolean) => Promise<void>
   connectLinear: (
     apiKey: string
   ) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
@@ -76,11 +124,23 @@ export type LinearSlice = {
   disconnectLinear: () => Promise<void>
   disconnectLinearWorkspace: (workspaceId: string) => Promise<void>
   fetchLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
-  searchLinearIssues: (query: string, limit?: number) => Promise<LinearIssue[]>
+  getCachedLinearIssues: (args: LinearIssueReadArgs) => LinearIssue[] | null
+  prefetchLinearIssues: (args: LinearIssueReadArgs) => void
+  searchLinearIssues: (
+    query: string,
+    limit?: number,
+    options?: LinearFetchOptions
+  ) => Promise<LinearIssue[]>
   listLinearIssues: (
     filter?: 'assigned' | 'created' | 'all' | 'completed',
-    limit?: number
+    limit?: number,
+    options?: LinearFetchOptions
   ) => Promise<LinearIssue[]>
+  getCachedLinearTeams: (workspaceId?: LinearWorkspaceSelection | null) => LinearTeam[] | null
+  listLinearTeams: (
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: LinearFetchOptions
+  ) => Promise<LinearTeam[]>
   patchLinearIssue: (issueId: string, patch: Partial<LinearIssue>) => void
 }
 
@@ -89,37 +149,61 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearStatusChecked: false,
   linearIssueCache: {},
   linearSearchCache: {},
+  linearTeamCache: {},
 
-  checkLinearConnection: async () => {
-    try {
-      const status = (await linearStatus(get().settings)) as LinearConnectionStatus
-      const prev = get().linearStatus
-      if (
-        prev.connected !== status.connected ||
-        prev.viewer?.email !== status.viewer?.email ||
-        getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(status) ||
-        (prev.workspaces?.length ?? 0) !== (status.workspaces?.length ?? 0)
-      ) {
-        set({ linearStatus: status, linearStatusChecked: true })
-      } else if (!get().linearStatusChecked) {
-        set({ linearStatusChecked: true })
-      }
-    } catch {
-      if (get().linearStatus.connected) {
-        set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
-      } else if (!get().linearStatusChecked) {
-        set({ linearStatusChecked: true })
-      }
+  checkLinearConnection: async (force = false) => {
+    if (inflightStatusRequest && !force) {
+      return inflightStatusRequest
     }
+
+    const requestGeneration = beginStatusOperation()
+    inflightStatusRequest = linearStatus(get().settings)
+      .then((status) => {
+        if (!isCurrentStatusOperation(requestGeneration)) {
+          return
+        }
+        const typedStatus = status as LinearConnectionStatus
+        const prev = get().linearStatus
+        if (
+          prev.connected !== typedStatus.connected ||
+          prev.viewer?.email !== typedStatus.viewer?.email ||
+          getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(typedStatus) ||
+          (prev.workspaces?.length ?? 0) !== (typedStatus.workspaces?.length ?? 0)
+        ) {
+          set({ linearStatus: typedStatus, linearStatusChecked: true })
+        } else if (!get().linearStatusChecked) {
+          set({ linearStatusChecked: true })
+        }
+      })
+      .catch(() => {
+        if (!isCurrentStatusOperation(requestGeneration)) {
+          return
+        }
+        if (get().linearStatus.connected) {
+          set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
+        } else if (!get().linearStatusChecked) {
+          set({ linearStatusChecked: true })
+        }
+      })
+      .finally(() => {
+        if (isCurrentStatusOperation(requestGeneration)) {
+          inflightStatusRequest = null
+        }
+      })
+
+    return inflightStatusRequest
   },
 
   testLinearConnection: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     try {
       const result = (await linearTestConnection(get().settings, workspaceId)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
       const status = await linearStatus(get().settings)
-      set({ linearStatus: status, linearStatusChecked: true })
+      if (isCurrentStatusOperation(requestGeneration)) {
+        set({ linearStatus: status, linearStatusChecked: true })
+      }
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Test failed'
@@ -128,16 +212,17 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   connectLinear: async (apiKey: string) => {
+    const requestGeneration = beginStatusOperation()
     try {
       const result = await linearConnect(get().settings, apiKey)
-      if (result.ok) {
+      if (result.ok && isCurrentStatusOperation(requestGeneration)) {
         set({
           linearStatus: {
             connected: true,
             viewer: result.viewer as LinearViewer
           }
         })
-        void get().checkLinearConnection()
+        void get().checkLinearConnection(true)
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
@@ -147,43 +232,61 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   selectLinearWorkspace: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     const status = await linearSelectWorkspace(get().settings, workspaceId)
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
+    inflightTeamRequests.clear()
     clearLinearMetadataCache()
     set({
       linearStatus: status,
       linearIssueCache: {},
       linearSearchCache: {},
+      linearTeamCache: {},
       linearStatusChecked: true
     })
   },
 
   disconnectLinear: async () => {
+    const requestGeneration = beginStatusOperation()
     await linearDisconnect(get().settings)
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
+    inflightTeamRequests.clear()
     clearLinearMetadataCache()
     set({
       linearStatus: { connected: false, viewer: null },
       linearIssueCache: {},
-      linearSearchCache: {}
+      linearSearchCache: {},
+      linearTeamCache: {}
     })
   },
 
   disconnectLinearWorkspace: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     await linearDisconnectWorkspace(get().settings, workspaceId)
+    const status = await linearStatus(get().settings)
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
+    inflightTeamRequests.clear()
     clearLinearMetadataCache()
-    const status = await linearStatus(get().settings)
     set({
       linearStatus: status,
       linearIssueCache: {},
       linearSearchCache: {},
+      linearTeamCache: {},
       linearStatusChecked: true
     })
   },
@@ -226,81 +329,171 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  searchLinearIssues: async (query: string, limit = 20) => {
+  getCachedLinearIssues: (args) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = `${workspaceId ?? 'default'}::${query}::${limit}`
+    const limit = args.limit ?? 20
+    const cacheKey =
+      args.kind === 'search'
+        ? linearSearchCacheKey(workspaceId, args.query, limit)
+        : linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    return get().linearSearchCache[cacheKey]?.data ?? null
+  },
+
+  prefetchLinearIssues: (args) => {
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const limit = args.limit ?? 20
+    const cacheKey =
+      args.kind === 'search'
+        ? linearSearchCacheKey(workspaceId, args.query, limit)
+        : linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    if (
+      isFresh(get().linearSearchCache[cacheKey]) ||
+      inflightSearchRequests.has(cacheKey) ||
+      inflightListRequests.has(cacheKey)
+    ) {
+      return
+    }
+    const promise =
+      args.kind === 'search'
+        ? get().searchLinearIssues(args.query, limit)
+        : get().listLinearIssues(args.filter, limit)
+    void promise.catch(() => {})
+  },
+
+  searchLinearIssues: async (query: string, limit = 20, options) => {
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = linearSearchCacheKey(workspaceId, query, limit)
     const cached = get().linearSearchCache[cacheKey]
-    if (isFresh(cached)) {
+    if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
     }
 
     const inflight = inflightSearchRequests.get(cacheKey)
-    if (inflight) {
-      return inflight
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
     }
 
+    let entry: InflightLinearListRequest
     const promise = linearSearchIssues(get().settings, query, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
-        set((s) => ({
-          linearSearchCache: evictStaleEntries({
-            ...s.linearSearchCache,
-            [cacheKey]: { data, fetchedAt: Date.now() }
-          })
-        }))
+        if (inflightSearchRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearSearchCache: evictStaleEntries({
+              ...s.linearSearchCache,
+              [cacheKey]: { data, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return data
       })
       .catch((error) => {
         console.warn('[linear] searchLinearIssues failed:', error)
         if (looksLikeAuthError(error)) {
           set({ linearStatus: { connected: false, viewer: null } })
+          return []
         }
-        return []
+        return get().linearSearchCache[cacheKey]?.data ?? []
       })
       .finally(() => {
-        inflightSearchRequests.delete(cacheKey)
+        if (inflightSearchRequests.get(cacheKey) === entry) {
+          inflightSearchRequests.delete(cacheKey)
+        }
       })
 
-    inflightSearchRequests.set(cacheKey, promise)
+    entry = { promise, force: Boolean(options?.force) }
+    inflightSearchRequests.set(cacheKey, entry)
     return promise
   },
 
-  listLinearIssues: async (filter = 'assigned', limit = 20) => {
+  listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = `${workspaceId ?? 'default'}::list::${filter}::${limit}`
+    const cacheKey = linearListCacheKey(workspaceId, filter, limit)
     const cached = get().linearSearchCache[cacheKey]
-    if (isFresh(cached)) {
+    if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
     }
 
     const inflight = inflightListRequests.get(cacheKey)
-    if (inflight) {
-      return inflight
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
     }
 
+    let entry: InflightLinearListRequest
     const promise = linearListIssues(get().settings, filter, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
-        set((s) => ({
-          linearSearchCache: evictStaleEntries({
-            ...s.linearSearchCache,
-            [cacheKey]: { data, fetchedAt: Date.now() }
-          })
-        }))
+        if (inflightListRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearSearchCache: evictStaleEntries({
+              ...s.linearSearchCache,
+              [cacheKey]: { data, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return data
       })
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
         if (looksLikeAuthError(error)) {
           set({ linearStatus: { connected: false, viewer: null } })
+          return []
         }
-        return []
+        return get().linearSearchCache[cacheKey]?.data ?? []
       })
       .finally(() => {
-        inflightListRequests.delete(cacheKey)
+        if (inflightListRequests.get(cacheKey) === entry) {
+          inflightListRequests.delete(cacheKey)
+        }
       })
 
-    inflightListRequests.set(cacheKey, promise)
+    entry = { promise, force: Boolean(options?.force) }
+    inflightListRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  getCachedLinearTeams: (workspaceId) => {
+    const key = linearTeamsCacheKey(workspaceId ?? getSelectedWorkspaceId(get().linearStatus))
+    return get().linearTeamCache[key]?.data ?? null
+  },
+
+  listLinearTeams: async (workspaceId, options) => {
+    const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = linearTeamsCacheKey(resolvedWorkspaceId)
+    const cached = get().linearTeamCache[cacheKey]
+    if (!options?.force && isFresh(cached, TEAM_CACHE_TTL)) {
+      return cached.data ?? []
+    }
+
+    const inflight = inflightTeamRequests.get(cacheKey)
+    if (inflight && !options?.force) {
+      return inflight
+    }
+
+    const promise = linearListTeams(get().settings, resolvedWorkspaceId)
+      .then((teams) => {
+        const data = teams as LinearTeam[]
+        set((s) => ({
+          linearTeamCache: evictStaleEntries({
+            ...s.linearTeamCache,
+            [cacheKey]: { data, fetchedAt: Date.now() }
+          })
+        }))
+        return data
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearTeams failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+          return []
+        }
+        return get().linearTeamCache[cacheKey]?.data ?? []
+      })
+      .finally(() => {
+        inflightTeamRequests.delete(cacheKey)
+      })
+
+    inflightTeamRequests.set(cacheKey, promise)
     return promise
   },
 
@@ -309,11 +502,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       let changed = false
 
       const nextIssueCache = { ...s.linearIssueCache }
-      const issueEntry = nextIssueCache[issueId]
-      if (issueEntry?.data) {
+      for (const [key, issueEntry] of Object.entries(nextIssueCache)) {
+        if (issueEntry?.data?.id !== issueId) {
+          continue
+        }
         // Why: set fetchedAt to 0 so the next fetchLinearIssue call
         // actually hits IPC instead of returning the stale optimistic data.
-        nextIssueCache[issueId] = {
+        nextIssueCache[key] = {
           ...issueEntry,
           data: { ...issueEntry.data, ...patch },
           fetchedAt: 0

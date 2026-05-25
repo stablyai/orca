@@ -16,5 +16,5 @@
 // server feature added at a specific runtime protocol version. This
 // triggers a hard-block screen for users paired to older servers.
 
-export const MOBILE_PROTOCOL_VERSION = 2
+export const MOBILE_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_DESKTOP_VERSION = 2

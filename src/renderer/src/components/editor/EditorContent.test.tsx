@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { EditorContent } from './EditorContent'
+import { EditorContent, getMarkdownSourceLineOffset } from './EditorContent'
 
 function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -17,6 +17,12 @@ function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 describe('EditorContent', () => {
+  it('maps rich-editor annotation lines after front matter to source lines', () => {
+    expect(getMarkdownSourceLineOffset('---\ntitle: x\n---\n')).toBe(3)
+    expect(getMarkdownSourceLineOffset('+++\ntitle = "x"\n+++\n')).toBe(3)
+    expect(getMarkdownSourceLineOffset('---\r\ntitle: x\r\n---\r\n')).toBe(3)
+  })
+
   it('surfaces file load errors before notebook content is parsed', () => {
     const activeFile = createOpenFile()
     const html = renderToStaticMarkup(
@@ -32,6 +38,7 @@ describe('EditorContent', () => {
         }}
         diffContents={{}}
         editBuffers={{}}
+        openFiles={[activeFile]}
         worktreeEntries={[]}
         resolvedLanguage="notebook"
         isMarkdown={false}
@@ -43,8 +50,10 @@ describe('EditorContent', () => {
         sideBySide={false}
         pendingEditorReveal={null}
         handleContentChange={vi.fn()}
+        handleContentChangeForFile={vi.fn()}
         handleDirtyStateHint={vi.fn()}
         handleSave={vi.fn()}
+        handleSaveForFile={vi.fn()}
         reloadFileContent={vi.fn()}
       />
     )

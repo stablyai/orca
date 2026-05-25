@@ -192,6 +192,7 @@ describe('registerPtyHandlers', () => {
     delete process.env.OPENCODE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     delete process.env.PI_CODING_AGENT_DIR
     delete process.env.ORCA_PI_SOURCE_AGENT_DIR
     delete process.env.ORCA_PI_CODING_AGENT_DIR
@@ -324,6 +325,14 @@ describe('registerPtyHandlers', () => {
         exitHandler?.({ exitCode })
       }
     }
+  }
+
+  function getPtyWriteListener(): (event: unknown, args: { id: string; data: string }) => void {
+    const writeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:write')
+    if (!writeCall) {
+      throw new Error('missing pty:write listener')
+    }
+    return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -571,6 +580,40 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
     })
 
+    it('strips stale inherited hook receiver env before injecting this runtime', async () => {
+      const env = await spawnAndGetEnv({
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENV: 'production',
+        ORCA_AGENT_HOOK_VERSION: 'stale-version',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+      })
+
+      expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+    })
+
+    it('does not leak inherited hook receiver env if the hook server is unavailable', async () => {
+      buildAgentHookEnvMock.mockReturnValueOnce({})
+
+      const env = await spawnAndGetEnv({
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENV: 'production',
+        ORCA_AGENT_HOOK_VERSION: 'stale-version',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+      })
+
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+    })
+
     it('prepends local git/gh attribution shims when attribution is enabled', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
         enableGitHubAttribution: true
@@ -763,6 +806,23 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
       })
 
+      it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+          })
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
       it('prepends attribution shims on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
           enableGitHubAttribution: true
@@ -797,7 +857,9 @@ describe('registerPtyHandlers', () => {
             PATH: '/system/bin'
           })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toBe(`${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`)
+          expect(env.PATH).toBe(
+            `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
+          )
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -1127,6 +1189,66 @@ describe('registerPtyHandlers', () => {
         ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
 
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
+      })
+
+      it('marks a scoped SSH session expired using the raw relay lease id', async () => {
+        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+        const sshSpawn = vi.fn(async () => {
+          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership(scopedPtyId, 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
+        } finally {
+          deletePtyOwnership(scopedPtyId)
+        }
+
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
+        expect(openCodeClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
+        expect(piClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
       })
 
       it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
@@ -1531,6 +1653,85 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
     expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
+      immediate: true,
+      keepHistory: false
+    })
+  })
+
+  it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const shutdownA = vi.fn(async () => undefined)
+    const shutdownB = vi.fn(async () => undefined)
+    registerSshPtyProvider('ssh-a', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: shutdownA,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [
+        { id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a', title: 'ssh-a' }
+      ]),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerSshPtyProvider('ssh-b', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: shutdownB,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [
+        { id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b', title: 'ssh-b' }
+      ]),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      id: string
+      cwd: string
+      title: string
+    }[]
+
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a' }),
+        expect.objectContaining({ id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b' })
+      ])
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-a@@pty-1' })
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-b@@pty-1' })
+
+    expect(shutdownA).toHaveBeenCalledWith('ssh:ssh-a@@pty-1', {
+      immediate: true,
+      keepHistory: false
+    })
+    expect(shutdownB).toHaveBeenCalledWith('ssh:ssh-b@@pty-1', {
       immediate: true,
       keepHistory: false
     })
@@ -2268,6 +2469,246 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('batches PTY output when it is not responding to recent input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('background output')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(7)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends small PTY redraws immediately after terminal input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b[20;2Hredraw')
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[20;2Hredraw'
+      })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores PTY input for unknown sessions', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: 'missing-pty',
+        data: 'a'
+      })
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches large PTY output even after recent terminal input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mainWindow.webContents.send.mockClear()
+
+      const largeOutput = 'x'.repeat(1025)
+      mockProc.emitData(largeOutput)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: largeOutput
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches combined pending output that exceeds the interactive size limit', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      const pendingOutput = 'x'.repeat(1020)
+      mockProc.emitData(pendingOutput)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mockProc.emitData('redraw')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${pendingOutput}redraw`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains large batched PTY output in bounded slices', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const firstSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const secondSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      const firstChunk = 'x'.repeat(16 * 1024)
+      const firstRemainder = 'tail'
+      secondProc.emitData('second-terminal-output')
+      firstProc.emitData(`${firstChunk}${firstRemainder}`)
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: secondSpawn.id,
+        data: 'second-terminal-output'
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstChunk
+      })
+
+      vi.advanceTimersByTime(1)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(3)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(3, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstRemainder
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches stale PTY output after the interactive window expires', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      vi.advanceTimersByTime(101)
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('stale redraw')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'stale redraw'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('falls back to a system shell when SHELL points to a missing binary', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -2350,6 +2791,26 @@ describe('registerPtyHandlers', () => {
         process.env.SHELL = originalShell
       }
     }
+  })
+
+  it('acknowledges pty writes only for owned PTYs', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+
+    expect(handlers.get('pty:writeAccepted')!(null, { id: result.id, data: '\x03' })).toBe(true)
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x03')
+    expect(
+      handlers.get('pty:writeAccepted')!(null, {
+        id: 'missing-pty-for-write-ack',
+        data: '\x03'
+      })
+    ).toBe(false)
+    expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
   })
 
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {

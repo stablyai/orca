@@ -2,6 +2,7 @@
 import {
   findCommandSpec,
   isCommandGroup,
+  normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
   validateCommandAndFlags
@@ -20,7 +21,7 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
-  const parsed = parseArgs(argv)
+  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv))
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)

@@ -14,6 +14,10 @@ const BEL = '\x07'
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
+function flushPtySideEffects(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('pty-transport — coalesced OSC titles from Pi', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
@@ -67,6 +71,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
     // agent_end fires stopAnimation -> trailing idle title after working frames
     const chunk = `${workingFrame('⠋')}some response text\r\n${workingFrame('⠙')}more response text\r\n${idleTitle()}`
     onData?.({ id: 'pty-pi', data: chunk })
+    await flushPtySideEffects()
 
     const seen = onTitleChange.mock.calls.map((c) => c[0])
     // Users expect the working state to register SOMEWHERE in the sequence,
@@ -93,6 +98,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
     const framesChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
     const chunk = framesChars.map(workingFrame).join('body\r\n')
     onData?.({ id: 'pty-pi', data: chunk })
+    await flushPtySideEffects()
 
     const seen = onTitleChange.mock.calls.map((c) => c[0])
     expect(seen).toContain('⠋ Pi')

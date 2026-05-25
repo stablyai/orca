@@ -195,6 +195,7 @@ export function mergeWorktree(
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
+    ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
     lastActivityAt: meta?.lastActivityAt ?? 0,
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),

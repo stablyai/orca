@@ -5,7 +5,9 @@
  * the oxlint max-lines (300) limit.
  */
 import * as path from 'path'
+import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
+import { parseWorktreeList } from './git-handler-utils'
 
 // ─── Worktree management ─────────────────────────────────────────────
 
@@ -14,6 +16,8 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
   const base = params.base as string | undefined
+  const checkoutExistingBranch = params.checkoutExistingBranch === true
+  const noCheckout = params.noCheckout === true
 
   // Why: a branchName starting with '-' would be interpreted as a git flag,
   // potentially changing the command's semantics (e.g. "--detach").
@@ -29,12 +33,33 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   // (state machine, common-dir scope, old-git fallback) in the comments
   // around src/main/git/worktree.ts addWorktree — those invariants apply
   // identically here.
-  const args = ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
-  if (base) {
-    args.push(base)
+  const effectiveBase =
+    base && !checkoutExistingBranch
+      ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
+          try {
+            await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
+            return true
+          } catch {
+            return false
+          }
+        })
+      : undefined
+
+  const args = checkoutExistingBranch
+    ? ['worktree', 'add', targetDir, branchName]
+    : ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
+  if (!checkoutExistingBranch && noCheckout) {
+    args.splice(3, 0, '--no-checkout')
+  }
+  if (effectiveBase) {
+    args.push(effectiveBase)
   }
 
   await git(args, repoPath)
+
+  if (checkoutExistingBranch) {
+    return
+  }
 
   // Why: best-effort write so a deliberate user value (any scope) is
   // preserved and a real read failure is not silently overwritten. Final
@@ -71,6 +96,7 @@ export async function removeWorktreeOp(
 ): Promise<void> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
+  const deleteBranch = params.deleteBranch !== false
 
   let repoPath = worktreePath
   try {
@@ -83,6 +109,12 @@ export async function removeWorktreeOp(
     // fall through with worktreePath as repo
   }
 
+  const worktreesBeforeRemoval = await listRelayWorktrees(git, repoPath)
+  const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
+    areRelayWorktreePathsEqual(worktree.path, worktreePath)
+  )
+  const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
+
   const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
@@ -90,6 +122,62 @@ export async function removeWorktreeOp(
   args.push(worktreePath)
   await git(args, repoPath)
   await git(['worktree', 'prune'], repoPath)
+
+  if (!branchName) {
+    return
+  }
+  if (!deleteBranch) {
+    return
+  }
+
+  // Why: SSH worktree deletion should mirror local deletion. Dropping the
+  // branch also removes its upstream config, which lets fork-remotes cleanup
+  // after the last PR review worktree is gone.
+  const worktreesAfterPrune = await listRelayWorktrees(git, repoPath)
+  const branchStillInUse = worktreesAfterPrune.some(
+    (worktree) => normalizeLocalBranchRef(worktree.branch ?? '') === branchName
+  )
+  if (branchStillInUse) {
+    return
+  }
+
+  try {
+    await git(['branch', '-D', branchName], repoPath)
+  } catch (error) {
+    console.warn(
+      `relay removeWorktree: failed to delete local branch "${branchName}" after removing worktree`,
+      error
+    )
+  }
+}
+
+type RelayWorktreeInfo = {
+  path: string
+  branch?: string
+}
+
+async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
+  try {
+    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+    return parseWorktreeList(stdout)
+      .map((worktree) => ({
+        path: typeof worktree.path === 'string' ? worktree.path : '',
+        branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
+      }))
+      .filter((worktree) => worktree.path.length > 0)
+  } catch {
+    return []
+  }
+}
+
+function normalizeLocalBranchRef(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '')
+}
+
+function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
+  const left = path.normalize(path.resolve(leftPath))
+  const right = path.normalize(path.resolve(rightPath))
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 // ─── Commit ──────────────────────────────────────────────────────────

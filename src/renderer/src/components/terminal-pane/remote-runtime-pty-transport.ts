@@ -1,6 +1,10 @@
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalCreate,
+  RuntimeTerminalSend
+} from '../../../../shared/runtime-types'
 import type { PtyConnectResult, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
@@ -20,9 +24,21 @@ import {
 } from './remote-runtime-pty-batching'
 import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
+const HOST_SESSION_ATTACH_POLL_MS = 150
+const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
+
+function isRemoteTerminalGoneMessage(message: string): boolean {
+  return (
+    message.includes('terminal_handle_stale') ||
+    message.includes('terminal_exited') ||
+    message.includes('terminal_gone') ||
+    message.includes('no_connected_pty')
+  )
+}
 
 export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
@@ -34,6 +50,7 @@ export function createRemoteRuntimePtyTransport(
     worktreeId,
     tabId,
     leafId,
+    activate,
     onPtyExit,
     onPtySpawn,
     onTitleChange,
@@ -47,6 +64,9 @@ export function createRemoteRuntimePtyTransport(
   let destroyed = false
   let handle: string | null = null
   let remotePtyId: string | null = null
+  // Why: web session mirrors attach to host-owned handles; only terminals this
+  // transport created should be closed by this transport's teardown path.
+  let ownsRemoteTerminal = false
   let currentRuntimeEnvironmentId = runtimeEnvironmentId
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
@@ -61,6 +81,109 @@ export function createRemoteRuntimePtyTransport(
     onAgentExited,
     onAgentStatus
   })
+
+  function findReadyHostSessionHandle(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string
+  ): string | null {
+    const terminalTabs = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+    const preferred =
+      terminalTabs.find(
+        (tab) =>
+          tab.status === 'ready' &&
+          tab.parentTabId === hostTabId &&
+          (!leafId || tab.leafId === leafId)
+      ) ??
+      terminalTabs.find(
+        (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.isActive
+      ) ??
+      terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
+    return preferred?.terminal ?? null
+  }
+
+  function hasHostSessionTerminalSurface(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string
+  ): boolean {
+    return snapshot.tabs.some(
+      (tab) => tab.type === 'terminal' && (tab.parentTabId === hostTabId || tab.id === hostTabId)
+    )
+  }
+
+  async function waitForHostSessionHandle(hostTabId: string): Promise<string | null> {
+    if (!worktreeId) {
+      return null
+    }
+    const worktree = `id:${worktreeId}`
+    const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
+      worktree,
+      tabId: hostTabId
+    })
+    const immediate = findReadyHostSessionHandle(activated, hostTabId)
+    if (immediate) {
+      return immediate
+    }
+
+    const startedAt = Date.now()
+    while (!destroyed) {
+      const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (remainingMs <= 0) {
+        return null
+      }
+      // Why: host mirrors can be published before their PTY handle is ready,
+      // but a stuck pending surface must not poll the runtime forever.
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(HOST_SESSION_ATTACH_POLL_MS, remainingMs))
+      )
+      const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      const handle = findReadyHostSessionHandle(listed, hostTabId)
+      if (handle) {
+        return handle
+      }
+      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+        return null
+      }
+    }
+    return null
+  }
+
+  async function attachHostSessionMirror(
+    options: Parameters<PtyTransport['connect']>[0]
+  ): Promise<PtyConnectResult | undefined> {
+    if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
+      return undefined
+    }
+    const hostTabId = toHostSessionTabId(tabId)
+    const hostHandle = await waitForHostSessionHandle(hostTabId)
+    if (!hostHandle || destroyed) {
+      if (!destroyed) {
+        storedCallbacks.onError?.('Remote terminal was closed.')
+      }
+      return undefined
+    }
+
+    handle = hostHandle
+    ownsRemoteTerminal = false
+    remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
+    connected = true
+    desiredViewport = {
+      cols: options.cols ?? 80,
+      rows: options.rows ?? 24
+    }
+    onPtySpawn?.(remotePtyId)
+
+    await subscribeToHandle()
+    if (destroyed || !connected || !remotePtyId) {
+      return undefined
+    }
+
+    return {
+      id: remotePtyId,
+      replay: ''
+    } satisfies PtyConnectResult
+  }
 
   async function callRuntime<TResult>(method: string, params?: unknown): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
@@ -84,6 +207,28 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
+  async function sendInputAcceptedToRuntime(data: string): Promise<boolean> {
+    const targetHandle = handle
+    if (!connected || !targetHandle) {
+      return false
+    }
+    if (!data) {
+      return true
+    }
+    const text = `${inputBatcher.takePending()}${data}`
+    try {
+      const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+        terminal: targetHandle,
+        text,
+        client: { id: clientId, type: 'desktop' }
+      })
+      return result.send.accepted === true
+    } catch (error) {
+      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      return false
+    }
+  }
+
   const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
     const targetHandle = handle
     if (!connected || !targetHandle) {
@@ -96,6 +241,8 @@ export function createRemoteRuntimePtyTransport(
       terminal: targetHandle,
       text,
       client: { id: clientId, type: 'desktop' }
+    }).catch((error) => {
+      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
     })
   })
 
@@ -121,6 +268,30 @@ export function createRemoteRuntimePtyTransport(
 
   function rememberViewport(cols: number, rows: number): void {
     desiredViewport = { cols, rows }
+  }
+
+  function retireRemoteTerminalId(): void {
+    connected = false
+    const stalePtyId = remotePtyId
+    handle = null
+    remotePtyId = null
+    multiplexedStream?.close()
+    multiplexedStream = null
+    if (stalePtyId) {
+      onPtyExit?.(stalePtyId)
+    }
+  }
+
+  function handleRemoteTerminalError(error: unknown): void {
+    const message = runtimeTerminalErrorMessage(error)
+    if (isRemoteTerminalGoneMessage(message)) {
+      // Why: paired web clients consume host-published PTY handles. If the host
+      // retires one between snapshots, clear this mirror and wait for the next
+      // session-tabs update instead of surfacing a red xterm error.
+      retireRemoteTerminalId()
+      return
+    }
+    storedCallbacks.onError?.(message)
   }
 
   async function subscribeToHandle(): Promise<void> {
@@ -157,7 +328,7 @@ export function createRemoteRuntimePtyTransport(
             onPtyExit?.(remotePtyId)
           }
         },
-        onError: (message) => storedCallbacks.onError?.(message),
+        onError: (message) => handleRemoteTerminalError(message),
         onFitOverrideChanged: (event) => {
           if (remotePtyId) {
             setFitOverride(remotePtyId, event.mode, event.cols, event.rows)
@@ -175,7 +346,7 @@ export function createRemoteRuntimePtyTransport(
           }
           resubscribing = true
           void subscribeToHandle()
-            .catch((error) => storedCallbacks.onError?.(runtimeTerminalErrorMessage(error)))
+            .catch((error) => handleRemoteTerminalError(error))
             .finally(() => {
               resubscribing = false
             })
@@ -197,15 +368,21 @@ export function createRemoteRuntimePtyTransport(
       }
 
       try {
+        if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+          return await attachHostSessionMirror(options)
+        }
+
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: worktreeId,
           command,
           env,
           tabId,
           leafId,
-          focus: false
+          focus: false,
+          ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle
+        ownsRemoteTerminal = true
         if (destroyed) {
           await closeRemoteTerminal(created.terminal.handle)
           return
@@ -246,14 +423,14 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       remotePtyId = options.existingPtyId
+      ownsRemoteTerminal = false
       connected = true
       desiredViewport = {
         cols: options.cols ?? 80,
         rows: options.rows ?? 24
       }
       void subscribeToHandle().catch((error) => {
-        connected = false
-        storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+        handleRemoteTerminalError(error)
       })
     },
 
@@ -268,9 +445,12 @@ export function createRemoteRuntimePtyTransport(
       const id = remotePtyId
       multiplexedStream?.close()
       multiplexedStream = null
-      void closeRemoteTerminal()
+      if (ownsRemoteTerminal) {
+        void closeRemoteTerminal()
+      }
       handle = null
       remotePtyId = null
+      ownsRemoteTerminal = false
       storedCallbacks.onDisconnect?.()
       if (id) {
         onPtyExit?.(id)
@@ -284,6 +464,7 @@ export function createRemoteRuntimePtyTransport(
       connected = false
       multiplexedStream?.close()
       multiplexedStream = null
+      ownsRemoteTerminal = false
       storedCallbacks = {}
     },
 
@@ -291,11 +472,16 @@ export function createRemoteRuntimePtyTransport(
       if (!connected || !handle) {
         return false
       }
-      // Why: remote terminal input currently crosses the runtime RPC boundary;
-      // coalescing same-frame key bursts avoids a per-keystroke remote round-trip.
+      if (!data) {
+        return true
+      }
+      // Why: callers use \r or terminal.send's enter flag for semantic Enter;
+      // literal LF bytes from paste/programmatic input must survive the stream.
       inputBatcher.push(data)
       return true
     },
+
+    sendInputAccepted: sendInputAcceptedToRuntime,
 
     resize(cols: number, rows: number): boolean {
       if (!connected || !handle) {

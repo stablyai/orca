@@ -27,7 +27,7 @@ export const PTY_FLOW_HIGH_WATERMARK = 100_000
 export const PTY_FLOW_LOW_WATERMARK = 5_000
 
 /** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000 // 5 minutes
+export const DEFAULT_GRACE_TIME_MS = 3 * 60 * 60 * 1000 // 3 hours
 
 // ── Relay error codes ───────────────────────────────────────────────
 

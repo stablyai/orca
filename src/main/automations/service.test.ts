@@ -89,6 +89,41 @@ describe('AutomationService', () => {
     )
   })
 
+  it('returns the persisted status for manual runs after dispatch is requested', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Manual check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('dispatching')
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
+    expect(send).toHaveBeenCalledWith(
+      'automations:dispatchRequested',
+      expect.objectContaining({
+        run: expect.objectContaining({ id: run.id, status: 'dispatching' })
+      })
+    )
+  })
+
   it('attaches provider usage when a completed run can be attributed', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()

@@ -87,6 +87,73 @@ vi.mock('./ssh', () => ({
 
 import { registerRepoHandlers } from './repos'
 
+describe('repos:getGitUsername', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockStore.getRepo.mockReset()
+    mockGitProvider.exec.mockReset()
+    mockWindow.webContents.send.mockReset()
+
+    registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('uses explicit SSH username config instead of remote author identity', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'git',
+      connectionId: 'conn-1'
+    })
+    mockGitProvider.exec.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get') {
+        const valueByKey: Record<string, string> = {
+          'user.username': 'remote-login',
+          'user.email': 'remote-user@example.com',
+          'user.name': 'Remote User'
+        }
+        const value = valueByKey[args[2]]
+        if (value) {
+          return { stdout: `${value}\n`, stderr: '' }
+        }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const username = await handlers.get('repos:getGitUsername')!(null, { repoId: 'repo-ssh' })
+
+    expect(username).toBe('remote-login')
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(
+      ['config', '--get', 'github.user'],
+      '/remote/repo'
+    )
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(
+      ['config', '--get', 'user.username'],
+      '/remote/repo'
+    )
+    expect(mockGitProvider.exec).not.toHaveBeenCalledWith(
+      ['config', '--get', 'user.email'],
+      '/remote/repo'
+    )
+    expect(mockGitProvider.exec).not.toHaveBeenCalledWith(
+      ['config', '--get', 'user.name'],
+      '/remote/repo'
+    )
+  })
+})
+
 describe('repos:addRemote', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockWindow = {
@@ -134,11 +201,14 @@ describe('repos:addRemote', () => {
         connectionId: 'conn-1',
         kind: 'git',
         displayName: 'project',
-        badgeColor: DEFAULT_REPO_BADGE_COLOR
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
       })
     )
     expect(result).toHaveProperty('repo.id')
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
   })
 
   it('uses custom displayName when provided', async () => {
@@ -349,13 +419,28 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
 
+  it('defaults new git repos:add records to hiding non-Orca worktrees', async () => {
+    const result = await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        kind: 'git',
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
+      })
+    )
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+  })
+
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
     const existing = {
       id: 'repo-add-existing',
       path: '/tmp/from-add-existing',
       displayName: 'from-add-existing',
       kind: 'folder',
-      badgeColor: '#22c55e'
+      badgeColor: '#22c55e',
+      externalWorktreeVisibility: 'show'
     }
     mockStore.getRepos.mockReturnValue([existing])
 
@@ -366,6 +451,7 @@ describe('repos:add + repos:clone', () => {
 
     expect(result).toEqual({ repo: existing })
     expect(result).toHaveProperty('repo.badgeColor', '#22c55e')
+    expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'show')
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -379,10 +465,13 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({
         path: '/tmp/orca',
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        kind: 'git'
+        kind: 'git',
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
       })
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
+    expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {

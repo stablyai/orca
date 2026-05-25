@@ -71,7 +71,23 @@ describe('linear RPC methods', () => {
       makeRequest('linear.updateIssue', {
         id: 'issue-3',
         workspaceId: 'workspace-1',
-        updates: { stateId: 'state-1', assigneeId: null, priority: 2, labelIds: ['label-1'] }
+        updates: {
+          stateId: 'state-1',
+          assigneeId: null,
+          estimate: 5,
+          priority: 2,
+          labelIds: ['label-1'],
+          projectId: 'project-1'
+        }
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.createIssue', {
+        parentIssueId: 'issue-3',
+        teamId: 'team-1',
+        title: 'Child task',
+        workspaceId: 'workspace-1',
+        projectId: 'project-1'
       })
     )
     await dispatcher.dispatch(
@@ -92,15 +108,27 @@ describe('linear RPC methods', () => {
       'team-1',
       'Fix bug',
       'Details',
-      'workspace-1'
+      'workspace-1',
+      undefined,
+      undefined
+    )
+    expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
+      'team-1',
+      'Child task',
+      undefined,
+      'workspace-1',
+      'issue-3',
+      'project-1'
     )
     expect(runtime.linearUpdateIssue).toHaveBeenCalledWith(
       'issue-3',
       {
         stateId: 'state-1',
         assigneeId: null,
+        estimate: 5,
         priority: 2,
-        labelIds: ['label-1']
+        labelIds: ['label-1'],
+        projectId: 'project-1'
       },
       'workspace-1'
     )
@@ -116,6 +144,7 @@ describe('linear RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       linearListTeams: vi.fn().mockResolvedValue([{ id: 'team-1' }]),
+      linearListProjects: vi.fn().mockResolvedValue([{ id: 'project-1' }]),
       linearTeamStates: vi.fn().mockResolvedValue([{ id: 'state-1' }]),
       linearTeamLabels: vi.fn().mockResolvedValue([{ id: 'label-1' }]),
       linearTeamMembers: vi.fn().mockResolvedValue([{ id: 'member-1' }])
@@ -123,6 +152,7 @@ describe('linear RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))
+    await dispatcher.dispatch(makeRequest('linear.listProjects', { query: 'roadmap', limit: 5 }))
     await dispatcher.dispatch(
       makeRequest('linear.teamStates', { teamId: 'team-1', workspaceId: 'workspace-1' })
     )
@@ -134,6 +164,7 @@ describe('linear RPC methods', () => {
     )
 
     expect(runtime.linearListTeams).toHaveBeenCalledWith('all')
+    expect(runtime.linearListProjects).toHaveBeenCalledWith('roadmap', 5, undefined)
     expect(runtime.linearTeamStates).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(runtime.linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(runtime.linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')

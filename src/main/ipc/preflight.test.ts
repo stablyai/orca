@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: preflight tests share expensive process/preload mocks across
    install, auth, agent detection, and refresh branches. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   handleMock,
@@ -65,6 +65,7 @@ import {
 type HandlerMap = Record<string, (_event?: unknown, args?: { force?: boolean }) => Promise<unknown>>
 
 describe('preflight', () => {
+  const originalPlatform = process.platform
   const handlers: HandlerMap = {}
   const defaultBitbucketStatus = { configured: false, authenticated: false, account: null }
   const defaultAzureDevOpsStatus = {
@@ -94,6 +95,10 @@ describe('preflight', () => {
     getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
     getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
     _resetPreflightCache()
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -101,6 +106,13 @@ describe('preflight', () => {
 
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform
     })
   })
 
@@ -185,6 +197,49 @@ describe('preflight', () => {
     const status = await runPreflightCheck()
 
     expect(status.glab).toEqual({ installed: true, authenticated: false })
+  })
+
+  it('prefers the selected WSL distro when checking gh for a WSL workspace', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'git') {
+        return { stdout: 'git version 2.0.0\n' }
+      }
+      if (command === 'gh') {
+        throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
+      }
+      if (command === 'glab') {
+        throw Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' })
+      }
+      if (command === 'wsl.exe') {
+        const script = String(args[5])
+        if (script === "'gh' --version") {
+          return { stdout: 'gh version 2.0.0\n' }
+        }
+        if (script === "'gh' auth status") {
+          return { stdout: 'github.com\n  - Active account: true\n' }
+        }
+        throw new Error(`unexpected WSL script ${script}`)
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    const status = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+
+    expect(status.gh).toEqual({ installed: true, authenticated: true })
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' --version"],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' auth status"],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
   })
 
   it('re-runs the probe when forced so updated gh auth state is visible without relaunch', async () => {
@@ -302,6 +357,28 @@ describe('preflight', () => {
     registerPreflightHandlers()
 
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['cursor'])
+  })
+
+  it('detects agents from the selected WSL distro for a WSL workspace', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'where') {
+        throw new Error('not found')
+      }
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      if (script === "command -v 'claude'") {
+        return { stdout: '/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

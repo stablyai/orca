@@ -154,6 +154,8 @@ export function colorToCss(
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
 }
 
+export { isTerminalBackgroundLight } from './terminal-title-contrast'
+
 const PALETTE_KEYS = [
   'black',
   'red',

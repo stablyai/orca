@@ -41,7 +41,6 @@ function removeDeletedWorktreesFromAnalysis(
       reclaimableBytes: repoRows.reduce((sum, row) => sum + row.reclaimableBytes, 0)
     }
   })
-
   return {
     ...analysis,
     totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),

@@ -59,6 +59,110 @@
   color: var(--foreground);
 }
 
+.orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  z-index: 1001;
+}
+
+.rich-markdown-annotation-selection {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--annotation-highlight) 22%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
+  padding-right: min(360px, 34%);
+}
+
+.rich-markdown-review-rail-actions {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rich-markdown-review-rail-toggle,
+.rich-markdown-review-rail-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.rich-markdown-review-rail-toggle {
+  gap: 5px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rich-markdown-review-rail-send {
+  width: 26px;
+  padding: 0;
+}
+
+.rich-markdown-review-rail-toggle:hover,
+.rich-markdown-review-rail-toggle[aria-expanded='true'],
+.rich-markdown-review-rail-send:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-review-rail-send:disabled,
+.rich-markdown-review-note-send:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.rich-markdown-review-note-layer {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  bottom: 0;
+  width: min(300px, 30%);
+  pointer-events: none;
+  z-index: 30;
+}
+
+.rich-markdown-review-note-card {
+  position: absolute;
+  right: 0;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.rich-markdown-review-note-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.rich-markdown-review-note-send:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
 .rich-markdown-search {
   /* Why: overlay the editor like Monaco's find widget instead of occupying
      layout space — otherwise opening cmd+f shifts the document content down. */
@@ -585,12 +689,43 @@
   width: min(300px, calc(100% - 24px));
   max-height: min(440px, calc(100vh - 120px));
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
   border-radius: 6px;
   background: var(--popover);
   color: var(--popover-foreground);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.rich-markdown-slash-search {
+  display: flex;
+  min-height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  padding: 0 10px;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-slash-search input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--popover-foreground);
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+}
+
+.rich-markdown-slash-search input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-slash-results {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .rich-markdown-slash-section {
@@ -617,6 +752,13 @@
 .rich-markdown-slash-item:hover,
 .rich-markdown-slash-item.is-active {
   background: var(--accent);
+}
+
+.rich-markdown-slash-empty {
+  padding: 18px 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
 }
 
 .rich-markdown-slash-icon {

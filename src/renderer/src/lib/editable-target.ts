@@ -8,8 +8,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 
   // xterm.js focuses a hidden <textarea class="xterm-helper-textarea"> for
   // keyboard input.  That element IS an editable target, but we must NOT
-  // suppress global shortcuts when the terminal itself is focused — otherwise
-  // Cmd/Ctrl+P and other app-level keybindings become unreachable.
+  // suppress global shortcuts when the terminal itself is focused.
   if (target.classList.contains('xterm-helper-textarea')) {
     return false
   }

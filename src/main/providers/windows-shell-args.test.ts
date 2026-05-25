@@ -119,6 +119,26 @@ describe('resolveWindowsShellLaunchArgs', () => {
     }
   })
 
+  it('keeps POSIX cwd inside the worktree distro when WSL context is provided', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/home/alice/repo/subdir',
+      'C:\\Users\\alice',
+      { distro: 'Ubuntu' }
+    )
+
+    expect(result.shellArgs).toEqual([
+      '-d',
+      'Ubuntu',
+      '--',
+      'bash',
+      '-c',
+      "cd '/home/alice/repo/subdir' && exec bash -l"
+    ])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')
+  })
+
   it('falls back to empty args + same cwd for unknown shells', () => {
     const result = resolveWindowsShellLaunchArgs(
       'C:\\tools\\fish.exe',

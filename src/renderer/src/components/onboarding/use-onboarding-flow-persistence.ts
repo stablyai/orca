@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
-import type { NotificationDraft } from './NotificationStep'
 import {
   hasSelectedOnboardingFeatureSetup,
   onboardingFeatureSetupRunTelemetry,
@@ -116,7 +115,6 @@ type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
   theme: GlobalSettings['theme']
-  notifications: NotificationDraft
   featureSetupSelection: OnboardingFeatureSetupSelection
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -134,7 +132,6 @@ export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
   theme,
-  notifications,
   featureSetupSelection,
   settings,
   updateSettings,
@@ -171,22 +168,18 @@ export function usePersistCurrentStep({
         return { ok: true }
       }
       if (currentStepId === 'notifications') {
-        const enabled = notifications.agentTaskComplete || notifications.terminalBell
-        if (enabled) {
-          // Why: triggers macOS first-prompt notification on first call. Only fire
-          // on Continue; Skip uses the persistence-only path below.
-          await window.api.notifications.requestPermission()
-        }
         await updateSettings({
           notifications: {
             ...settings.notifications,
-            enabled,
-            agentTaskComplete: notifications.agentTaskComplete,
-            terminalBell: notifications.terminalBell,
-            // Why: invert positive UX framing back to persisted negative field.
-            suppressWhenFocused: !notifications.notifyWhenFocused
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true
           }
         })
+        onOnboardingChange(await persistStep(3))
+        return { ok: true }
+      }
+      if (currentStepId === 'agentSetup') {
         const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
         const featureSetupResult: OnboardingFeatureSetupResult = setupResult
         track('onboarding_feature_setup_run', {
@@ -208,8 +201,20 @@ export function usePersistCurrentStep({
             toast.message('Opened Computer Use permissions')
           }
         }
-        onOnboardingChange(await persistStep(3))
+        onOnboardingChange(await persistStep(4))
         return { ok: true, featureSetupResult }
+      }
+      if (currentStepId === 'integrations') {
+        // Why: GitHub and Linear connections persist through their own
+        // store slices when the user actually wires them up. The step itself
+        // is a no-op for settings/onboarding state beyond marking it
+        // completed.
+        onOnboardingChange(await persistStep(5))
+        return { ok: true }
+      }
+      if (currentStepId === 'tour') {
+        onOnboardingChange(await persistStep(6))
+        return { ok: true }
       }
       return { ok: false }
     } catch (err) {
@@ -219,7 +224,6 @@ export function usePersistCurrentStep({
   }, [
     currentStepId,
     featureSetupSelection,
-    notifications,
     onboardingChecklist,
     onOnboardingChange,
     selectedAgent,

@@ -27,6 +27,7 @@ export const AGENT_NAMES = [
   'copilot',
   'cursor',
   'gemini',
+  'antigravity',
   'opencode',
   'openclaw',
   'aider',
@@ -41,6 +42,7 @@ const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // substring list because cwd/path titles like `~/hermes/working` would
 // otherwise count as agent activity.
 const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
+const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
@@ -111,6 +113,9 @@ const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
  * normalizeTerminalChunk pass.
  */
 export function extractLastOscTitle(data: string): string | null {
+  if (!data.includes('\x1b]')) {
+    return null
+  }
   let last: string | null = null
   for (const m of data.matchAll(OSC_TITLE_RE)) {
     last = m[2]
@@ -129,6 +134,9 @@ export function extractLastOscTitle(data: string): string | null {
  * spinner-miss follow-up.
  */
 export function extractAllOscTitles(data: string): string[] {
+  if (!data.includes('\x1b]')) {
+    return []
+  }
   const titles: string[] = []
   for (const m of data.matchAll(OSC_TITLE_RE)) {
     titles.push(m[2])
@@ -174,6 +182,7 @@ function containsLegacyAgentName(title: string): boolean {
 function containsAgentName(title: string): boolean {
   return (
     containsLegacyAgentName(title) ||
+    AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
   )
@@ -367,6 +376,9 @@ export function getAgentLabel(title: string): string | null {
   if (lower.includes('grok')) {
     return 'Grok'
   }
+  if (lower.includes('antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+    return 'Antigravity'
+  }
   if (lower.includes('opencode')) {
     return 'OpenCode'
   }
@@ -446,8 +458,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
+  const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName) {
+  if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
     }

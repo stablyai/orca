@@ -4,8 +4,8 @@ import { FitAddon } from '@xterm/addon-fit'
 // Upstream packaging bug: @xterm/addon-ligatures declares `"main":
 // "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
 // resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
-// the patch once that lands.
+// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
+// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -24,6 +24,7 @@ import {
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -41,7 +42,7 @@ export function createPaneDOM(
   options: PaneManagerOptions,
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number) => void,
+  onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
   onMouseEnter: (id: number, event: MouseEvent) => void
 ): ManagedPaneInternal {
   // Create .pane container
@@ -134,8 +135,10 @@ export function createPaneDOM(
   // the terminal. We must call focus: true here because after DOM reparenting
   // (e.g. splitPane moves the original pane into a flex container), xterm.js's
   // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', () => {
-    onPointerDown(id)
+  container.addEventListener('pointerdown', (event) => {
+    onPointerDown(id, {
+      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    })
   })
 
   // Focus-follows-mouse handler: when the setting is enabled, hovering a

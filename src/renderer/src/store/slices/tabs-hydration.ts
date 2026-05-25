@@ -4,6 +4,7 @@ import type {
   TabGroupLayoutNode,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   dedupeTabOrder,
@@ -65,6 +66,11 @@ function hydrateUnifiedFormat(
         entityId: tab.entityId ?? tab.id
       }))
       .filter((tab) => {
+        if (tab.contentType === 'terminal') {
+          // Why: old web-client sessions could persist host surface ids
+          // containing "::"; those are invalid pane-key tab ids.
+          return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
+        }
         if (!isTransientEditorContentType(tab.contentType)) {
           return true
         }
@@ -157,7 +163,9 @@ function hydrateLegacyFormat(
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
 
   for (const worktreeId of validWorktreeIds) {
-    const terminalTabs = session.tabsByWorktree[worktreeId] ?? []
+    const terminalTabs = (session.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
+      isValidTerminalTabId(tab.id)
+    )
     const editorFiles = session.openFilesByWorktree?.[worktreeId] ?? []
 
     if (terminalTabs.length === 0 && editorFiles.length === 0) {

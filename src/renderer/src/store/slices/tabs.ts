@@ -28,6 +28,7 @@ import {
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -904,10 +905,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupId,
         remainingGroups[0]?.id ?? null
       )
+      // Why: drop the dead group's recent-quick-command entry so the in-memory
+      // map can't grow unbounded as users open/close groups.
+      const { [groupId]: _droppedRecent, ...remainingRecent } = current.recentQuickCommandIdByGroup
       return {
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
         layoutByWorktree: collapsedState.layoutByWorktree,
         activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
+        recentQuickCommandIdByGroup: remainingRecent,
         ...(current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
@@ -1485,6 +1490,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .flat()
         .map((w) => w.id)
     )
+    validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

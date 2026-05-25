@@ -91,12 +91,18 @@ export function useWorkspaceKanbanSelection(open: boolean, boardWorktrees: reado
     [boardWorktreeIds, selectedWorktreeIds, selectionAnchorId]
   )
 
+  const clearSelection = useCallback(() => {
+    setSelectedWorktreeIds((previous) => (previous.size === 0 ? previous : new Set()))
+    setSelectionAnchorId((previous) => (previous === null ? previous : null))
+  }, [])
+
   return {
     selectedWorktreeIds,
     selectedWorktrees,
     selectionAnchorId,
     updateSelectionForGesture,
     updateSelectionForArea,
+    clearSelection,
     selectForContextMenu
   }
 }

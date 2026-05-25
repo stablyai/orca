@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAutomationRunOutputSnapshotBuffer } from './automation-run-output-snapshot'
+import {
+  createAutomationRunOutputSnapshotBuffer,
+  createAutomationRunOutputSnapshotFromText,
+  selectAutomationRunOutputSnapshot
+} from './automation-run-output-snapshot'
 
 describe('automation run output snapshot buffer', () => {
   beforeEach(() => {
@@ -66,6 +70,28 @@ describe('automation run output snapshot buffer', () => {
 
     expect(buffer.snapshot()).toMatchObject({
       content: 'LoadingDone'
+    })
+  })
+
+  it('creates a saved snapshot from agent transcript text', () => {
+    expect(createAutomationRunOutputSnapshotFromText('\nFinal summary.\n')).toEqual({
+      format: 'plain_text',
+      content: 'Final summary.',
+      capturedAt: new Date('2026-05-16T12:00:00Z').getTime(),
+      truncated: false
+    })
+  })
+
+  it('prefers agent transcript text over raw terminal redraw output', () => {
+    const rawTerminalSnapshot = createAutomationRunOutputSnapshotFromText(
+      'q;\u2834 orca q\u2022Working q q'
+    )
+
+    expect(selectAutomationRunOutputSnapshot('Posted to #releases.', rawTerminalSnapshot)).toEqual({
+      format: 'plain_text',
+      content: 'Posted to #releases.',
+      capturedAt: new Date('2026-05-16T12:00:00Z').getTime(),
+      truncated: false
     })
   })
 })

@@ -47,7 +47,7 @@ describe('createSetupRunnerScript', () => {
       const { createSetupRunnerScript } = await import('./hooks')
       const result = createSetupRunnerScript(
         makeRepo(),
-        'C:\\repo\\feature',
+        'C:\\repo\\feature\\',
         'pnpm install\npnpm build'
       )
 
@@ -55,7 +55,8 @@ describe('createSetupRunnerScript', () => {
         runnerScriptPath: 'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/test/repo',
-          ORCA_WORKTREE_PATH: 'C:\\repo\\feature'
+          ORCA_WORKTREE_PATH: 'C:\\repo\\feature\\',
+          ORCA_WORKSPACE_NAME: 'feature'
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
@@ -70,6 +71,33 @@ describe('createSetupRunnerScript', () => {
           ''
         ].join('\r\n'),
         'utf-8'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('/test/repo/.git/worktrees/feature/orca/setup-runner.sh')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
+
+      expect(result.envVars).toEqual(
+        expect.objectContaining({
+          ORCA_WORKTREE_PATH: '/test/repo-feature',
+          ORCA_WORKSPACE_NAME: 'repo-feature'
+        })
       )
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -106,6 +134,7 @@ describe('createSetupRunnerScript', () => {
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
           ORCA_WORKTREE_PATH: '/home/jin/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
           CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
           GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
         })
@@ -151,6 +180,7 @@ describe('createSetupRunnerScript', () => {
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/test/repo',
           ORCA_WORKTREE_PATH: '/home/jin/repo/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
           CONDUCTOR_ROOT_PATH: '/test/repo',
           GHOSTX_ROOT_PATH: '/test/repo'
         })

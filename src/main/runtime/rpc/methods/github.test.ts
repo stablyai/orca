@@ -54,6 +54,21 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { items: [] } })
   })
 
+  it('lists issues on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listRepoIssues: vi.fn().mockResolvedValue([{ number: 7, title: 'Bug' }])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.listIssues', { repo: 'repo-1', limit: 10 })
+    )
+
+    expect(runtime.listRepoIssues).toHaveBeenCalledWith('repo-1', 10)
+    expect(response).toMatchObject({ ok: true, result: [{ number: 7, title: 'Bug' }] })
+  })
+
   it('looks up a single work item on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -156,13 +171,47 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         prNumber: 7,
         headSha: 'abc123',
+        prRepo: { owner: 'acme', repo: 'widgets' },
         noCache: true
       })
     )
 
-    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith('repo-1', 7, 'abc123', {
-      noCache: true
-    })
+    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      'abc123',
+      { owner: 'acme', repo: 'widgets' },
+      {
+        noCache: true
+      }
+    )
+    expect(response).toMatchObject({ ok: true, result: [] })
+  })
+
+  it('fetches PR comments on the runtime server with explicit PR repo', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRepoPRComments: vi.fn().mockResolvedValue([])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.prComments', {
+        repo: 'repo-1',
+        prNumber: 7,
+        prRepo: { owner: 'acme', repo: 'widgets' },
+        noCache: true
+      })
+    )
+
+    expect(runtime.getRepoPRComments).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      { owner: 'acme', repo: 'widgets' },
+      {
+        noCache: true
+      }
+    )
     expect(response).toMatchObject({ ok: true, result: [] })
   })
 
@@ -254,12 +303,44 @@ describe('github RPC methods', () => {
       makeRequest('github.updatePRTitle', {
         repo: 'repo-1',
         prNumber: 7,
-        title: 'New title'
+        title: 'New title',
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
-    expect(runtime.updateRepoPRTitle).toHaveBeenCalledWith('repo-1', 7, 'New title')
+    expect(runtime.updateRepoPRTitle).toHaveBeenCalledWith('repo-1', 7, 'New title', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
     expect(response).toMatchObject({ ok: true, result: true })
+  })
+
+  it('updates PR metadata on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepoPRDetails: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.updatePR', {
+        repo: 'repo-1',
+        prNumber: 7,
+        updates: { title: 'New title', body: 'Updated body' },
+        prRepo: { owner: 'acme', repo: 'widgets' }
+      })
+    )
+
+    expect(runtime.updateRepoPRDetails).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      { title: 'New title', body: 'Updated body' },
+      {
+        owner: 'acme',
+        repo: 'widgets'
+      }
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
   it('merges PRs on the runtime server', async () => {
@@ -273,11 +354,63 @@ describe('github RPC methods', () => {
       makeRequest('github.mergePR', {
         repo: 'repo-1',
         prNumber: 7,
-        method: 'squash'
+        method: 'squash',
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
-    expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash')
+    expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('routes PR reviewer mutations on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      requestRepoPRReviewers: vi.fn().mockResolvedValue({ ok: true }),
+      removeRepoPRReviewers: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const requestResponse = await dispatcher.dispatch(
+      makeRequest('github.requestPRReviewers', {
+        repo: 'repo-1',
+        prNumber: 7,
+        reviewers: ['octo']
+      })
+    )
+    const removeResponse = await dispatcher.dispatch(
+      makeRequest('github.removePRReviewers', {
+        repo: 'repo-1',
+        prNumber: 7,
+        reviewers: ['octo']
+      })
+    )
+
+    expect(runtime.requestRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'])
+    expect(runtime.removeRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'])
+    expect(requestResponse).toMatchObject({ ok: true, result: { ok: true } })
+    expect(removeResponse).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('updates PR state on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepoPRState: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.updatePRState', {
+        repo: 'repo-1',
+        prNumber: 7,
+        updates: { state: 'closed' }
+      })
+    )
+
+    expect(runtime.updateRepoPRState).toHaveBeenCalledWith('repo-1', 7, { state: 'closed' })
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 

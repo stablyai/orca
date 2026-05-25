@@ -308,6 +308,26 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('accepts onboarding_task_sources_snapshot with bounded statuses', () => {
+    const result = validate('onboarding_task_sources_snapshot', {
+      github_status: 'connected',
+      linear_status: 'not_connected',
+      exit_action: 'continue',
+      duration_ms: 1200,
+      advanced_via: 'button'
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects onboarding_task_sources_snapshot with unknown status strings', () => {
+    const result = validate('onboarding_task_sources_snapshot', {
+      github_status: 'signed-in',
+      linear_status: 'not_connected',
+      exit_action: 'continue'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts onboarding_started with cohort upgrade_backfill', () => {
     const result = validate('onboarding_started', { cohort: 'upgrade_backfill' })
     expect(result.ok).toBe(true)

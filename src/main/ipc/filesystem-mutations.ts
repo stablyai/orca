@@ -18,8 +18,9 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'path'
 import { pipeline } from 'stream/promises'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
+import { assertFileExplorerRenameDestinationAvailable } from '../file-explorer-rename-collision'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -70,10 +71,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:createFile',
     async (_event, args: { filePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createFile(args.filePath)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
@@ -91,10 +89,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:createDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createDir(args.dirPath)
       }
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
@@ -113,10 +108,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { oldPath: string; newPath: string; connectionId?: string }
     ): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.rename(args.oldPath, args.newPath)
       }
       // Why: rename() operates on directory entries, not file contents. If
@@ -127,7 +119,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // accidentally write into a symlinked destination name.
       const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
       const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await assertNotExists(newPath)
+      await assertFileExplorerRenameDestinationAvailable(oldPath, newPath)
       await rename(oldPath, newPath)
     }
   )
@@ -139,10 +131,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { sourcePath: string; destinationPath: string; connectionId?: string }
     ): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.copy(args.sourcePath, args.destinationPath)
       }
       const sourcePath = await resolveAuthorizedPath(args.sourcePath, store, {

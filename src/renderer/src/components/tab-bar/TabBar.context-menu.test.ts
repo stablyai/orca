@@ -181,7 +181,6 @@ async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
     onSetCustomTitle: () => {},
     onSetTabColor: () => {},
     onTogglePaneExpand: () => {},
-    wslAvailable: false,
     ...props
   })
 }

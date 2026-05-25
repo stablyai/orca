@@ -112,6 +112,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'gemini',
     promptInjectionMode: 'flag-prompt-interactive'
   },
+  antigravity: {
+    detectCmd: 'agy',
+    launchCmd: 'agy',
+    expectedProcess: 'agy',
+    promptInjectionMode: 'flag-prompt-interactive'
+  },
   aider: {
     detectCmd: 'aider',
     launchCmd: 'aider',

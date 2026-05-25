@@ -42,6 +42,7 @@ import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
 import type {
   BaseRefSearchResult,
   GitHubWorkItem,
@@ -82,6 +83,7 @@ type SmartWorkspaceNameFieldProps = {
   onPlainEnter?: () => void
   disabled?: boolean
   disabledPlaceholder?: string
+  textOnly?: boolean
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -146,7 +148,8 @@ export default function SmartWorkspaceNameField({
   inputRef,
   onPlainEnter,
   disabled = false,
-  disabledPlaceholder
+  disabledPlaceholder,
+  textOnly = false
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   const {
     addRepo,
@@ -156,6 +159,9 @@ export default function SmartWorkspaceNameField({
     linearStatus,
     linearStatusChecked,
     listLinearIssues,
+    preflightStatus,
+    preflightStatusChecked,
+    refreshPreflightStatus,
     searchLinearIssues,
     settings
   } = useAppStore(
@@ -167,6 +173,9 @@ export default function SmartWorkspaceNameField({
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
       listLinearIssues: s.listLinearIssues,
+      preflightStatus: s.preflightStatus,
+      preflightStatusChecked: s.preflightStatusChecked,
+      refreshPreflightStatus: s.refreshPreflightStatus,
       searchLinearIssues: s.searchLinearIssues,
       settings: s.settings
     }))
@@ -175,7 +184,7 @@ export default function SmartWorkspaceNameField({
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
   )
-  const [mode, setMode] = useState<SmartNameMode>('smart')
+  const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : 'smart')
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [open, setOpen] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState(value)
@@ -196,6 +205,32 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  const availableTaskProviders = useMemo(
+    () =>
+      filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
+        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        linearConnected: linearStatus.connected === true
+      }),
+    [linearStatus.connected, preflightStatus?.glab?.installed]
+  )
+  const gitlabAvailable = availableTaskProviders.includes('gitlab')
+  const linearAvailable = availableTaskProviders.includes('linear')
+  const availableModes = useMemo(
+    () =>
+      MODES.filter((item) => {
+        if (textOnly) {
+          return item.id === 'text'
+        }
+        if (item.id === 'gitlab') {
+          return gitlabAvailable
+        }
+        if (item.id === 'linear') {
+          return linearAvailable
+        }
+        return true
+      }),
+    [gitlabAvailable, linearAvailable, textOnly]
+  )
 
   const setInputNode = useCallback(
     (node: HTMLInputElement | null) => {
@@ -208,17 +243,45 @@ export default function SmartWorkspaceNameField({
   )
 
   useEffect(() => {
-    if (disabled) {
+    if (disabled || textOnly) {
       return
     }
-    // Why: the composer can be opened before any other Linear-aware surface
-    // (TaskPage, IntegrationsPane) has had a chance to refresh status, leaving
-    // `linearStatus.connected=false` even when the user is actually connected.
-    // Trigger a check on mount if it hasn't run this session.
+    if (!preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
-  }, [checkLinearConnection, disabled, linearStatusChecked])
+  }, [
+    checkLinearConnection,
+    disabled,
+    linearStatusChecked,
+    preflightStatusChecked,
+    refreshPreflightStatus,
+    textOnly
+  ])
+
+  useEffect(() => {
+    if (textOnly) {
+      if (mode !== 'text') {
+        setMode('text')
+      }
+      setOpen(false)
+      return
+    }
+    if ((mode === 'gitlab' && gitlabAvailable) || (mode === 'linear' && linearAvailable)) {
+      return
+    }
+    if (mode !== 'gitlab' && mode !== 'linear') {
+      return
+    }
+    setMode('smart')
+    setGitlabItems([])
+    setLinearIssues([])
+    setGitlabLoading(false)
+    setLinearLoading(false)
+    setCommandValue('')
+  }, [gitlabAvailable, linearAvailable, mode, textOnly])
 
   useEffect(() => {
     if (!disabled) {
@@ -253,9 +316,9 @@ export default function SmartWorkspaceNameField({
     [debouncedQuery]
   )
   const parsedGhLink = useMemo(() => parseGitHubIssueOrPRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGithub = mode === 'smart' || mode === 'github'
-  const shouldQueryBranches = mode === 'smart' || mode === 'branches'
-  const shouldQueryLinear = mode === 'smart' || mode === 'linear'
+  const shouldQueryGithub = !textOnly && (mode === 'smart' || mode === 'github')
+  const shouldQueryBranches = !textOnly && (mode === 'smart' || mode === 'branches')
+  const shouldQueryLinear = !textOnly && linearAvailable && (mode === 'smart' || mode === 'linear')
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub || !selectedRepo?.path) {
@@ -462,7 +525,7 @@ export default function SmartWorkspaceNameField({
   // GitLabWorkItem via the IPC. Skipped silently when the host hook
   // hasn't supplied an onGitLabItemSelect handler.
   const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGitlab = mode === 'smart' || mode === 'gitlab'
+  const shouldQueryGitlab = !textOnly && gitlabAvailable && (mode === 'smart' || mode === 'gitlab')
   useEffect(() => {
     if (
       !shouldQueryGitlab ||
@@ -473,7 +536,7 @@ export default function SmartWorkspaceNameField({
     ) {
       // Why: don't clobber list-mode items here — the listMRs effect below
       // is the sole writer when the user is in 'gitlab' mode without a URL.
-      if (parsedGlLink === null && mode !== 'gitlab') {
+      if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
         setGitlabItems([])
       }
       setGitlabLoading(false)
@@ -529,7 +592,11 @@ export default function SmartWorkspaceNameField({
   // MR list view. Smart mode includes GitLab MRs alongside GitHub
   // items so the unified picker actually surfaces both providers.
   useEffect(() => {
-    if (disabled || (mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
+    if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
+      if (!shouldQueryGitlab) {
+        setGitlabItems([])
+        setGitlabLoading(false)
+      }
       return
     }
     if (!selectedRepo?.path || selectedRepo.connectionId) {
@@ -576,7 +643,15 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [disabled, mode, mrStateFilter, onGitLabItemSelect, parsedGlLink, selectedRepo])
+  }, [
+    disabled,
+    mode,
+    mrStateFilter,
+    onGitLabItemSelect,
+    parsedGlLink,
+    selectedRepo,
+    shouldQueryGitlab
+  ])
 
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
@@ -617,7 +692,7 @@ export default function SmartWorkspaceNameField({
         }))
       )
     }
-    if (mode === 'smart' || mode === 'gitlab') {
+    if (gitlabAvailable && (mode === 'smart' || mode === 'gitlab')) {
       nextRows.push(
         ...gitlabItems.map((item) => ({
           kind: 'gitlab' as const,
@@ -639,7 +714,7 @@ export default function SmartWorkspaceNameField({
         }))
       )
     }
-    if (mode === 'smart' || mode === 'linear') {
+    if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
       nextRows.push(
         ...linearIssues.map((issue) => ({
           kind: 'linear' as const,
@@ -649,7 +724,16 @@ export default function SmartWorkspaceNameField({
       )
     }
     return nextRows.slice(0, RESULT_LIMIT + 1)
-  }, [branches, githubItems, gitlabItems, linearIssues, mode, value])
+  }, [
+    branches,
+    githubItems,
+    gitlabAvailable,
+    gitlabItems,
+    linearIssues,
+    linearAvailable,
+    mode,
+    value
+  ])
 
   // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
   // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
@@ -677,11 +761,11 @@ export default function SmartWorkspaceNameField({
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
     }
-    if (/^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
+    if (linearAvailable && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
       return 'linear'
     }
     return null
-  }, [value])
+  }, [linearAvailable, value])
 
   useEffect(() => {
     if (rows.length === 0) {
@@ -801,7 +885,9 @@ export default function SmartWorkspaceNameField({
   const placeholder = disabled
     ? (disabledPlaceholder ?? 'Unavailable')
     : mode === 'smart'
-      ? 'Type a name, #1234, branch, GitHub or Linear URL'
+      ? linearAvailable
+        ? 'Type a name, #1234, branch, GitHub or Linear URL'
+        : 'Type a name, #1234, branch, or GitHub URL'
       : mode === 'github'
         ? 'Search GitHub PRs and issues'
         : mode === 'branches'
@@ -821,49 +907,44 @@ export default function SmartWorkspaceNameField({
         }}
         className="gap-0"
       >
-        <TabsList
-          ref={tabsListRef}
-          variant="line"
-          className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
-          onFocusCapture={(event) => {
-            // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
-            // the active trigger on every render, so we can't keep it out of
-            // the natural Tab order via props or a MutationObserver (race
-            // with React commits). Instead, intercept focus *on entry* into
-            // the tabs list:
-            //   - Forward Tab from outside (e.g., Repo combobox) → bounce to
-            //     the search input so the segmented control is skipped.
-            //   - Shift-Tab from the input → relatedTarget is the input, so
-            //     allow focus to land on the active trigger (segmented
-            //     control remains reachable in reverse).
-            //   - Intra-list focus moves (arrow keys) → relatedTarget is
-            //     inside the list; allow.
-            const previous = event.relatedTarget as HTMLElement | null
-            const list = tabsListRef.current
-            const input = localInputRef.current
-            if (!list || !input) {
-              return
-            }
-            if (!previous || previous === input || list.contains(previous)) {
-              return
-            }
-            event.stopPropagation()
-            input.focus({ preventScroll: true })
-          }}
-        >
-          {MODES.map(({ id, label, Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              tabIndex={-1}
-              data-smart-name-mode={id}
-              className="flex-none gap-1.5 px-0 text-xs"
-            >
-              <Icon className="size-3.5" />
-              <span>{label}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {textOnly ? null : (
+          <TabsList
+            ref={tabsListRef}
+            variant="line"
+            className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
+            onFocusCapture={(event) => {
+              // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
+              // the active trigger on every render, so we can't keep it out of
+              // the natural Tab order via props or a MutationObserver (race
+              // with React commits). Instead, intercept focus on entry into
+              // the tabs list so forward Tab goes straight to the input.
+              const previous = event.relatedTarget as HTMLElement | null
+              const list = tabsListRef.current
+              const input = localInputRef.current
+              if (!list || !input) {
+                return
+              }
+              if (!previous || previous === input || list.contains(previous)) {
+                return
+              }
+              event.stopPropagation()
+              input.focus({ preventScroll: true })
+            }}
+          >
+            {availableModes.map(({ id, label, Icon }) => (
+              <TabsTrigger
+                key={id}
+                value={id}
+                tabIndex={-1}
+                data-smart-name-mode={id}
+                className="flex-none gap-1.5 px-0 text-xs"
+              >
+                <Icon className="size-3.5" />
+                <span>{label}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
       </Tabs>
 
       <Popover

@@ -64,6 +64,8 @@ function makeGuest(id: number) {
 
 describe('browserManager grab operations', () => {
   const rendererWebContentsId = 5001
+  const primaryModifier =
+    process.platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
   let guest: Electron.WebContents
 
   beforeEach(() => {
@@ -72,6 +74,7 @@ describe('browserManager grab operations', () => {
     guestExecuteJavaScriptMock.mockResolvedValue(true)
     guestExecuteJavaScriptInIsolatedWorldMock.mockResolvedValue(true)
     browserManager.unregisterAll()
+    browserManager.setSettingsResolver(() => ({}))
 
     guest = makeGuest(101)
     webContentsFromIdMock.mockImplementation((id: number) => {
@@ -158,7 +161,13 @@ describe('browserManager grab operations', () => {
       const preventDefault = vi.fn()
       handler?.(
         { preventDefault } as never,
-        { type: 'keyDown', meta: true, control: true, shift: false, alt: false, key: 'c' } as never
+        {
+          type: 'keyDown',
+          ...primaryModifier,
+          shift: false,
+          alt: false,
+          key: 'c'
+        } as never
       )
 
       await Promise.resolve()
@@ -178,7 +187,13 @@ describe('browserManager grab operations', () => {
       const preventDefault = vi.fn()
       handler?.(
         { preventDefault } as never,
-        { type: 'keyDown', meta: true, control: true, shift: false, alt: false, key: 'c' } as never
+        {
+          type: 'keyDown',
+          ...primaryModifier,
+          shift: false,
+          alt: false,
+          key: 'c'
+        } as never
       )
 
       await Promise.resolve()
@@ -231,8 +246,8 @@ describe('browserManager grab operations', () => {
         { preventDefault } as never,
         {
           type: 'keyDown',
-          meta: true,
-          control: true,
+          meta: process.platform === 'darwin',
+          control: process.platform !== 'darwin',
           shift: true,
           alt: false,
           code: 'KeyB',

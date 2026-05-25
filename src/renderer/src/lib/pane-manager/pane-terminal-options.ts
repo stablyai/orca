@@ -32,12 +32,10 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
     // Why: advertise kitty keyboard protocol support so CLIs that probe
-    // (CSI ? u) know Orca accepts enhanced key reporting. Without this,
-    // Orca already writes \x1b[13;2u for Shift+Enter (see
-    // terminal-shortcut-policy.ts), but programs that respect the protocol
-    // handshake fall back to legacy encodings and ignore the CSI-u byte,
-    // making chords like Shift+Enter invisible to the app — especially
-    // noticeable inside tmux. Matches VS Code's xtermTerminal.ts.
+    // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
+    // CSI-u for Shift+Enter on non-Windows platforms; programs that respect
+    // the handshake otherwise fall back to legacy encodings and miss it.
+    // Matches VS Code's xtermTerminal.ts.
     vtExtensions: {
       kittyKeyboard: true
     }

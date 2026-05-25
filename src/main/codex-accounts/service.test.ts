@@ -61,6 +61,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
+    sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -73,7 +74,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
       agentTaskComplete: true,
       terminalBell: false,
       suppressWhenFocused: true,
-      customSoundPath: null
+      customSoundId: 'system',
+      customSoundPath: null,
+      customSoundVolume: 100
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,

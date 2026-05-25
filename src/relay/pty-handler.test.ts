@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -120,6 +121,29 @@ describe('PtyHandler', () => {
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
     expect(notifMethods).toContain('pty.ackData')
+  })
+
+  it('allows callers to shorten a grace timer for empty startup relays', () => {
+    const onExpire = vi.fn()
+    handler.startGraceTimer(onExpire, 100)
+
+    expect(handler.graceTimerActive).toBe(true)
+    vi.advanceTimersByTime(99)
+    expect(onExpire).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onExpire).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not expire an unlimited grace timer', () => {
+    const onExpire = vi.fn()
+    handler.startGraceTimer(onExpire, 100)
+
+    expect(handler.graceTimerActive).toBe(true)
+    handler.startGraceTimer(onExpire, 0)
+
+    expect(handler.graceTimerActive).toBe(false)
+    vi.advanceTimersByTime(100)
+    expect(onExpire).not.toHaveBeenCalled()
   })
 
   it('spawns a PTY and returns an id', async () => {
@@ -332,9 +356,12 @@ describe('PtyHandler', () => {
 
   it('grace timer waits full period even when no PTYs exist', () => {
     const onExpire = vi.fn()
+    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
     handler.startGraceTimer(onExpire)
     expect(onExpire).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(5 * 60 * 1000)
+    vi.advanceTimersByTime(defaultGraceMs - 1)
+    expect(onExpire).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
     expect(onExpire).toHaveBeenCalledTimes(1)
   })
 
@@ -347,10 +374,13 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
 
     const onExpire = vi.fn()
+    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
     handler.startGraceTimer(onExpire)
     expect(onExpire).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(5 * 60 * 1000)
+    vi.advanceTimersByTime(defaultGraceMs - 1)
+    expect(onExpire).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
     expect(onExpire).toHaveBeenCalledTimes(1)
   })
 
@@ -363,12 +393,13 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
 
     const onExpire = vi.fn()
+    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
     handler.startGraceTimer(onExpire)
 
     vi.advanceTimersByTime(60_000)
     handler.cancelGraceTimer()
 
-    vi.advanceTimersByTime(5 * 60 * 1000)
+    vi.advanceTimersByTime(defaultGraceMs)
     expect(onExpire).not.toHaveBeenCalled()
   })
 

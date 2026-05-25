@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: file RPC routing coverage stays together so the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
@@ -16,6 +17,10 @@ const FileOpen = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path'))
+})
+
+const FileOpenDiff = FileOpen.extend({
+  staged: z.boolean().optional()
 })
 
 const FileTreePath = WorktreeSelector.extend({
@@ -115,6 +120,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.openMobileFile(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.openDiff',
+    params: FileOpenDiff,
+    handler: async (params, { runtime }) =>
+      runtime.openMobileDiff(params.worktree, params.relativePath, params.staged === true)
   }),
   defineMethod({
     name: 'files.read',

@@ -35,9 +35,20 @@ import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
+import {
+  getDiffCommentPopoverLeft,
+  getDiffCommentPopoverTop
+} from '../diff-comments/diff-comment-popover-position'
+import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { installEditorSaveShortcut } from './editor-shortcuts'
+import { Plus } from 'lucide-react'
+import {
+  getMonacoMarkdownSelectionAnnotationTarget,
+  type MonacoMarkdownSelectionAnnotationTarget
+} from './monaco-markdown-selection-annotation'
 
 type MonacoEditorProps = {
+  fileId: string
   filePath: string
   viewStateKey: string
   relativePath: string
@@ -52,9 +63,16 @@ type MonacoEditorProps = {
   worktreeId?: string
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
+  readOnly?: boolean
+  autoHeight?: boolean
+}
+
+type MarkdownCommentPopoverState = Omit<MonacoMarkdownSelectionAnnotationTarget, 'selectedText'> & {
+  selectedText?: string
 }
 
 export default function MonacoEditor({
+  fileId,
   filePath,
   viewStateKey,
   relativePath,
@@ -68,11 +86,14 @@ export default function MonacoEditor({
   markdownDocuments,
   worktreeId,
   markdownAnnotationsEnabled = false,
-  conflictDecorationsEnabled = false
+  conflictDecorationsEnabled = false,
+  readOnly = false,
+  autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
+  const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
@@ -112,6 +133,16 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  const estimatedAutoHeight = useMemo(() => {
+    if (!autoHeight) {
+      return null
+    }
+    const lineHeight = Math.ceil(editorFontSize * 1.45)
+    return Math.max(80, content.split(/\r?\n/).length * lineHeight + 18)
+  }, [autoHeight, content, editorFontSize])
+  const renderedEditorHeight = autoHeight
+    ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
+    : null
   // Why: `keepCurrentModel` retains Monaco models across unmounts, and
   // @monaco-editor/react skips its value→model sync on the first render after
   // a remount. Without explicit sync, external file changes that arrived
@@ -137,12 +168,9 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
-  const [commentPopover, setCommentPopover] = useState<{
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-  } | null>(null)
+  const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
+  const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
+    useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -180,7 +208,8 @@ export default function MonacoEditor({
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
-    onAddCommentClick: ({ lineNumber, startLine, top }) =>
+    onAddCommentClick: ({ lineNumber, startLine, top }) => {
+      setSelectionAnnotationTarget(null)
       setCommentPopover({
         lineNumber,
         startLine,
@@ -188,7 +217,8 @@ export default function MonacoEditor({
         left: mountedEditor
           ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
           : undefined
-      }),
+      })
+    },
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -278,6 +308,24 @@ export default function MonacoEditor({
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
+      let autoHeightSub: { dispose: () => void } | null = null
+      let autoHeightFrame: number | null = null
+      const updateAutoHeight = (): void => {
+        if (!autoHeight) {
+          return
+        }
+        if (autoHeightFrame !== null) {
+          return
+        }
+        autoHeightFrame = window.requestAnimationFrame(() => {
+          autoHeightFrame = null
+          setAutoHeightContentHeight(Math.ceil(editorInstance.getContentHeight()) + 1)
+        })
+      }
+      if (autoHeight) {
+        updateAutoHeight()
+        autoHeightSub = editorInstance.onDidContentSizeChange(updateAutoHeight)
+      }
       markdownDocLinkDecorationsRef.current = createMarkdownDocLinkDecorationController(
         editorInstance,
         () => languageRef.current
@@ -316,11 +364,13 @@ export default function MonacoEditor({
         return model.getValueInRange(selection)
       })
 
-      // Add Cmd+S save keybinding
-      editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        const value = editorInstance.getValue()
-        propsRef.current.onSave(value)
-      })
+      const cleanupSaveShortcut = installEditorSaveShortcut(
+        editorInstance.getContainerDomNode(),
+        () => {
+          const value = editorInstance.getValue()
+          propsRef.current.onSave(value)
+        }
+      )
 
       // Track cursor line for "copy path to line" feature
       const pos = editorInstance.getPosition()
@@ -336,6 +386,12 @@ export default function MonacoEditor({
       })
 
       editorInstance.onDidDispose(() => {
+        cleanupSaveShortcut()
+        autoHeightSub?.dispose()
+        if (autoHeightFrame !== null) {
+          window.cancelAnimationFrame(autoHeightFrame)
+          autoHeightFrame = null
+        }
         conflictDecorationsRef.current?.clear()
         conflictDecorationsRef.current = null
         editorRef.current = null
@@ -379,7 +435,10 @@ export default function MonacoEditor({
       // Why: search-result navigation sets the reveal before openFile switches
       // the active tab. Without scoping consumption to the destination file,
       // the previously mounted editor can clear the reveal on the first click.
-      if (reveal?.filePath === filePath) {
+      const revealMatchesEditor = reveal?.fileId
+        ? reveal.fileId === fileId
+        : reveal?.filePath === filePath
+      if (reveal && revealMatchesEditor) {
         queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
           useAppStore.getState().setPendingEditorReveal(null)
         })
@@ -409,10 +468,12 @@ export default function MonacoEditor({
     [
       queueReveal,
       setupCopy,
+      fileId,
       filePath,
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
-      viewStateKey
+      viewStateKey,
+      autoHeight
     ]
   )
 
@@ -421,11 +482,10 @@ export default function MonacoEditor({
       return
     }
     const update = (): void => {
-      const top =
-        mountedEditor.getTopForLineNumber(commentPopover.lineNumber) - mountedEditor.getScrollTop()
+      const top = getDiffCommentPopoverTop(mountedEditor, commentPopover.lineNumber, undefined)
       const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
       setCommentPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left } : prev
+        prev ? { ...prev, top: top ?? prev.top, left: left == null ? prev.left : left } : prev
       )
     }
     const scrollSub = mountedEditor.onDidScrollChange(update)
@@ -439,6 +499,32 @@ export default function MonacoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
   }, [mountedEditor, commentPopover?.lineNumber])
 
+  useEffect(() => {
+    if (!mountedEditor || !shouldShowMarkdownAnnotations || commentPopover) {
+      setSelectionAnnotationTarget(null)
+      return
+    }
+    const update = (): void => {
+      const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
+      setSelectionAnnotationTarget(
+        getMonacoMarkdownSelectionAnnotationTarget(
+          mountedEditor,
+          mountedEditor.getSelection(),
+          left ?? undefined
+        )
+      )
+    }
+    update()
+    const selectionSub = mountedEditor.onDidChangeCursorSelection(update)
+    const scrollSub = mountedEditor.onDidScrollChange(update)
+    const layoutSub = mountedEditor.onDidLayoutChange(update)
+    return () => {
+      selectionSub.dispose()
+      scrollSub.dispose()
+      layoutSub.dispose()
+    }
+  }, [commentPopover, mountedEditor, shouldShowMarkdownAnnotations])
+
   const handleSubmitMarkdownComment = async (body: string): Promise<void> => {
     if (!commentPopover || !worktreeId) {
       return
@@ -449,6 +535,7 @@ export default function MonacoEditor({
       source: 'markdown',
       startLine: commentPopover.startLine,
       lineNumber: commentPopover.lineNumber,
+      selectedText: commentPopover.selectedText,
       body,
       side: 'modified'
     })
@@ -600,7 +687,11 @@ export default function MonacoEditor({
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
-    <div ref={editorContainerRef} className="relative h-full">
+    <div
+      ref={editorContainerRef}
+      className={autoHeight ? 'relative' : 'relative h-full'}
+      style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
+    >
       {commentPopover && shouldShowMarkdownAnnotations && (
         <DiffCommentPopover
           key={commentPopover.lineNumber}
@@ -612,8 +703,33 @@ export default function MonacoEditor({
           onSubmit={handleSubmitMarkdownComment}
         />
       )}
+      {selectionAnnotationTarget && shouldShowMarkdownAnnotations && !commentPopover ? (
+        <button
+          type="button"
+          className="orca-diff-comment-add-btn"
+          style={{
+            display: 'flex',
+            top: Math.max(4, selectionAnnotationTarget.top - 22),
+            left: selectionAnnotationTarget.left ?? 4
+          }}
+          title="Add note on selected text"
+          aria-label="Add note on selected text"
+          onMouseDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setCommentPopover(selectionAnnotationTarget)
+            setSelectionAnnotationTarget(null)
+          }}
+        >
+          <Plus className="size-3" />
+        </button>
+      ) : null}
       <Editor
-        height="100%"
+        height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
         value={content}
         theme={isDark ? 'vs-dark' : 'vs'}
@@ -633,6 +749,8 @@ export default function MonacoEditor({
           renderLineHighlight: 'line',
           automaticLayout: true,
           tabSize: 2,
+          readOnly,
+          scrollbar: autoHeight ? { vertical: 'hidden', handleMouseWheel: false } : undefined,
           smoothScrolling: true,
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },
@@ -640,7 +758,11 @@ export default function MonacoEditor({
             addExtraSpaceOnTop: false,
             autoFindInSelection: 'never',
             seedSearchStringFromSelection: 'never'
-          }
+          },
+          // Why: Monaco has its own Linux primary-selection integration; keep
+          // it aligned with Orca's app-level opt-out instead of relying on the
+          // global DOM hook, which does not own Monaco's rendered line surface.
+          selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}
         path={filePath}
         // Why: keepCurrentModel preserves the Monaco text model so undo/redo

@@ -130,6 +130,10 @@ function isCodexExecutable(command: string): boolean {
   return command === 'codex' || command === 'codex.exe' || command === 'codex.cmd'
 }
 
+function isClaudeExecutable(command: string): boolean {
+  return command === 'claude' || command === 'claude.exe' || command === 'claude.cmd'
+}
+
 function isShellAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)
 }
@@ -176,6 +180,11 @@ function isHelpFlag(token: string): boolean {
 
 function isVersionFlag(token: string): boolean {
   return token === '--version' || token === '-V'
+}
+
+function isClaudePrintFlag(token: string): boolean {
+  const optionName = codexGlobalOptionName(token)
+  return optionName === '-p' || optionName === '--print'
 }
 
 function findCodexSubcommand(
@@ -259,7 +268,7 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
   return CODEX_NON_INTERACTIVE_SUBCOMMANDS.has(normalizedSubcommand)
 }
 
-export function shouldForceVisibleCodexTerminal(command: string | undefined): boolean {
+export function shouldUseRendererBackedCodexTerminal(command: string | undefined): boolean {
   if (!command) {
     return false
   }
@@ -274,4 +283,25 @@ export function shouldForceVisibleCodexTerminal(command: string | undefined): bo
   }
 
   return !isNonInteractiveCodexSubcommand(tokens)
+}
+
+export function shouldUseRendererBackedInteractiveTerminal(command: string | undefined): boolean {
+  if (!command) {
+    return false
+  }
+
+  const tokens = stripShellLaunchPrefix(
+    tokenizeLeadingShellWords(command.trim(), 32).filter((token) => token.length > 0)
+  )
+
+  const executable = tokens[0] ? commandBasename(tokens[0]) : ''
+  if (isCodexExecutable(executable)) {
+    return !isNonInteractiveCodexSubcommand(tokens)
+  }
+  if (isClaudeExecutable(executable)) {
+    return !tokens
+      .slice(1)
+      .some((token) => isHelpFlag(token) || isVersionFlag(token) || isClaudePrintFlag(token))
+  }
+  return false
 }

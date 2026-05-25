@@ -1,20 +1,12 @@
 ---
 name: orchestration
 description: >-
-  Use `orca orchestration` when coordinating multiple AI agents through Orca:
-  pass context, instructions, questions, findings, reviews, handoffs, or
-  structured results between agents; delegate subtasks; dispatch work; track task
-  DAGs; wait for worker_done/escalation; or run coordinator loops and decision
-  gates. This is the right skill for semantic agent-to-agent communication.
-  Boundary with `orca-cli`: do not use orchestration for ordinary terminal
-  control, shell commands, browser automation, worktree management, or
-  reading/waiting on terminals; use `orca-cli` for those. Triggers include "tell
-  the other agent", "ask <agent>", "hand off to", "pass this to <agent>",
-  "delegate to <agent>", "have <agent> do X", "let <agent> know", "share with the
-  other AI", "coordinate agents", "what did <agent> find", "check orchestration
-  inbox", "reply to <agent>", "dispatch task", "orchestrate agents",
-  "multi-agent", "task DAG", "worker_done", "escalation", "decision gate", and
-  "coordinator loop".
+  Use for Orca agent-to-agent coordination: send/ask/reply between agent
+  terminals, dispatch tasks to worker agents, wait for worker_done or
+  escalation messages, manage task DAGs with dependencies, run decision
+  gates, operate coordinator loops, or decompose a spec into parallel subtasks.
+  Use `orca-cli` instead for terminal control, shell commands, browser
+  automation, worktree management, and reading or waiting on terminals.
 ---
 
 # Orca Inter-Agent Orchestration
@@ -28,6 +20,10 @@ Use this skill when the task involves coordinating multiple coding agents throug
 - You need to dispatch tasks to worker agents with structured feedback
 - You need to act as a coordinator managing a multi-agent workflow
 - You need to create decision gates for human-in-the-loop checkpoints
+
+## When Not To Use
+
+Use `orca-cli` instead for ordinary terminal control, shell commands, browser automation, worktree management, or reading/waiting on terminals.
 
 ## Preconditions
 

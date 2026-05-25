@@ -523,6 +523,62 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('does not schedule a checkpoint timer until a session is dirty', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'idle-checkpoint'
+        })
+
+        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
+
+        lastSubprocess._simulateData('dirty after idle\r\n')
+        await waitFor(() => setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000))
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+        setTimeoutSpy.mockRestore()
+      }
+    })
+
+    it('clears a pending checkpoint timer when the last dirty session closes', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'close-dirty-checkpoint'
+        })
+        const internals = historyAdapter as unknown as {
+          dirtySessionVersions: Map<string, number>
+        }
+
+        lastSubprocess._simulateData('dirty before close\r\n')
+        await waitFor(() => internals.dirtySessionVersions.has(id))
+        const callsBeforeClose = clearTimeoutSpy.mock.calls.length
+
+        await historyAdapter.shutdown(id, { immediate: true })
+
+        expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(callsBeforeClose)
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+        clearTimeoutSpy.mockRestore()
+      }
+    })
+
     it('writes meta.json with endedAt on exit', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 

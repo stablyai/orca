@@ -24,6 +24,12 @@ export type DashboardAgentRow = {
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */
   startedAt: number
+  lineage?: {
+    depth: 0 | 1
+    isFirstSibling: boolean
+    isLastSibling: boolean
+    childCount: number
+  }
 }
 
 // Why: the shape here is deliberately minimal. The per-card rendering pipeline

@@ -10,33 +10,40 @@ const {
   notificationShowMock,
   notificationCloseMock,
   notificationOnMock,
+  notificationOnceMock,
   notificationCtorMock,
   notificationIsSupportedMock,
-  getAllWindowsMock
+  getAllWindowsMock,
+  shellOpenExternalMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
   const handleMock = vi.fn()
   const notificationShowMock = vi.fn()
   const notificationCloseMock = vi.fn()
   const notificationOnMock = vi.fn()
+  const notificationOnceMock = vi.fn()
   const notificationCtorMock = vi.fn(function () {
     return {
       show: notificationShowMock,
       close: notificationCloseMock,
-      on: notificationOnMock
+      on: notificationOnMock,
+      once: notificationOnceMock
     }
   })
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
+  const shellOpenExternalMock = vi.fn()
   return {
     removeHandlerMock,
     handleMock,
     notificationShowMock,
     notificationCloseMock,
     notificationOnMock,
+    notificationOnceMock,
     notificationCtorMock,
     notificationIsSupportedMock,
-    getAllWindowsMock
+    getAllWindowsMock,
+    shellOpenExternalMock
   }
 })
 
@@ -55,7 +62,7 @@ vi.mock('electron', () => ({
     focus: vi.fn()
   },
   shell: {
-    openExternal: vi.fn()
+    openExternal: shellOpenExternalMock
   }
 }))
 
@@ -67,6 +74,12 @@ import {
 describe('registerNotificationHandlers', () => {
   let tempDir: string
 
+  function expectedNativeNotificationOptions<T extends Record<string, unknown>>(
+    options: T
+  ): T & { sound?: string } {
+    return process.platform === 'darwin' ? { ...options, sound: 'default' } : options
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
@@ -77,10 +90,12 @@ describe('registerNotificationHandlers', () => {
     notificationShowMock.mockClear()
     notificationCloseMock.mockClear()
     notificationOnMock.mockClear()
+    notificationOnceMock.mockClear()
     notificationIsSupportedMock.mockReset()
     notificationIsSupportedMock.mockReturnValue(true)
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
+    shellOpenExternalMock.mockClear()
   })
 
   afterEach(() => {
@@ -93,6 +108,16 @@ describe('registerNotificationHandlers', () => {
       throw new Error('notifications:dispatch handler not registered')
     }
     return call[1] as (event: unknown, args: unknown) => unknown
+  }
+
+  function getOpenSystemSettingsHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'notifications:openSystemSettings'
+    )
+    if (!call) {
+      throw new Error('notifications:openSystemSettings handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
   }
 
   function getLoadSoundHandler(): (event: unknown) => Promise<unknown> {
@@ -113,6 +138,22 @@ describe('registerNotificationHandlers', () => {
     return call[1] as (event: unknown) => unknown
   }
 
+  function getNotificationEventHandler(eventName: string): () => void {
+    const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+    if (!call) {
+      throw new Error(`Notification ${eventName} handler not registered`)
+    }
+    return call[1] as () => void
+  }
+
+  function getNotificationOnceEventHandler(eventName: string): () => void {
+    const call = notificationOnceMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+    if (!call) {
+      throw new Error(`Notification ${eventName} once handler not registered`)
+    }
+    return call[1] as () => void
+  }
+
   it('registers the IPC handler', () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -127,6 +168,63 @@ describe('registerNotificationHandlers', () => {
 
     expect(removeHandlerMock).toHaveBeenCalledWith('notifications:dispatch')
     expect(handleMock).toHaveBeenCalledWith('notifications:dispatch', expect.any(Function))
+  })
+
+  it('opens the current macOS app notification settings entry', () => {
+    const originalPlatform = process.platform
+    const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev.fb5a47066f08'
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.dev.fb5a47066f08'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      if (originalBundleId === undefined) {
+        delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+      } else {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+      }
+    }
+  })
+
+  it('opens Windows notification settings', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith('ms-settings:notifications')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
   })
 
   it('suppresses notifications when disabled in settings', () => {
@@ -192,11 +290,118 @@ describe('registerNotificationHandlers', () => {
     expect(
       handler({}, { source: 'agent-task-complete', repoLabel: 'orca', worktreeLabel: 'feat/notis' })
     ).toEqual({ delivered: true })
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'Task complete in feat/notis',
-      body: 'orca'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'Task complete in feat/notis',
+        body: 'orca'
+      })
+    )
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the macOS default notification sound when no custom sound is configured', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: null
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+      expect(notificationCtorMock).toHaveBeenCalledWith({
+        title: 'Orca notifications are on',
+        body: 'This is a test notification from Orca.',
+        sound: 'default'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('does not request a native macOS sound when a custom sound is configured', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+      expect(notificationCtorMock).toHaveBeenCalledWith({
+        title: 'Orca notifications are on',
+        body: 'This is a test notification from Orca.',
+        silent: true
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('focuses the originating terminal pane when a notification with paneKey is clicked', () => {
+    const webContentsSend = vi.fn()
+    const restore = vi.fn()
+    const focus = vi.fn()
+    getAllWindowsMock.mockReturnValue([
+      {
+        isDestroyed: () => false,
+        isFocused: () => false,
+        isMinimized: () => true,
+        restore,
+        focus,
+        webContents: { send: webContentsSend }
+      } as never
+    ])
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const handler = getDispatchHandler()
+    expect(
+      handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1', paneKey })
+    ).toEqual({ delivered: true })
+
+    getNotificationEventHandler('click')()
+
+    expect(restore).toHaveBeenCalledTimes(1)
+    expect(focus).toHaveBeenCalledTimes(1)
+    expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
+      repoId: 'repo',
+      worktreeId: 'repo::wt1'
+    })
+    expect(webContentsSend).toHaveBeenCalledWith('ui:focusTerminal', {
+      tabId: 'tab-1',
+      worktreeId: 'repo::wt1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      ackPaneKeyOnSuccess: paneKey,
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
   })
 
   it('formats agent-task-complete with the agent response when a status snapshot is present', () => {
@@ -229,10 +434,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'feat/notis - Codex finished',
-      body: 'Updated the notification body.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Codex finished',
+        body: 'Updated the notification body.'
+      })
+    )
   })
 
   it('includes the repo name when multiple repos are active', () => {
@@ -264,10 +471,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'orca / feat/notis - Codex finished',
-      body: 'Updated the notification body.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'orca / feat/notis - Codex finished',
+        body: 'Updated the notification body.'
+      })
+    )
   })
 
   it('keeps a readable body when no assistant response was captured', () => {
@@ -299,10 +508,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'jinjing-work / main - Claude finished',
-      body: 'Claude finished.'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'jinjing-work / main - Claude finished',
+        body: 'Claude finished.'
+      })
+    )
   })
 
   it('formats blocked and interrupted agent snapshots distinctly', () => {
@@ -347,14 +558,20 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
-      title: 'feat/notis - Claude needs input',
-      body: 'Please approve the command.'
-    })
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
-      title: 'feat/notis - Claude stopped',
-      body: 'Stopped by user.'
-    })
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(
+      1,
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude needs input',
+        body: 'Please approve the command.'
+      })
+    )
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(
+      2,
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude stopped',
+        body: 'Stopped by user.'
+      })
+    )
   })
 
   it('normalizes custom agent labels and re-bounds multiline assistant previews', () => {
@@ -427,10 +644,12 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'feat/notis - Agent finished',
-      body: 'Using Bash: pnpm test'
-    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Agent finished',
+        body: 'Using Bash: pnpm test'
+      })
+    )
   })
 
   it('uses rich formatter output for mobile notifications before desktop guards', () => {
@@ -566,6 +785,67 @@ describe('registerNotificationHandlers', () => {
       delivered: false,
       reason: 'cooldown'
     })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cooldown explicit test notifications', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirms explicit test notifications after the native show event', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    getNotificationOnceEventHandler('show')()
+
+    await expect(result).resolves.toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports not-displayed when explicit test notifications never show', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+
+    const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    await vi.advanceTimersByTimeAsync(2501)
+
+    await expect(result).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 

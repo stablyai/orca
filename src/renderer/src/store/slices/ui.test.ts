@@ -2,7 +2,12 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { PersistedUIState } from '../../../../shared/types'
+import type {
+  GitHubWorkItem,
+  PersistedUIState,
+  Worktree,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
@@ -13,16 +18,37 @@ afterEach(() => {
 })
 
 function createUIStore(): StoreApi<AppState> {
-  // Only the UI slice, repo ids, and right sidebar width fallback are needed
-  // for persisted UI hydration tests. The worktree-nav-history slice is also
-  // included because openTaskPage records a Tasks visit via recordViewVisit.
+  // Only the UI slice, repo/worktree ids, and right sidebar width fallback are
+  // needed for these tests. The worktree-nav-history slice is also included
+  // because page opens record view visits.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((...args: any[]) => ({
     repos: [],
+    worktreesByRepo: {},
     rightSidebarWidth: 280,
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
+}
+
+function makeWorktree(id: string): Worktree {
+  return { id } as unknown as Worktree
+}
+
+function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
+  return {
+    id: 'pr-95',
+    type: 'pr',
+    number: 95,
+    title: 'feat: add file upload command',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/95',
+    labels: [],
+    updatedAt: '2026-05-20T00:00:00.000Z',
+    author: 'octocat',
+    repoId: 'repo-1',
+    ...overrides
+  }
 }
 
 function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUIState {
@@ -33,6 +59,12 @@ function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUI
 }
 
 describe('createUISlice hydratePersistedUI', () => {
+  it('defaults to showing sleeping workspaces', () => {
+    const store = createUIStore()
+
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
     const store = createUIStore()
 
@@ -92,7 +124,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarWidth).toBe(360)
   })
 
-  it('restores the active-only filter from persisted UI state', () => {
+  it('does not restore the retired active-only filter from persisted UI state', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -101,7 +133,44 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().showActiveOnly).toBe(true)
+    expect(store.getState().showActiveOnly).toBe(false)
+  })
+
+  it('restores the new hide-sleeping filter from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        hideSleepingWorkspaces: true
+      })
+    )
+
+    expect(store.getState().showSleepingWorkspaces).toBe(false)
+  })
+
+  it('ignores legacy hidden-sleeping preference so existing users start with sleeping visible', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showSleepingWorkspaces: false
+      })
+    )
+
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
+  it('ignores the legacy show-inactive filter so existing users start with sleeping visible', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showSleepingWorkspaces: undefined,
+        showInactiveWorkspaces: false
+      })
+    )
+
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
   it('restores the hide-default-branch filter from persisted UI state', () => {
@@ -114,6 +183,53 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('restores fixed card properties during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        worktreeCardProperties: ['inline-agents']
+      })
+    )
+
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
+  })
+
+  it('adds the default-on Ports status item once for older persisted UI', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'resource-usage'],
+        _portsStatusBarDefaultAdded: false
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(setUI).toHaveBeenCalledWith({
+      statusBarItems: ['claude', 'resource-usage', 'ports'],
+      _portsStatusBarDefaultAdded: true
+    })
+  })
+
+  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'resource-usage'],
+        _portsStatusBarDefaultAdded: true
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
+    expect(setUI).not.toHaveBeenCalled()
   })
 
   it('restores compact workspace board mode only from an explicit true', () => {
@@ -418,9 +534,60 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().taskResumeState).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
+
+  it('keeps fixed card properties when toggling Agent activity', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ worktreeCardProperties: ['inline-agents'] })
+    store.getState().toggleWorktreeCardProperty('inline-agents')
+
+    const expected: WorktreeCardProperty[] = ['status', 'unread']
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
+  })
 })
 
 describe('createUISlice settings navigation', () => {
+  it('prefetches the restored default task source when provider settings drifted', () => {
+    const store = createUIStore()
+    const prefetchWorkItems = vi.fn()
+    const prefetchLinearIssues = vi.fn()
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github',
+        defaultTaskViewPreset: 'all'
+      } as unknown as AppState['settings'],
+      linearStatus: { connected: true } as AppState['linearStatus'],
+      preflightStatus: { glab: { installed: false } } as AppState['preflightStatus'],
+      prefetchWorkItems,
+      prefetchLinearIssues
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage()
+
+    expect(prefetchWorkItems).toHaveBeenCalledWith(
+      'repo-1',
+      '/repo',
+      expect.any(Number),
+      'is:issue is:open'
+    )
+    expect(prefetchLinearIssues).not.toHaveBeenCalled()
+  })
+
   it('returns to the tasks page after visiting settings from an in-progress draft', () => {
     const store = createUIStore()
 
@@ -450,30 +617,147 @@ describe('createUISlice settings navigation', () => {
   })
 })
 
-describe('createUISlice feature tour nudge', () => {
-  it('shows and dismisses the feature tour nudge', () => {
+describe('createUISlice page navigation history', () => {
+  it('records and rewinds Tasks visits on close', () => {
     const store = createUIStore()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
 
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openTaskPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'tasks'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
 
-    store.getState().dismissFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
+    store.getState().closeTaskPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 
-  it('keeps the nudge hidden while the full feature tour is open', () => {
+  it('rewinds Tasks detail visits on close', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    expect(store.getState().worktreeNavHistory).toEqual([
+      'a',
+      'tasks',
+      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined }
+    ])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(2)
+
+    store.getState().closeTaskPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().taskPageData).toEqual({})
+    expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('skips the whole Tasks detail stack on close', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    store.getState().openTaskPage({ taskSource: 'linear' })
+    expect(store.getState().worktreeNavHistory).toEqual([
+      'a',
+      'tasks',
+      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined },
+      'tasks'
+    ])
+
+    store.getState().closeTaskPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('records and rewinds Automations visits on close', () => {
+    const store = createUIStore()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openAutomationsPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'automations'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    store.getState().closeAutomationsPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('dedupes repeated Automations opens against the current history entry', () => {
+    const store = createUIStore()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openAutomationsPage()
+    store.getState().openAutomationsPage()
+
+    expect(store.getState().activeView).toBe('automations')
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'automations'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('keeps the Automations history index when Automations is the only entry', () => {
     const store = createUIStore()
 
-    store.getState().openModal('feature-wall')
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
+    store.getState().openAutomationsPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['automations'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
 
-    store.getState().closeModal()
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
+    store.getState().closeAutomationsPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
 
-    store.getState().openModal('feature-wall')
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
+  it('skips deleted prior worktrees when closing Automations', () => {
+    const store = createUIStore()
+    store.setState({
+      activeView: 'automations',
+      previousViewBeforeAutomations: 'terminal',
+      worktreesByRepo: { 'repo-1': [makeWorktree('c')] },
+      worktreeNavHistory: ['c', 'a', 'automations'],
+      worktreeNavHistoryIndex: 2
+    })
+
+    store.getState().closeAutomationsPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+})
+
+describe('createUISlice feature tips', () => {
+  it('marks feature tips seen and persists them once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markFeatureTipsSeen(['voice-dictation'])
+    store.getState().markFeatureTipsSeen(['voice-dictation'])
+
+    expect(store.getState().featureTipsSeenIds).toEqual(['voice-dictation'])
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ featureTipsSeenIds: ['voice-dictation'] })
+  })
+
+  it('normalizes persisted feature tip ids during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        featureTipsSeenIds: ['voice-dictation', 'unknown', 'voice-dictation'] as never
+      })
+    )
+
+    expect(store.getState().featureTipsSeenIds).toEqual(['voice-dictation'])
   })
 })
 

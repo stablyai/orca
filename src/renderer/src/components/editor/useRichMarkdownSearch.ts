@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import {
   createRichMarkdownSearchPlugin,
@@ -11,16 +13,15 @@ import {
 
 export function useRichMarkdownSearch({
   editor,
-  isMac,
   rootRef,
   scrollContainerRef
 }: {
   editor: Editor | null
-  isMac: boolean
   rootRef: RefObject<HTMLDivElement | null>
   scrollContainerRef: RefObject<HTMLDivElement | null>
 }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const keybindings = useAppStore((state) => state.keybindings)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [rawActiveMatchIndex, setRawActiveMatchIndex] = useState(-1)
@@ -188,7 +189,10 @@ export function useRichMarkdownSearch({
 
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
-      if (isMarkdownPreviewFindShortcut(event, isMac) && targetInsideEditor) {
+      if (
+        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
+        targetInsideEditor
+      ) {
         event.preventDefault()
         event.stopPropagation()
         openSearch()
@@ -208,7 +212,7 @@ export function useRichMarkdownSearch({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isMac, isSearchOpen, openSearch, rootRef])
+  }, [closeSearch, isSearchOpen, keybindings, openSearch, rootRef])
 
   return {
     activeMatchIndex,

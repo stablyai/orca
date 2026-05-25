@@ -318,7 +318,7 @@ describe('analyzeWorkspaceSpace', () => {
       omittedTopLevelItemCount: 0,
       omittedTopLevelSizeBytes: 0
     })
-    const readDir = vi.fn()
+    const readDir = vi.fn().mockResolvedValue([])
     const stat = vi.fn()
     getSshFilesystemProviderMock.mockReturnValue({ scanWorkspaceSpace, readDir, stat })
 
