@@ -48,7 +48,11 @@ function CommandDialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+            // Why: 'dialog-overlay-dim' lets glass themes lighten the dim
+            // (see main.css). CommandDialog is used by Cmd+P and the
+            // sidebar Search palette — without this they black out the
+            // whole window under glass.
+            'dialog-overlay-dim fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
             overlayClassName
           )}
         />
