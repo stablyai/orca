@@ -390,9 +390,9 @@
    are siblings of the app root, not descendants of an already-glassy
    container. */
 /* Why: under glass themes we want the chrome to read as one continuous
-   surface rather than rigid regions divided by seams. Suppress the titlebar
-   and worktree-sidebar borders specifically — interactive borders (button
-   outlines, input rings) still use --border at full alpha. */
+   surface rather than rigid regions divided by seams. Suppress the
+   titlebar, titlebar-left inset, and sidebar→main right border. Interactive
+   borders (button outlines, input rings) still use --border at full alpha. */
 :root.glass-light .titlebar,
 :root.glass-dark .titlebar {
   border-bottom: none;
@@ -401,14 +401,24 @@
 :root.glass-dark .titlebar-left {
   box-shadow: none;
 }
-:root.glass-light .worktree-sidebar,
-:root.glass-dark .worktree-sidebar {
+:root.glass-light .sidebar,
+:root.glass-dark .sidebar {
   border-right: none;
 }
 
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Why: floating panels (floating workspace, command palettes, sheet-like
+   overlays) want the same near-transparent fill as the rest of the glass
+   chrome but with stronger blur, so they read as "distinct surface
+   floating above the canvas" without becoming opaque. ~3× the default
+   --glass-blur is enough separation. */
+.glass-surface-strong {
+  backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
 }
 
 /* Why: respect the user's system-level reduce-transparency setting. macOS
