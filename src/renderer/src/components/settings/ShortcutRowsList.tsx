@@ -1,9 +1,11 @@
 import React from 'react'
 import type { KeybindingActionId, KeybindingInput } from '../../../../shared/keybindings'
+import { cn } from '../../lib/utils'
 import { ShortcutBindingRow } from './ShortcutBindingRow'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
 
 export function ShortcutRowsList({
+  className,
   groups,
   platform,
   errors,
@@ -15,6 +17,7 @@ export function ShortcutRowsList({
   onDisable,
   onReset
 }: {
+  className?: string
   groups: ShortcutRowsByGroup[]
   platform: NodeJS.Platform
   errors: Partial<Record<KeybindingActionId, string>>
@@ -28,14 +31,19 @@ export function ShortcutRowsList({
 }): React.JSX.Element {
   if (groups.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+      <div
+        className={cn(
+          'rounded-md border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground',
+          className
+        )}
+      >
         No shortcuts match those filters.
       </div>
     )
   }
 
   return (
-    <div className="grid gap-8">
+    <div className={cn('grid gap-8', className)}>
       {groups.map((group) => (
         <div key={group.title} className="space-y-3">
           <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">

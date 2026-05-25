@@ -124,45 +124,44 @@ export function ShortcutBindingRow({
       title={item.title}
       description={`${groupTitle} shortcut`}
       keywords={[...item.searchKeywords]}
-      className="group relative grid min-h-[54px] max-w-none grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)] lg:items-center"
+      className="group relative grid min-h-[54px] max-w-none grid-cols-1 gap-x-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)] lg:grid-rows-[minmax(1.75rem,auto)_1rem] lg:items-start"
     >
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm text-foreground">{item.title}</span>
-          {modified ? (
-            <Badge variant="outline" className="shrink-0 text-[11px]">
-              Modified
-            </Badge>
-          ) : null}
-          {terminalStatus ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant="outline"
-                  className="shrink-0 gap-1 border-border/70 text-[11px] text-muted-foreground"
-                >
-                  <Terminal className="size-3" />
-                  {terminalStatus.label}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {terminalStatus.description}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
-        <div
-          className={cn(
-            'h-[16px] overflow-hidden text-[11px] leading-4',
-            error ? 'text-destructive' : 'text-muted-foreground'
-          )}
-          aria-live="polite"
-        >
-          {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
-        </div>
+      <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1 lg:self-center">
+        <span className="truncate text-sm text-foreground">{item.title}</span>
+        {modified ? (
+          <Badge variant="outline" className="shrink-0 text-[11px]">
+            Modified
+          </Badge>
+        ) : null}
+        {terminalStatus ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="shrink-0 gap-1 border-border/70 text-[11px] text-muted-foreground"
+              >
+                <Terminal className="size-3" />
+                {terminalStatus.label}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {terminalStatus.description}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
 
-      <div className="mt-1 flex min-w-0 items-center lg:mt-0 lg:justify-end lg:pr-24">
+      <div
+        className={cn(
+          'h-[16px] overflow-hidden text-[11px] leading-4 lg:col-start-1 lg:row-start-2',
+          error ? 'text-destructive' : 'text-muted-foreground'
+        )}
+        aria-live="polite"
+      >
+        {helperMessage ? <span className="block truncate">{helperMessage}</span> : null}
+      </div>
+
+      <div className="mt-1 flex min-w-0 items-center lg:col-start-2 lg:row-start-1 lg:mt-0 lg:self-center lg:justify-end lg:pr-24">
         <BindingPreview bindings={effective} platform={platform} />
       </div>
 

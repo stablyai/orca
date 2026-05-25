@@ -48,8 +48,6 @@ import {
   type LinkedWorkItemSummary,
   type SetupConfig
 } from '@/lib/new-workspace'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
@@ -77,7 +75,6 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { resolveComposerBranchSelection } from './composer-branch-selection'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -134,7 +131,6 @@ export type ComposerCardProps = {
   onClearSmartNameSelection: () => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
-  onPromptKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
   /** Rendered issueCommand template to preview inside the empty prompt
    *  textarea when the user has linked a work item but not typed anything. */
   linkedOnlyTemplatePreview: string | null
@@ -142,7 +138,6 @@ export type ComposerCardProps = {
   getAttachmentLabel: (pathValue: string) => string
   onAddAttachment: () => void
   onRemoveAttachment: (pathValue: string) => void
-  addAttachmentShortcut: string
   linkedWorkItem: LinkedWorkItemSummary | null
   onRemoveLinkedWorkItem: () => void
   linkPopoverOpen: boolean
@@ -1372,28 +1367,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [])
 
-  const handlePromptKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      if (
-        !keybindingMatchesAction(
-          'composer.addAttachment',
-          event,
-          getShortcutPlatform(),
-          useAppStore.getState().keybindings
-        )
-      ) {
-        return
-      }
-
-      // Why: the attachment picker should only steal Cmd/Ctrl+U while the user
-      // is composing a prompt, so the shortcut is scoped to the textarea rather
-      // than registered globally for the whole new-workspace surface.
-      event.preventDefault()
-      void handleAddAttachment()
-    },
-    [handleAddAttachment]
-  )
-
   const handleRepoChange = useCallback(
     (value: string): void => {
       if (value === repoId) {
@@ -2153,8 +2126,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createGateMode === 'quick'
       ? getQuickComposerCreateDisabled(createGateInput)
       : getFullComposerCreateDisabled(createGateInput)
-  const addAttachmentShortcut = useShortcutLabel('composer.addAttachment')
-
   const cardProps: ComposerCardProps = {
     eligibleRepos,
     repoId,
@@ -2170,14 +2141,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onClearSmartNameSelection: handleClearSmartNameSelection,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
-    onPromptKeyDown: handlePromptKeyDown,
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
-    addAttachmentShortcut,
     linkedWorkItem,
     onRemoveLinkedWorkItem: handleRemoveLinkedWorkItem,
     linkPopoverOpen,

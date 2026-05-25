@@ -105,8 +105,8 @@ export function ShortcutFilterRail({
   }))
 
   return (
-    <aside className="space-y-5 xl:sticky xl:top-0 xl:self-start">
-      <div className="space-y-2">
+    <aside className="flex min-h-0 flex-col gap-5 xl:h-full">
+      <div className="shrink-0 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="shortcut-filter-search" className="text-xs font-medium">
             Find shortcuts
@@ -139,7 +139,7 @@ export function ShortcutFilterRail({
         </div>
       </div>
 
-      <nav aria-label="Shortcut status filters" className="space-y-2">
+      <nav aria-label="Shortcut status filters" className="shrink-0 space-y-2">
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
           Status
         </p>
@@ -163,7 +163,10 @@ export function ShortcutFilterRail({
         </div>
       </nav>
 
-      <nav aria-label="Shortcut groups" className="space-y-2">
+      <nav
+        aria-label="Shortcut groups"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-sleek"
+      >
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
           Groups
         </p>

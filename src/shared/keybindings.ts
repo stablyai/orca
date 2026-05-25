@@ -71,7 +71,6 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
-  | 'composer.addAttachment'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.paste'
@@ -565,14 +564,6 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       win32: ['Delete']
     },
     allowBareKeybindings: true
-  },
-  {
-    id: 'composer.addAttachment',
-    title: 'Add Attachment',
-    group: 'Composer',
-    scope: 'composer',
-    searchKeywords: ['shortcut', 'composer', 'attachment', 'upload'],
-    defaultBindings: platformBindings(['Mod+U'])
   },
   {
     id: 'settings.search',

@@ -29,18 +29,10 @@ import {
   type ShortcutGroupSummary,
   type ShortcutRowsByGroup
 } from './ShortcutFilterRail'
-import { ShortcutPolicyControls } from './ShortcutPolicyControls'
 import { ShortcutRowsList } from './ShortcutRowsList'
-import {
-  CTRL_TAB_BEHAVIOR_SEARCH_ENTRY,
-  SHORTCUTS_PANE_SEARCH_ENTRIES,
-  TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY
-} from './shortcuts-search'
-import {
-  matchesSettingsSearch,
-  normalizeSettingsSearchQuery
-} from './settings-search'
-export { SHORTCUTS_PANE_SEARCH_ENTRIES }
+import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
+import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 
 type ShortcutGroup = {
   title: string
@@ -129,7 +121,6 @@ function getShortcutTerminalStatus(
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const ctrlTabOrderMode = useAppStore((state) => state.settings?.ctrlTabOrderMode ?? 'mru')
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
@@ -332,17 +323,16 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
-  const showCtrlTab = matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY)
 
   return (
-    <div className="space-y-6">
-      <section className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
+      <section className="flex min-h-0 flex-1 flex-col space-y-3">
         <SettingsSubsectionHeader
           title="Keyboard Shortcuts"
           description="Customize shortcuts visually or edit the file directly."
         />
 
-        <div className="grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
             onQueryChange={setShortcutQuery}
@@ -356,20 +346,19 @@ export function ShortcutsPane(): React.JSX.Element {
             totalCount={shortcutRows.length}
           />
 
-          <div className="min-w-0 space-y-5">
-            <ShortcutPolicyControls
-              showPolicy={showPolicy}
-              showCtrlTab={showCtrlTab}
-              terminalShortcutPolicy={terminalShortcutPolicy}
-              ctrlTabOrderMode={ctrlTabOrderMode}
-              terminalShortcutPolicyKeywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
-              ctrlTabKeywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRY.keywords}
-              updateSettings={updateSettings}
-            />
+          <div className="flex min-h-0 min-w-0 flex-col gap-5">
+            {showPolicy ? (
+              <ShortcutTerminalPolicyControl
+                terminalShortcutPolicy={terminalShortcutPolicy}
+                keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+                updateSettings={updateSettings}
+              />
+            ) : null}
 
             <KeybindingsFileActions />
 
             <ShortcutRowsList
+              className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
               groups={visibleShortcutGroups}
               platform={platform}
               errors={errors}
