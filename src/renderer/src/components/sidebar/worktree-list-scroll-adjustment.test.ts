@@ -11,6 +11,7 @@ import {
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
 import {
+  extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,
   GROUP_HEADER_ROW_HEIGHT,
   getActiveStickyHeaderIndexForScroll
@@ -210,6 +211,26 @@ describe('getScrollTopToRevealBounds', () => {
         GROUP_HEADER_ROW_HEIGHT
       )
     ).toBe(120)
+  })
+})
+
+describe('extractWorktreeVirtualRowIndexes', () => {
+  it('extracts the active and previous sticky headers with the visible range', () => {
+    expect(
+      extractWorktreeVirtualRowIndexes({
+        range: { startIndex: 8, endIndex: 10, overscan: 1, count: 20 },
+        stickyHeaderIndexes: [0, 5, 9]
+      })
+    ).toEqual([0, 5, 7, 8, 9, 10, 11])
+  })
+
+  it('falls back to the default range when no sticky header is active', () => {
+    expect(
+      extractWorktreeVirtualRowIndexes({
+        range: { startIndex: 2, endIndex: 3, overscan: 1, count: 10 },
+        stickyHeaderIndexes: [5]
+      })
+    ).toEqual([1, 2, 3, 4])
   })
 })
 

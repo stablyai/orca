@@ -1,4 +1,5 @@
-import type { VirtualItem } from '@tanstack/react-virtual'
+import { defaultRangeExtractor } from '@tanstack/react-virtual'
+import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from './worktree-list-groups'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
@@ -84,6 +85,31 @@ export function getPreviousStickyHeaderIndex(
     return null
   }
   return stickyHeaderIndexes[currentPosition - 1] ?? null
+}
+
+export function extractWorktreeVirtualRowIndexes(args: {
+  range: Range
+  stickyHeaderIndexes: readonly number[]
+}): number[] {
+  const activeStickyHeaderIndex = getActiveStickyHeaderIndex(
+    args.stickyHeaderIndexes,
+    args.range.startIndex
+  )
+  if (activeStickyHeaderIndex === null) {
+    return defaultRangeExtractor(args.range)
+  }
+
+  const previousStickyHeaderIndex = getPreviousStickyHeaderIndex(
+    args.stickyHeaderIndexes,
+    activeStickyHeaderIndex
+  )
+  return Array.from(
+    new Set([
+      activeStickyHeaderIndex,
+      ...(previousStickyHeaderIndex === null ? [] : [previousStickyHeaderIndex]),
+      ...defaultRangeExtractor(args.range)
+    ])
+  ).sort((a, b) => a - b)
 }
 
 export function getActiveStickyHeaderIndexForScroll(args: {
