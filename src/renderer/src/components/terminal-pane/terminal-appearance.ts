@@ -205,7 +205,7 @@ export function applyTerminalAppearance(
   // Why: glass themes default to a translucent terminal while preserving any
   // explicit user opacity value, including fully opaque.
   const themeIsGlass = settings.theme === 'glass-light' || settings.theme === 'glass-dark'
-  const effectiveOpacity = settings.terminalBackgroundOpacity ?? (themeIsGlass ? 0.92 : undefined)
+  const effectiveOpacity = settings.terminalBackgroundOpacity ?? (themeIsGlass ? 0.45 : undefined)
   const theme = composeActiveTerminalTheme(baseTheme, {
     ...settings,
     terminalBackgroundOpacity: effectiveOpacity
