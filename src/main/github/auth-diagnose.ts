@@ -13,6 +13,8 @@
  */
 import { ghExecFileAsync } from '../git/runner'
 import type { GhAuthDiagnostic, GhAuthAccount } from '../../shared/github-auth-types'
+import type { GitHubRepoTarget } from '../../shared/github-project-types'
+import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
 
 // Required scopes for ProjectV2 GraphQL access in Orca. `project` is the
 // scope that gates ProjectV2 reads/writes; the others are needed for the
@@ -90,13 +92,20 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
   return accounts
 }
 
-export async function diagnoseGhAuth(): Promise<GhAuthDiagnostic> {
+export async function diagnoseGhAuth(args: GitHubRepoTarget = {}): Promise<GhAuthDiagnostic> {
+  // Why (issue #1715): pass cwd:repoPath when known so `gh auth status` reads
+  // the host that owns the repo (via its git remote) instead of gh's globally
+  // active host. Without this the diagnostic returns scope/auth info for the
+  // wrong host in multi-host setups and the UI shows misleading remediation.
+  const ghOptions = args.repoPath
+    ? ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
+    : {}
   let raw = ''
   let ghAvailable = true
   try {
     // `gh auth status` exits non-zero when no host is logged in but still
     // prints the same diagnostic text we want, so capture both streams.
-    const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'])
+    const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], ghOptions)
     raw = `${stdout}\n${stderr}`
   } catch (err) {
     const stderr =

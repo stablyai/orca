@@ -14,6 +14,7 @@ import {
   runRest,
   validateSlugArgs,
   assertPositiveInt,
+  targetToCwd,
   type GraphqlVars
 } from './internals'
 import type { GitHubAssignableUser, GitHubWorkItemDetails, PRComment } from '../../../shared/types'
@@ -122,7 +123,7 @@ export async function updateProjectItemFieldValue(
     fieldId: args.fieldId,
     value: valVar.val
   }
-  const res = await runGraphql<unknown>(query, vars)
+  const res = await runGraphql<unknown>(query, vars, targetToCwd(args))
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -144,11 +145,15 @@ export async function clearProjectItemFieldValue(
       }) { projectV2Item { id } }
     }
   `
-  const res = await runGraphql<unknown>(query, {
-    projectId: args.projectId,
-    itemId: args.itemId,
-    fieldId: args.fieldId
-  })
+  const res = await runGraphql<unknown>(
+    query,
+    {
+      projectId: args.projectId,
+      itemId: args.itemId,
+      fieldId: args.fieldId
+    },
+    targetToCwd(args)
+  )
   if (!res.ok) {
     return { ok: false, error: res.error }
   }

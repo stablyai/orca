@@ -196,7 +196,17 @@ const PRReviewCommentReply = RepoSelector.extend({
 
 const ProjectOwnerType = z.enum(['organization', 'user'])
 
-const ProjectViewTable = z.object({
+// Why (issue #1715): repo target lets the renderer hint which gh host to
+// route to in multi-host setups. Both fields optional — callers without a
+// repo context (e.g. paste-to-add from a foreign host) accept gh's globally
+// active host. `repoPath` is the local checkout path used as gh's cwd so
+// it infers the host from the git remote.
+const RepoTarget = z.object({
+  repoPath: OptionalString,
+  connectionId: OptionalString.nullable().optional()
+})
+
+const ProjectViewTable = RepoTarget.extend({
   owner: requiredString('Missing owner'),
   ownerType: ProjectOwnerType,
   projectNumber: z.number().int().positive(),
@@ -211,24 +221,24 @@ const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
   type: z.enum(['issue', 'pr'])
 })
 
-const ProjectRef = z.object({
+const ProjectRef = RepoTarget.extend({
   input: requiredString('Missing project reference')
 })
 
-const ProjectViews = z.object({
+const ProjectViews = RepoTarget.extend({
   owner: requiredString('Missing owner'),
   ownerType: ProjectOwnerType,
   projectNumber: z.number().int().positive()
 })
 
-const ProjectItemField = z.object({
+const ProjectItemField = RepoTarget.extend({
   projectId: requiredString('Missing project ID'),
   itemId: requiredString('Missing item ID'),
   fieldId: requiredString('Missing field ID'),
   value: z.any()
 })
 
-const ClearProjectItemField = z.object({
+const ClearProjectItemField = RepoTarget.extend({
   projectId: requiredString('Missing project ID'),
   itemId: requiredString('Missing item ID'),
   fieldId: requiredString('Missing field ID')
@@ -538,8 +548,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'github.project.listAccessible',
-    params: z.object({}),
-    handler: async (_params, { runtime }) => runtime.listGitHubProjects()
+    params: RepoTarget,
+    handler: async (params, { runtime }) => runtime.listGitHubProjects(params)
   }),
   defineMethod({
     name: 'github.project.listLabelsBySlug',

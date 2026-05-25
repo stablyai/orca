@@ -327,7 +327,21 @@ export type ListIssueTypesBySlugResult =
 
 // ─── IPC arg shapes (shared between main, preload, renderer) ──────────
 
-export type GetProjectViewTableArgs = {
+/**
+ * Repo target for routing `gh` to the correct host in multi-host setups
+ * (e.g. github.com + GHES). Passed through to `gh` as `cwd: repoPath` for
+ * local repos so `gh` infers the host from the git remote. When
+ * `connectionId` is set the call is SSH-routed and `cwd` is omitted because
+ * the path is meaningful only on the remote. Both optional — calls that
+ * legitimately span hosts (paste-to-add a URL from a foreign host) leave
+ * both unset and accept gh's globally-active host. See issue #1715.
+ */
+export type GitHubRepoTarget = {
+  repoPath?: string
+  connectionId?: string | null
+}
+
+export type GetProjectViewTableArgs = GitHubRepoTarget & {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
@@ -350,14 +364,14 @@ export type ProjectWorkItemDetailsBySlugArgs = {
   type: 'issue' | 'pr'
 }
 
-export type UpdateProjectItemFieldArgs = {
+export type UpdateProjectItemFieldArgs = GitHubRepoTarget & {
   projectId: string
   itemId: string
   fieldId: string
   value: GitHubProjectFieldMutationValue
 }
 
-export type ClearProjectItemFieldArgs = {
+export type ClearProjectItemFieldArgs = GitHubRepoTarget & {
   projectId: string
   itemId: string
   fieldId: string
@@ -421,12 +435,14 @@ export type UpdateIssueTypeBySlugArgs = {
   issueTypeId: string | null
 }
 
-export type ResolveProjectRefArgs = {
+export type ResolveProjectRefArgs = GitHubRepoTarget & {
   input: string
 }
 
-export type ListProjectViewsArgs = {
+export type ListProjectViewsArgs = GitHubRepoTarget & {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
 }
+
+export type ListAccessibleProjectsArgs = GitHubRepoTarget

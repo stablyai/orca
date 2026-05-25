@@ -30,7 +30,8 @@ import type {
   GitHubProjectMutationResult,
   GitHubProjectRow,
   GitHubProjectTable,
-  GitHubProjectViewError
+  GitHubProjectViewError,
+  GitHubRepoTarget
 } from '../../../../shared/github-project-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -326,6 +327,19 @@ function countGitHubWorkItemsForRepo(
     repoId: context.repoId,
     ...args
   })
+}
+
+// Why (issue #1715): derive a gh-host routing hint from the active repo so
+// project gh calls land on the host that owns the repo in multi-host setups
+// (github.com + GHES). Returns `{}` when no repo is active; callers then
+// accept gh's globally active host (legitimate for paste-to-add from a
+// foreign host with no repo context).
+function activeRepoTargetFromState(state: AppState): GitHubRepoTarget {
+  const repo = state.activeRepoId ? state.repos.find((r) => r.id === state.activeRepoId) : null
+  if (!repo) {
+    return {}
+  }
+  return { repoPath: repo.path, connectionId: repo.connectionId ?? null }
 }
 
 export function projectViewCacheKey(
@@ -1706,15 +1720,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
+        // Why (issue #1715): inject the active repo as a gh-host routing
+        // hint so the view-fetch GraphQL targets the host that owns the
+        // repo (github.com vs GHES). gh infers the host from the git
+        // remote when called with cwd:repoPath.
+        const payload: GetProjectViewTableArgs = { ...activeRepoTargetFromState(get()), ...args }
         const envelope =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetProjectViewTableResult>(
                 target,
                 'github.project.viewTable',
-                args,
+                payload,
                 { timeoutMs: 60_000 }
               )
-            : await window.api.gh.getProjectViewTable(args)
+            : await window.api.gh.getProjectViewTable(payload)
         if (envelope.ok) {
           const table = envelope.data
           const key = projectViewCacheKey(
@@ -1806,25 +1825,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
     const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
+    // Why (issue #1715): route the ProjectV2 field-update GraphQL to the
+    // host that owns the active repo so GHES projects don't fall through
+    // to gh's globally-active host (github.com) and 404 / mis-auth.
+    const updatePayload = {
+      ...activeRepoTargetFromState(state),
+      projectId: table.project.id,
+      itemId: rowId,
+      fieldId,
+      value
+    }
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
             target,
             'github.project.updateItemField',
-            {
-              projectId: table.project.id,
-              itemId: rowId,
-              fieldId,
-              value
-            },
+            updatePayload,
             { timeoutMs: 30_000 }
           )
-        : await window.api.gh.updateProjectItemField({
-            projectId: table.project.id,
-            itemId: rowId,
-            fieldId,
-            value
-          })
+        : await window.api.gh.updateProjectItemField(updatePayload)
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
@@ -1864,23 +1883,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
     const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
+    // Why (issue #1715): same host-routing concern as updateProjectFieldValue
+    // — clear-field GraphQL must hit the host that owns the active repo.
+    const clearPayload = {
+      ...activeRepoTargetFromState(state),
+      projectId: table.project.id,
+      itemId: rowId,
+      fieldId
+    }
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
             target,
             'github.project.clearItemField',
-            {
-              projectId: table.project.id,
-              itemId: rowId,
-              fieldId
-            },
+            clearPayload,
             { timeoutMs: 30_000 }
           )
-        : await window.api.gh.clearProjectItemField({
-            projectId: table.project.id,
-            itemId: rowId,
-            fieldId
-          })
+        : await window.api.gh.clearProjectItemField(clearPayload)
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }

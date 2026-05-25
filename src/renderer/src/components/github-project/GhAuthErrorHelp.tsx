@@ -8,11 +8,12 @@
  * a one-shot diagnostic and rewrites the suggested fix to match what gh
  * is actually doing: env-shadow vs. plain missing-scope vs. not-installed.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import type { GitHubProjectViewError } from '@/../../shared/github-project-types'
+import { useAppStore } from '@/store'
+import type { GitHubProjectViewError, GitHubRepoTarget } from '@/../../shared/github-project-types'
 import type { GhAuthDiagnostic } from '@/../../shared/github-auth-types'
 import { translate } from '@/i18n/i18n'
 
@@ -248,10 +249,29 @@ export function GhAuthErrorHelp({
   variant?: 'block' | 'banner'
 }): React.JSX.Element {
   const [diag, setDiag] = useState<GhAuthDiagnostic | null>(null)
+  // Why (issue #1715): pass the active repo as a host hint so `gh auth status`
+  // reads scope/auth info for the host that owns the repo instead of gh's
+  // globally-active host. Without this, multi-host setups (github.com + GHES)
+  // see remediation tailored to the wrong host's account.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const activeRepoTarget = useMemo<GitHubRepoTarget>(() => {
+    const repo = activeRepoId ? repos.find((r) => r.id === activeRepoId) : null
+    if (!repo) {
+      return {}
+    }
+    return { repoPath: repo.path, connectionId: repo.connectionId ?? null }
+  }, [activeRepoId, repos])
+  const repoPath = activeRepoTarget.repoPath
+  const connectionId = activeRepoTarget.connectionId
   useEffect(() => {
     let cancelled = false
+    const target: GitHubRepoTarget = {
+      ...(repoPath ? { repoPath } : {}),
+      ...(connectionId !== undefined ? { connectionId } : {})
+    }
     window.api.gh
-      .diagnoseAuth()
+      .diagnoseAuth(target)
       .then((d) => {
         if (!cancelled) {
           setDiag(d)
@@ -262,7 +282,7 @@ export function GhAuthErrorHelp({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [repoPath, connectionId])
 
   const remedy = buildRemediation(error.message, error.type, diag)
   const docsUrl = remedy.docsUrl

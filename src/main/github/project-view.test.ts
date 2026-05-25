@@ -131,7 +131,8 @@ describe('parseProjectPaste', () => {
       kind: 'org',
       owner: 'acme',
       number: 42,
-      viewNumber: 3
+      viewNumber: 3,
+      host: 'github.com'
     })
   })
 
@@ -139,7 +140,8 @@ describe('parseProjectPaste', () => {
     expect(parseProjectPaste('https://github.com/users/octocat/projects/1')).toEqual({
       kind: 'user',
       owner: 'octocat',
-      number: 1
+      number: 1,
+      host: 'github.com'
     })
   })
 

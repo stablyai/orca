@@ -6,13 +6,25 @@ classification semantics. */
 // for gh calls. The legacy plain `execFileAsync` is NOT used here — routing
 // every gh call through the runner gives us transient-5xx retry, WSL path
 // translation, and a single hook point for future quota tracking.
-import { acquire, release } from '../gh-utils'
+import { acquire, ghRepoExecOptions, githubRepoContext, release } from '../gh-utils'
 import { extractExecError, ghExecFileAsync } from '../../git/runner'
 import { rateLimitGuard, noteRateLimitSpend, type RateLimitBucketKind } from '../rate-limit'
-import type { GitHubProjectViewError } from '../../../shared/github-project-types'
+import type { GitHubProjectViewError, GitHubRepoTarget } from '../../../shared/github-project-types'
 
 export { acquire, release, extractExecError, ghExecFileAsync, rateLimitGuard, noteRateLimitSpend }
 export type { RateLimitBucketKind }
+
+// Why (issue #1715): translate the caller's repo target into the gh exec
+// cwd so multi-host setups (github.com + GHES) route to the right host.
+// Local repos get cwd:repoPath; SSH targets return undefined because the
+// path is meaningful only on the remote (the relay handles host inference
+// remotely). When neither is set, callers accept gh's globally-active host.
+export function targetToCwd(target: GitHubRepoTarget | undefined): string | undefined {
+  if (!target?.repoPath) {
+    return undefined
+  }
+  return ghRepoExecOptions(githubRepoContext(target.repoPath, target.connectionId)).cwd
+}
 
 // ─── Slug validation ──────────────────────────────────────────────────
 

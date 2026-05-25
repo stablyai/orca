@@ -19,6 +19,7 @@ import {
   isValidOwnerSlug,
   assertSlug,
   assertPositiveInt,
+  targetToCwd,
   type GhGraphqlErrorShape,
   type GraphqlVars
 } from './project-view/internals'
@@ -41,6 +42,7 @@ import type {
   GitHubProjectViewError,
   GitHubProjectViewLayout,
   GitHubProjectViewSummary,
+  ListAccessibleProjectsArgs,
   ListAccessibleProjectsResult,
   ListProjectViewsArgs,
   ListProjectViewsResult,
@@ -634,12 +636,15 @@ function ownerQueryRoot(ownerType: GitHubProjectOwnerType): string {
   return ownerType === 'organization' ? 'organization' : 'user'
 }
 
-async function fetchProjectViewsPage(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  after: string | null
-}): Promise<
+async function fetchProjectViewsPage(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    after: string | null
+  },
+  cwd: string | undefined
+): Promise<
   | {
       ok: true
       project: { id: string; title: string; url: string }
@@ -682,7 +687,8 @@ async function fetchProjectViewsPage(args: {
   }
   const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
     query,
-    vars
+    vars,
+    cwd
   )
   if (!res.ok) {
     return res
@@ -705,7 +711,8 @@ async function fetchProjectViewsPage(args: {
 
 async function fetchViewFieldsContinuation(
   viewId: string,
-  after: string
+  after: string,
+  cwd: string | undefined
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
@@ -741,7 +748,7 @@ async function fetchViewFieldsContinuation(
           nodes?: (RawProjectV2Field | null)[]
         }
       } | null
-    }>(query, { viewId, after: cursor })
+    }>(query, { viewId, after: cursor }, cwd)
     if (!res.ok) {
       return res
     }
@@ -843,15 +850,18 @@ type RawItemsPage = {
 // Why: runGraphql returns the classified error but not the raw GraphQL
 // errors; for the parent-field retry decision we need those. This variant
 // returns the raw envelope so callers can re-inspect.
-async function fetchItemsPageWithRaw(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-  first: number
-  after: string | null
-  includeParent: boolean
-}): Promise<
+async function fetchItemsPageWithRaw(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+    first: number
+    after: string | null
+    includeParent: boolean
+  },
+  cwd: string | undefined
+): Promise<
   | { ok: true; page: RawItemsPage }
   | {
       ok: false
@@ -908,7 +918,10 @@ async function fetchItemsPageWithRaw(args: {
     let stderr = ''
     let execFailed = false
     try {
-      const r = await ghExecFileAsync(argsArr, { encoding: 'utf-8' })
+      const r = await ghExecFileAsync(argsArr, {
+        encoding: 'utf-8',
+        ...(cwd ? { cwd } : {})
+      })
       stdout = r.stdout
       stderr = r.stderr
     } catch (err) {
@@ -974,12 +987,15 @@ async function fetchItemsPageWithRaw(args: {
   }
 }
 
-async function fetchAllItems(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-}): Promise<
+async function fetchAllItems(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+  },
+  cwd: string | undefined
+): Promise<
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
@@ -1013,15 +1029,18 @@ async function fetchAllItems(args: {
     parentFieldProbeInFlight.set(scopeKey, probe)
     probePromise = (async () => {
       try {
-        const result = await fetchItemsPageWithRaw({
-          owner: args.owner,
-          ownerType: args.ownerType,
-          projectNumber: args.projectNumber,
-          query: args.query,
-          first: ITEM_PAGE_SIZE,
-          after: null,
-          includeParent: true
-        })
+        const result = await fetchItemsPageWithRaw(
+          {
+            owner: args.owner,
+            ownerType: args.ownerType,
+            projectNumber: args.projectNumber,
+            query: args.query,
+            first: ITEM_PAGE_SIZE,
+            after: null,
+            includeParent: true
+          },
+          cwd
+        )
         // Why: flip parentFieldRetriedByOwner BEFORE resolveProbe()/clearing
         // parentFieldProbeInFlight so siblings that awoke on `inFlight.catch()`
         // observe the updated flag. Doing this in the outer block (after
@@ -1039,15 +1058,18 @@ async function fetchAllItems(args: {
     })()
     first = await probePromise
   } else {
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent
-    })
+    first = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: null,
+        includeParent
+      },
+      cwd
+    )
   }
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
     // Retry the whole table without parent. Mark this owner as retried so
@@ -1062,15 +1084,18 @@ async function fetchAllItems(args: {
       )
       markParentFieldWarningLogged(scopeKey)
     }
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent: false
-    })
+    first = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: null,
+        includeParent: false
+      },
+      cwd
+    )
   }
   if (!first.ok) {
     return { ok: false, error: first.error }
@@ -1129,15 +1154,18 @@ async function fetchAllItems(args: {
     }
   }
   while (hasNext) {
-    const next = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: cursor as string,
-      includeParent
-    })
+    const next = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: cursor as string,
+        includeParent
+      },
+      cwd
+    )
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
     }
@@ -1170,12 +1198,15 @@ async function fetchAllItems(args: {
 
 // ─── Cheap count-only query (for unsupported_layout) ──────────────────
 
-async function fetchItemsCountOnly(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-}): Promise<number | null> {
+async function fetchItemsCountOnly(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+  },
+  cwd: string | undefined
+): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
   const query = `
     query($owner:String!, $num:Int!, $q:String!) {
@@ -1188,7 +1219,7 @@ async function fetchItemsCountOnly(args: {
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
-  >(query, { owner: args.owner, num: args.projectNumber, q: args.query })
+  >(query, { owner: args.owner, num: args.projectNumber, q: args.query }, cwd)
   if (!res.ok) {
     return null
   }
@@ -1215,6 +1246,7 @@ export async function getProjectViewTable(
       error: { type: 'validation_error', message: 'Invalid ownerType.' }
     }
   }
+  const ghCwd = targetToCwd(args)
 
   // Paginate views until a match is found.
   let cursor: string | null = null
@@ -1223,12 +1255,15 @@ export async function getProjectViewTable(
   let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
   const viewsSeen: RawProjectView[] = []
   while (true) {
-    const page = await fetchProjectViewsPage({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      after: cursor
-    })
+    const page = await fetchProjectViewsPage(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        after: cursor
+      },
+      ghCwd
+    )
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
@@ -1283,7 +1318,7 @@ export async function getProjectViewTable(
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
-    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor)
+    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, ghCwd)
     if (!cont.ok) {
       return { ok: false, error: cont.error }
     }
@@ -1306,12 +1341,15 @@ export async function getProjectViewTable(
   // Unsupported layout: return without paginating items; attempt a cheap
   // count-only query best-effort.
   if (selectedView.layout !== 'TABLE_LAYOUT') {
-    const count = await fetchItemsCountOnly({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: effectiveQuery
-    })
+    const count = await fetchItemsCountOnly(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: effectiveQuery
+      },
+      ghCwd
+    )
     return {
       ok: false,
       error: {
@@ -1323,12 +1361,15 @@ export async function getProjectViewTable(
   }
 
   // Fetch items.
-  const items = await fetchAllItems({
-    owner: args.owner,
-    ownerType: args.ownerType,
-    projectNumber: args.projectNumber,
-    query: effectiveQuery
-  })
+  const items = await fetchAllItems(
+    {
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: effectiveQuery
+    },
+    ghCwd
+  )
   if (!items.ok) {
     return {
       ok: false,
@@ -1382,7 +1423,10 @@ type RawViewerDiscovery = {
   }
 }
 
-export async function listAccessibleProjects(): Promise<ListAccessibleProjectsResult> {
+export async function listAccessibleProjects(
+  args: ListAccessibleProjectsArgs = {}
+): Promise<ListAccessibleProjectsResult> {
+  const ghCwd = targetToCwd(args)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
   // Why: per-org failures are collected so the picker can render a "some orgs
@@ -1417,7 +1461,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (viewerCursor) {
       vars.after = viewerCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, ghCwd)
     if (!res.ok) {
       // Why: a viewer-level failure is structural — if we can't list the
       // user's own projects, we have nothing to build on. Propagate as a
@@ -1492,7 +1536,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (orgCursor) {
       vars.orgAfter = orgCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, ghCwd)
     if (!res.ok) {
       // Why: the org-listing query itself failed (not a nested projectsV2).
       // Record it as a partial failure against a synthetic `*` owner so the
@@ -1556,8 +1600,8 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
 // ─── resolveProjectRef ─────────────────────────────────────────────────
 
 type ParsedPaste =
-  | { kind: 'org'; owner: string; number: number; viewNumber?: number }
-  | { kind: 'user'; owner: string; number: number; viewNumber?: number }
+  | { kind: 'org'; owner: string; number: number; viewNumber?: number; host: string }
+  | { kind: 'user'; owner: string; number: number; viewNumber?: number; host: string }
   | { kind: 'bare'; owner: string; number: number }
 
 export function parseProjectPaste(input: string): ParsedPaste | null {
@@ -1565,12 +1609,20 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   if (!trimmed) {
     return null
   }
-  // URL forms
-  const urlRe =
-    /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
+  // URL forms — Why (issue #1715): accept any host so GHES project URLs (e.g.
+  // https://ghe.example.com/orgs/foo/projects/3) parse. The host is captured
+  // so callers can route gh against the right server; gh itself resolves the
+  // host from the local repo's git remote (cwd:repoPath), but having the
+  // parsed host on hand keeps the parser useful for future host-aware checks.
+  const urlRe = /^https?:\/\/([^/\s]+)\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
   const m = trimmed.match(urlRe)
   if (m) {
-    const [, kindSeg, owner, nStr, vStr] = m
+    const [, host, kindSeg, owner, nStr, vStr] = m
+    // Why: require a dot to reject obvious non-hosts like `localhost-typo`
+    // pasted by mistake; legitimate GitHub Enterprise hosts always have one.
+    if (!host.includes('.')) {
+      return null
+    }
     const number = parseInt(nStr, 10)
     if (!Number.isInteger(number) || number < 1) {
       return null
@@ -1583,6 +1635,7 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
       kind: kindSeg === 'orgs' ? 'org' : 'user',
       owner,
       number,
+      host,
       ...(viewNumber !== undefined && Number.isInteger(viewNumber) && viewNumber >= 1
         ? { viewNumber }
         : {})
@@ -1603,7 +1656,8 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
 
 async function resolveOwnerType(
   owner: string,
-  preferred: GitHubProjectOwnerType | null
+  preferred: GitHubProjectOwnerType | null,
+  cwd: string | undefined
 ): Promise<
   | { ok: true; ownerType: GitHubProjectOwnerType; title: string }
   | { ok: false; error: GitHubProjectViewError }
@@ -1631,7 +1685,7 @@ async function resolveOwnerType(
     }
     const res = await runGraphql<
       Record<string, { projectV2?: { id?: string; title?: string } | null; login?: string } | null>
-    >(query, vars)
+    >(query, vars, cwd)
     if (!res.ok) {
       return { ok: false, error: res.error }
     }
@@ -1704,8 +1758,9 @@ export async function resolveProjectRef(
   }
   const preferred: GitHubProjectOwnerType | null =
     parsed.kind === 'org' ? 'organization' : parsed.kind === 'user' ? 'user' : null
+  const ghCwd = targetToCwd(args)
   // Verify by fetching project title.
-  const ownerRes = await resolveOwnerType(parsed.owner, preferred)
+  const ownerRes = await resolveOwnerType(parsed.owner, preferred, ghCwd)
   if (!ownerRes.ok) {
     return { ok: false, error: ownerRes.error }
   }
@@ -1718,7 +1773,7 @@ export async function resolveProjectRef(
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { id?: string; title?: string } | null } | null>
-  >(query, { owner: parsed.owner, num: parsed.number })
+  >(query, { owner: parsed.owner, num: parsed.number }, ghCwd)
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -1757,15 +1812,19 @@ export async function listProjectViews(
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
   }
+  const ghCwd = targetToCwd(args)
   const summaries: GitHubProjectViewSummary[] = []
   let cursor: string | null = null
   while (true) {
-    const page = await fetchProjectViewsPage({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      after: cursor
-    })
+    const page = await fetchProjectViewsPage(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        after: cursor
+      },
+      ghCwd
+    )
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
