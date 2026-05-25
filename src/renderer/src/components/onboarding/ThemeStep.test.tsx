@@ -1,10 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { applyOnboardingThemeSelection, ThemeStep } from './ThemeStep'
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
 
 describe('applyOnboardingThemeSelection', () => {
   it('previews and persists the selected theme immediately', () => {
@@ -28,20 +24,9 @@ describe('ThemeStep tile counts', () => {
     return html.split(TILE_CLASS_SIGNATURE).length - 1
   }
 
-  it('renders 5 theme tiles on macOS', () => {
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-    })
-    const html = renderToStaticMarkup(
-      <ThemeStep theme="system" onThemeChange={vi.fn()} settings={null} updateSettings={vi.fn()} />
-    )
-    expect(countTiles(html)).toBe(5)
-  })
-
-  it('renders 3 theme tiles on non-macOS', () => {
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
-    })
+  it('renders 3 theme tiles (system / dark / light) regardless of platform', () => {
+    // Why: glass effect lives in AppearancePane as a separate switch, so
+    // onboarding stays at 3 base tiles on every platform.
     const html = renderToStaticMarkup(
       <ThemeStep theme="system" onThemeChange={vi.fn()} settings={null} updateSettings={vi.fn()} />
     )

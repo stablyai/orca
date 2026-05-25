@@ -279,9 +279,10 @@ function CodeCell({
     onSaveRequestRef.current = onSaveRequest
   }, [onDeactivate, onSaveRequest])
 
+  const glassEffect = settings?.glassEffect ?? false
   useEffect(() => {
-    monaco.editor.setTheme(resolveMonacoThemeName(settings?.theme, isDark))
-  }, [isDark, settings?.theme])
+    monaco.editor.setTheme(resolveMonacoThemeName({ glassEffect }, isDark))
+  }, [isDark, glassEffect])
 
   if (!active) {
     return (
@@ -313,7 +314,7 @@ function CodeCell({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={resolveMonacoThemeName(settings?.theme, isDark)}
+        theme={resolveMonacoThemeName(settings, isDark)}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}

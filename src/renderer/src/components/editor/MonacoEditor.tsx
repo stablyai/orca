@@ -687,7 +687,7 @@ export default function MonacoEditor({
     })
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
-  const monacoTheme = resolveMonacoThemeName(settings?.theme, isDark)
+  const monacoTheme = resolveMonacoThemeName(settings, isDark)
 
   return (
     <div

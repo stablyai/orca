@@ -4,23 +4,19 @@ import { ORCA_GLASS_LIGHT_THEME_NAME, ORCA_GLASS_DARK_THEME_NAME } from './monac
 /**
  * Why: every Monaco consumer (file editor, diff viewer, ipynb viewer, code
  * excerpt) needs to pick the same theme so the editor surfaces look
- * consistent under glass themes. Without a single resolver, each consumer
- * drifts independently — Task 7's gap surfaced exactly this.
+ * consistent. Without a single resolver, each consumer drifts independently.
  *
- * Glass cases map to the registered orca-glass-* themes (defined in
- * monaco-glass-themes.ts and registered at bootstrap in monaco-setup.ts).
- * Non-glass cases keep the existing vs / vs-dark mapping driven by the
- * resolved-dark boolean.
+ * When glass effect is on, picks the registered orca-glass-* theme (which
+ * paints a transparent canvas so the underlying CSS surface shows through).
+ * When glass effect is off, keeps the standard vs / vs-dark mapping driven
+ * by the resolved-dark boolean.
  */
 export function resolveMonacoThemeName(
-  theme: GlobalSettings['theme'] | undefined,
+  settings: Pick<GlobalSettings, 'glassEffect'> | null | undefined,
   isDark: boolean
 ): string {
-  if (theme === 'glass-dark') {
-    return ORCA_GLASS_DARK_THEME_NAME
-  }
-  if (theme === 'glass-light') {
-    return ORCA_GLASS_LIGHT_THEME_NAME
+  if (settings?.glassEffect) {
+    return isDark ? ORCA_GLASS_DARK_THEME_NAME : ORCA_GLASS_LIGHT_THEME_NAME
   }
   return isDark ? 'vs-dark' : 'vs'
 }

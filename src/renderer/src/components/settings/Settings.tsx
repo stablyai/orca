@@ -374,9 +374,13 @@ function Settings(): React.JSX.Element {
     }
   }
 
-  const applyTheme = useCallback((theme: GlobalSettings['theme']) => {
-    applyDocumentTheme(theme)
-  }, [])
+  const glassEffect = settings?.glassEffect ?? false
+  const applyTheme = useCallback(
+    (theme: GlobalSettings['theme']) => {
+      applyDocumentTheme(theme, glassEffect)
+    },
+    [glassEffect]
+  )
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
   const navSections = useSettingsNavigationMetadata()

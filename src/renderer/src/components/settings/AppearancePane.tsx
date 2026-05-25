@@ -6,7 +6,6 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
-import { isGlassTheme } from '../../../../shared/glass-theme'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
@@ -78,15 +77,15 @@ export function AppearancePane({
 
   const isMac = navigator.userAgent.includes('Mac')
   // Why: vibrancy + transparent: true are window-creation-only Electron options.
-  // Snapshot the theme at component mount and compare to the live setting to
-  // detect crossings of the glass boundary that require a window relaunch.
-  // Mirrors the pattern used for windowBackgroundBlur in TerminalWindowSection.
-  const bootThemeRef = useRef<GlobalSettings['theme']>(settings.theme)
-  const glassBoundaryCrossed = isGlassTheme(settings.theme) !== isGlassTheme(bootThemeRef.current)
+  // Snapshot the glassEffect at component mount and compare to the live setting
+  // to detect glass on/off toggles that require a window relaunch. Mirrors
+  // the windowBackgroundBlur pattern in TerminalWindowSection.
+  const bootGlassEffectRef = useRef<boolean>(settings.glassEffect)
+  const glassBoundaryCrossed = settings.glassEffect !== bootGlassEffectRef.current
   const [relaunching, setRelaunching] = useState(false)
 
   useEffect(() => {
-    bootThemeRef.current = settings.theme
+    bootGlassEffectRef.current = settings.glassEffect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -127,15 +126,38 @@ export function AppearancePane({
                   options={[
                     { value: 'system', label: 'System' },
                     { value: 'dark', label: 'Dark' },
-                    { value: 'light', label: 'Light' },
-                    ...(isMac
-                      ? [
-                          { value: 'glass-dark' as const, label: 'Glass Dark' },
-                          { value: 'glass-light' as const, label: 'Glass Light' }
-                        ]
-                      : [])
+                    { value: 'light', label: 'Light' }
                   ]}
                 />
+              }
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {isMac && matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
+          <SearchableSetting
+            title="Glass effect"
+            description="Frosted glass surfaces over the desktop wallpaper. macOS only."
+            keywords={['glass', 'vibrancy', 'transparent', 'blur', 'frosted']}
+          >
+            <SettingsRow
+              label="Glass effect"
+              description="Frosted glass surfaces over the desktop wallpaper. Works with any theme; requires relaunch."
+              control={
+                <button
+                  role="switch"
+                  aria-checked={settings.glassEffect}
+                  onClick={() => updateSettings({ glassEffect: !settings.glassEffect })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                    settings.glassEffect ? 'bg-foreground' : 'bg-muted-foreground/30'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none block size-3.5 rounded-full bg-background-opaque shadow-sm transition-transform ${
+                      settings.glassEffect ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
               }
             />
           </SearchableSetting>
@@ -148,8 +170,7 @@ export function AppearancePane({
                 Restart required
               </p>
               <p className="text-xs text-muted-foreground">
-                Switching to or from a glass theme requires relaunching Orca to update window
-                vibrancy.
+                Toggling the glass effect requires relaunching Orca to update window vibrancy.
               </p>
             </div>
             <Button

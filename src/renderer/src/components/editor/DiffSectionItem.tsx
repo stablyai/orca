@@ -72,7 +72,10 @@ export function DiffSectionItem({
   sideBySide: boolean
   isDark: boolean
   settings:
-    | (Pick<GlobalSettings, 'theme'> & { terminalFontSize?: number; terminalFontFamily?: string })
+    | (Pick<GlobalSettings, 'theme' | 'glassEffect'> & {
+        terminalFontSize?: number
+        terminalFontFamily?: string
+      })
     | null
   sectionHeight: number | undefined
   worktreeId?: string
@@ -416,7 +419,7 @@ export function DiffSectionItem({
     loadSection(index)
   }, [index, loadSection])
 
-  const monacoTheme = resolveMonacoThemeName(settings?.theme, isDark)
+  const monacoTheme = resolveMonacoThemeName(settings, isDark)
 
   return (
     <div className="border-b border-border">

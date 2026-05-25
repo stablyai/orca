@@ -1095,15 +1095,8 @@ app.whenReady().then(async () => {
       onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
     })
   )
-  // Why: glass-* themes resolve to their underlying light/dark variant for
-  // the OS theme source; translucency comes from window vibrancy + renderer CSS.
-  const persistedTheme = store.getSettings().theme ?? 'system'
-  nativeTheme.themeSource =
-    persistedTheme === 'glass-dark'
-      ? 'dark'
-      : persistedTheme === 'glass-light'
-        ? 'light'
-        : persistedTheme
+  // Why: theme is system/dark/light only; glassEffect is a separate setting.
+  nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
     // users who removed Orca-managed hooks do not see them silently reappear on launch.

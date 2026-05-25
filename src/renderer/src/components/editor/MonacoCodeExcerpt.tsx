@@ -57,9 +57,10 @@ export default function MonacoCodeExcerpt({
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
+  const glassEffect = settings?.glassEffect ?? false
   useEffect(() => {
-    monaco.editor.setTheme(resolveMonacoThemeName(settings?.theme, isDark))
-  }, [isDark, settings?.theme])
+    monaco.editor.setTheme(resolveMonacoThemeName({ glassEffect }, isDark))
+  }, [isDark, glassEffect])
 
   useEffect(() => {
     if (lines.length === 0) {

@@ -49,30 +49,36 @@ export function resolveDocumentTheme(
   theme: DocumentThemePreference,
   matchMedia?: ThemeMediaMatcher
 ): boolean {
-  if (theme === 'dark' || theme === 'glass-dark') {
+  if (theme === 'dark') {
     return true
   }
-  if (theme === 'light' || theme === 'glass-light') {
+  if (theme === 'light') {
     return false
   }
   return systemPrefersDark(matchMedia)
 }
 
+/**
+ * Apply theme + glass effect classes to the document root.
+ *
+ * Class mapping:
+ * - 'dark' / 'light' — always set (mirror of resolved theme; Tailwind keys on 'dark')
+ * - 'glass-light' — set when glassEffect is on AND resolved theme is light
+ * - 'glass-dark'  — set when glassEffect is on AND resolved theme is dark
+ *
+ * Glass effect is silently dropped on non-macOS hosts because the
+ * underlying Electron vibrancy is macOS-only.
+ */
 export function applyDocumentTheme(
   theme: DocumentThemePreference,
+  glassEffect: boolean,
   options: ApplyDocumentThemeOptions = {}
 ): void {
   const root = options.root ?? document.documentElement
   const disableTransitions = options.disableTransitions ?? true
   const isDarwin = options.isDarwin ?? detectIsDarwin()
   const shouldUseDarkTheme = resolveDocumentTheme(theme, options.matchMedia)
-
-  // Why: glass themes require macOS vibrancy at the window level. On other
-  // platforms we silently fall back to the matching non-glass variant rather
-  // than rendering broken translucent surfaces. The settings file keeps the
-  // glass value so it reactivates if the same profile is opened on a Mac.
-  const effectiveTheme: DocumentThemePreference =
-    !isDarwin && theme.startsWith('glass') ? (theme === 'glass-dark' ? 'dark' : 'light') : theme
+  const effectiveGlassEffect = glassEffect && isDarwin
 
   if (disableTransitions) {
     root.classList.add(THEME_TRANSITION_DISABLED_CLASS)
@@ -82,8 +88,8 @@ export function applyDocumentTheme(
   // Mirror with `light` so consumers can observe the resolved theme
   // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
   root.classList.toggle('light', !shouldUseDarkTheme)
-  root.classList.toggle('glass-light', effectiveTheme === 'glass-light')
-  root.classList.toggle('glass-dark', effectiveTheme === 'glass-dark')
+  root.classList.toggle('glass-light', effectiveGlassEffect && !shouldUseDarkTheme)
+  root.classList.toggle('glass-dark', effectiveGlassEffect && shouldUseDarkTheme)
 
   if (!disableTransitions) {
     return

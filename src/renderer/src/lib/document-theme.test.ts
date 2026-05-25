@@ -76,17 +76,19 @@ describe('document theme', () => {
   it('applies dark and light root classes', () => {
     const root = createThemeRoot()
 
-    applyDocumentTheme('dark', { root, disableTransitions: false })
+    applyDocumentTheme('dark', false, { root, disableTransitions: false })
     expect(root.classList.contains('dark')).toBe(true)
+    expect(root.classList.contains('light')).toBe(false)
 
-    applyDocumentTheme('light', { root, disableTransitions: false })
+    applyDocumentTheme('light', false, { root, disableTransitions: false })
     expect(root.classList.contains('dark')).toBe(false)
+    expect(root.classList.contains('light')).toBe(true)
   })
 
   it('applies system root class from matchMedia', () => {
     const root = createThemeRoot()
 
-    applyDocumentTheme('system', {
+    applyDocumentTheme('system', false, {
       root,
       matchMedia: () => ({ matches: true }),
       disableTransitions: false
@@ -98,7 +100,7 @@ describe('document theme', () => {
     const root = createThemeRoot()
     const frames = createFrameQueue()
 
-    applyDocumentTheme('dark', {
+    applyDocumentTheme('dark', false, {
       root,
       requestAnimationFrame: frames.requestAnimationFrame
     })
@@ -112,78 +114,66 @@ describe('document theme', () => {
     expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(false)
   })
 
-  it('resolves glass themes as light or dark for parity with non-glass consumers', () => {
-    expect(resolveDocumentTheme('glass-dark')).toBe(true)
-    expect(resolveDocumentTheme('glass-light')).toBe(false)
+  it('does not set glass classes when glassEffect is false', () => {
+    const root = createThemeRoot()
+    applyDocumentTheme('dark', false, { root, disableTransitions: false, isDarwin: true })
+    expect(root.classList.contains('glass-dark')).toBe(false)
+    expect(root.classList.contains('glass-light')).toBe(false)
   })
 
-  it('applies glass-light root class on a macOS host', () => {
+  it('applies glass-light when glassEffect is true and theme resolves to light (macOS)', () => {
     const root = createThemeRoot()
-
-    applyDocumentTheme('glass-light', {
-      root,
-      disableTransitions: false,
-      isDarwin: true
-    })
-
+    applyDocumentTheme('light', true, { root, disableTransitions: false, isDarwin: true })
     expect(root.classList.contains('glass-light')).toBe(true)
     expect(root.classList.contains('glass-dark')).toBe(false)
-    expect(root.classList.contains('dark')).toBe(false)
     expect(root.classList.contains('light')).toBe(true)
   })
 
-  it('applies glass-dark root class on a macOS host', () => {
+  it('applies glass-dark when glassEffect is true and theme resolves to dark (macOS)', () => {
     const root = createThemeRoot()
-
-    applyDocumentTheme('glass-dark', {
-      root,
-      disableTransitions: false,
-      isDarwin: true
-    })
-
+    applyDocumentTheme('dark', true, { root, disableTransitions: false, isDarwin: true })
     expect(root.classList.contains('glass-dark')).toBe(true)
     expect(root.classList.contains('glass-light')).toBe(false)
     expect(root.classList.contains('dark')).toBe(true)
-    expect(root.classList.contains('light')).toBe(false)
   })
 
-  it('falls back from glass-light to plain light on a non-macOS host', () => {
+  it('glass + system theme tracks OS preference', () => {
     const root = createThemeRoot()
-
-    applyDocumentTheme('glass-light', {
+    // System reports dark
+    applyDocumentTheme('system', true, {
       root,
       disableTransitions: false,
-      isDarwin: false
+      isDarwin: true,
+      matchMedia: () => ({ matches: true })
     })
-
+    expect(root.classList.contains('glass-dark')).toBe(true)
     expect(root.classList.contains('glass-light')).toBe(false)
-    expect(root.classList.contains('glass-dark')).toBe(false)
-    expect(root.classList.contains('light')).toBe(true)
-    expect(root.classList.contains('dark')).toBe(false)
-  })
 
-  it('falls back from glass-dark to plain dark on a non-macOS host', () => {
-    const root = createThemeRoot()
-
-    applyDocumentTheme('glass-dark', {
+    // System reports light
+    applyDocumentTheme('system', true, {
       root,
       disableTransitions: false,
-      isDarwin: false
+      isDarwin: true,
+      matchMedia: () => ({ matches: false })
     })
+    expect(root.classList.contains('glass-light')).toBe(true)
+    expect(root.classList.contains('glass-dark')).toBe(false)
+  })
 
+  it('silently ignores glassEffect on non-macOS hosts', () => {
+    const root = createThemeRoot()
+    applyDocumentTheme('dark', true, { root, disableTransitions: false, isDarwin: false })
     expect(root.classList.contains('glass-dark')).toBe(false)
     expect(root.classList.contains('glass-light')).toBe(false)
     expect(root.classList.contains('dark')).toBe(true)
-    expect(root.classList.contains('light')).toBe(false)
   })
 
-  it('clears glass classes when switching away from a glass theme', () => {
+  it('clears glass classes when glassEffect flips from on to off', () => {
     const root = createThemeRoot()
-
-    applyDocumentTheme('glass-dark', { root, disableTransitions: false, isDarwin: true })
+    applyDocumentTheme('dark', true, { root, disableTransitions: false, isDarwin: true })
     expect(root.classList.contains('glass-dark')).toBe(true)
 
-    applyDocumentTheme('light', { root, disableTransitions: false, isDarwin: true })
+    applyDocumentTheme('dark', false, { root, disableTransitions: false, isDarwin: true })
     expect(root.classList.contains('glass-dark')).toBe(false)
     expect(root.classList.contains('glass-light')).toBe(false)
   })

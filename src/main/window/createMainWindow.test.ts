@@ -2124,7 +2124,7 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
   })
 
-  it('injects vibrancy when theme is glass-dark on macOS', () => {
+  it('injects vibrancy when glassEffect is true on macOS', () => {
     if (process.platform !== 'darwin') {
       return
     }
@@ -2159,7 +2159,8 @@ describe('createMainWindow', () => {
       getSettings: () =>
         ({
           windowBackgroundBlur: false,
-          theme: 'glass-dark',
+          theme: 'dark',
+          glassEffect: true,
           voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
         }) as never,
       updateUI: vi.fn()
@@ -2205,7 +2206,8 @@ describe('createMainWindow', () => {
       getSettings: () =>
         ({
           windowBackgroundBlur: false,
-          theme: 'glass-dark',
+          theme: 'dark',
+          glassEffect: true,
           voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
         }) as never,
       updateUI: vi.fn()

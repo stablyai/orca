@@ -1,32 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { isGlassTheme } from './glass-theme'
+import { isGlassEffectActive } from './glass-theme'
 
-describe('isGlassTheme', () => {
-  it('returns true for glass-light', () => {
-    expect(isGlassTheme('glass-light')).toBe(true)
+describe('isGlassEffectActive', () => {
+  it('returns true on darwin when glassEffect is true', () => {
+    expect(isGlassEffectActive({ glassEffect: true }, { isDarwin: true })).toBe(true)
   })
 
-  it('returns true for glass-dark', () => {
-    expect(isGlassTheme('glass-dark')).toBe(true)
+  it('returns false on darwin when glassEffect is false', () => {
+    expect(isGlassEffectActive({ glassEffect: false }, { isDarwin: true })).toBe(false)
   })
 
-  it('returns false for plain dark / light / system', () => {
-    expect(isGlassTheme('dark')).toBe(false)
-    expect(isGlassTheme('light')).toBe(false)
-    expect(isGlassTheme('system')).toBe(false)
+  it('returns false on non-darwin even when glassEffect is true', () => {
+    // Why: vibrancy + transparent windows are macOS-only at the Electron
+    // layer. Non-darwin hosts cannot render glass — pretending otherwise
+    // would yield broken low-alpha UI without an OS-level backdrop.
+    expect(isGlassEffectActive({ glassEffect: true }, { isDarwin: false })).toBe(false)
   })
 
-  it('returns false for undefined / null', () => {
-    expect(isGlassTheme(undefined)).toBe(false)
-    expect(isGlassTheme(null)).toBe(false)
+  it('returns false for null / undefined settings', () => {
+    expect(isGlassEffectActive(null, { isDarwin: true })).toBe(false)
+    expect(isGlassEffectActive(undefined, { isDarwin: true })).toBe(false)
   })
 
-  it('narrows the type via the type guard', () => {
-    const t: 'system' | 'dark' | 'light' | 'glass-light' | 'glass-dark' = 'glass-dark'
-    if (isGlassTheme(t)) {
-      // Type narrowing: t is 'glass-light' | 'glass-dark' inside this branch
-      const narrowed: 'glass-light' | 'glass-dark' = t
-      expect(narrowed).toBe('glass-dark')
-    }
+  it('falls back to process.platform when isDarwin is not provided', () => {
+    // process.platform in the test environment is whatever the host runs.
+    // We just verify the function does not throw and returns a boolean.
+    const result = isGlassEffectActive({ glassEffect: true })
+    expect(typeof result).toBe('boolean')
   })
 })

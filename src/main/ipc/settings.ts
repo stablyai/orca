@@ -45,11 +45,7 @@ export function registerSettingsHandlers(
       )
     }
     if (args.theme) {
-      // Why: glass-* themes resolve to their underlying light/dark variant for
-      // the OS theme source — the translucency is applied via window vibrancy +
-      // .glass-surface CSS, not via nativeTheme.
-      nativeTheme.themeSource =
-        args.theme === 'glass-dark' ? 'dark' : args.theme === 'glass-light' ? 'light' : args.theme
+      nativeTheme.themeSource = args.theme
     }
     // Why: capture the pre-update value so we only emit when the value
     // actually changes. The settings UI sometimes re-saves the same value

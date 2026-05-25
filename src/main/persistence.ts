@@ -1531,6 +1531,25 @@ export class Store {
         if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
           this.loadNeedsSave = true
         }
+        // Why: earlier glass-theme builds stored 'glass-light' / 'glass-dark'
+        // inline as theme values. The model split into theme (system/dark/
+        // light) + glassEffect (boolean) so the user can pair any base theme
+        // with glass. Migrate legacy values: extract glass→true, normalize
+        // theme back to its base light/dark counterpart. Stamp loadNeedsSave
+        // so the migrated values persist on next write.
+        const rawTheme = (parsed.settings as { theme?: string } | undefined)?.theme
+        const isLegacyGlassTheme = rawTheme === 'glass-light' || rawTheme === 'glass-dark'
+        const migratedTheme: 'system' | 'dark' | 'light' = isLegacyGlassTheme
+          ? rawTheme === 'glass-dark'
+            ? 'dark'
+            : 'light'
+          : ((rawTheme as 'system' | 'dark' | 'light' | undefined) ?? defaults.settings.theme)
+        const migratedGlassEffect =
+          parsed.settings?.glassEffect ??
+          (isLegacyGlassTheme ? true : defaults.settings.glassEffect)
+        if (isLegacyGlassTheme) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1539,6 +1558,8 @@ export class Store {
           settings: {
             ...defaults.settings,
             ...parsed.settings,
+            theme: migratedTheme,
+            glassEffect: migratedGlassEffect,
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:

@@ -1,0 +1,585 @@
+<style>
+  /* ─── 三种玻璃风格对比 ─────────────────────────────────── */
+  .glass-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-top: 16px;
+  }
+  @media (max-width: 1100px) {
+    .glass-grid { grid-template-columns: 1fr; }
+  }
+
+  .glass-card {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #14161a;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .glass-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(120, 160, 255, 0.35);
+  }
+  .glass-card.selected {
+    border-color: #5c9eff;
+    box-shadow: 0 0 0 4px rgba(92, 158, 255, 0.18), 0 12px 32px rgba(0,0,0,0.4);
+  }
+
+  /* Mockup canvas */
+  .glass-canvas {
+    position: relative;
+    height: 420px;
+    overflow: hidden;
+  }
+  /* Realistic mesh-gradient wallpaper — what shows through the glass */
+  .glass-wallpaper {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(at 18% 22%, #ff7a59 0%, transparent 45%),
+      radial-gradient(at 78% 14%, #6e8bff 0%, transparent 48%),
+      radial-gradient(at 12% 78%, #19c2c2 0%, transparent 42%),
+      radial-gradient(at 88% 82%, #c452ff 0%, transparent 45%),
+      radial-gradient(at 50% 50%, #ffd166 0%, transparent 38%),
+      linear-gradient(135deg, #2d1b4d 0%, #1a3a5c 50%, #0d2e3a 100%);
+  }
+
+  /* Two stacked mini-window variants per card: Light glass (top), Dark glass (bottom) */
+  .mini-window {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    height: 190px;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+  .mini-window.light { top: 14px; }
+  .mini-window.dark  { bottom: 14px; }
+
+  /* Window structure: traffic lights + content */
+  .mini-titlebar {
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 5px;
+  }
+  .mini-traffic { width: 9px; height: 9px; border-radius: 50%; }
+  .mini-traffic.r { background: #fc615d; }
+  .mini-traffic.y { background: #fdbc40; }
+  .mini-traffic.g { background: #34c84a; }
+  .mini-titlebar-label {
+    margin-left: auto;
+    font-size: 9px;
+    opacity: 0.55;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: 0.01em;
+  }
+
+  .mini-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+  .mini-sidebar {
+    width: 35%;
+    padding: 6px 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .mini-content {
+    flex: 1;
+    padding: 7px 6px;
+    position: relative;
+  }
+  .sidebar-item {
+    height: 5px;
+    border-radius: 2px;
+    width: 100%;
+  }
+  .sidebar-item.active { width: 80%; }
+  .code-line {
+    height: 4px;
+    border-radius: 1.5px;
+    margin-bottom: 3px;
+  }
+  /* Floating popover overlapping content */
+  .mini-popover {
+    position: absolute;
+    top: 8px;
+    right: 6px;
+    width: 56%;
+    padding: 5px;
+    border-radius: 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .popover-row {
+    height: 5px;
+    border-radius: 1.5px;
+  }
+
+  /* ─── Variant A: Pure Frost (Apple-faithful, neutral) ─── */
+  .frost.light .mini-titlebar,
+  .frost.light .mini-sidebar {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background: rgba(255, 255, 255, 0.50);
+  }
+  .frost.light .mini-sidebar { border-right: 1px solid rgba(0, 0, 0, 0.06); }
+  .frost.light .mini-content {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background: rgba(255, 255, 255, 0.72);
+  }
+  .frost.light .mini-popover {
+    backdrop-filter: blur(34px) saturate(180%);
+    -webkit-backdrop-filter: blur(34px) saturate(180%);
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.10);
+  }
+  .frost.light .sidebar-item { background: rgba(0, 0, 0, 0.10); }
+  .frost.light .sidebar-item.active { background: rgba(0, 0, 0, 0.22); }
+  .frost.light .code-line { background: rgba(0, 0, 0, 0.10); }
+  .frost.light .popover-row { background: rgba(0, 0, 0, 0.10); }
+  .frost.light .popover-row.active { background: rgba(0, 0, 0, 0.22); }
+
+  .frost.dark .mini-titlebar,
+  .frost.dark .mini-sidebar {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background: rgba(20, 20, 22, 0.55);
+  }
+  .frost.dark .mini-sidebar { border-right: 1px solid rgba(255, 255, 255, 0.06); }
+  .frost.dark .mini-content {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background: rgba(15, 15, 18, 0.70);
+  }
+  .frost.dark .mini-popover {
+    backdrop-filter: blur(34px) saturate(180%);
+    -webkit-backdrop-filter: blur(34px) saturate(180%);
+    background: rgba(28, 28, 32, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.40);
+  }
+  .frost.dark .sidebar-item { background: rgba(255, 255, 255, 0.14); }
+  .frost.dark .sidebar-item.active { background: rgba(255, 255, 255, 0.30); }
+  .frost.dark .code-line { background: rgba(255, 255, 255, 0.14); }
+  .frost.dark .popover-row { background: rgba(255, 255, 255, 0.14); }
+  .frost.dark .popover-row.active { background: rgba(255, 255, 255, 0.30); }
+
+  /* ─── Variant B: Soft Tinted (warm cream / cool midnight) ─── */
+  .tinted.light .mini-titlebar,
+  .tinted.light .mini-sidebar,
+  .tinted.light .mini-content {
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+  }
+  .tinted.light .mini-sidebar {
+    background: linear-gradient(180deg, rgba(255, 248, 235, 0.55), rgba(252, 240, 220, 0.60));
+    border-right: 1px solid rgba(180, 140, 90, 0.18);
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.4);
+  }
+  .tinted.light .mini-titlebar {
+    background: rgba(255, 248, 235, 0.50);
+  }
+  .tinted.light .mini-content {
+    background: rgba(252, 244, 230, 0.70);
+  }
+  .tinted.light .mini-popover {
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    background: rgba(255, 248, 232, 0.65);
+    border: 1px solid rgba(180, 140, 90, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 6px 18px rgba(120, 80, 40, 0.18);
+  }
+  .tinted.light .sidebar-item { background: rgba(120, 80, 40, 0.16); }
+  .tinted.light .sidebar-item.active { background: rgba(120, 80, 40, 0.32); }
+  .tinted.light .code-line { background: rgba(120, 80, 40, 0.16); }
+  .tinted.light .popover-row { background: rgba(120, 80, 40, 0.18); }
+  .tinted.light .popover-row.active { background: rgba(120, 80, 40, 0.32); }
+
+  .tinted.dark .mini-titlebar,
+  .tinted.dark .mini-sidebar,
+  .tinted.dark .mini-content {
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+  }
+  .tinted.dark .mini-sidebar {
+    background: linear-gradient(180deg, rgba(18, 22, 38, 0.60), rgba(22, 28, 46, 0.65));
+    border-right: 1px solid rgba(100, 130, 200, 0.14);
+    box-shadow: inset 1px 0 0 rgba(140, 170, 230, 0.10);
+  }
+  .tinted.dark .mini-titlebar {
+    background: rgba(18, 22, 38, 0.55);
+  }
+  .tinted.dark .mini-content {
+    background: rgba(15, 18, 32, 0.72);
+  }
+  .tinted.dark .mini-popover {
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    background: rgba(28, 34, 52, 0.65);
+    border: 1px solid rgba(100, 130, 200, 0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(140, 170, 230, 0.12),
+      0 6px 18px rgba(0, 0, 20, 0.5);
+  }
+  .tinted.dark .sidebar-item { background: rgba(140, 170, 230, 0.20); }
+  .tinted.dark .sidebar-item.active { background: rgba(160, 190, 250, 0.45); }
+  .tinted.dark .code-line { background: rgba(140, 170, 230, 0.20); }
+  .tinted.dark .popover-row { background: rgba(140, 170, 230, 0.22); }
+  .tinted.dark .popover-row.active { background: rgba(160, 190, 250, 0.45); }
+
+  /* ─── Variant C: Liquid Aurora (bold, color-adaptive) ─── */
+  .aurora.light .mini-titlebar,
+  .aurora.light .mini-sidebar,
+  .aurora.light .mini-content {
+    backdrop-filter: blur(16px) saturate(200%) brightness(1.05);
+    -webkit-backdrop-filter: blur(16px) saturate(200%) brightness(1.05);
+  }
+  .aurora.light .mini-sidebar {
+    background: rgba(255, 255, 255, 0.30);
+    border-right: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow:
+      inset 1px 0 0 rgba(255, 255, 255, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .aurora.light .mini-titlebar {
+    background: rgba(255, 255, 255, 0.28);
+  }
+  .aurora.light .mini-content {
+    background: rgba(255, 255, 255, 0.42);
+  }
+  .aurora.light .mini-popover {
+    backdrop-filter: blur(14px) saturate(220%) brightness(1.08);
+    -webkit-backdrop-filter: blur(14px) saturate(220%) brightness(1.08);
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.25),
+      0 8px 24px rgba(0, 0, 0, 0.15),
+      0 0 40px rgba(255, 255, 255, 0.20);
+  }
+  .aurora.light .sidebar-item { background: rgba(40, 30, 60, 0.16); }
+  .aurora.light .sidebar-item.active { background: rgba(40, 30, 60, 0.34); }
+  .aurora.light .code-line { background: rgba(40, 30, 60, 0.16); }
+  .aurora.light .popover-row { background: rgba(40, 30, 60, 0.18); }
+  .aurora.light .popover-row.active { background: rgba(40, 30, 60, 0.36); }
+
+  .aurora.dark .mini-titlebar,
+  .aurora.dark .mini-sidebar,
+  .aurora.dark .mini-content {
+    backdrop-filter: blur(16px) saturate(200%) brightness(0.85);
+    -webkit-backdrop-filter: blur(16px) saturate(200%) brightness(0.85);
+  }
+  .aurora.dark .mini-sidebar {
+    background: rgba(10, 10, 16, 0.30);
+    border-right: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      inset 1px 0 0 rgba(255, 255, 255, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  .aurora.dark .mini-titlebar {
+    background: rgba(10, 10, 16, 0.28);
+  }
+  .aurora.dark .mini-content {
+    background: rgba(10, 10, 16, 0.42);
+  }
+  .aurora.dark .mini-popover {
+    backdrop-filter: blur(14px) saturate(220%) brightness(0.90);
+    -webkit-backdrop-filter: blur(14px) saturate(220%) brightness(0.90);
+    background: rgba(20, 20, 32, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.30),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+      0 8px 24px rgba(0, 0, 0, 0.5),
+      0 0 40px rgba(180, 140, 255, 0.20);
+  }
+  .aurora.dark .sidebar-item { background: rgba(220, 200, 255, 0.18); }
+  .aurora.dark .sidebar-item.active { background: rgba(220, 200, 255, 0.40); }
+  .aurora.dark .code-line { background: rgba(220, 200, 255, 0.18); }
+  .aurora.dark .popover-row { background: rgba(220, 200, 255, 0.20); }
+  .aurora.dark .popover-row.active { background: rgba(220, 200, 255, 0.42); }
+
+  /* Card body */
+  .card-text {
+    padding: 14px 16px 16px;
+  }
+  .card-text h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: #e8e9ed;
+    letter-spacing: 0.01em;
+  }
+  .card-text p {
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #9aa0b0;
+  }
+  .recipe {
+    display: inline-block;
+    font-family: 'SF Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: #6c7286;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .variant-label {
+    position: absolute;
+    left: 18px;
+    z-index: 10;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .variant-label.light-label { top: 18px; }
+  .variant-label.dark-label  { bottom: 18px; }
+</style>
+
+<h2>选一个 Liquid Glass 调性</h2>
+<p class="subtitle">三种风格都基于 macOS 26 Liquid Glass 设计语言。每张卡片上半部分是 <strong>Glass Light</strong>，下半部分是 <strong>Glass Dark</strong>，都叠在同一张彩色"壁纸"上以便对比玻璃如何吸收背景色。点击选择。</p>
+
+<div class="glass-grid">
+
+  <!-- ─── A. Pure Frost ─── -->
+  <div class="glass-card" data-choice="frost" onclick="toggleSelect(this)">
+    <div class="glass-canvas">
+      <div class="glass-wallpaper"></div>
+      <div class="variant-label light-label">Light</div>
+      <div class="variant-label dark-label">Dark</div>
+
+      <div class="mini-window light frost">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · frost</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mini-window dark frost">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · frost</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-text">
+      <h3>A · Pure Frost</h3>
+      <p>最贴近 Apple 原生（Mail、Finder 在 macOS 26 的做法）。中性色调，blur 重，色彩被磨得很淡。安静、专业、不抢戏。最适合需要长时间专注编码的人。</p>
+      <span class="recipe">blur(40px) · saturate(180%) · 中性 white/black</span>
+    </div>
+  </div>
+
+  <!-- ─── B. Soft Tinted ─── -->
+  <div class="glass-card" data-choice="tinted" onclick="toggleSelect(this)">
+    <div class="glass-canvas">
+      <div class="glass-wallpaper"></div>
+      <div class="variant-label light-label">Light</div>
+      <div class="variant-label dark-label">Dark</div>
+
+      <div class="mini-window light tinted">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · tinted</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mini-window dark tinted">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · tinted</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-text">
+      <h3>B · Soft Tinted</h3>
+      <p>Light 带一点暖奶油色，Dark 带一点冷午夜蓝。Blur 适中，边缘有 1px inner-glow 模拟切割玻璃的"光线挂钩"。有性格、显档次，像 Sketch 或 Linear 的玻璃做法。</p>
+      <span class="recipe">blur(28px) · 暖/冷色 tint · inset 光晕</span>
+    </div>
+  </div>
+
+  <!-- ─── C. Liquid Aurora ─── -->
+  <div class="glass-card" data-choice="aurora" onclick="toggleSelect(this)">
+    <div class="glass-canvas">
+      <div class="glass-wallpaper"></div>
+      <div class="variant-label light-label">Light</div>
+      <div class="variant-label dark-label">Dark</div>
+
+      <div class="mini-window light aurora">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · aurora</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mini-window dark aurora">
+        <div class="mini-titlebar">
+          <span class="mini-traffic r"></span>
+          <span class="mini-traffic y"></span>
+          <span class="mini-traffic g"></span>
+          <span class="mini-titlebar-label">orca · aurora</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-sidebar">
+            <div class="sidebar-item active"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item"></div>
+            <div class="sidebar-item" style="width:65%"></div>
+          </div>
+          <div class="mini-content">
+            <div class="code-line" style="width:78%"></div>
+            <div class="code-line" style="width:55%"></div>
+            <div class="code-line" style="width:88%"></div>
+            <div class="code-line" style="width:42%"></div>
+            <div class="mini-popover">
+              <div class="popover-row"></div>
+              <div class="popover-row active"></div>
+              <div class="popover-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-text">
+      <h3>C · Liquid Aurora</h3>
+      <p>最大胆。透明度高、blur 轻，壁纸的色彩直接透到表面。Popover 有 prismatic rim-light 和外发光，像 iOS 18 控制中心。视觉戏剧性最强，但对编辑器内文字对比度挑战最大。</p>
+      <span class="recipe">blur(16px) · saturate(200%) · 棱镜边光</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px">
+  <p class="subtitle">⚠️ 这个对比是真 backdrop-filter 在浏览器里渲染的，所见即所得。但实际 Orca 里看到的效果会更好——因为底下是 macOS 桌面壁纸/其他窗口，色彩远比这张人造 mesh 丰富。</p>
+</div>

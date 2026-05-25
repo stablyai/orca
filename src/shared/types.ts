@@ -1646,7 +1646,15 @@ export type GlobalSettings = {
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
-  theme: 'system' | 'dark' | 'light' | 'glass-light' | 'glass-dark'
+  theme: 'system' | 'dark' | 'light'
+  /**
+   * Why: glass effect is a separate visual layer, independent of the
+   * light/dark choice. Lets users pair "follow system theme" with the
+   * glass aesthetic instead of locking glass to a fixed light or dark
+   * variant. Only effective on macOS (Electron vibrancy availability);
+   * silently ignored on Windows / Linux.
+   */
+  glassEffect: boolean
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number

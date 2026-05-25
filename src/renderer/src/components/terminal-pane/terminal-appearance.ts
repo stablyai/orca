@@ -3,7 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { isGlassTheme } from '../../../../shared/glass-theme'
+import { isGlassEffectActive } from '../../../../shared/glass-theme'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -206,7 +206,7 @@ export function applyTerminalAppearance(
   // Why: glass themes default to the sidebar's see-through level so there is
   // no sharp seam where the sidebar meets the terminal. Explicit user opacity wins.
   const effectiveOpacity =
-    settings.terminalBackgroundOpacity ?? (isGlassTheme(settings.theme) ? 0.15 : undefined)
+    settings.terminalBackgroundOpacity ?? (isGlassEffectActive(settings) ? 0.15 : undefined)
   const theme = composeActiveTerminalTheme(baseTheme, {
     ...settings,
     terminalBackgroundOpacity: effectiveOpacity

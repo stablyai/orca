@@ -391,7 +391,7 @@ export default function DiffViewer({
     }
   }, [sideBySide])
 
-  const monacoTheme = resolveMonacoThemeName(settings?.theme, isDark)
+  const monacoTheme = resolveMonacoThemeName(settings, isDark)
 
   return (
     <div className="flex flex-col flex-1 min-h-0">

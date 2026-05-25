@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/types'
-import { isGlassTheme } from '../../../shared/glass-theme'
+import { isGlassEffectActive } from '../../../shared/glass-theme'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -50,16 +50,10 @@ export function resolveEffectiveTerminalAppearance(
   >,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
-  // Why: glass-* themes resolve to their underlying light/dark variant for
-  // terminal coloring — the translucency is applied via window vibrancy +
-  // .glass-surface CSS, not via the terminal palette.
-  const baseTheme: 'system' | 'dark' | 'light' =
-    settings.theme === 'glass-dark'
-      ? 'dark'
-      : settings.theme === 'glass-light'
-        ? 'light'
-        : settings.theme
-  const sourceTheme = baseTheme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : baseTheme
+  // Why: theme is now narrow (system/dark/light) thanks to the glassEffect
+  // split — earlier glass-* clamp logic is no longer needed at this site.
+  const sourceTheme =
+    settings.theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : settings.theme
   const useLightVariant = sourceTheme === 'light' && settings.terminalUseSeparateLightTheme
   const themeName = useLightVariant
     ? settings.terminalThemeLight || DEFAULT_TERMINAL_THEME_LIGHT
@@ -70,7 +64,7 @@ export function resolveEffectiveTerminalAppearance(
 
   return {
     mode: sourceTheme,
-    sourceTheme: baseTheme,
+    sourceTheme: settings.theme,
     themeName,
     dividerColor,
     theme: getTerminalThemePreview(themeName),
@@ -117,7 +111,7 @@ export function resolvePaneStyleOptions(
     | 'terminalPaneOpacityTransitionMs'
     | 'terminalDividerThicknessPx'
     | 'terminalFocusFollowsMouse'
-    | 'theme'
+    | 'glassEffect'
   >
 ) {
   // Why: under glass themes the pane background is already a translucent
@@ -127,7 +121,7 @@ export function resolvePaneStyleOptions(
   // wallpaper bleed, looking like a colour change. Force both opacities
   // to 1 so focus state never changes the rendered alpha. Non-glass
   // themes still honour the user's preference.
-  const themeIsGlass = isGlassTheme(settings.theme)
+  const themeIsGlass = isGlassEffectActive(settings)
   return {
     inactivePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalInactivePaneOpacity, 0, 1),
     activePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalActivePaneOpacity, 0, 1),
