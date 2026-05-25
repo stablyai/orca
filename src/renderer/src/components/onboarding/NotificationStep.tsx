@@ -1,10 +1,9 @@
-/* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, upload, and volume controls. */
+/* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, FileAudio, Settings, Upload, Volume2, X } from 'lucide-react'
+import { BellRing, FileAudio, Settings, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
 import {
   Select,
   SelectContent,
@@ -48,14 +47,12 @@ export function NotificationStep({
   const notificationSettingsRef = useRef(notificationSettings)
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermissionStatusResult | null>(null)
-  const [volumeDraft, setVolumeDraft] = useState(notificationSettings?.customSoundVolume ?? 100)
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings
-    setVolumeDraft(notificationSettings?.customSoundVolume ?? 100)
   }, [notificationSettings])
 
   useEffect(() => {
@@ -93,6 +90,9 @@ export function NotificationStep({
     })
   }
 
+  const getCustomSoundVolume = (): number =>
+    notificationSettingsRef.current?.customSoundVolume ?? 100
+
   const handleMacPermission = async (): Promise<void> => {
     setShowMacSettingsPreview(true)
     const status = await window.api.notifications.requestPermission()
@@ -108,7 +108,7 @@ export function NotificationStep({
     }
     const result = await window.api.notifications.playSound({
       force: true,
-      volume: volumeDraft
+      volume: getCustomSoundVolume()
     })
     if (!result.played) {
       toast.error('Notification sound could not be played')
@@ -137,18 +137,12 @@ export function NotificationStep({
     await previewSound(value)
   }
 
-  const handleVolumeCommit = (value: number): void => {
-    if (notificationSettingsRef.current?.customSoundVolume !== value) {
-      void updateNotificationSettings({ customSoundVolume: value })
-    }
-  }
-
   const handleSendTestNotification = async (): Promise<void> => {
     if (!notificationSettings) {
       toast.error('Notification settings are still loading')
       return
     }
-    await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
+    await sendNotificationSettingsTestNotification(notificationSettings, getCustomSoundVolume())
   }
 
   if (!notificationSettings) {
@@ -162,7 +156,6 @@ export function NotificationStep({
   const customPath = notificationSettings.customSoundPath
   const selectedSoundId = notificationSettings.customSoundId
   const soundOptions = getNotificationSoundOptions(customPath)
-  const canAdjustVolume = selectedSoundId !== 'system'
   const isMac = permissionStatus?.platform === 'darwin'
 
   return (
@@ -295,25 +288,6 @@ export function NotificationStep({
             </Button>
           </div>
         </div>
-
-        {canAdjustVolume ? (
-          <div className="flex items-center gap-3 pt-1">
-            <Volume2 className="size-4 text-muted-foreground" />
-            <Slider
-              value={[volumeDraft]}
-              min={0}
-              max={100}
-              step={5}
-              onValueChange={([value]) => setVolumeDraft(value)}
-              onValueCommit={([value]) => handleVolumeCommit(value)}
-              className="flex-1"
-              aria-label="Notification sound volume"
-            />
-            <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
-              {volumeDraft}%
-            </span>
-          </div>
-        ) : null}
       </section>
     </div>
   )
