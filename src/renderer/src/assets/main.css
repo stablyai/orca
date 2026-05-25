@@ -182,13 +182,20 @@
 
 :root.glass-light {
   /* Two-tier transparency model:
-     - "Frame" surfaces (background, sidebar) → low alpha so the user sees
-       through Orca into the world (wallpaper / lower windows).
+     - "Frame" surfaces (sidebar, body via --glass-canvas) → low alpha so
+       the user sees through Orca into the world (wallpaper / lower windows).
      - "Floating" surfaces (card, popover, dialog, sheet) → medium alpha
        so floating panels remain clearly distinguishable.
      - Borders → higher alpha so button outlines remain visible against
-       the near-transparent main canvas. */
-  --background: rgba(252, 244, 230, 0.1);
+       the near-transparent main canvas.
+
+     IMPORTANT: --background stays opaque because dozens of components use
+     the inverted pattern `bg-foreground` + `text-background` for active /
+     primary state. A transparent --background renders those texts invisible.
+     The body itself uses --glass-canvas (translucent) to keep the see-through
+     wallpaper effect, with body painting overridden separately below. */
+  --background: #fcf4e6;
+  --glass-canvas: rgba(252, 244, 230, 0.1);
   --foreground: rgba(30, 18, 6, 1);
   --editor-surface: rgba(252, 244, 230, 0.4);
   --card: rgba(255, 248, 235, 0.65);
@@ -232,7 +239,8 @@
 
 :root.glass-dark {
   /* Two-tier transparency model — see :root.glass-light. */
-  --background: rgba(15, 18, 32, 0.12);
+  --background: #0f1220;
+  --glass-canvas: rgba(15, 18, 32, 0.12);
   --foreground: rgba(235, 240, 255, 1);
   --editor-surface: rgba(15, 18, 32, 0.4);
   --card: rgba(28, 34, 52, 0.7);
@@ -388,6 +396,17 @@
    the blur — keep popovers, dropdowns, and dialogs in Radix portals so they
    are siblings of the app root, not descendants of an already-glassy
    container. */
+/* Why: under glass themes, body must paint with the translucent --glass-canvas
+   so the user sees through to the wallpaper / lower windows. We can't make
+   --background itself translucent because dozens of components use the
+   inverted pattern `bg-foreground` + `text-background` for active state —
+   a transparent --background renders that text invisible (tooltips, primary
+   buttons, filter chips, etc.). */
+:root.glass-light body,
+:root.glass-dark body {
+  background: var(--glass-canvas);
+}
+
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -400,6 +419,7 @@
 @media (prefers-reduced-transparency: reduce) {
   :root.glass-light {
     --background: #fcf4e6;
+    --glass-canvas: #fcf4e6;
     --foreground: #322110;
     --editor-surface: #fdf6eb;
     --card: #fff8eb;
@@ -410,6 +430,7 @@
   }
   :root.glass-dark {
     --background: #0f1220;
+    --glass-canvas: #0f1220;
     --foreground: #dce6fa;
     --editor-surface: #131628;
     --card: #1c2234;
