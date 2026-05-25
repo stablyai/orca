@@ -151,7 +151,10 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
-  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
+  const primaryActionLabel =
+    cardProps.selectedRepoIsGit && cardProps.workspaceCreateMode === 'new-worktree'
+      ? 'Create Worktree'
+      : 'Create Workspace'
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {

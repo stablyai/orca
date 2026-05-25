@@ -93,7 +93,8 @@ export type WorktreeSlice = {
     branchNameOverride?: string,
     workspaceStatus?: WorkspaceStatus,
     linkedGitLabMR?: number,
-    linkedGitLabIssue?: number
+    linkedGitLabIssue?: number,
+    existingWorktreePath?: string
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
