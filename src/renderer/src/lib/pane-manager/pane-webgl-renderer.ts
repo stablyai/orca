@@ -17,7 +17,26 @@ function isLinuxRenderer(): boolean {
   return navigator.platform.includes('Linux') || navigator.userAgent.includes('Linux')
 }
 
+function isGlassThemeActive(): boolean {
+  if (typeof document === 'undefined') {
+    return false
+  }
+  const cls = document.documentElement.classList
+  return cls.contains('glass-light') || cls.contains('glass-dark')
+}
+
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
+  // Why: under glass themes the xterm bg is a translucent rgba. xterm's
+  // WebGL renderer redraws cells with opaque framebuffer clears in some
+  // code paths (notably on scroll / new prompt line), which briefly flashes
+  // the terminal bg to an opaque color. The DOM/Canvas renderer respects
+  // the alpha consistently. Fall back to DOM rendering so focus / scroll /
+  // command execution don't produce visible alpha flicker. Users on glass
+  // forgo the WebGL perf win; usually fine because glass already pairs with
+  // animation-heavy macOS vibrancy compositing.
+  if (isGlassThemeActive()) {
+    return false
+  }
   if (pane.terminalGpuAcceleration === 'on') {
     return true
   }
