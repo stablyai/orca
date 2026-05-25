@@ -10,6 +10,7 @@ import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-ca
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { resolveMonacoThemeName } from '@/lib/monaco-theme-resolution'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -686,19 +687,7 @@ export default function MonacoEditor({
     })
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
-  // Why: Monaco paints its own background canvas, so a transparent-background
-  // theme is required for the underlying CSS surface (--editor-surface) to
-  // show through under glass themes. Glass cases bypass the isDark boolean
-  // because each maps to a specific named Monaco theme registered in
-  // monaco-setup.ts. All other themes keep the existing vs / vs-dark mapping.
-  const monacoTheme =
-    settings?.theme === 'glass-dark'
-      ? 'orca-glass-dark'
-      : settings?.theme === 'glass-light'
-        ? 'orca-glass-light'
-        : isDark
-          ? 'vs-dark'
-          : 'vs'
+  const monacoTheme = resolveMonacoThemeName(settings?.theme, isDark)
 
   return (
     <div
