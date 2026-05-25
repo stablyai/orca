@@ -1,5 +1,12 @@
+/* eslint-disable max-lines -- Why: AppearancePane is the single owner of all
+   appearance settings UI; splitting individual sections (theme, zoom, fonts,
+   layout, titlebar, status bar, sidebar) into separate files would scatter
+   related controls without a meaningful abstraction boundary. */
 import type React from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -32,7 +39,7 @@ export { APPEARANCE_PANE_SEARCH_ENTRIES }
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  applyTheme: (theme: GlobalSettings['theme']) => void
   fontSuggestions: string[]
 }
 
@@ -68,6 +75,34 @@ export function AppearancePane({
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
+  const isMac = navigator.userAgent.includes('Mac')
+  // Why: vibrancy + transparent: true are window-creation-only Electron options.
+  // Snapshot the theme at component mount and compare to the live setting to
+  // detect crossings of the glass boundary that require a window relaunch.
+  // Mirrors the pattern used for windowBackgroundBlur in TerminalWindowSection.
+  const bootThemeRef = useRef<GlobalSettings['theme']>(settings.theme)
+  const themeIsGlass = (t: GlobalSettings['theme']): boolean =>
+    t === 'glass-light' || t === 'glass-dark'
+  const glassBoundaryCrossed = themeIsGlass(settings.theme) !== themeIsGlass(bootThemeRef.current)
+  const [relaunching, setRelaunching] = useState(false)
+
+  useEffect(() => {
+    bootThemeRef.current = settings.theme
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleRelaunch = async (): Promise<void> => {
+    if (relaunching) {
+      return
+    }
+    setRelaunching(true)
+    try {
+      await window.api.app.relaunch()
+    } catch {
+      setRelaunching(false)
+    }
+  }
+
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ||
     matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ||
@@ -93,12 +128,42 @@ export function AppearancePane({
                   options={[
                     { value: 'system', label: 'System' },
                     { value: 'dark', label: 'Dark' },
-                    { value: 'light', label: 'Light' }
+                    { value: 'light', label: 'Light' },
+                    ...(isMac
+                      ? [
+                          { value: 'glass-dark' as const, label: 'Glass Dark' },
+                          { value: 'glass-light' as const, label: 'Glass Light' }
+                        ]
+                      : [])
                   ]}
                 />
               }
             />
           </SearchableSetting>
+        ) : null}
+
+        {glassBoundaryCrossed ? (
+          <div className="mx-4 mt-2 flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                Restart required
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Switching to or from a glass theme requires relaunching Orca to update window
+                vibrancy.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              className="shrink-0 gap-1.5"
+              disabled={relaunching}
+              onClick={() => void handleRelaunch()}
+            >
+              <RotateCw className={`size-3 ${relaunching ? 'animate-spin' : ''}`} />
+              {relaunching ? 'Restarting…' : 'Restart now'}
+            </Button>
+          </div>
         ) : null}
 
         {matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ? (
