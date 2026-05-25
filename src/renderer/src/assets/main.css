@@ -214,8 +214,10 @@
   --sidebar-border: rgba(180, 140, 90, 0.18);
   --sidebar-ring: rgba(180, 140, 90, 0.55);
 
-  /* Activate glass — lighter blur so background reads sharply */
-  --glass-blur: 12px;
+  /* Activate glass — minimal blur so the wallpaper / lower windows read
+     almost sharply through the surface (still enough blur to feel "glass"
+     rather than naked transparency). */
+  --glass-blur: 6px;
   --glass-saturate: 180%;
   --glass-inner-glow: rgba(255, 255, 255, 0.55);
   --glass-shadow: rgba(120, 80, 40, 0.18);
@@ -256,8 +258,10 @@
   --sidebar-border: rgba(140, 170, 230, 0.12);
   --sidebar-ring: rgba(140, 170, 230, 0.4);
 
-  /* Activate glass — lighter blur so background reads sharply */
-  --glass-blur: 12px;
+  /* Activate glass — minimal blur so the wallpaper / lower windows read
+     almost sharply through the surface (still enough blur to feel "glass"
+     rather than naked transparency). */
+  --glass-blur: 6px;
   --glass-saturate: 180%;
   --glass-inner-glow: rgba(140, 170, 230, 0.12);
   --glass-shadow: rgba(0, 0, 30, 0.5);
