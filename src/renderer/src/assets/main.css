@@ -259,7 +259,10 @@
   --editor-surface: rgba(15, 18, 32, 0.4);
   --card: rgba(15, 18, 32, 0.15);
   --card-foreground: rgba(235, 240, 255, 1);
-  --popover: rgba(15, 18, 32, 0.78);
+  /* Why: panels must read brighter than the dark blurred backdrop so they
+     pop as frosted glass (not blend into the dim). Lighter cool-grey fill,
+     distinct from the chrome's rgb(15,18,32). */
+  --popover: rgba(34, 40, 60, 0.82);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
