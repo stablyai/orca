@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the scheduler tests cover one queue state machine; keeping ordering and overflow cases together makes regressions easier to audit. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function createTerminal() {
@@ -275,6 +276,45 @@ describe('pane terminal output scheduler', () => {
     expect(output).toContain('Orca skipped hidden terminal output')
     expect(output).toContain('after-cap')
     expect(output).not.toContain('x'.repeat(1024))
+  })
+
+  it('caps hidden backlog chunk count even when each chunk is tiny', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    for (let i = 0; i < 4097; i++) {
+      writeTerminalOutput(terminal, 'x', { foreground: false })
+    }
+
+    vi.advanceTimersByTime(0)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped hidden terminal output')
+    expect(output).not.toContain('x'.repeat(512))
+  })
+
+  it('requests registered recovery instead of flushing a dropped hidden backlog', async () => {
+    vi.useFakeTimers()
+    const { flushTerminalOutput, registerTerminalBacklogRecovery, writeTerminalOutput } =
+      await loadScheduler()
+    const terminal = createTerminal()
+    const requestRecovery = vi.fn(() => true)
+    const unregister = registerTerminalBacklogRecovery(terminal, requestRecovery)
+    const chunk = 'x'.repeat(512 * 1024)
+
+    try {
+      for (let i = 0; i < 5; i++) {
+        writeTerminalOutput(terminal, chunk, { foreground: false })
+      }
+
+      flushTerminalOutput(terminal)
+
+      expect(requestRecovery).toHaveBeenCalledTimes(1)
+      expect(terminal.write).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
   })
 
   it('flushes queued output before foreground output on the same terminal', async () => {

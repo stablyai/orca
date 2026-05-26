@@ -12,6 +12,13 @@ import {
 type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
 type TerminalOutputBeforeWrite = (data: string) => void
+type TerminalBacklogRecoveryRequest = () => boolean
+
+type WriteTerminalOutputOptions = {
+  foreground: boolean
+  beforeWrite?: TerminalOutputBeforeWrite
+  onBackgroundBacklogDropped?: () => void
+}
 
 type QueueChunk = {
   data: string
@@ -29,6 +36,8 @@ type QueueEntry = {
   chunkIndex: number
   queuedChars: number
   beforeWrite?: TerminalOutputBeforeWrite
+  onBackgroundBacklogDropped?: () => void
+  backgroundBacklogDropped: boolean
   highPriority: boolean
 }
 
@@ -41,6 +50,7 @@ const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 16
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 const MAX_BACKGROUND_QUEUE_CHARS = 2 * 1024 * 1024
+const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 const PARSE_SETTLE_TIMEOUT_MS = 250
 // Why: CAN aborts a partial escape sequence before resetting style and showing
 // the lossy-backlog warning.
@@ -48,6 +58,10 @@ const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB.]\r\n'
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
+const backlogRecoveryByTerminal = new WeakMap<
+  TerminalOutputTarget,
+  TerminalBacklogRecoveryRequest
+>()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
 const debugEnabled = e2eConfig.exposeStore
@@ -181,10 +195,15 @@ function enqueueChunk(entry: QueueEntry, data: string, options?: { foreground?: 
 }
 
 function replaceBacklogWithWarning(entry: QueueEntry): void {
+  const shouldNotify = !entry.backgroundBacklogDropped
   entry.chunks = [{ data: BACKGROUND_BACKLOG_WARNING, foreground: false }]
   entry.chunkIndex = 0
   entry.queuedChars = BACKGROUND_BACKLOG_WARNING.length
+  entry.backgroundBacklogDropped = true
   entry.highPriority = true
+  if (shouldNotify) {
+    entry.onBackgroundBacklogDropped?.()
+  }
 }
 
 function hasQueuedChunks(entry: QueueEntry): boolean {
@@ -265,7 +284,7 @@ function drainQueuedOutput(): void {
 export function writeTerminalOutput(
   terminal: TerminalOutputTarget,
   data: string,
-  options: { foreground: boolean; beforeWrite?: TerminalOutputBeforeWrite }
+  options: WriteTerminalOutputOptions
 ): void {
   exposeDebugApi()
   if (!data) {
@@ -304,14 +323,20 @@ export function writeTerminalOutput(
       chunkIndex: 0,
       queuedChars: 0,
       beforeWrite: options.beforeWrite,
+      onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
+      backgroundBacklogDropped: false,
       highPriority: false
     }
     queuedByTerminal.set(terminal, entry)
   } else {
     entry.beforeWrite = options.beforeWrite
+    entry.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
   }
   enqueueChunk(entry, data)
-  if (entry.queuedChars > MAX_BACKGROUND_QUEUE_CHARS) {
+  if (
+    entry.queuedChars > MAX_BACKGROUND_QUEUE_CHARS ||
+    entry.chunks.length - entry.chunkIndex > MAX_BACKGROUND_QUEUE_CHUNKS
+  ) {
     replaceBacklogWithWarning(entry)
   }
   if (debugEnabled) {
@@ -335,6 +360,13 @@ export function flushTerminalOutput(
     return
   }
   queuedByTerminal.delete(terminal)
+  if (entry.backgroundBacklogDropped && requestRegisteredTerminalBacklogRecovery(terminal)) {
+    entry.chunks.length = 0
+    entry.chunkIndex = 0
+    entry.queuedChars = 0
+    entry.highPriority = false
+    return
+  }
 
   let flushedChars = 0
   let queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
@@ -367,6 +399,31 @@ export function flushTerminalOutput(
     scheduleDrain(0)
   } else {
     entry.highPriority = false
+  }
+}
+
+function requestRegisteredTerminalBacklogRecovery(terminal: TerminalOutputTarget): boolean {
+  const requestRecovery = backlogRecoveryByTerminal.get(terminal)
+  if (!requestRecovery) {
+    return false
+  }
+  return requestRecovery()
+}
+
+export function requestTerminalBacklogRecovery(terminal: TerminalOutputTarget): void {
+  exposeDebugApi()
+  requestRegisteredTerminalBacklogRecovery(terminal)
+}
+
+export function registerTerminalBacklogRecovery(
+  terminal: TerminalOutputTarget,
+  requestRecovery: TerminalBacklogRecoveryRequest
+): () => void {
+  backlogRecoveryByTerminal.set(terminal, requestRecovery)
+  return () => {
+    if (backlogRecoveryByTerminal.get(terminal) === requestRecovery) {
+      backlogRecoveryByTerminal.delete(terminal)
+    }
   }
 }
 

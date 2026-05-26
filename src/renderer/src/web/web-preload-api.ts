@@ -1811,6 +1811,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
+    getMainBufferSnapshot: () => Promise.resolve(null),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,

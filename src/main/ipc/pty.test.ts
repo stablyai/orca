@@ -3734,4 +3734,30 @@ describe('registerPtyHandlers', () => {
       await expect(pending).resolves.toBeNull()
     })
   })
+
+  describe('main buffer snapshot dispatch', () => {
+    it('returns a sequenced main-owned terminal snapshot with clamped scrollback', async () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        serializeMainTerminalBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot\r\n',
+          cols: 120,
+          rows: 40,
+          seq: 42
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
+        id: 'pty-1',
+        opts: { scrollbackRows: 999_999 }
+      })
+
+      expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+        scrollbackRows: 50_000
+      })
+      expect(result).toEqual({ data: 'snapshot\r\n', cols: 120, rows: 40, seq: 42 })
+    })
+  })
 })

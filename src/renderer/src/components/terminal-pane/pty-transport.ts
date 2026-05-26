@@ -17,7 +17,12 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
-import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
+import type {
+  PtyTransport,
+  IpcPtyTransportOptions,
+  PtyConnectResult,
+  PtyDataMeta
+} from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
 import { createAgentStatusOscProcessor, type ProcessedAgentStatusChunk } from './agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -80,7 +85,8 @@ export function createPtyOutputProcessor({
   processData: (
     data: string,
     callbacks: PtyOutputCallbacks,
-    options?: ProcessPtyOutputOptions
+    options?: ProcessPtyOutputOptions,
+    meta?: PtyDataMeta
   ) => void
   clearAccumulatedState: () => void
   clearStaleTitleTimer: () => void
@@ -250,8 +256,10 @@ export function createPtyOutputProcessor({
   function processData(
     data: string,
     callbacks: PtyOutputCallbacks,
-    options: ProcessPtyOutputOptions = {}
+    options: ProcessPtyOutputOptions = {},
+    meta?: PtyDataMeta
   ): void {
+    const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
     // Why: OSC 9999 is a renderer-only control protocol. Parse it before
     // xterm sees the bytes, and keep parser state across chunks so partial
@@ -265,7 +273,11 @@ export function createPtyOutputProcessor({
     if (options.replayingBufferedData && callbacks.onReplayData) {
       callbacks.onReplayData(data)
     } else {
-      callbacks.onData?.(data)
+      if (meta) {
+        callbacks.onData?.(data, { ...meta, rawLength })
+      } else {
+        callbacks.onData?.(data)
+      }
     }
     schedulePtySideEffects(data, processed.payloads, suppressAttentionEvents)
   }
@@ -361,11 +373,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data)
       }
     })
-    ptyDataHandlers.set(id, (data) => {
-      outputProcessor.processData(data, storedCallbacks, {
-        replayingBufferedData,
-        suppressAttentionEvents
-      })
+    ptyDataHandlers.set(id, (data, meta) => {
+      outputProcessor.processData(
+        data,
+        storedCallbacks,
+        {
+          replayingBufferedData,
+          suppressAttentionEvents
+        },
+        meta
+      )
     })
   }
 

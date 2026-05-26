@@ -772,7 +772,13 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-    onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (

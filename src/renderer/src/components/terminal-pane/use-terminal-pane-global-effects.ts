@@ -10,7 +10,10 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  flushTerminalOutput,
+  requestTerminalBacklogRecovery
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
@@ -91,6 +94,7 @@ export function useTerminalPaneGlobalEffects({
         // ordering and continues the rest asynchronously so return-to-app does
         // not beachball behind an entire backlog.
         for (const pane of manager.getPanes()) {
+          requestTerminalBacklogRecovery(pane.terminal)
           flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
         }
         // Resume WebGL immediately so the terminal shows its last-known state
