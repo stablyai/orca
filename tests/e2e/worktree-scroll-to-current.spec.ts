@@ -153,4 +153,57 @@ test.describe('Reveal active workspace button', () => {
     await expect(revealButton).toBeVisible()
     await expect(revealButton).toBeEnabled()
   })
+
+  test('clears sidebar filters before revealing a hidden current workspace', async ({
+    orcaPage
+  }) => {
+    await prepareSidebarForScrollTest(orcaPage)
+
+    const renderedOptions = orcaPage.locator('[data-worktree-sidebar] [role="option"]')
+    await expect(renderedOptions).toHaveCount(2)
+
+    const targetIdAttribute = await renderedOptions.last().getAttribute('id')
+    if (!targetIdAttribute?.startsWith(WORKTREE_OPTION_PREFIX)) {
+      throw new Error('Bottom workspace row did not expose the expected option id')
+    }
+
+    const targetId = decodeURIComponent(targetIdAttribute.slice(WORKTREE_OPTION_PREFIX.length))
+    const targetRow = worktreeOption(orcaPage, targetId)
+    const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
+
+    await renderedOptions.last().click()
+    await expect(targetRow).toHaveAttribute('aria-current', 'page')
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().setFilterRepoIds(['__filtered_repo__'])
+    })
+
+    await expect(renderedOptions).toHaveCount(0)
+    await expect(orcaPage.getByText('No workspaces found')).toBeVisible()
+
+    await revealButton.click()
+
+    await expect(targetRow).toBeVisible()
+    await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate(() => {
+            const store = window.__store
+            if (!store) {
+              throw new Error('window.__store is not available')
+            }
+            return store.getState().filterRepoIds
+          }),
+        {
+          timeout: 10_000,
+          message: 'Reveal button should clear repo filters that hide the current workspace'
+        }
+      )
+      .toEqual([])
+  })
 })

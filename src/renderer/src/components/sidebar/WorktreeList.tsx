@@ -290,10 +290,6 @@ type VirtualizedWorktreeViewportProps = {
   handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
-  onRevealCurrentWorkspace: (
-    worktreeId: string,
-    options?: Pick<PendingSidebarWorktreeReveal, 'highlight'>
-  ) => void
   clearPendingRevealWorktreeId: () => void
   worktrees: Worktree[]
   selectedWorktreeIds: ReadonlySet<string>
@@ -593,7 +589,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleRemoveRepo,
   activeModal,
   pendingRevealWorktree,
-  onRevealCurrentWorkspace,
   clearPendingRevealWorktreeId,
   worktrees,
   selectedWorktreeIds,
@@ -1314,19 +1309,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     markScrollMovement()
   }, [markScrollMovement])
 
-  const handleRevealCurrentWorkspace = useCallback(() => {
-    if (!currentWorktreeId) {
-      return
-    }
-    const container = scrollRef.current
-    container?.focus({ preventScroll: true })
-    if (container && revealMountedWorktreeElement(container, currentWorktreeId, 'smooth')) {
-      flashRevealedWorktree(currentWorktreeId)
-      return
-    }
-    onRevealCurrentWorkspace(currentWorktreeId, { highlight: true })
-  }, [currentWorktreeId, flashRevealedWorktree, onRevealCurrentWorkspace])
-
   useEffect(() => {
     return () => {
       if (revealHighlightTimeoutRef.current !== null) {
@@ -1334,19 +1316,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     }
   }, [])
-
-  useEffect(() => {
-    window.addEventListener(
-      SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
-      handleRevealCurrentWorkspace
-    )
-    return () => {
-      window.removeEventListener(
-        SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
-        handleRevealCurrentWorkspace
-      )
-    }
-  }, [handleRevealCurrentWorkspace])
 
   const cleanupWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
@@ -3164,16 +3133,6 @@ const WorktreeList = React.memo(function WorktreeList({
     [setSortBy, updateWorktreesMeta, worktreeMap]
   )
 
-  const revealCurrentWorkspace = useCallback(
-    (worktreeId: string, options?: Pick<PendingSidebarWorktreeReveal, 'highlight'>) => {
-      revealWorktreeInSidebar(worktreeId, {
-        behavior: 'smooth',
-        ...(options?.highlight ? { highlight: true } : {})
-      })
-    },
-    [revealWorktreeInSidebar]
-  )
-
   // Why: hideDefaultBranchWorkspace is counted as a filter here so the
   // empty-sidebar escape hatch (Clear Filters button below) is reachable when
   // it's the only reason the list is empty — otherwise a user whose only
@@ -3200,6 +3159,35 @@ const WorktreeList = React.memo(function WorktreeList({
       setHideDefaultBranchWorkspace(false)
     }
   }, [setShowSleepingWorkspaces, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
+
+  const handleRevealCurrentWorkspaceRequest = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const activeWorktree = worktreeMap.get(activeWorktreeId)
+    if (!activeWorktree || activeWorktree.isArchived) {
+      return
+    }
+    if (!worktrees.some((worktree) => worktree.id === activeWorktreeId)) {
+      // Why: the toolbar action promises to reveal the current workspace; when
+      // sidebar filters hide it, relax those filters before queuing the reveal.
+      clearFilters()
+    }
+    revealWorktreeInSidebar(activeWorktreeId, { behavior: 'smooth', highlight: true })
+  }, [activeWorktreeId, clearFilters, revealWorktreeInSidebar, worktreeMap, worktrees])
+
+  useEffect(() => {
+    window.addEventListener(
+      SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
+      handleRevealCurrentWorkspaceRequest
+    )
+    return () => {
+      window.removeEventListener(
+        SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
+        handleRevealCurrentWorkspaceRequest
+      )
+    }
+  }, [handleRevealCurrentWorkspaceRequest])
 
   if (worktrees.length === 0) {
     return (
@@ -3238,7 +3226,6 @@ const WorktreeList = React.memo(function WorktreeList({
       handleRemoveRepo={handleRemoveRepo}
       activeModal={activeModal}
       pendingRevealWorktree={pendingRevealWorktree}
-      onRevealCurrentWorkspace={revealCurrentWorkspace}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
       worktrees={worktrees}
       selectedWorktreeIds={selectedWorktreeIds}
