@@ -575,9 +575,6 @@ export async function searchBaseRefDetails(
   limit = 25
 ): Promise<BaseRefSearchResult[]> {
   const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) {
-    return []
-  }
 
   try {
     // Why: argv (including the two-remote-glob rationale) lives in

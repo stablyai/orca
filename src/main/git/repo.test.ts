@@ -181,10 +181,14 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toEqual([])
   })
 
-  it('returns [] without error for an empty query', async () => {
+  it('returns recent refs for an empty query so branch pickers can open populated', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+    createRemoteRef(tmpDir, 'upstream/feature-x', sha)
+
     const results = await searchBaseRefs(tmpDir, '')
 
-    expect(results).toEqual([])
+    expect(results).toEqual(['main', 'upstream/feature-x', 'upstream/main'])
   })
 
   // Why: the picker displays results as `<remote>/<branch>` and labels

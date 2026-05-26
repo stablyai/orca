@@ -880,13 +880,8 @@ async function searchBaseRefDetailsForRepo(
     }
     // Why: mirror the local path's sanitization (normalizeRefSearchQuery
     // in ../git/repo.ts) — strip glob metacharacters to prevent glob
-    // injection via the SSH branch, and short-circuit empty queries so
-    // we don't leak every ref. Without this the SSH path diverges from
-    // the local path's behavior.
+    // injection via the SSH branch while preserving empty-query branch lists.
     const normalizedQuery = normalizeRefSearchQuery(args.query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
