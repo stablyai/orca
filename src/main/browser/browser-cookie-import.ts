@@ -829,6 +829,9 @@ function fallbackChromiumCookieColumnValue(
   if (defaultValue !== null) {
     return defaultValue
   }
+  if (!isSqliteNotNull(column)) {
+    return null
+  }
 
   switch (column.name) {
     case 'value':

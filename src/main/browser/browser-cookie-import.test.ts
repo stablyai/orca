@@ -274,12 +274,13 @@ describe('buildChromiumCookieInsertParams', () => {
     ])
   })
 
-  it('preserves null when a nullable source column is present', () => {
+  it('preserves null for nullable columns without defaults', () => {
     const decryptedValue = Buffer.from('decrypted-cookie-value')
     const columns: ChromiumCookieColumnInfo[] = [
       { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
       { name: 'host_key', type: 'TEXT', notnull: 1 },
       { name: 'nullable_metadata', type: 'TEXT', notnull: 0 },
+      { name: 'target_only_nullable_metadata', type: 'TEXT', notnull: 0 },
       { name: 'last_update_utc', type: 'INTEGER', notnull: 1 }
     ]
     const sourceRow = {
@@ -290,6 +291,6 @@ describe('buildChromiumCookieInsertParams', () => {
 
     const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
 
-    expect(params).toEqual([133_000_000_000_000n, '.example.com', null, 133_000_000_000_000n])
+    expect(params).toEqual([133_000_000_000_000n, '.example.com', null, null, 133_000_000_000_000n])
   })
 })
