@@ -110,13 +110,11 @@ async function acquireForMainProcess(browserPageId: string): Promise<string | nu
   if (typeof browserPageId !== 'string' || browserPageId.length === 0) {
     return null
   }
-  const token = acquireBrowserAutomationVisibility(browserPageId)
-  // Why: main acquires the lease immediately before CDP work. Wait for React to
-  // commit the paintable hidden surface before agent-browser asks Chromium for
-  // DOM/layout/screenshot state.
+  // Why: only allocate the lease after the paint wait succeeds. If RAF hangs,
+  // main times out without leaving a permanently visible hidden webview.
   await nextAnimationFrame()
   await nextAnimationFrame()
-  return token
+  return acquireBrowserAutomationVisibility(browserPageId)
 }
 
 export function installBrowserAutomationVisibilityBridge(): void {

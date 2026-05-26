@@ -35,16 +35,51 @@ describe('browser automation visibility leases', () => {
   })
 
   it('installs a main-process bridge that waits for paint before returning a token', async () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('window', {
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        animationFrameCallbacks.push(callback)
+        return animationFrameCallbacks.length
+      }
+    })
     const { isBrowserAutomationVisible } = await import('./browser-automation-visibility')
 
     const bridge = window.__orcaBrowserAutomationVisibility
     expect(bridge).toBeTruthy()
 
-    const token = await bridge?.acquire('page-2')
+    const acquirePromise = bridge?.acquire('page-2')
+    await Promise.resolve()
+
+    expect(isBrowserAutomationVisible('page-2')).toBe(false)
+    expect(animationFrameCallbacks).toHaveLength(1)
+
+    animationFrameCallbacks.shift()?.(0)
+    await Promise.resolve()
+
+    expect(isBrowserAutomationVisible('page-2')).toBe(false)
+    expect(animationFrameCallbacks).toHaveLength(1)
+
+    animationFrameCallbacks.shift()?.(16)
+    const token = await acquirePromise
 
     expect(typeof token).toBe('string')
     expect(isBrowserAutomationVisible('page-2')).toBe(true)
     expect(bridge?.release(token ?? '')).toBe(true)
     expect(isBrowserAutomationVisible('page-2')).toBe(false)
+  })
+
+  it('does not allocate a main-process bridge lease when the paint wait hangs', async () => {
+    vi.stubGlobal('window', {
+      requestAnimationFrame: () => 1
+    })
+    const { isBrowserAutomationVisible } = await import('./browser-automation-visibility')
+
+    const bridge = window.__orcaBrowserAutomationVisibility
+    expect(bridge).toBeTruthy()
+
+    void bridge?.acquire('page-hung-paint')
+    await Promise.resolve()
+
+    expect(isBrowserAutomationVisible('page-hung-paint')).toBe(false)
   })
 })
