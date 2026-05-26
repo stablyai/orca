@@ -140,6 +140,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'browser.screencast.unsubscribe',
   'browser.tabCreate',
   'browser.viewport',
+  'files.createFile',
   'files.list',
   'files.open',
   'files.openDiff',
