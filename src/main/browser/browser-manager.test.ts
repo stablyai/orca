@@ -249,6 +249,58 @@ describe('browserManager', () => {
     restore()
   })
 
+  it('acquires renderer automation visibility without changing active browser state', async () => {
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockResolvedValueOnce('lease-1')
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1707,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-automation',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restore = await browserManager.acquireAutomationVisibility(guest.id)
+    const acquireScript = rendererExecuteJavaScriptMock.mock.calls[0]?.[0]
+    expect(acquireScript).toContain('__orcaBrowserAutomationVisibility')
+    expect(acquireScript).toContain('bridge.acquire("page-automation")')
+    expect(acquireScript).not.toContain('setActiveBrowserTab')
+    expect(acquireScript).not.toContain('setActiveTabType')
+
+    restore()
+
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("lease-1")')
+  })
+
   it('restores the previously focused browser workspace after screenshot prep changes tabs', async () => {
     const rendererExecuteJavaScriptMock = vi
       .fn()

@@ -437,6 +437,48 @@ export class BrowserManager {
     }
   }
 
+  async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return () => {}
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    if (!renderer || renderer.isDestroyed()) {
+      return () => {}
+    }
+
+    // Why: agent browser commands need a paintable webview for lazy-loading
+    // sites, but must not steal the user's visible Orca tab/worktree.
+    const token = await renderer
+      .executeJavaScript(
+        `(async function() {
+          var bridge = window.__orcaBrowserAutomationVisibility;
+          if (!bridge || typeof bridge.acquire !== 'function') return null;
+          return await bridge.acquire(${JSON.stringify(browserPageId)});
+        })()`
+      )
+      .catch(() => null)
+
+    if (typeof token !== 'string' || token.length === 0) {
+      return () => {}
+    }
+
+    return () => {
+      if (renderer.isDestroyed()) {
+        return
+      }
+      renderer
+        .executeJavaScript(
+          `(function() {
+            var bridge = window.__orcaBrowserAutomationVisibility;
+            if (!bridge || typeof bridge.release !== 'function') return false;
+            return bridge.release(${JSON.stringify(token)});
+          })()`
+        )
+        .catch(() => {})
+    }
+  }
+
   attachGuestPolicies(guest: Electron.WebContents): void {
     if (this.policyAttachedGuestIds.has(guest.id)) {
       return
