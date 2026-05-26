@@ -11,6 +11,30 @@ import { parseWorktreeList } from './git-handler-utils'
 
 // ─── Worktree management ─────────────────────────────────────────────
 
+async function persistRelayWorktreeCreationBase(
+  git: GitExec,
+  targetDir: string,
+  branchName: string,
+  effectiveBase: string
+): Promise<void> {
+  const configKey = `branch.${branchName}.base`
+  try {
+    await git(['config', '--local', '--replace-all', configKey, effectiveBase], targetDir)
+  } catch (error) {
+    console.warn(`relay addWorktree: failed to set ${configKey} for ${targetDir}`, error)
+    try {
+      // Why: SSH worktree creation shares branch config by name; clear stale
+      // metadata if replacing an old same-name base fails.
+      await git(['config', '--local', '--unset-all', configKey], targetDir)
+    } catch (unsetError) {
+      console.warn(
+        `relay addWorktree: failed to unset stale ${configKey} for ${targetDir}`,
+        unsetError
+      )
+    }
+  }
+}
+
 export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
@@ -59,6 +83,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
 
   if (checkoutExistingBranch) {
     return
+  }
+
+  if (effectiveBase) {
+    await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase)
   }
 
   // Why: best-effort write so a deliberate user value (any scope) is
