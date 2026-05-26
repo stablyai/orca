@@ -305,6 +305,8 @@ describePosix('local PTY shell-ready launch config', () => {
       '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+    const ompRestoreLine =
+      '[[ -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_OMP_CODING_AGENT_DIR}"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -314,6 +316,9 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
+    expect(zshrc).toContain(ompRestoreLine)
+    expect(zlogin).toContain(ompRestoreLine)
+    expect(bashRc).toContain(ompRestoreLine)
   })
 
   // Why: regression guard for issue #2422. Without OSC 133 C/D markers in the

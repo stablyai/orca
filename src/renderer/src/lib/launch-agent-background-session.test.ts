@@ -18,8 +18,6 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-const CLAUDE_SCOPED_SETTINGS =
-  'claude --settings "$HOME/.orca/agent-hooks/claude-agent-status-settings.json"'
 
 function expectStablePaneSpawn(): string {
   const spawnArgs = mockSpawn.mock.calls[0]?.[0]
@@ -124,7 +122,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/repo/worktree',
-        command: `${CLAUDE_SCOPED_SETTINGS} 'run the automation'`,
+        command: "claude 'run the automation'",
         env: expect.objectContaining({
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
@@ -269,10 +267,7 @@ describe('launchAgentBackgroundSession', () => {
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        `${CLAUDE_SCOPED_SETTINGS} 'run the automation'\r`
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude 'run the automation'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -306,7 +301,7 @@ describe('launchAgentBackgroundSession', () => {
       method: 'terminal.create',
       params: expect.objectContaining({
         worktree: 'wt-1',
-        command: `${CLAUDE_SCOPED_SETTINGS} 'run the automation'`,
+        command: "claude 'run the automation'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',

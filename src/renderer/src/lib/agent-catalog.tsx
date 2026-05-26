@@ -55,6 +55,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://pi.dev'
   },
   {
+    id: 'omp',
+    label: 'OMP',
+    cmd: 'omp',
+    faviconDomain: 'omp.sh',
+    homepageUrl: 'https://omp.sh'
+  },
+  {
     id: 'gemini',
     label: 'Gemini',
     cmd: 'gemini',

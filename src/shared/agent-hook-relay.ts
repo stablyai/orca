@@ -38,6 +38,7 @@ export type AgentHookSource =
   | 'opencode'
   | 'cursor'
   | 'pi'
+  | 'omp'
   | 'droid'
   | 'grok'
   | 'copilot'

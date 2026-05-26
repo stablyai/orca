@@ -6,6 +6,7 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { useAppStore } from '@/store'
+import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import {
   activateWebRuntimeSessionWorktree,
   isWebRuntimeSessionActive
@@ -96,9 +97,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree):
     prompt: '',
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
     platform: CLIENT_PLATFORM,
-    allowEmptyPromptLaunch: true,
-    useOrcaClaudeAgentStatusSettings:
-      useAppStore.getState().settings?.agentStatusHooksEnabled !== false
+    allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
     return undefined
@@ -125,6 +124,7 @@ export function activateAndRevealWorktree(
     }
     setup?: WorktreeSetupLaunch
     issueCommand?: IssueCommandLaunch
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -188,7 +188,11 @@ export function activateAndRevealWorktree(
   }
 
   // 6. Reveal in sidebar
-  state.revealWorktreeInSidebar(worktreeId)
+  if (opts?.sidebarRevealBehavior) {
+    state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
+  } else {
+    state.revealWorktreeInSidebar(worktreeId)
+  }
 
   return { primaryTabId }
 }

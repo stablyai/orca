@@ -20,7 +20,6 @@ const {
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
-  claudeBuildPtyEnvMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
@@ -50,7 +49,6 @@ const {
   getPathMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
-  claudeBuildPtyEnvMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
@@ -102,12 +100,6 @@ vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
-  }
-}))
-
-vi.mock('../claude/hook-service', () => ({
-  claudeHookService: {
-    buildPtyEnv: claudeBuildPtyEnvMock
   }
 }))
 
@@ -196,7 +188,9 @@ describe('registerPtyHandlers', () => {
   const savedOrcaPiAgentDir = process.env.ORCA_PI_CODING_AGENT_DIR
   const savedOrcaPiSourceAgentDir = process.env.ORCA_PI_SOURCE_AGENT_DIR
   const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
-  const savedOrcaClaudeSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
+  const savedOrcaOmpAgentDir = process.env.ORCA_OMP_CODING_AGENT_DIR
+  const savedOrcaOmpSourceAgentDir = process.env.ORCA_OMP_SOURCE_AGENT_DIR
+  const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
 
   beforeEach(() => {
     delete process.env.OPENCODE_CONFIG_DIR
@@ -208,6 +202,8 @@ describe('registerPtyHandlers', () => {
     delete process.env.ORCA_PI_SOURCE_AGENT_DIR
     delete process.env.ORCA_PI_CODING_AGENT_DIR
     delete process.env.ORCA_CODEX_HOME
+    delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
+    delete process.env.ORCA_OMP_CODING_AGENT_DIR
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -224,7 +220,6 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
-    claudeBuildPtyEnvMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
@@ -261,14 +256,13 @@ describe('registerPtyHandlers', () => {
       ORCA_AGENT_HOOK_PORT: '5678',
       ORCA_AGENT_HOOK_TOKEN: 'agent-token'
     })
-    claudeBuildPtyEnvMock.mockReturnValue({
-      ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/orca-claude-settings.json'
-    })
-    piBuildPtyEnvMock.mockImplementation((_ptyId: string, existingAgentDir?: string) => ({
-      PI_CODING_AGENT_DIR: existingAgentDir
-        ? '/tmp/orca-pi-agent-overlay'
-        : '/tmp/orca-pi-agent-overlay'
-    }))
+    piBuildPtyEnvMock.mockImplementation(
+      (_ptyId: string, existingAgentDir?: string, _kind?: string) => ({
+        PI_CODING_AGENT_DIR: existingAgentDir
+          ? '/tmp/orca-pi-agent-overlay'
+          : '/tmp/orca-pi-agent-overlay'
+      })
+    )
     isPwshAvailableMock.mockReturnValue(false)
     spawnMock.mockReturnValue({
       onData: vi.fn(() => makeDisposable()),
@@ -319,10 +313,20 @@ describe('registerPtyHandlers', () => {
     } else {
       process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
     }
-    if (savedOrcaClaudeSettings === undefined) {
+    if (savedOrcaOmpAgentDir !== undefined) {
+      process.env.ORCA_OMP_CODING_AGENT_DIR = savedOrcaOmpAgentDir
+    } else {
+      delete process.env.ORCA_OMP_CODING_AGENT_DIR
+    }
+    if (savedOrcaOmpSourceAgentDir !== undefined) {
+      process.env.ORCA_OMP_SOURCE_AGENT_DIR = savedOrcaOmpSourceAgentDir
+    } else {
+      delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
+    }
+    if (savedOrcaClaudeAgentStatusSettings === undefined) {
       delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
     } else {
-      process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS = savedOrcaClaudeSettings
+      process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS = savedOrcaClaudeAgentStatusSettings
     }
   })
 
@@ -366,7 +370,12 @@ describe('registerPtyHandlers', () => {
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
     getSelectedCodexHomePath?: () => string | null,
-    getSettings?: () => { enableGitHubAttribution?: boolean; agentStatusHooksEnabled?: boolean }
+    getSettings?: () => { enableGitHubAttribution?: boolean; agentStatusHooksEnabled?: boolean },
+    // Why: PR #2662 finding 2 — the threading from IPC `args.command` through
+    // buildPtyHostEnv to piTitlebarExtensionService.buildPtyEnv was untested
+    // for the OMP case because this helper never forwarded a command. Accept
+    // an optional `command` so callers can exercise OMP overlay resolution.
+    command?: string
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -393,7 +402,8 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        ...(argsEnv ? { env: argsEnv } : {})
+        ...(argsEnv ? { env: argsEnv } : {}),
+        ...(command ? { command } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
       return spawnCall[2].env as Record<string, string>
@@ -593,10 +603,36 @@ describe('registerPtyHandlers', () => {
 
     it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+    })
+
+    it('threads command: "omp" through to piBuildPtyEnv and emits ORCA_OMP_* shadow vars', async () => {
+      // Why: OMP launches must emit OMP-named Orca shadow vars (ORCA_OMP_*),
+      // not Pi-named ones. The PI_CODING_AGENT_DIR binary var is unavoidable
+      // (OMP's own binary reads it — see C:\tmp\pr-workspace\oh-my-pi
+      // packages/utils/src/dirs.ts), but every other Orca-owned env name
+      // stays kind-scoped so an OMP PTY never accumulates Pi shadow state.
+      const env = await spawnAndGetEnv(
+        undefined,
+        { PI_CODING_AGENT_DIR: '/tmp/user-omp-agent' },
+        undefined,
+        undefined,
+        'omp'
+      )
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-omp-agent',
+        'omp'
+      )
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
+      // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
     it('mirrors the original Pi source dir when launched from an Orca overlay shell', async () => {
@@ -604,10 +640,44 @@ describe('registerPtyHandlers', () => {
         PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
         ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
       })
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+    })
+
+    it('does not use an inherited Pi overlay source for an OMP launch', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'omp'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('does not use an inherited OMP overlay source for a Pi launch', async () => {
+      const env = await spawnAndGetEnv({
+        PI_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+        ORCA_OMP_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+        ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/user-omp-agent'
+      })
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
     it('restores user Pi config when agent status hooks are disabled in a nested Orca shell', async () => {
@@ -641,14 +711,15 @@ describe('registerPtyHandlers', () => {
 
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),
-        '/home/tester/.config/pi-agent'
+        '/home/tester/.config/pi-agent',
+        'pi'
       )
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/home/tester/.config/pi-agent')
     })
 
-    it('injects the Claude/Codex hook receiver env into Orca terminal PTYs', async () => {
+    it('injects the agent hook receiver env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv()
       // Why: after the daemon-parity refactor, buildAgentHookEnv runs exactly
       // once for a local spawn — inside the shared buildPtyHostEnv helper,
@@ -656,10 +727,8 @@ describe('registerPtyHandlers', () => {
       // both route through. The handler's separate ad-hoc injection (which
       // used to cause a double-call for local spawns) is gone.
       expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(1)
-      expect(claudeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
-      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBe('/tmp/orca-claude-settings.json')
     })
 
     it('strips stale inherited hook receiver env before injecting this runtime', async () => {
@@ -669,7 +738,7 @@ describe('registerPtyHandlers', () => {
         ORCA_AGENT_HOOK_ENV: 'production',
         ORCA_AGENT_HOOK_VERSION: 'stale-version',
         ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env',
-        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/stale-claude-settings.json'
+        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
       })
 
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
@@ -677,7 +746,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
       expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBe('/tmp/orca-claude-settings.json')
+      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
     })
 
     it('does not leak inherited hook receiver env if the hook server is unavailable', async () => {
@@ -689,7 +758,7 @@ describe('registerPtyHandlers', () => {
         ORCA_AGENT_HOOK_ENV: 'production',
         ORCA_AGENT_HOOK_VERSION: 'stale-version',
         ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env',
-        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/stale-claude-settings.json'
+        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
       })
 
       expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
@@ -697,7 +766,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
       expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBe('/tmp/orca-claude-settings.json')
+      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
     })
 
     it('prepends local git/gh attribution shims when attribution is enabled', async () => {
@@ -802,7 +871,9 @@ describe('registerPtyHandlers', () => {
         getSelectedCodexHomePath?: () => string | null,
         getSettings?: () => { enableGitHubAttribution: boolean },
         processEnvOverrides?: Record<string, string | undefined>,
-        spawnArgs?: { cwd?: string; shellOverride?: string }
+        // Why: daemon spawn tests need to exercise both WSL launch metadata
+        // from main and PR #2662 command threading for OMP overlay selection.
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
       ): Promise<DaemonSpawnCall> {
         const daemonSpawn = setupDaemonAdapter()
         const savedEnv: Record<string, string | undefined> = {}
@@ -847,7 +918,7 @@ describe('registerPtyHandlers', () => {
         getSelectedCodexHomePath?: () => string | null,
         getSettings?: () => { enableGitHubAttribution: boolean },
         processEnvOverrides?: Record<string, string | undefined>,
-        spawnArgs?: { cwd?: string; shellOverride?: string }
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
       ): Promise<Record<string, string>> {
         return (
           await daemonSpawnAndGetOptions(
@@ -901,10 +972,33 @@ describe('registerPtyHandlers', () => {
         // Why: asserts the overlay key was passed through — the id is the
         // daemon-assigned sessionId minted in pty.ts, and the mock returns
         // the fixed overlay path from the shared setup.
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent', 'pi')
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
+      })
+
+      it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP shadow vars', async () => {
+        // Why: mirror of the local-spawn OMP threading assertion. The
+        // daemon path's `command` forwarding could silently regress and
+        // Pi-only tests would still pass.
+        const env = await daemonSpawnAndGetEnv(
+          { PI_CODING_AGENT_DIR: '/user/.omp/agent' },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'omp' }
+        )
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/.omp/agent',
+          'omp'
+        )
+        expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
@@ -978,7 +1072,53 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
-        expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBe('/tmp/orca-claude-settings.json')
+      })
+
+      it('deletes stale Claude scoped settings env from daemon-hosted PTYs', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions({}, undefined, undefined, {
+          ORCA_CLAUDE_AGENT_STATUS_SETTINGS:
+            '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+        })
+        expect(spawnOptions.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_CLAUDE_AGENT_STATUS_SETTINGS'])
+        )
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('deletes stale Claude scoped settings env from runtime-created daemon PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS =
+          '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_CLAUDE_AGENT_STATUS_SETTINGS'])
+        )
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
       })
 
       it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
@@ -1053,7 +1193,7 @@ describe('registerPtyHandlers', () => {
         const sessionId = spawnOpts.sessionId
         expect(sessionId).toEqual(expect.any(String))
         expect((sessionId ?? '').length).toBeGreaterThan(0)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
       it('respects a caller-provided sessionId instead of minting a new one', async () => {
@@ -1067,7 +1207,7 @@ describe('registerPtyHandlers', () => {
           sessionId: 'user-session-42'
         })
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
       })
 
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
@@ -1086,7 +1226,7 @@ describe('registerPtyHandlers', () => {
         })
         const sessionId = daemonSpawn.mock.calls.at(-1)![0].sessionId ?? ''
         expect(sessionId).toMatch(/^wt-alpha@@[0-9a-f]{8}$/)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
       it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
@@ -1098,7 +1238,11 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           PI_CODING_AGENT_DIR: '/ambient/pi/agent'
         })
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/ambient/pi/agent')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/ambient/pi/agent',
+          'pi'
+        )
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       })
@@ -1269,7 +1413,6 @@ describe('registerPtyHandlers', () => {
         // worst a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-        expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()

@@ -47,55 +47,16 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex 'fix it'")
   })
 
-  it('does not inject Codex profile flags through the shared agent-status option', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'codex',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux',
-      useOrcaClaudeAgentStatusSettings: true
-    })
-
-    expect(plan?.launchCommand).toBe("codex 'fix it'")
-    expect(plan?.launchCommand).not.toContain('--profile')
-    expect(plan?.launchCommand).not.toContain('orca-agent-status')
-  })
-
-  it('launches Claude with the Orca settings file when agent status hooks are enabled', () => {
+  it('launches Claude without Orca settings injection', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux',
-      useOrcaClaudeAgentStatusSettings: true
+      platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe(
-      'claude --settings "$HOME/.orca/agent-hooks/claude-agent-status-settings.json" \'fix it\''
-    )
-  })
-
-  it('uses the target shell syntax for Claude settings injection', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'claude',
-        prompt: 'fix it',
-        cmdOverrides: {},
-        platform: 'win32',
-        useOrcaClaudeAgentStatusSettings: true
-      })?.launchCommand
-    ).toBe("claude --settings $Env:ORCA_CLAUDE_AGENT_STATUS_SETTINGS 'fix it'")
-
-    expect(
-      buildAgentStartupPlan({
-        agent: 'claude',
-        prompt: 'fix it',
-        cmdOverrides: {},
-        platform: 'win32',
-        shell: 'cmd',
-        useOrcaClaudeAgentStatusSettings: true
-      })?.launchCommand
-    ).toBe('claude --settings "%ORCA_CLAUDE_AGENT_STATUS_SETTINGS%" "fix it"')
+    expect(plan?.launchCommand).toBe("claude 'fix it'")
+    expect(plan?.launchCommand).not.toContain('--settings')
   })
 
   it('leaves Claude command overrides untouched', () => {
@@ -103,8 +64,7 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
-      platform: 'linux',
-      useOrcaClaudeAgentStatusSettings: true
+      platform: 'linux'
     })
 
     expect(plan?.launchCommand).toBe("claude --dangerously-skip-permissions 'fix it'")
@@ -140,5 +100,25 @@ describe('tui agent startup plans', () => {
         shell: 'cmd'
       })?.launchCommand
     ).toBe('pi & set "ORCA_PI_PREFILL="')
+  })
+
+  it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
+    // Why: OMP owns its own overlay tree, bundled prefill extension, and
+    // prefill env var. The OMP overlay's orca-prefill.ts reads
+    // ORCA_OMP_PREFILL — see src/main/pi/titlebar-extension-service.ts —
+    // so a draft plan for OMP MUST emit that name. A regression here would
+    // either silently drop the draft (Pi var ignored by OMP overlay) or
+    // honor a stale Pi-PTY draft from a previous launch.
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'omp',
+      draft: 'fix the omp regression',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).not.toBeNull()
+    expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
+    expect(plan?.expectedProcess).toBe('omp')
+    expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
   })
 })

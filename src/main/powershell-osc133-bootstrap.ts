@@ -22,6 +22,7 @@ try {
 # Profiles can re-export user defaults after Orca's spawn env is set.
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 if ($env:ORCA_PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR }
+if ($env:ORCA_OMP_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
 $Global:__OrcaOsc133State = @{

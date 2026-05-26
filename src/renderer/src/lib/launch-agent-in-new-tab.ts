@@ -72,7 +72,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const useOrcaAgentStatusHooks = store.settings?.agentStatusHooksEnabled !== false
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -96,8 +95,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
     submitPastedPrompt = true
@@ -107,8 +105,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      platform: CLIENT_PLATFORM
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -124,8 +121,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: CLIENT_PLATFORM,
-        allowEmptyPromptLaunch: true,
-        useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+        allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
     }
@@ -135,8 +131,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
   } else {
@@ -145,8 +140,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: !hasPrompt,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: !hasPrompt
     })
   }
 

@@ -147,7 +147,6 @@ describe('AgentsPane', () => {
   it('includes hook search metadata for the status setting', () => {
     expect(matchesSettingsSearch('hooks', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('waiting', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('scoped', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 })

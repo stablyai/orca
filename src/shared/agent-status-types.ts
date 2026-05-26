@@ -21,6 +21,7 @@ export type WellKnownAgentType =
   | 'copilot'
   | 'aider'
   | 'pi'
+  | 'omp'
   | 'droid'
   | 'grok'
   | 'hermes'

@@ -1529,6 +1529,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
+    case 'omp':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -1569,6 +1570,7 @@ function extractToolFields(
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
+    case 'omp':
       return extractPiToolFields(eventName, hookPayload)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -1956,8 +1958,9 @@ function normalizeCopilotEvent(
   )
 }
 
-function normalizePiEvent(
+function normalizePiCompatibleEvent(
   state: HookListenerState,
+  agentType: 'pi' | 'omp',
   eventName: unknown,
   promptText: string,
   paneKey: string,
@@ -1982,17 +1985,17 @@ function normalizePiEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('pi', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('pi', eventName) }
+    extractToolFields(agentType, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
   )
 
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('pi', eventName)
+        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
       }),
-      agentType: 'pi',
+      agentType,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage
@@ -2274,7 +2277,24 @@ export function normalizeHookPayload(
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'pi':
-      payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizePiCompatibleEvent(
+        state,
+        'pi',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
+    case 'omp':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'omp',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
@@ -2325,6 +2345,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
+  '/hook/omp': 'omp',
   '/hook/droid': 'droid',
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',

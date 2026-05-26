@@ -1,9 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Check, Globe2, MonitorCog, Workflow } from 'lucide-react'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import type {
   OnboardingFeatureSetupId,
@@ -51,46 +47,8 @@ export function FeatureSetupChecklist({
   value,
   onChange
 }: FeatureSetupChecklistProps): React.JSX.Element {
-  const [showCliNotice, setShowCliNotice] = useState(true)
-
-  useEffect(() => {
-    let canceled = false
-    const refreshCliNotice = async (): Promise<void> => {
-      try {
-        const status = await window.api.cli.getInstallStatus()
-        if (!canceled) {
-          setShowCliNotice(!isOrcaCliAvailableOnPath(status))
-        }
-      } catch {
-        if (!canceled) {
-          setShowCliNotice(true)
-        }
-      }
-    }
-
-    void refreshCliNotice()
-    window.addEventListener('focus', refreshCliNotice)
-    return () => {
-      canceled = true
-      window.removeEventListener('focus', refreshCliNotice)
-    }
-  }, [])
-
   return (
-    <section className="mt-6 space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-sm font-semibold text-foreground">Set up agent features</h2>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">
-          Pick the capabilities you want ready after onboarding. Selected features run setup on the
-          next click and show a terminal here with the skill command ready for review.
-        </p>
-        {showCliNotice ? (
-          <p className="text-[12px] leading-relaxed text-muted-foreground">
-            {AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-          </p>
-        ) : null}
-      </div>
-
+    <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
         {FEATURE_SETUP_ROWS.map((row) => {
           const selected = value[row.id]

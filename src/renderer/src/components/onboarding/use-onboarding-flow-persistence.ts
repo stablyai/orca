@@ -128,6 +128,10 @@ export type PersistCurrentStepResult = {
   featureSetupResult?: OnboardingFeatureSetupResult
 }
 
+type PersistCurrentStepOptions = {
+  runFeatureSetup?: boolean
+}
+
 export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
@@ -139,97 +143,104 @@ export function usePersistCurrentStep({
   onOnboardingChange,
   setError
 }: PersistCurrentStepDeps) {
-  return useCallback(async (): Promise<PersistCurrentStepResult> => {
-    if (!settings) {
-      return { ok: false }
-    }
-    try {
-      if (currentStepId === 'agent') {
-        const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
-        await updateSettings({ defaultTuiAgent })
-        const choseAgent = defaultTuiAgent !== 'blank'
-        const wasAlreadyChosen = onboardingChecklist.choseAgent
-        onOnboardingChange(
-          await persistStep(1, {
-            checklist: { ...onboardingChecklist, choseAgent }
-          })
-        )
-        if (choseAgent && !wasAlreadyChosen) {
-          track('activation_checklist_item_completed', {
-            item: 'choseAgent',
-            time_since_completed_ms: 0
-          })
-        }
-        return { ok: true }
+  return useCallback(
+    async (options: PersistCurrentStepOptions = {}): Promise<PersistCurrentStepResult> => {
+      if (!settings) {
+        return { ok: false }
       }
-      if (currentStepId === 'theme') {
-        await updateSettings({ theme })
-        onOnboardingChange(await persistStep(2))
-        return { ok: true }
-      }
-      if (currentStepId === 'notifications') {
-        await updateSettings({
-          notifications: {
-            ...settings.notifications,
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true
-          }
-        })
-        onOnboardingChange(await persistStep(3))
-        return { ok: true }
-      }
-      if (currentStepId === 'agentSetup') {
-        const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
-        const featureSetupResult: OnboardingFeatureSetupResult = setupResult
-        track('onboarding_feature_setup_run', {
-          ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
-        })
-        if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
-          const firstWarning = setupResult.warnings[0]
-          if (firstWarning) {
-            toast.warning('Some feature setup needs attention', {
-              description: firstWarning.message
+      try {
+        if (currentStepId === 'agent') {
+          const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
+          await updateSettings({ defaultTuiAgent })
+          const choseAgent = defaultTuiAgent !== 'blank'
+          const wasAlreadyChosen = onboardingChecklist.choseAgent
+          onOnboardingChange(
+            await persistStep(1, {
+              checklist: { ...onboardingChecklist, choseAgent }
+            })
+          )
+          if (choseAgent && !wasAlreadyChosen) {
+            track('activation_checklist_item_completed', {
+              item: 'choseAgent',
+              time_since_completed_ms: 0
             })
           }
-          if (setupResult.skillCommandsCopied) {
-            toast.success('Feature setup ready', {
-              description: 'Skill command copied and inserted below for review.'
-            })
-          }
-          if (setupResult.computerUsePermissionsOpened) {
-            toast.message('Opened Computer Use permissions')
-          }
+          return { ok: true }
         }
-        onOnboardingChange(await persistStep(4))
-        return { ok: true, featureSetupResult }
+        if (currentStepId === 'theme') {
+          await updateSettings({ theme })
+          onOnboardingChange(await persistStep(2))
+          return { ok: true }
+        }
+        if (currentStepId === 'notifications') {
+          await updateSettings({
+            notifications: {
+              ...settings.notifications,
+              enabled: true,
+              agentTaskComplete: true,
+              terminalBell: true
+            }
+          })
+          onOnboardingChange(await persistStep(3))
+          return { ok: true }
+        }
+        if (currentStepId === 'agentSetup') {
+          if (!options.runFeatureSetup) {
+            onOnboardingChange(await persistStep(4))
+            return { ok: true }
+          }
+          const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
+          const featureSetupResult: OnboardingFeatureSetupResult = setupResult
+          track('onboarding_feature_setup_run', {
+            ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
+          })
+          if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
+            const firstWarning = setupResult.warnings[0]
+            if (firstWarning) {
+              toast.warning('Some feature setup needs attention', {
+                description: firstWarning.message
+              })
+            }
+            if (setupResult.skillCommandsCopied) {
+              toast.success('Feature setup ready', {
+                description: 'Skill command copied and inserted below for review.'
+              })
+            }
+            if (setupResult.computerUsePermissionsOpened) {
+              toast.message('Opened Computer Use permissions')
+            }
+          }
+          onOnboardingChange(await persistStep(4))
+          return { ok: true, featureSetupResult }
+        }
+        if (currentStepId === 'integrations') {
+          // Why: GitHub and Linear connections persist through their own
+          // store slices when the user actually wires them up. The step itself
+          // is a no-op for settings/onboarding state beyond marking it
+          // completed.
+          onOnboardingChange(await persistStep(5))
+          return { ok: true }
+        }
+        if (currentStepId === 'tour') {
+          onOnboardingChange(await persistStep(6))
+          return { ok: true }
+        }
+        return { ok: false }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return { ok: false }
       }
-      if (currentStepId === 'integrations') {
-        // Why: GitHub and Linear connections persist through their own
-        // store slices when the user actually wires them up. The step itself
-        // is a no-op for settings/onboarding state beyond marking it
-        // completed.
-        onOnboardingChange(await persistStep(5))
-        return { ok: true }
-      }
-      if (currentStepId === 'tour') {
-        onOnboardingChange(await persistStep(6))
-        return { ok: true }
-      }
-      return { ok: false }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      return { ok: false }
-    }
-  }, [
-    currentStepId,
-    featureSetupSelection,
-    onboardingChecklist,
-    onOnboardingChange,
-    selectedAgent,
-    settings,
-    theme,
-    updateSettings,
-    setError
-  ])
+    },
+    [
+      currentStepId,
+      featureSetupSelection,
+      onboardingChecklist,
+      onOnboardingChange,
+      selectedAgent,
+      settings,
+      theme,
+      updateSettings,
+      setError
+    ]
+  )
 }

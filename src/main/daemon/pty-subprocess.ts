@@ -265,6 +265,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       : env.ORCA_ATTRIBUTION_SHIM_DIR ||
           env.ORCA_OPENCODE_CONFIG_DIR ||
           env.ORCA_PI_CODING_AGENT_DIR ||
+          env.ORCA_OMP_CODING_AGENT_DIR ||
           env.ORCA_CODEX_HOME
         ? getAttributionShellLaunchConfig(shellPath)
         : null

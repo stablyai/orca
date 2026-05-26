@@ -45,6 +45,7 @@ import {
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
+import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -374,13 +375,29 @@ async function main(): Promise<void> {
       }
     }
     if (pluginOverlay.hasPiSource()) {
-      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell)
-      const dir = pluginOverlay.materializePi(overlayId, sourceDir)
+      // Why: source-dir defaulting is keyed on which Pi-compatible agent is
+      // being launched (Pi vs OMP). The renderer-supplied `command` is the
+      // only signal - disk-presence guessing silently shadows the other
+      // agent's extensions when both `~/.pi/agent` and `~/.omp/agent` exist.
+      const kind = detectPiAgentKindFromCommand(ctx.command)
+      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, kind)
+      const dir = pluginOverlay.materializePi(overlayId, sourceDir, kind)
       if (dir) {
         env.PI_CODING_AGENT_DIR = dir
-        env.ORCA_PI_CODING_AGENT_DIR = dir
-        if (sourceDir) {
-          env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+        // Why: shadow var is agent-scoped so the remote shell-ready wrappers
+        // can OR-restore either kind without cross-contamination. PI_CODING_AGENT_DIR
+        // is the binary-facing var both Pi and OMP read; OMP's changelog
+        // documents the OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename.
+        if (kind === 'omp') {
+          env.ORCA_OMP_CODING_AGENT_DIR = dir
+          if (sourceDir) {
+            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
+          }
+        } else {
+          env.ORCA_PI_CODING_AGENT_DIR = dir
+          if (sourceDir) {
+            env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+          }
         }
       }
     }
@@ -422,16 +439,20 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
+    const omp = params.ompExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
-      piExtensionSource: typeof pi === 'string' ? pi : undefined
+      piExtensionSource: typeof pi === 'string' ? pi : undefined,
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
-        pi: pluginOverlay.hasPiSource()
+        pi: pluginOverlay.hasPiSource('pi'),
+        omp: pluginOverlay.hasPiSource('omp')
       }
     }
   })

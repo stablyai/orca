@@ -8,10 +8,10 @@ import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
 
 const TOUR_LEARNING_POINTS: readonly string[] = [
-  'Work on several branches at once.',
-  'Hand off a feature to an orchestrator agent.',
-  'Start work straight from a GitHub or Linear ticket.',
-  'Grab an element from your running app and send it to an agent.'
+  'Run agents in isolated worktrees.',
+  'Orchestrate agents to finish larger tasks.',
+  'Start tasks from GitHub or Linear.',
+  'Send webpage elements to agents from the Orca browser.'
 ]
 
 type OnboardingTourStepProps = {
@@ -83,7 +83,7 @@ export function OnboardingTourStep({
         compactRail
         detachedFooter
         onTourDepthSummaryChange={onTourDepthSummaryChange}
-        className="h-full max-h-[790px] min-h-0"
+        className="h-full min-h-0"
         panelClassName="rounded-xl border border-border bg-card"
         leadingFooterContent={
           <button
@@ -103,7 +103,7 @@ export function OnboardingTourStep({
     <div className="flex h-full min-h-[430px] flex-col">
       <div className="grid w-full grid-cols-1 items-start gap-10 md:grid-cols-[1fr_minmax(0,340px)]">
         <div className="flex flex-col gap-4">
-          <p className="text-sm font-medium text-foreground">Learn how Orca can help you…</p>
+          <p className="text-sm font-medium text-foreground">Preview the core workflow.</p>
           <ul className="flex flex-col gap-2.5">
             {TOUR_LEARNING_POINTS.map((point) => (
               <li key={point} className="flex items-start gap-3">
@@ -114,24 +114,26 @@ export function OnboardingTourStep({
               </li>
             ))}
           </ul>
-          <div className="mt-2 flex items-center gap-3">
+        </div>
+        <div className="flex w-full flex-col gap-3">
+          <FeatureTourPreview className="w-full" />
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
             <Button
               variant="default"
               onClick={handleStartTour}
               disabled={Boolean(busyLabel)}
-              className="gap-2"
+              className="w-full gap-2"
             >
               Take the tour
               <ArrowRight className="size-4" />
             </Button>
-            <span className="text-xs text-muted-foreground">~ 60 seconds</span>
+            <div className="mt-2 text-center text-xs text-muted-foreground">~ 60 seconds</div>
           </div>
         </div>
-        <FeatureTourPreview className="w-full" />
       </div>
 
       <p className="mt-auto max-w-[560px] text-left text-xs leading-relaxed text-muted-foreground">
-        This tour can be seen anytime under Help &gt; Explore Orca.
+        Available later under Help &gt; Explore Orca.
       </p>
     </div>
   )

@@ -220,7 +220,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           onboarding,
           hadProjectBeforeAdd
         )
-        activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
+        activateAndRevealWorktree(folderWorktree.id, {
+          sidebarRevealBehavior: 'auto',
+          ...(startup ? { startup } : {})
+        })
       }
       return repo
     } catch (err) {

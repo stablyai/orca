@@ -1,6 +1,5 @@
 import { homedir } from 'os'
 import { join } from 'path'
-import { ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE } from '../../shared/claude-settings'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -33,12 +32,8 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
-export function getLegacyConfigPath(): string {
+export function getConfigPath(): string {
   return join(homedir(), '.claude', 'settings.json')
-}
-
-export function getScopedSettingsPath(): string {
-  return join(homedir(), '.orca', 'agent-hooks', ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE)
 }
 
 export function getManagedScriptFileName(): string {
@@ -49,11 +44,7 @@ export function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-export function getRemoteScopedSettingsPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE}`
-}
-
-export function getRemoteLegacyConfigPath(remoteHome: string): string {
+export function getRemoteConfigPath(remoteHome: string): string {
   return `${remoteHome.replace(/\/$/, '')}/.claude/settings.json`
 }
 

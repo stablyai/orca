@@ -30,17 +30,37 @@ describe('OnboardingFlow', () => {
       />
     )
 
-    expect(html).toContain('Interested in Orca&#x27;s advanced features?')
-    expect(html).toContain('Take a short tour before getting started.')
-    expect(html).toContain('Learn how Orca can help you')
-    expect(html).toContain('Hand off a feature to an orchestrator agent.')
-    expect(html).toContain('Grab an element from your running app and send it to an agent.')
+    expect(html).toContain('Explore Orca')
+    expect(html).toContain('Preview the core workflow.')
+    expect(html).toContain('Run agents in isolated worktrees.')
+    expect(html).toContain('Orchestrate agents to finish larger tasks.')
+    expect(html).toContain('Start tasks from GitHub or Linear.')
+    expect(html).toContain('Send webpage elements to agents from the Orca browser.')
     expect(html).not.toContain('Write and preview Markdown.')
     expect(html).toContain('items-start')
     expect(html).toContain('text-left')
     expect(html).toContain('Continue')
     expect(html).toContain('Skip to project setup')
     expect(html).not.toContain('Skip the tour')
+  })
+
+  it('keeps agent setup actions out of the footer', () => {
+    const html = renderToStaticMarkup(
+      <OnboardingFlow
+        onboarding={{
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 3
+        }}
+        onOnboardingChange={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Set up Orca for agents')
+    expect(html).toContain('Turn on advanced Orca capabilities for agents.')
+    expect(html).toContain('Enable capabilities')
+    expect(html).toContain('Continue')
+    expect(html).toContain('Skip to project setup')
+    expect(html).not.toContain('>Skip</button>')
   })
 
   it('renders onboarding inside a centered modal shell', () => {

@@ -526,7 +526,8 @@ export class SshRelaySession {
     try {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
-        piExtensionSource: getPiAgentStatusExtensionSource()
+        piExtensionSource: getPiAgentStatusExtensionSource('pi'),
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler (treat as soft skip).
