@@ -19,6 +19,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   autohand: 'autohand',
   opencode: 'opencode',
   pi: 'pi',
+  omp: 'omp',
   gemini: 'gemini',
   antigravity: 'antigravity',
   aider: 'aider',

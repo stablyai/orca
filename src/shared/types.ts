@@ -1465,6 +1465,7 @@ export type TuiAgent =
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
+  | 'omp' // OMP (omp.sh)
   | 'gemini' // Gemini CLI
   | 'antigravity' // Google Antigravity CLI
   | 'aider' // Aider

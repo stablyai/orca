@@ -21,6 +21,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'codex',
       'opencode',
       'pi',
+      'omp',
       'gemini',
       'aider',
       'goose',

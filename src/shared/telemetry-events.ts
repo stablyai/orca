@@ -43,6 +43,7 @@ export const AGENT_KIND_VALUES = [
   'autohand',
   'opencode',
   'pi',
+  'omp',
   'gemini',
   'antigravity',
   'aider',

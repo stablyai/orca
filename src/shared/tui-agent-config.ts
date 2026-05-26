@@ -106,6 +106,23 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // user-visible behavior as `claude --prefill <text>`.
     draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
+  omp: {
+    // Why: OMP (omp.sh) is a Pi fork with its own binary (`omp`), brand,
+    // default config dir (~/.omp/agent), and overlay tree. It re-uses
+    // Pi's argv prompt-injection contract because the OMP binary inherits
+    // Pi's command-line parser, but every Orca-owned env var (overlay
+    // shadow, prefill) is scoped to OMP - see ORCA_OMP_* in
+    // src/main/pi/titlebar-extension-service.ts. The one var that MUST
+    // stay shared is `PI_CODING_AGENT_DIR`: OMP's CHANGELOG documents
+    // the deliberate rename of `OMP_CODING_AGENT_DIR` -> `PI_CODING_AGENT_DIR`
+    // (packages/ai/CHANGELOG.md), so the binary itself reads the PI-prefixed
+    // name and we have to set that to point at the OMP overlay dir.
+    detectCmd: 'omp',
+    launchCmd: 'omp',
+    expectedProcess: 'omp',
+    promptInjectionMode: 'argv',
+    draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+  },
   gemini: {
     detectCmd: 'gemini',
     launchCmd: 'gemini',

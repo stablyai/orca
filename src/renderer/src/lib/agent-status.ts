@@ -151,6 +151,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   autohand: true,
   opencode: true,
   pi: true,
+  omp: true,
   gemini: true,
   antigravity: true,
   aider: true,

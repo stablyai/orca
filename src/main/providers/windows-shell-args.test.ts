@@ -34,6 +34,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const piRestoreIndex = command.indexOf(
       '$env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR'
     )
+    const ompRestoreIndex = command.indexOf(
+      '$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR'
+    )
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
 
@@ -41,7 +44,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
     expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(piRestoreIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(ompRestoreIndex).toBeGreaterThan(piRestoreIndex)
     expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(codexRestoreIndex).toBeGreaterThan(ompRestoreIndex)
     expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')

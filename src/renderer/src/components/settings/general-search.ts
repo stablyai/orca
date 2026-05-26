@@ -118,6 +118,7 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'codex',
       'opencode',
       'pi',
+      'omp',
       'gemini',
       'aider',
       'copilot',

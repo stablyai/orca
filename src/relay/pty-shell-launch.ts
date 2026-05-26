@@ -15,7 +15,9 @@ function quotePosixSingle(value: string): string {
 }
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
-  return Boolean(env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_PI_CODING_AGENT_DIR)
+  return Boolean(
+    env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_PI_CODING_AGENT_DIR || env.ORCA_OMP_CODING_AGENT_DIR
+  )
 }
 
 function getWrapperRoot(env: Record<string, string>): string {
@@ -78,6 +80,7 @@ if [[ ! -o login ]]; then
   # Why: remote startup files can re-export user defaults after relay spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
   [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+  [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
 fi
 `
   const zshLogin = `# Orca relay zsh overlay wrapper
@@ -91,6 +94,7 @@ fi
 # Why: .zlogin is the final zsh login startup file before the prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
 `
   const bashRc = `# Orca relay bash overlay wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -104,6 +108,7 @@ fi
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.
 __orca_osc133_precmd() {
