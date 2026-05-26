@@ -54,6 +54,7 @@ import {
 import {
   TerminalWebView,
   type TerminalKeyboardAvoidanceMetrics,
+  type MobileTerminalTheme,
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
@@ -85,13 +86,16 @@ import {
   type MobileSyntaxSegment,
   type MobileSyntaxTokenKind
 } from '../../../../src/session/mobile-file-syntax'
+import {
+  getTerminalRecordsFromSessionTabs,
+  mergeTerminalListWithKnownRecords,
+  mergeTerminalRecordsByCurrentOrder,
+  terminalRecordsEqual,
+  type TerminalRecord
+} from '../../../../src/session/mobile-terminal-records'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
-type Terminal = {
-  handle: string
-  title: string
-  isActive: boolean
-}
+type Terminal = TerminalRecord
 
 type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
 
@@ -104,6 +108,7 @@ type MobileSessionTab =
       leafId?: string
       status?: 'pending-handle' | 'ready'
       terminal: string | null
+      terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
   | {
@@ -187,33 +192,6 @@ type DirtyMarkdownDraft = {
   content: string
 }
 
-function mergeTerminalRecordsByCurrentOrder(
-  terminalTabs: Terminal[],
-  currentTerminals: Terminal[]
-): Terminal[] {
-  if (currentTerminals.length === 0) {
-    return terminalTabs
-  }
-  const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
-  const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
-  return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
-    ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
-  ]
-}
-
-function terminalRecordsEqual(a: Terminal[], b: Terminal[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every(
-      (terminal, index) =>
-        terminal.handle === b[index]?.handle &&
-        terminal.title === b[index]?.title &&
-        terminal.isActive === b[index]?.isActive
-    )
-  )
-}
-
 function mobileSessionTabsEqual(a: MobileSessionTab[], b: MobileSessionTab[]): boolean {
   return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
 }
@@ -235,7 +213,8 @@ function mobileSessionTabEqual(a: MobileSessionTab, b: MobileSessionTab | undefi
         a.parentTabId === b.parentTabId &&
         a.leafId === b.leafId &&
         a.status === b.status &&
-        a.terminal === b.terminal
+        a.terminal === b.terminal &&
+        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
       )
     case 'markdown':
       return (
@@ -347,6 +326,7 @@ function TerminalPaneView({
   handle,
   active,
   keyboardLift,
+  terminalTheme,
   onRef,
   onWebReady,
   onSelectionMode,
@@ -360,6 +340,7 @@ function TerminalPaneView({
   handle: string
   active: boolean
   keyboardLift: number
+  terminalTheme?: MobileTerminalTheme
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
@@ -389,6 +370,7 @@ function TerminalPaneView({
       <TerminalWebView
         ref={setRef}
         style={styles.terminalWebView}
+        terminalTheme={terminalTheme}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
         onSelectionCopy={(t) => onSelectionCopy(handle, t)}
@@ -775,6 +757,7 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
@@ -1205,8 +1188,15 @@ export default function SessionScreen() {
             return true
           })
 
-          setTerminals(deduped)
-          terminalsRef.current = deduped
+          const mergedTerminals = mergeTerminalListWithKnownRecords(
+            deduped,
+            terminalsRef.current,
+            sessionTabsRef.current
+          )
+          setTerminals((prev) =>
+            terminalRecordsEqual(prev, mergedTerminals) ? prev : mergedTerminals
+          )
+          terminalsRef.current = mergedTerminals
 
           // Session tabs are the UI authority. terminal.list only refreshes
           // per-handle metadata for existing ready terminal surfaces.
@@ -1248,12 +1238,7 @@ export default function SessionScreen() {
       // Why: subscribe snapshots often repeat identical tab payloads. Avoid a
       // render loop where the subscription effect tears down and replays itself.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
-      const terminalTabs = nextTabs.flatMap((tab): Terminal[] => {
-        if (tab.type !== 'terminal' || typeof tab.terminal !== 'string') {
-          return []
-        }
-        return [{ handle: tab.terminal, title: tab.title || 'Terminal', isActive: tab.isActive }]
-      })
+      const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const mergedTerminalsForActive = mergeTerminalRecordsByCurrentOrder(
         terminalTabs,
         terminalsRef.current
@@ -1822,6 +1807,7 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
+    initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) clearTimeout(queued.timer)
     }
@@ -2533,14 +2519,21 @@ export default function SessionScreen() {
           activeHandleRef.current = createdHandle
           setActiveHandle(createdHandle)
           setTerminals((prev) => {
-            if (prev.some((t) => t.handle === createdHandle)) {
-              terminalsRef.current = prev
-              return prev
+            const existing = prev.find((terminal) => terminal.handle === createdHandle)
+            const createdTerminal: Terminal = {
+              handle: createdHandle,
+              title: created.title || existing?.title || 'Terminal',
+              terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
+              isActive: true
             }
-            const next = [
-              ...prev,
-              { handle: createdHandle, title: created.title || 'Terminal', isActive: true }
-            ]
+            if (existing) {
+              const next = prev.map((terminal) =>
+                terminal.handle === createdHandle ? { ...terminal, ...createdTerminal } : terminal
+              )
+              terminalsRef.current = next
+              return terminalRecordsEqual(prev, next) ? prev : next
+            }
+            const next = [...prev, createdTerminal]
             terminalsRef.current = next
             return next
           })
@@ -2773,6 +2766,25 @@ export default function SessionScreen() {
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
+
+  useEffect(() => {
+    if (
+      !client ||
+      !showEmptyState ||
+      creating ||
+      creatingBrowser ||
+      creatingMarkdown ||
+      initialEmptySessionAutoCreateRef.current === worktreeId
+    ) {
+      return
+    }
+    // Why: a sleeping/new workspace can hydrate with zero session tabs. Create
+    // the first terminal once on initial load instead of leaving mobile blank.
+    initialEmptySessionAutoCreateRef.current = worktreeId
+    setCreateError('')
+    void handleCreateTerminal()
+  }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
+
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
@@ -3063,6 +3075,7 @@ export default function SessionScreen() {
                 handle={terminal.handle}
                 active={terminal.handle === activeHandle}
                 keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
+                terminalTheme={terminal.terminalTheme}
                 onRef={setTerminalWebViewRef}
                 onWebReady={handleTerminalWebReady}
                 onSelectionMode={handleSelectionMode}

@@ -97,6 +97,7 @@ import {
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
 import { applyDocumentTheme } from './lib/document-theme'
+import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -776,14 +777,27 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
+      const systemPrefersDark = getSystemPrefersDark()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
+      if (
+        canSkipRuntimeMobileSessionSyncKeyBuild(
+          state,
+          previousState,
+          systemPrefersDark,
+          previousKey.systemPrefersDark
+        )
+      ) {
         return
       }
-      const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
+      const nextKey = getRuntimeMobileSessionSyncKey(
+        state,
+        previousState,
+        previousKey,
+        systemPrefersDark
+      )
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
@@ -942,7 +956,12 @@ function App(): React.JSX.Element {
       // system
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
       applyDocumentTheme('system')
-      const handler = (): void => applyDocumentTheme('system')
+      const handler = (): void => {
+        applyDocumentTheme('system')
+        // Why: system theme changes do not mutate the store, so mobile
+        // terminal colors need an explicit graph republish.
+        scheduleRuntimeGraphSync()
+      }
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
