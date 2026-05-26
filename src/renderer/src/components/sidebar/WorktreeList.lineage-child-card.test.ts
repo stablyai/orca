@@ -100,6 +100,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     React.createElement(React.Fragment, null, children),
   DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
+  DropdownMenuSeparator: () => React.createElement('hr'),
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children)
 }))
@@ -229,17 +230,21 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
   }
 }
 
+async function renderWorktreeListMarkup(): Promise<string> {
+  const { default: WorktreeList } = await import('./WorktreeList')
+
+  return renderToStaticMarkup(
+    React.createElement(WorktreeList, {
+      scrollOffsetRef: { current: 0 },
+      scrollAnchorRef: { current: null }
+    })
+  )
+}
+
 describe('WorktreeList lineage child card renderer', () => {
   it('renders nested inline agent rows before the nested child-count toggle', async () => {
     setLineageFixtureState()
-    const { default: WorktreeList } = await import('./WorktreeList')
-
-    const markup = renderToStaticMarkup(
-      React.createElement(WorktreeList, {
-        scrollOffsetRef: { current: 0 },
-        scrollAnchorRef: { current: null }
-      })
-    )
+    const markup = await renderWorktreeListMarkup()
 
     const childStart = markup.indexOf('lineage child with agent')
     const agentRowIndex = markup.indexOf('Review fixture prompt', childStart)
@@ -253,18 +258,20 @@ describe('WorktreeList lineage child card renderer', () => {
 
   it('does not add group indentation when grouping is disabled', async () => {
     setLineageFixtureState('none')
-    const { default: WorktreeList } = await import('./WorktreeList')
-
-    const markup = renderToStaticMarkup(
-      React.createElement(WorktreeList, {
-        scrollOffsetRef: { current: 0 },
-        scrollAnchorRef: { current: null }
-      })
-    )
+    const markup = await renderWorktreeListMarkup()
 
     const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
 
     expect(parentRow).toContain('id="worktree-list-option-parent"')
     expect(parentRow).not.toContain('padding-left')
+  })
+
+  it('adds one group indentation step when grouped by project', async () => {
+    setLineageFixtureState('repo')
+    const markup = await renderWorktreeListMarkup()
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('style="padding-left:18px"')
   })
 })
