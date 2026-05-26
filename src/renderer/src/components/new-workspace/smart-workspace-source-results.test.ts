@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
-  getSmartWorkspaceEmptyHint,
-  shouldOpenSmartWorkspacePopoverOnModeChange
+  getSmartWorkspaceEmptyHint
 } from './smart-workspace-source-results'
 
 describe('Branch source results', () => {
-  it('requests empty-query branch results when Branch mode opens', () => {
+  it('requests empty-query branch results in Branch mode', () => {
     expect(
       getBranchSearchRequest({
         disabled: false,
@@ -18,10 +17,6 @@ describe('Branch source results', () => {
         limit: 12
       })
     ).toEqual({ repoId: 'repo-1', query: '', limit: 12 })
-
-    expect(shouldOpenSmartWorkspacePopoverOnModeChange({ disabled: false, mode: 'branches' })).toBe(
-      true
-    )
   })
 
   it('keeps returned branch rows visible before the user types', () => {

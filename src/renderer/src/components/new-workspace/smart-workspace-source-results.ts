@@ -28,16 +28,6 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
   return EMPTY_HINT_BY_MODE[mode]
 }
 
-export function shouldQueryBranchMode({
-  textOnly,
-  mode
-}: {
-  textOnly: boolean
-  mode: SmartNameMode
-}): boolean {
-  return !textOnly && (mode === 'smart' || mode === 'branches')
-}
-
 export function getBranchSearchRequest({
   disabled,
   textOnly,
@@ -53,20 +43,11 @@ export function getBranchSearchRequest({
   query: string
   limit: number
 }): { repoId: string; query: string; limit: number } | null {
-  if (disabled || !selectedRepoId || !shouldQueryBranchMode({ textOnly, mode })) {
+  const branchModeCanSearch = !textOnly && (mode === 'smart' || mode === 'branches')
+  if (disabled || !selectedRepoId || !branchModeCanSearch) {
     return null
   }
   return { repoId: selectedRepoId, query: query.trim(), limit }
-}
-
-export function shouldOpenSmartWorkspacePopoverOnModeChange({
-  disabled,
-  mode
-}: {
-  disabled: boolean
-  mode: SmartNameMode
-}): boolean {
-  return !disabled && mode !== 'text'
 }
 
 export function buildSmartWorkspaceSourceRows({
@@ -91,21 +72,9 @@ export function buildSmartWorkspaceSourceRows({
   value: string
 }): SmartWorkspaceSourceRow[] {
   const trimmed = value.trim()
-  const branchExactMatch =
-    mode === 'branches' &&
-    trimmed.length > 0 &&
-    branches.some((branch) => branch.refName === trimmed || branch.localBranchName === trimmed)
-  const useNameRow: SmartWorkspaceSourceRow | null =
-    trimmed && mode === 'smart'
-      ? { kind: 'use-name', value: `use-name-${trimmed}`, name: trimmed }
-      : null
-  const createBranchRow: SmartWorkspaceSourceRow | null =
-    trimmed && mode === 'branches' && !branchExactMatch
-      ? { kind: 'create-branch', value: `create-branch-${trimmed}`, name: trimmed }
-      : null
   const nextRows: SmartWorkspaceSourceRow[] = []
-  if (useNameRow) {
-    nextRows.push(useNameRow)
+  if (trimmed && mode === 'smart') {
+    nextRows.push({ kind: 'use-name', value: `use-name-${trimmed}`, name: trimmed })
   }
   if (mode === 'text') {
     return nextRows
@@ -129,8 +98,11 @@ export function buildSmartWorkspaceSourceRows({
     )
   }
   if (mode === 'smart' || mode === 'branches') {
-    if (createBranchRow) {
-      nextRows.push(createBranchRow)
+    const branchExactMatch = branches.some(
+      (branch) => branch.refName === trimmed || branch.localBranchName === trimmed
+    )
+    if (trimmed && mode === 'branches' && !branchExactMatch) {
+      nextRows.push({ kind: 'create-branch', value: `create-branch-${trimmed}`, name: trimmed })
     }
     nextRows.push(
       ...branches.map((branch) => ({

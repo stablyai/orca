@@ -47,7 +47,6 @@ import {
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
-  shouldOpenSmartWorkspacePopoverOnModeChange,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from './smart-workspace-source-results'
@@ -859,7 +858,7 @@ export default function SmartWorkspaceNameField({
         onValueChange={(next) => {
           const nextMode = next as SmartNameMode
           setMode(nextMode)
-          setOpen(shouldOpenSmartWorkspacePopoverOnModeChange({ disabled, mode: nextMode }))
+          setOpen(!disabled && nextMode !== 'text')
           requestAnimationFrame(() => localInputRef.current?.focus({ preventScroll: true }))
         }}
         className="gap-0"
