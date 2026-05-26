@@ -251,6 +251,8 @@ function isClaudePermissionResumingApprovedTool(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
+  const previousToolUseId = previous.toolUseId?.trim() || undefined
+  const nextToolUseId = next.toolUseId?.trim() || undefined
   const previousAgentId = previous.toolAgentId?.trim() || undefined
   const nextAgentId = next.toolAgentId?.trim() || undefined
   const hasAgentId = previousAgentId !== undefined || nextAgentId !== undefined
@@ -270,21 +272,27 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
   const hasMatchingToolUseId =
-    typeof previous.toolUseId === 'string' &&
-    previous.toolUseId.trim().length > 0 &&
-    previous.toolUseId === next.toolUseId
+    previousToolUseId !== undefined && previousToolUseId === nextToolUseId
+  const hasConflictingToolUseId =
+    previousToolUseId !== undefined &&
+    nextToolUseId !== undefined &&
+    previousToolUseId !== nextToolUseId
+  const sameUnknownInputFromToolUseId =
+    hasMatchingToolUseId &&
+    previous.payload.toolInput === undefined &&
+    next.payload.toolInput === undefined
 
   return (
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&
-    typeof next.toolUseId === 'string' &&
-    next.toolUseId.trim().length > 0 &&
+    nextToolUseId !== undefined &&
+    !hasConflictingToolUseId &&
     // Why: subagents can share `agent_type`; a concrete agent id is the
     // strongest available signal that the permission owner resumed execution.
     // Claude's approval path omits identity but preserves the original
     // tool_use_id on PostToolUse, so that exact id is also a safe clear signal.
     (hasMatchingConcreteAgentId || hasSameExplicitAgentType || hasMatchingToolUseId) &&
     sameToolName &&
-    (sameKnownToolInput || sameUnknownInputFromConcreteAgent)
+    (sameKnownToolInput || sameUnknownInputFromConcreteAgent || sameUnknownInputFromToolUseId)
   )
 }
 
@@ -305,13 +313,17 @@ function shouldInheritClaudeToolUseIdForPermission(
   ) {
     return false
   }
+  const sameKnownToolInput =
+    previous.payload.toolInput !== undefined &&
+    previous.payload.toolInput === next.payload.toolInput
+  const sameUnknownToolInput =
+    previous.payload.toolInput === undefined && next.payload.toolInput === undefined
   if (
     previous.toolAgentId !== next.toolAgentId ||
     previous.toolAgentType !== next.toolAgentType ||
     previous.payload.toolName === undefined ||
     previous.payload.toolName !== next.payload.toolName ||
-    previous.payload.toolInput === undefined ||
-    previous.payload.toolInput !== next.payload.toolInput
+    (!sameKnownToolInput && !sameUnknownToolInput)
   ) {
     return false
   }
