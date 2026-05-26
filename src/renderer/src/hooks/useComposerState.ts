@@ -635,12 +635,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
 
   // Why: when the user leaves the workspace name blank and provides no other
-  // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
+  // seed source (prompt, linked issue/PR), pick a globally-unique marine
   // creature name so the workspace gets a distinct, readable identifier
-  // instead of colliding on a literal "workspace" default.
+  // instead of colliding on a literal "workspace" default — or on the same
+  // creature already used in another repo.
   const fallbackCreatureName = useMemo(
-    () => getSuggestedCreatureName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? true),
-    [repoId, worktreesByRepo, settings?.nestWorkspaces]
+    () => getSuggestedCreatureName(worktreesByRepo),
+    [worktreesByRepo]
   )
   const workspaceSeedName = useMemo(
     () =>
