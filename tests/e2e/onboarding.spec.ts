@@ -114,12 +114,34 @@ function onboardingFooterButton(page: Page, name: RegExp) {
   return onboardingFooter(page).getByRole('button', { name })
 }
 
+function onboardingNotificationSoundSelect(page: Page) {
+  return page.getByRole('combobox').first()
+}
+
+async function expectOnboardingNotificationSound(page: Page, name: RegExp): Promise<void> {
+  await expect(onboardingNotificationSoundSelect(page)).toContainText(name)
+}
+
+async function chooseOnboardingNotificationSound(page: Page, name: RegExp): Promise<void> {
+  const soundSelect = onboardingNotificationSoundSelect(page)
+  await soundSelect.click()
+  await page.getByRole('option', { name }).click()
+  await expect(soundSelect).toContainText(name)
+}
+
+async function expectOnboardingCustomSoundOption(page: Page): Promise<void> {
+  const soundSelect = onboardingNotificationSoundSelect(page)
+  await soundSelect.click()
+  await expect(page.getByRole('option', { name: /Choose Custom File/i })).toBeVisible()
+  await page.keyboard.press('Escape')
+}
+
 async function continueOnboarding(page: Page): Promise<void> {
   await onboardingFooterButton(page, /^Continue\b/).click()
 }
 
 async function setupOnboardingFeatures(page: Page): Promise<void> {
-  await onboardingFooterButton(page, /^Set up\b/).click()
+  await page.getByRole('button', { name: /^Enable capabilities$/i }).click()
 }
 
 async function continueFromFeatureSetupToRepo(page: Page): Promise<void> {
@@ -128,12 +150,10 @@ async function continueFromFeatureSetupToRepo(page: Page): Promise<void> {
   await expect(page.getByText('5 of 7')).toBeVisible()
   await continueOnboarding(page)
   await expect(page.getByText('6 of 7')).toBeVisible()
-  await expect(
-    page.getByRole('heading', { name: /Interested in Orca's advanced features/i })
-  ).toBeVisible()
-  await onboardingFooterButton(page, /^Continue\b/).click()
-  await expect(page.getByText('You can take the tour anytime')).toHaveCount(0)
-  await expect(page.getByText('Open Help > Explore Orca when you want the tour.')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /^Explore Orca$/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Take the tour$/i })).toBeVisible()
+  await continueOnboarding(page)
+  await expect(page.getByText(/Available later under Help > Explore Orca/i)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
   await expect(page.getByText('7 of 7')).toBeVisible()
 }
@@ -250,12 +270,9 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     // --- Step 3: notifications ---
-    await expect(orcaPage.getByRole('button', { name: /System Default/i })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
+    await expectOnboardingNotificationSound(orcaPage, /System Default/i)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
-    await expect(orcaPage.getByText(/Advanced sound file/i)).toBeVisible()
+    await expectOnboardingCustomSoundOption(orcaPage)
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 7')).toBeVisible()
@@ -558,10 +575,7 @@ test.describe('Onboarding flow', () => {
         return { supported: true, platform: 'darwin', requested: true }
       }
     })
-    await expect(orcaPage.getByRole('button', { name: /System Default/i })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
+    await expectOnboardingNotificationSound(orcaPage, /System Default/i)
 
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
@@ -620,9 +634,7 @@ test.describe('Onboarding flow', () => {
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 
-    const dingSound = orcaPage.getByRole('button', { name: /^Ding\b/i })
-    await dingSound.click()
-    await expect(dingSound).toHaveAttribute('aria-pressed', 'true')
+    await chooseOnboardingNotificationSound(orcaPage, /^Ding$/i)
 
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
