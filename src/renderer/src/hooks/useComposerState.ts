@@ -1850,11 +1850,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               startup: {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                ...(tuiAgent === 'command-code' && startupPrompt.trim().length > 0
+                ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
                   ? {
                       initialAgentStatus: {
                         agent: tuiAgent,
-                        prompt: startupPrompt.trim()
+                        prompt: submitStartupPrompt.trim()
                       }
                     }
                   : {}),
