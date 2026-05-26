@@ -626,7 +626,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(
       '\r\n✻ Thought for 1 second\r\n:: Hi! How can I help you today?\r\n❯ Ask your question...'
     )
-    vi.advanceTimersByTime(899)
+    vi.advanceTimersByTime(1499)
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'working',
       prompt: 'say hi',
@@ -668,8 +668,9 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('❯ Run a slow command\r\n✻ Thinking...')
     capturedDataCallback.current?.('\r\n❯ Ask your question...')
+    vi.advanceTimersByTime(1000)
     capturedDataCallback.current?.('\r\n✧ Investigating... esc to interrupt')
-    vi.advanceTimersByTime(900)
+    vi.advanceTimersByTime(500)
 
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'working',
