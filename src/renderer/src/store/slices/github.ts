@@ -960,6 +960,7 @@ export type GitHubSlice = {
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
+  checksPostPushNonceByWorktree: Record<string, number>
   // Why: keyed by repoId + limit + query so remote repos with the same path on
   // different SSH targets do not share issue/PR results.
   // from cache instantly on mount (and on hover-prefetch from sidebar buttons)
@@ -1162,6 +1163,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   prRefreshSequences: {},
   prRefreshStates: {},
   prVisibleRefreshGeneration: 0,
+  checksPostPushNonceByWorktree: {},
   workItemsCache: {},
   workItemsInvalidationNonce: 0,
   projectViewCache: {},
@@ -2595,6 +2597,48 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...s.issueCache,
           [issueKey]: { ...s.issueCache[issueKey], fetchedAt: 0 }
         }
+      }
+      // Invalidate the CI checks cache so a post-push fetch bypasses the TTL
+      // even when GitHub's API hasn't propagated the new headSha yet.
+      const prData = s.prCache[prKey]?.data
+      if (prData?.number) {
+        const checksKeysToInvalidate = [
+          prData.headSha
+            ? runtimeScopedRepoCacheKey(
+                repo.path,
+                repo.id,
+                prChecksCacheSuffix(prData.number, prData.prRepo, prData.headSha),
+                s.settings,
+                repo.connectionId
+              )
+            : null,
+          runtimeScopedRepoCacheKey(
+            repo.path,
+            repo.id,
+            prChecksCacheSuffix(prData.number, prData.prRepo),
+            s.settings,
+            repo.connectionId
+          )
+        ]
+        let nextChecksCache = s.checksCache
+        let checksChanged = false
+        for (const key of checksKeysToInvalidate) {
+          if (key && nextChecksCache[key]) {
+            nextChecksCache = {
+              ...nextChecksCache,
+              [key]: { ...nextChecksCache[key], fetchedAt: 0 }
+            }
+            checksChanged = true
+          }
+        }
+        if (checksChanged) {
+          updates.checksCache = nextChecksCache
+        }
+      }
+      // Signal the Checks panel to force-refresh immediately if it is open.
+      updates.checksPostPushNonceByWorktree = {
+        ...s.checksPostPushNonceByWorktree,
+        [worktreeId]: (s.checksPostPushNonceByWorktree[worktreeId] ?? 0) + 1
       }
       return updates
     })

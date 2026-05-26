@@ -148,6 +148,10 @@ export default function ChecksPanel(): React.JSX.Element {
   const sshConnectionStatus = useAppStore((s) =>
     repoConnectionId ? s.sshConnectionStates.get(repoConnectionId)?.status : undefined
   )
+  const checksPostPushNonce = useAppStore((s) =>
+    activeWorktreeId ? (s.checksPostPushNonceByWorktree?.[activeWorktreeId] ?? 0) : 0
+  )
+  const lastSeenPostPushNonceRef = useRef(checksPostPushNonce)
   const panelContextKey = buildChecksPanelGitStatusContextKey({
     repoId: repo?.id,
     worktreeId: activeWorktreeId,
@@ -191,6 +195,7 @@ export default function ChecksPanel(): React.JSX.Element {
     prevChecksRef.current = ''
     conflictSummaryRefreshKeyRef.current = null
     refreshRequestKeyRef.current = null
+    lastSeenPostPushNonceRef.current = checksPostPushNonce
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
       gitStatusSnapshotRetryTimerRef.current = null
@@ -1001,6 +1006,22 @@ export default function ChecksPanel(): React.JSX.Element {
     prevChecksRef.current = ''
     handleEntryRefresh({ refreshChecks, refreshComments })
   }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleEntryRefresh])
+
+  // Why: after a push the checksCache is invalidated and the nonce is bumped
+  // so the panel re-fetches CI checks immediately, even when GitHub's API
+  // hasn't propagated the new headSha yet (POST_PUSH_DELAY_MS is only 2.5 s).
+  useEffect(() => {
+    if (!isPanelVisible || !prNumber) {
+      return
+    }
+    if (checksPostPushNonce <= lastSeenPostPushNonceRef.current) {
+      return
+    }
+    lastSeenPostPushNonceRef.current = checksPostPushNonce
+    pollIntervalRef.current = 30_000
+    prevChecksRef.current = ''
+    void fetchChecks({ force: true })
+  }, [checksPostPushNonce, isPanelVisible, prNumber, fetchChecks])
 
   const handleStartEdit = useCallback(() => {
     if (!pr) {
