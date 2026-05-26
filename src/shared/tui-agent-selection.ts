@@ -9,6 +9,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'copilot',
   'opencode',
   'pi',
+  'omp',
   'gemini',
   'antigravity',
   'aider',
