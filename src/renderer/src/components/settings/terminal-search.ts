@@ -183,10 +183,19 @@ export const TERMINAL_MAC_OPTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const TERMINAL_MAC_YEN_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'JIS Yen(¥) to Backslash(\\)',
-    description:
-      'Controls whether pressing the Japanese Yen (¥) key sends a backslash (\\) instead.',
-    keywords: ['terminal', 'yen', 'backslash', 'japanese', 'keyboard', 'mac', 'macos', 'jis']
+    title: 'JIS Yen (¥) to Backslash (\\)',
+    description: 'Controls whether pressing the JIS Yen (¥) key sends a backslash (\\) instead.',
+    keywords: [
+      'terminal',
+      'yen',
+      'backslash',
+      'japanese',
+      'keyboard',
+      'mac',
+      'macos',
+      'jis',
+      'intl'
+    ]
   }
 ]
 

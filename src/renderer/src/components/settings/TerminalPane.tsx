@@ -939,8 +939,8 @@ export function TerminalPane({
               </SearchableSetting>
 
               <SearchableSetting
-                title="JIS Yen(¥) to Backslash(\)"
-                description="Controls whether pressing the Japanese Yen (¥) key sends a backslash (\\) instead."
+                title="JIS Yen (¥) to Backslash (\\)"
+                description="Controls whether pressing the JIS Yen (¥) key sends a backslash (\\) instead."
                 keywords={[
                   'terminal',
                   'yen',
@@ -949,12 +949,13 @@ export function TerminalPane({
                   'keyboard',
                   'mac',
                   'macos',
-                  'jis'
+                  'jis',
+                  'intl'
                 ]}
               >
                 <SettingsSwitchRow
-                  label="JIS Yen(¥) to Backslash(\)"
-                  description="Pressing the Yen (¥) key sends a backslash (\\) instead."
+                  label="JIS Yen (¥) to Backslash (\\)"
+                  description="Pressing the JIS Yen (¥) key sends a backslash (\\) instead."
                   checked={settings.terminalJISYenToBackslash ?? false}
                   onChange={() =>
                     updateSettings({
