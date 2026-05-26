@@ -1,33 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
-
-type LocalPreflightContext = { wslDistro?: string | null } | undefined
-
-function getWslDistroFromPath(path?: string | null): string | null {
-  if (!path) {
-    return null
-  }
-  const normalized = path.replace(/\\/g, '/')
-  const match = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(?:\/|$)/i)
-  return match?.[1] ?? null
-}
-
-function getLocalPreflightContext(state: AppState): LocalPreflightContext {
-  const activeWorktree = state.activeWorktreeId
-    ? Object.values(state.worktreesByRepo)
-        .flat()
-        .find((worktree) => worktree.id === state.activeWorktreeId)
-    : null
-  const activePath =
-    activeWorktree?.path ?? state.repos.find((repo) => repo.id === state.activeRepoId)?.path
-  const wslDistro = getWslDistroFromPath(activePath)
-  return wslDistro ? { wslDistro } : undefined
-}
-
-function localPreflightContextKey(context: LocalPreflightContext): string {
-  return context?.wslDistro ? `wsl:${context.wslDistro}` : 'host'
-}
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -83,7 +57,11 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     if (detectPromise?.key === contextKey) {
       return detectPromise.promise
     }
-    set({ isDetectingAgents: true })
+    const contextChanged = detectedContextKey !== contextKey
+    set({
+      detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
+      isDetectingAgents: true
+    })
     const pending = window.api.preflight
       .detectAgents(context)
       .then((ids) => {
@@ -94,9 +72,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       })
       .catch(() => {
         // Why: allow a retry on the next call if detection blew up (IPC timeout
-        // during cold start). Do not cache the failure.
+        // during cold start). Do not cache the failure or show stale context.
         detectPromise = null
-        set({ isDetectingAgents: false })
+        set({
+          detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
+          isDetectingAgents: false
+        })
         return [] as TuiAgent[]
       })
     detectPromise = { key: contextKey, promise: pending }
@@ -109,7 +90,11 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     if (refreshPromise?.key === contextKey) {
       return refreshPromise.promise
     }
-    set({ isRefreshingAgents: true })
+    const contextChanged = detectedContextKey !== contextKey
+    set({
+      detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
+      isRefreshingAgents: true
+    })
     const pending = window.api.preflight
       .refreshAgents(context)
       .then((result) => {
@@ -127,11 +112,17 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         return typed
       })
       .catch(() => {
-        set({ isRefreshingAgents: false })
-        return get().detectedAgentIds ?? []
+        const fallback = contextChanged ? [] : (get().detectedAgentIds ?? [])
+        set({
+          detectedAgentIds: fallback,
+          isRefreshingAgents: false
+        })
+        return fallback
       })
       .finally(() => {
-        refreshPromise = null
+        if (refreshPromise?.promise === pending) {
+          refreshPromise = null
+        }
       })
     refreshPromise = { key: contextKey, promise: pending }
     return pending

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTerminalQuickCommandInput,
   getDefaultTerminalQuickCommands,
-  normalizeTerminalQuickCommands
+  normalizeTerminalQuickCommands,
+  terminalQuickCommandMatchesRepo
 } from './terminal-quick-commands'
 
 describe('terminal quick commands', () => {
@@ -48,27 +49,104 @@ describe('terminal quick commands', () => {
         id: 'status',
         label: 'Status',
         command: 'git status',
-        appendEnter: false
+        appendEnter: false,
+        scope: { type: 'global' }
       },
       {
         id: 'empty-command',
         label: 'Empty',
         command: '',
-        appendEnter: true
+        appendEnter: true,
+        scope: { type: 'global' }
       },
       {
         id: 'status-2',
         label: 'Duplicate',
         command: 'pwd',
-        appendEnter: true
+        appendEnter: true,
+        scope: { type: 'global' }
       },
       {
         id: 'quick-command-4',
         label: 'No ID',
         command: 'date',
-        appendEnter: true
+        appendEnter: true,
+        scope: { type: 'global' }
       }
     ])
+  })
+
+  it('normalizes repository scoped commands and falls back to global for invalid scopes', () => {
+    expect(
+      normalizeTerminalQuickCommands([
+        {
+          id: 'repo-dev',
+          label: 'Dev',
+          command: 'pnpm dev',
+          scope: { type: 'repo', repoId: ' repo-1 ' }
+        },
+        {
+          id: 'bad-repo',
+          label: 'Bad',
+          command: 'echo bad',
+          scope: { type: 'repo', repoId: '   ' }
+        }
+      ])
+    ).toEqual([
+      {
+        id: 'repo-dev',
+        label: 'Dev',
+        command: 'pnpm dev',
+        appendEnter: true,
+        scope: { type: 'repo', repoId: 'repo-1' }
+      },
+      {
+        id: 'bad-repo',
+        label: 'Bad',
+        command: 'echo bad',
+        appendEnter: true,
+        scope: { type: 'global' }
+      }
+    ])
+  })
+
+  it('matches global commands everywhere and repo commands only in their repo', () => {
+    expect(
+      terminalQuickCommandMatchesRepo(
+        {
+          id: 'global',
+          label: 'Global',
+          command: 'date',
+          appendEnter: true,
+          scope: { type: 'global' }
+        },
+        null
+      )
+    ).toBe(true)
+    expect(
+      terminalQuickCommandMatchesRepo(
+        {
+          id: 'repo',
+          label: 'Repo',
+          command: 'pnpm dev',
+          appendEnter: true,
+          scope: { type: 'repo', repoId: 'repo-1' }
+        },
+        'repo-1'
+      )
+    ).toBe(true)
+    expect(
+      terminalQuickCommandMatchesRepo(
+        {
+          id: 'repo',
+          label: 'Repo',
+          command: 'pnpm dev',
+          appendEnter: true,
+          scope: { type: 'repo', repoId: 'repo-1' }
+        },
+        'repo-2'
+      )
+    ).toBe(false)
   })
 
   it('formats terminal input without assuming shell semantics', () => {

@@ -1,6 +1,6 @@
 import React from 'react'
 import type { GitHubOwnerRepo } from '../../../../shared/types'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 
 export type IssueSourceIndicatorProps = {
@@ -84,13 +84,13 @@ export default function IssueSourceIndicator({
     >
       {localRepo ? (
         // Why: when multiple repos are selected, a bare "Issues from X/Y" chip
-        // doesn't tell the user which local repo it describes. The dot-label
+        // doesn't tell the user which local repo it describes. The badge label
         // prefix pins the chip to the same visual identity used elsewhere in
         // the Tasks view (row disambiguator, composer target dropdown).
-        <RepoDotLabel
+        <RepoBadgeLabel
           name={localRepo.displayName}
           color={localRepo.color}
-          dotClassName="size-1.5"
+          badgeClassName="size-1.5"
           className="text-[10px] text-muted-foreground"
         />
       ) : null}

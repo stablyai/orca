@@ -2,7 +2,7 @@ import { resolve, relative, dirname, basename, isAbsolute } from 'path'
 import { realpathSync } from 'fs'
 import { realpath } from 'fs/promises'
 import type { Store } from '../persistence'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
@@ -271,12 +271,9 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 /**
  * Resolve and verify that a worktree path belongs to a registered repo.
  *
- * Why this doesn't use resolveAuthorizedPath: linked worktrees can live
- * anywhere on disk (e.g. ~/.codex/worktrees/), far outside the repo root
- * and workspaceDir that resolveAuthorizedPath allows.  The security boundary
- * for git operations is *worktree registration* — the path must match a
- * worktree reported by `git worktree list` for a known repo — not
- * directory containment within allowed roots.
+ * Why this doesn't use resolveAuthorizedPath: linked worktrees can live outside
+ * repo/workspace roots. Git operations trust exact worktree registration from
+ * `git worktree list`, not directory containment.
  */
 export async function resolveRegisteredWorktreePath(
   worktreePath: string,
@@ -289,8 +286,7 @@ export async function resolveRegisteredWorktreePath(
   }
 
   const resolvedTarget = resolve(worktreePath)
-
-  if (registeredWorktreeRoots.has(resolvedTarget)) {
+  if (registeredWorktreeRoots.has(resolvedTarget) || isRepoRoot(store.getRepos(), resolvedTarget)) {
     return resolvedTarget
   }
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
+import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -49,11 +50,6 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-
-  const [wslAvailable, setWslAvailable] = useState(false)
-  useEffect(() => {
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -116,12 +112,11 @@ export default function TabGroupPanel({
       }}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
-      wslAvailable={wslAvailable}
       onNewBrowserTab={commands.newBrowserTab}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
-      onTogglePaneExpand={() => {}}
+      onTogglePaneExpand={commands.toggleTerminalPaneExpand}
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
@@ -168,12 +163,14 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  const actionChromeClassName = `flex shrink-0 items-center overflow-hidden transition-[width,margin,opacity] duration-150 ${
-    isFocused
-      ? 'ml-1.5 w-7 pointer-events-auto opacity-100'
-      : 'ml-1.5 w-7 pointer-events-none opacity-0'
+  // Why: focused-only — the QC split-button and Pane Actions ellipsis both
+  // appear together so the action cluster never reflows when focus shifts
+  // between groups. Unfocused groups collapse the cluster fully (no
+  // reserved width) since the surrounding tab strip already absorbs the
+  // freed space.
+  const actionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
+    isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
-
   return (
     <div
       // Why: vertical borders are always `border-border` so the focus
@@ -244,6 +241,9 @@ export default function TabGroupPanel({
             className={actionChromeClassName}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {isFocused ? (
+              <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+            ) : null}
             {isFocused ? (
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>

@@ -142,4 +142,19 @@ describe('createWslWatcher', () => {
     expect(readPaths).not.toContain(path.join(rootPath, 'package.json'))
     await root.subscription.unsubscribe()
   })
+
+  it('marks a large WSL poll event batch for overflow without retaining every event', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const initialEntries = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.ts`))
+
+    readdirMock.mockResolvedValueOnce(initialEntries).mockResolvedValueOnce([])
+
+    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
+    expect(root.batch.events).toHaveLength(0)
+    expect(root.batch.overflowed).toBe(true)
+    await root.subscription.unsubscribe()
+  })
 })

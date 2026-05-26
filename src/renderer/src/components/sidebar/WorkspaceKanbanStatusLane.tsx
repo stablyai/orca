@@ -64,7 +64,7 @@ export default function WorkspaceKanbanStatusLane({
   const meta = getWorkspaceStatusVisualMeta(status)
   const createTooltip = canCreateWorktree
     ? `New workspace in ${status.label}`
-    : 'Add a Git project to create worktrees'
+    : 'Add a project to create workspaces'
   const createButton = (
     <Button
       type="button"
@@ -138,7 +138,10 @@ export default function WorkspaceKanbanStatusLane({
         </Tooltip>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2 scrollbar-sleek">
+      <div
+        data-workspace-board-lane-scroll=""
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2 scrollbar-sleek"
+      >
         {items.length > 0 ? (
           <div className="space-y-2">
             {items.map((worktree) => {

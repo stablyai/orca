@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
-import { open, readdir, stat } from 'node:fs/promises'
+import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import type { Repo } from '../../shared/types'
@@ -67,10 +67,22 @@ function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSourceKind): 
 
 async function findSkillFiles(rootPath: string, maxDepth: number): Promise<string[]> {
   const out: string[] = []
+  const visitedDirectoryPaths = new Set<string>()
   async function visit(dirPath: string): Promise<void> {
     if (!isWithinDepth(rootPath, dirPath, maxDepth)) {
       return
     }
+    let resolvedDirPath: string
+    try {
+      resolvedDirPath = await realpath(dirPath)
+    } catch {
+      return
+    }
+    if (visitedDirectoryPaths.has(resolvedDirPath)) {
+      return
+    }
+    visitedDirectoryPaths.add(resolvedDirPath)
+
     let entries: Dirent[]
     try {
       entries = await readdir(dirPath, { withFileTypes: true })
@@ -79,12 +91,36 @@ async function findSkillFiles(rootPath: string, maxDepth: number): Promise<strin
     }
     for (const entry of entries) {
       const entryPath = join(dirPath, entry.name)
-      if (entry.isFile() && entry.name === SKILL_FILE_NAME) {
-        out.push(entryPath)
+      if (entry.name === SKILL_FILE_NAME) {
+        if (entry.isFile()) {
+          out.push(entryPath)
+          continue
+        }
+        if (entry.isSymbolicLink()) {
+          try {
+            if ((await stat(entryPath)).isFile()) {
+              out.push(entryPath)
+            }
+          } catch {
+            // Broken links are not valid skill files.
+          }
+        }
         continue
       }
       if (entry.isDirectory()) {
         await visit(entryPath)
+        continue
+      }
+      if (entry.isSymbolicLink()) {
+        // Why: users commonly symlink agent skill dirs across providers; follow
+        // directory links but guard by realpath so recursive links cannot loop.
+        try {
+          if ((await stat(entryPath)).isDirectory()) {
+            await visit(entryPath)
+          }
+        } catch {
+          // Broken links are not valid skill directories.
+        }
       }
     }
   }
@@ -94,10 +130,22 @@ async function findSkillFiles(rootPath: string, maxDepth: number): Promise<strin
 
 async function countFiles(dirPath: string): Promise<number> {
   let count = 0
+  const visitedDirectoryPaths = new Set<string>()
   async function visit(currentPath: string): Promise<void> {
     if (count >= MAX_SKILL_FILES) {
       return
     }
+    let resolvedPath: string
+    try {
+      resolvedPath = await realpath(currentPath)
+    } catch {
+      return
+    }
+    if (visitedDirectoryPaths.has(resolvedPath)) {
+      return
+    }
+    visitedDirectoryPaths.add(resolvedPath)
+
     let entries: Dirent[]
     try {
       entries = await readdir(currentPath, { withFileTypes: true })
@@ -113,6 +161,14 @@ async function countFiles(dirPath: string): Promise<number> {
         count += 1
       } else if (entry.isDirectory()) {
         await visit(entryPath)
+      } else if (entry.isSymbolicLink()) {
+        try {
+          if ((await stat(entryPath)).isFile()) {
+            count += 1
+          }
+        } catch {
+          // Broken links do not contribute to the skill package file count.
+        }
       }
     }
   }

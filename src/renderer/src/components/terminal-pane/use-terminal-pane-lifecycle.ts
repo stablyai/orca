@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
@@ -32,8 +33,10 @@ import {
   installMode2031Handlers,
   mode2031SequenceFor
 } from './terminal-appearance'
-import { parseOsc52 } from './osc52-clipboard'
+import { handleOsc52ClipboardRequest } from './osc52-clipboard'
+import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
+import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -42,6 +45,7 @@ import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getConnectionId } from '@/lib/connection-context'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -57,6 +61,7 @@ import {
   type SplitTerminalPaneDetail,
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -139,6 +144,17 @@ type UseTerminalPaneLifecycleDeps = {
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+}
+
+export function suppressIntentionalPaneCloseExit(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined,
+  suppressPtyExit: (ptyId: string) => void
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  if (ptyId) {
+    suppressPtyExit(ptyId)
+  }
+  return ptyId
 }
 
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
@@ -422,6 +438,8 @@ export function useTerminalPaneLifecycle({
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
 
+    let releaseWebviewDragPassthrough: (() => void) | null = null
+
     const manager = new PaneManager(container, {
       // Why: `spawnHints` carries the resolved cwd from Cmd+D / context-menu
       // Split actions so the new PTY inherits the source pane's live cwd.
@@ -446,22 +464,13 @@ export function useTerminalPaneLifecycle({
         // both the enabled and disabled paths so xterm doesn't fall
         // through to any other OSC 52 handler and so our intentional drop
         // in the disabled path is explicit.
-        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) => {
-          if (!settingsRef.current?.terminalAllowOsc52Clipboard) {
-            return true
-          }
-          const parsed = parseOsc52(data)
-          if (parsed.kind !== 'write') {
-            // Queries and malformed payloads are intentionally dropped —
-            // answering a query would leak the user's clipboard to any
-            // process writing to the PTY.
-            return true
-          }
-          void window.api.ui.writeClipboardText(parsed.text).catch(() => {
-            /* ignore clipboard write failures */
+        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
+          handleOsc52ClipboardRequest(data, {
+            allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
+            writeClipboardText: window.api.ui.writeClipboardText,
+            onBlockedWrite: showOsc52ClipboardBlockedToast
           })
-          return true
-        })
+        )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
         // OSC 7 — shell-reported current working directory. Drives split-pane
@@ -499,10 +508,24 @@ export function useTerminalPaneLifecycle({
         // matching keyups so kitty release sequences do not leak after a
         // bypassed press. Returning false here short-circuits xterm before the
         // encoder runs, letting the browser and Electron paths fire normally.
-        // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
+        // See xterm-bypass-policy.ts for the rule derivation.
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const isMac = navigator.userAgent.includes('Mac')
+          const jisYenInput = resolveTerminalJisYenInput(e, {
+            enabled: settingsRef.current?.terminalJISYenToBackslash === true,
+            isMac
+          })
+          if (jisYenInput) {
+            if (jisYenInput.type === 'input') {
+              // Why: this is a translated character, not a terminal shortcut.
+              // Keep it on xterm's onData path so PTY input guards still run.
+              pane.terminal.input(jisYenInput.data)
+            }
+            return false
+          }
+
           return !shouldBypassXtermKeyboardEvent(e, {
-            isMac: navigator.userAgent.includes('Mac'),
+            isMac,
             hasSelection: pane.terminal.hasSelection()
           })
         })
@@ -681,8 +704,14 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         if (transport) {
-          const ptyId = transport.getPtyId()
+          const ptyId = suppressIntentionalPaneCloseExit(
+            transport,
+            useAppStore.getState().suppressPtyExit
+          )
           if (ptyId) {
+            // Why: user/CLI pane closes intentionally tear down this PTY after
+            // PaneManager has already promoted the sibling. Suppress that exit
+            // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
@@ -762,11 +791,31 @@ export function useTerminalPaneLifecycle({
           persistLayoutSnapshot()
         }
       },
+      onPaneDragActiveChange: (active) => {
+        if (active) {
+          releaseWebviewDragPassthrough?.()
+          releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
+          return
+        }
+        releaseWebviewDragPassthrough?.()
+        releaseWebviewDragPassthrough = null
+      },
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
         const cursorStyle = currentSettings?.terminalCursorStyle ?? 'bar'
+        const storeState = useAppStore.getState()
+        const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
+          (candidate) => candidate.id === tabId
+        )
+        const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
+          userAgent: navigator.userAgent,
+          connectionId: getConnectionId(worktreeId),
+          cwd: startupCwd,
+          shellOverride: currentTab?.shellOverride
+        })
         return {
+          ...windowsPtyCompatibilityOptions,
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
@@ -1059,6 +1108,8 @@ export function useTerminalPaneLifecycle({
       panePtyBindings.clear()
       paneTransports.clear()
       manager.destroy()
+      releaseWebviewDragPassthrough?.()
+      releaseWebviewDragPassthrough = null
       managerRef.current = null
       if (e2eConfig.exposeStore) {
         window.__paneManagers?.delete(tabId)

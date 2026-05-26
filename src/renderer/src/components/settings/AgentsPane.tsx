@@ -7,6 +7,8 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
+import { SettingsBadge, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
@@ -104,38 +106,26 @@ function AgentRow({
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
 
   return (
-    <div
-      className={cn(
-        'group rounded-xl border transition-all',
-        isDetected ? 'border-border/60 bg-card/60' : 'border-border/30 bg-card/20 opacity-60'
-      )}
-    >
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Icon */}
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/60">
-          <AgentIcon agent={agentId} size={18} />
+    <div className={cn('py-3', !isDetected && 'opacity-60')}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
+          <AgentIcon agent={agentId} size={16} />
         </div>
 
-        {/* Name + status */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold leading-none">{label}</span>
+            <span className="text-sm font-medium leading-none">{label}</span>
             {isDetected ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                <span className="size-1.5 rounded-full bg-emerald-500" />
-                Detected
-              </span>
+              <SettingsBadge tone="accent">Detected</SettingsBadge>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Not installed
-              </span>
+              <SettingsBadge tone="muted">Not installed</SettingsBadge>
             )}
           </div>
-          <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+          <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
             {cmdOverride ? (
               <span>
                 <span className="text-muted-foreground/60 line-through">{defaultCmd}</span>
-                <span className="ml-1.5 text-foreground/70">{cmdOverride}</span>
+                <span className="ml-1.5 text-foreground/80">{cmdOverride}</span>
               </span>
             ) : (
               defaultCmd
@@ -143,72 +133,67 @@ function AgentRow({
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex shrink-0 items-center gap-1">
-          {/* Set as default — only for detected agents */}
           {isDetected && (
-            <button
+            <Button
               type="button"
+              variant={isDefault ? 'secondary' : 'ghost'}
+              size="xs"
               onClick={onSetDefault}
               title={isDefault ? 'Default agent' : 'Set as default'}
-              className={cn(
-                'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                isDefault
-                  ? 'bg-foreground/10 text-foreground ring-1 ring-foreground/20'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              )}
+              className="h-7 gap-1 text-xs"
             >
               {isDefault && <Check className="size-3" />}
               {isDefault ? 'Default' : 'Set default'}
-            </button>
+            </Button>
           )}
 
-          {/* Customize command — only for detected agents */}
           {isDetected && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setCmdOpen((prev) => !prev)}
               title="Customize command"
+              aria-expanded={cmdOpen}
               className={cn(
-                'flex size-7 items-center justify-center rounded-lg transition-colors',
-                cmdOpen || cmdOverride
-                  ? 'bg-muted/60 text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                'size-7 text-muted-foreground hover:text-foreground',
+                (cmdOpen || cmdOverride) && 'text-foreground'
               )}
             >
               <Terminal className="size-3.5" />
-            </button>
+            </Button>
           )}
 
-          {/* Homepage link */}
           <a
             href={homepageUrl}
             target="_blank"
             rel="noopener noreferrer"
             title={isDetected ? 'Docs' : 'Install'}
-            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
           >
             <ExternalLink className="size-3.5" />
           </a>
 
-          {/* Expand chevron for cmd override */}
           {isDetected && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setCmdOpen((prev) => !prev)}
-              className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              aria-label={cmdOpen ? 'Collapse command override' : 'Expand command override'}
+              className="size-7 text-muted-foreground hover:text-foreground"
             >
               <ChevronDown
                 className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
               />
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Command override row */}
       {isDetected && cmdOpen && (
-        <div className="border-t border-border/40 px-4 py-3">
+        <div className="mt-3 pl-10">
           {/* Why: key by the persisted seed so settings changes reset the draft during reconciliation, not in a follow-up effect commit. */}
           <AgentCommandOverrideInput
             key={cmdOverride ?? defaultCmd}
@@ -222,6 +207,30 @@ function AgentRow({
         </div>
       )}
     </div>
+  )
+}
+
+type DefaultAgentPillProps = {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}
+
+function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        active
+          ? 'border-muted-foreground/40 bg-accent font-medium text-accent-foreground'
+          : 'border-border bg-background/50 text-muted-foreground hover:border-muted-foreground/35 hover:text-foreground'
+      )}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -269,102 +278,75 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
   return (
     <div className="space-y-8">
-      {/* Default agent picker */}
       <section className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Default Agent</h3>
-          <p className="text-xs text-muted-foreground">
-            Pre-selected agent when opening a new workspace.
-          </p>
-        </div>
+        <SettingsSubsectionHeader
+          title="Default Agent"
+          description="Pre-selected agent when opening a new workspace."
+        />
 
         <div className="flex flex-wrap gap-2">
-          {/* Auto option */}
-          <button
-            type="button"
-            onClick={() => setDefault(null)}
-            className={cn(
-              'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all',
-              isAutoDefault
-                ? 'border-foreground/20 bg-foreground/8 font-medium ring-1 ring-foreground/15'
-                : 'border-border/50 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground'
-            )}
-          >
+          <DefaultAgentPill active={isAutoDefault} onClick={() => setDefault(null)}>
             {isAutoDefault && <Check className="size-3.5" />}
             Auto
-          </button>
+          </DefaultAgentPill>
 
           {/* Why: users who prefer to open a raw shell by default need a
               first-class "no agent" choice here — without it, the Auto pill
               is the closest option but silently launches the first detected
               agent, which is the opposite of what they want. */}
-          <button
-            type="button"
-            onClick={() => setDefault('blank')}
-            className={cn(
-              'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all',
-              isBlankDefault
-                ? 'border-foreground/20 bg-foreground/8 font-medium ring-1 ring-foreground/15'
-                : 'border-border/50 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground'
-            )}
-          >
+          <DefaultAgentPill active={isBlankDefault} onClick={() => setDefault('blank')}>
             <Terminal className="size-3.5" />
             No agent (blank terminal)
             {isBlankDefault && <Check className="size-3.5" />}
-          </button>
+          </DefaultAgentPill>
 
-          {/* Detected agent pills */}
           {detectedAgents.map((agent) => {
             const isActive = defaultAgent === agent.id
             return (
-              <button
+              <DefaultAgentPill
                 key={agent.id}
-                type="button"
+                active={isActive}
                 onClick={() => setDefault(agent.id)}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all',
-                  isActive
-                    ? 'border-foreground/20 bg-foreground/8 font-medium ring-1 ring-foreground/15'
-                    : 'border-border/50 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground'
-                )}
               >
                 <AgentIcon agent={agent.id} size={14} />
                 {agent.label}
                 {isActive && <Check className="size-3.5" />}
-              </button>
+              </DefaultAgentPill>
             )
           })}
         </div>
       </section>
 
+      <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
 
-      {/* Detected agents */}
       {detectedAgents.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold">Installed</h3>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-              {detectedAgents.length} detected
-            </span>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              title="Re-read your shell PATH and re-detect installed agents"
-              className={cn(
-                'ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors',
-                isRefreshing
-                  ? 'text-muted-foreground/60'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              )}
-            >
-              <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-              {isRefreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
+          <SettingsSubsectionHeader
+            title={
+              <span className="flex items-center gap-2">
+                Installed
+                <SettingsBadge tone="accent">{detectedAgents.length} detected</SettingsBadge>
+              </span>
+            }
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                title="Re-read your shell PATH and re-detect installed agents"
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                {isRefreshing ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            }
+          />
 
-          <div className="space-y-2">
+          <div className="divide-y divide-border/40">
             {detectedAgents.map((agent) => (
               <AgentRow
                 key={agent.id}
@@ -383,17 +365,18 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
         </section>
       )}
 
-      {/* Undetected agents */}
       {undetectedAgents.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-muted-foreground">Available to install</h3>
-            <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {undetectedAgents.length} agents
-            </span>
-          </div>
+          <SettingsSubsectionHeader
+            title={
+              <span className="flex items-center gap-2 text-muted-foreground">
+                Available to install
+                <SettingsBadge tone="muted">{undetectedAgents.length} agents</SettingsBadge>
+              </span>
+            }
+          />
 
-          <div className="space-y-2">
+          <div className="divide-y divide-border/40">
             {undetectedAgents.map((agent) => (
               <AgentRow
                 key={agent.id}
@@ -413,10 +396,32 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
       )}
 
       {detectedIds === null && (
-        <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 py-8 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">
           Detecting installed agents…
         </div>
       )}
     </div>
+  )
+}
+
+export function AgentStatusHooksSetting({
+  settings,
+  updateSettings
+}: AgentsPaneProps): React.JSX.Element {
+  const enabled = settings.agentStatusHooksEnabled !== false
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={AGENT_STATUS_HOOKS_TITLE}
+        description={AGENT_STATUS_HOOKS_DESCRIPTION}
+        checked={enabled}
+        onChange={() =>
+          updateSettings({
+            agentStatusHooksEnabled: !enabled
+          })
+        }
+        ariaLabel={AGENT_STATUS_HOOKS_TITLE}
+      />
+    </section>
   )
 }

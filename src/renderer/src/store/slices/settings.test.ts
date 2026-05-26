@@ -70,11 +70,29 @@ beforeEach(() => {
                 totalCount: 1,
                 truncated: false
               }
-            : method === 'browser.profile.list'
-              ? { profiles: [] }
-              : method === 'worktree.lineageList'
-                ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                : {}
+            : method === 'worktree.detectedList'
+              ? {
+                  repoId: 'repo-env-2',
+                  authoritative: true,
+                  source: 'git',
+                  worktrees: [
+                    {
+                      ...makeWorktree({
+                        id: 'repo-env-2::/env-2/repo',
+                        repoId: 'repo-env-2',
+                        path: '/env-2/repo'
+                      }),
+                      ownership: 'orca-managed',
+                      selectedCheckout: true,
+                      visible: true
+                    }
+                  ]
+                }
+              : method === 'browser.profile.list'
+                ? { profiles: [] }
+                : method === 'worktree.lineageList'
+                  ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                  : {}
     return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
   })
   vi.stubGlobal('window', {
@@ -86,6 +104,29 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('repairs drifted task provider settings before sending updates', async () => {
+    settingsSet.mockResolvedValueOnce({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github'
+      } as AppState['settings']
+    })
+
+    await store.getState().updateSettings({
+      visibleTaskProviders: ['linear']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+  })
+
   it('rebases local state to the authoritative settings:set response', async () => {
     settingsSet.mockResolvedValueOnce({
       openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],

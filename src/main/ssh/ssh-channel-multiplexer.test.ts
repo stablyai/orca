@@ -229,6 +229,50 @@ describe('SshChannelMultiplexer', () => {
       expect(a).not.toHaveBeenCalled()
       expect(b).toHaveBeenCalledWith({ streamId: 7 })
     })
+
+    it('contains generic notification handler failures', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const badHandler = vi.fn(() => {
+        throw new Error('subscriber exploded')
+      })
+      const goodHandler = vi.fn()
+      mux.onNotification(badHandler)
+      mux.onNotification(goodHandler)
+
+      expect(() =>
+        transport.dataCallbacks[0](makeNotificationFrame('pty.data', { id: 'pty-1' }, 1))
+      ).not.toThrow()
+
+      expect(badHandler).toHaveBeenCalled()
+      expect(goodHandler).toHaveBeenCalledWith('pty.data', { id: 'pty-1' })
+      expect(mux.isDisposed()).toBe(false)
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ssh-mux] Notification handler failed for pty.data: subscriber exploded'
+      )
+    })
+
+    it('contains method notification handler failures', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const badHandler = vi.fn(() => {
+        throw new Error('stream consumer exploded')
+      })
+      const goodHandler = vi.fn()
+      mux.onNotificationByMethod('fs.streamChunk', badHandler)
+      mux.onNotificationByMethod('fs.streamChunk', goodHandler)
+
+      expect(() =>
+        transport.dataCallbacks[0](
+          makeNotificationFrame('fs.streamChunk', { streamId: 1, seq: 0, data: 'aGk=' }, 1)
+        )
+      ).not.toThrow()
+
+      expect(badHandler).toHaveBeenCalled()
+      expect(goodHandler).toHaveBeenCalledWith({ streamId: 1, seq: 0, data: 'aGk=' })
+      expect(mux.isDisposed()).toBe(false)
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ssh-mux] Method notification handler failed for fs.streamChunk: stream consumer exploded'
+      )
+    })
   })
 
   describe('keepalive', () => {

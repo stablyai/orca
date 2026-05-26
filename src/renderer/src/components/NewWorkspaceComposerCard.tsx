@@ -19,6 +19,7 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -30,10 +31,9 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 
@@ -45,7 +45,9 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  primaryActionLabel: string
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -63,7 +65,7 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
@@ -96,7 +98,7 @@ function SetupCommandPreview({
   setupConfig,
   headerAction
 }: {
-  setupConfig: { source: 'yaml' | 'legacy'; command: string }
+  setupConfig: SetupConfig
   headerAction?: React.ReactNode
 }): React.JSX.Element {
   if (setupConfig.source === 'yaml') {
@@ -117,7 +119,7 @@ function SetupCommandPreview({
     <div className="rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 shadow-inner">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Legacy setup command
+          {setupConfig.source === 'both' ? 'Combined setup command' : 'Local setup command'}
         </div>
         {headerAction}
       </div>
@@ -207,7 +209,9 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  selectedRepoIsGit,
   onRepoChange,
+  primaryActionLabel,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
@@ -246,9 +250,10 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
-    return repo?.displayName ?? repo?.path ?? 'This repository'
+    return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
   const sshStatusLabel = selectedRepoSshStatus
     ? SSH_STATUS_LABELS[selectedRepoSshStatus]
@@ -313,7 +318,7 @@ export default function NewWorkspaceComposerCard({
                   size="icon-xs"
                   onClick={handleAddRepo}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label="Add folder or repository"
+                  aria-label="Add project"
                 >
                   <FolderPlus className="size-3" />
                 </Button>
@@ -371,7 +376,7 @@ export default function NewWorkspaceComposerCard({
 
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Name or &apos;Create From&apos;{' '}
+            {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
             <span className="text-muted-foreground/70">[Optional]</span>
           </label>
           <SmartWorkspaceNameField
@@ -389,6 +394,7 @@ export default function NewWorkspaceComposerCard({
             onClearSelectedSource={onClearSmartNameSelection}
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder="Connect this repo first"
+            textOnly={!selectedRepoIsGit}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -519,7 +525,11 @@ export default function NewWorkspaceComposerCard({
                       Setup script
                     </label>
                     <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
-                      {setupConfig.source === 'yaml' ? 'orca.yaml' : 'legacy hooks'}
+                      {setupConfig.source === 'yaml'
+                        ? 'orca.yaml'
+                        : setupConfig.source === 'both'
+                          ? 'orca.yaml + local'
+                          : 'local settings'}
                     </span>
                   </div>
 
@@ -606,7 +616,7 @@ export default function NewWorkspaceComposerCard({
                 />
                 {!canUseSparseCheckout ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Only available for local repositories.
+                    Only available for local Git projects.
                   </p>
                 ) : null}
               </div>
@@ -640,9 +650,9 @@ export default function NewWorkspaceComposerCard({
           className="text-xs"
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          Create Workspace
+          {primaryActionLabel}
           <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-            <span>{isMac ? '⌘' : 'Ctrl'}</span>
+            <span>{submitShortcutModifierLabel}</span>
             <CornerDownLeft className="size-3" />
           </span>
         </Button>

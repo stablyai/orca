@@ -51,6 +51,220 @@ export function buildTaskPageRepoSourceState(
   })
 }
 
+function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
+  return `${item.repoId}\u0000${item.id}`
+}
+
+export function reconcileTaskPagePagesWithWorkItemsCache(
+  pages: readonly GitHubWorkItem[][],
+  entries: readonly (CacheEntry<GitHubWorkItem[]> | undefined)[]
+): GitHubWorkItem[][] {
+  const cachedItems = new Map<string, GitHubWorkItem>()
+  for (const entry of entries) {
+    for (const item of entry?.data ?? []) {
+      cachedItems.set(taskPageWorkItemCacheKey(item), item)
+    }
+  }
+
+  let changed = false
+  const nextPages = pages.map((page) => {
+    let pageChanged = false
+    const nextPage = page.map((item) => {
+      const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
+      if (!cached || cached === item) {
+        return item
+      }
+      pageChanged = true
+      changed = true
+      return cached
+    })
+    return pageChanged ? nextPage : page
+  })
+
+  return changed ? nextPages : (pages as GitHubWorkItem[][])
+}
+
+function taskPageWorkItemKey(item: GitHubWorkItem): string {
+  return `${item.repoId}\u0000${item.id}`
+}
+
+function sortedStrings(values: readonly string[] | undefined): string {
+  return [...(values ?? [])].sort().join('\u0000')
+}
+
+function sortedLogins(users: readonly { login: string | null | undefined }[] | undefined): string {
+  return [...(users ?? [])]
+    .map((user) => user.login ?? '')
+    .sort()
+    .join('\u0000')
+}
+
+function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
+  return JSON.stringify([
+    item.type,
+    item.number,
+    item.title,
+    item.state,
+    item.url,
+    item.author,
+    item.branchName ?? null,
+    item.baseRefName ?? null,
+    sortedStrings(item.labels),
+    sortedLogins(item.assignees),
+    sortedLogins(item.reviewRequests),
+    item.reviewDecision ?? null,
+    item.checksSummary?.state ?? null,
+    item.checksSummary?.total ?? null,
+    item.checksSummary?.failed ?? null,
+    item.checksSummary?.pending ?? null,
+    item.mergeable ?? null,
+    item.mergeStateStatus ?? null,
+    item.updatedAt
+  ])
+}
+
+function taskPageWorkItemKeyOrderSignature(items: readonly GitHubWorkItem[]): string {
+  return items.map(taskPageWorkItemKey).join('\u0000')
+}
+
+function taskPageWorkItemPaginationBoundary(items: readonly GitHubWorkItem[]): string | null {
+  return items.at(-1)?.updatedAt ?? null
+}
+
+export function shouldReplaceTaskPageItemsAfterRefresh(
+  currentItems: readonly GitHubWorkItem[],
+  refreshedItems: readonly GitHubWorkItem[]
+): boolean {
+  if (currentItems.length !== refreshedItems.length) {
+    return true
+  }
+  const currentKeys = new Set(currentItems.map(taskPageWorkItemKey))
+  for (const item of refreshedItems) {
+    if (!currentKeys.has(taskPageWorkItemKey(item))) {
+      return true
+    }
+  }
+  return false
+}
+
+export function reconcileTaskPageItemsAfterLandingRefresh(
+  currentItems: readonly GitHubWorkItem[],
+  refreshedItems: readonly GitHubWorkItem[]
+): GitHubWorkItem[] {
+  if (shouldReplaceTaskPageItemsAfterRefresh(currentItems, refreshedItems)) {
+    return [...refreshedItems]
+  }
+
+  const refreshedByKey = new Map(refreshedItems.map((item) => [taskPageWorkItemKey(item), item]))
+  let changed = false
+  const next = currentItems.map((item) => {
+    const refreshed = refreshedByKey.get(taskPageWorkItemKey(item))
+    if (
+      !refreshed ||
+      taskPageWorkItemStatusSignature(item) === taskPageWorkItemStatusSignature(refreshed)
+    ) {
+      return item
+    }
+    changed = true
+    return refreshed
+  })
+  return changed ? next : (currentItems as GitHubWorkItem[])
+}
+
+export function shouldResetTaskPagePaginationAfterLandingRefresh(
+  currentFirstPage: readonly GitHubWorkItem[],
+  refreshedItems: readonly GitHubWorkItem[]
+): boolean {
+  if (shouldReplaceTaskPageItemsAfterRefresh(currentFirstPage, refreshedItems)) {
+    return true
+  }
+  if (
+    taskPageWorkItemKeyOrderSignature(currentFirstPage) !==
+    taskPageWorkItemKeyOrderSignature(refreshedItems)
+  ) {
+    return true
+  }
+  return (
+    taskPageWorkItemPaginationBoundary(currentFirstPage) !==
+    taskPageWorkItemPaginationBoundary(refreshedItems)
+  )
+}
+
+export function reconcileTaskPagePagesAfterLandingRefresh(
+  pages: readonly GitHubWorkItem[][],
+  refreshedItems: readonly GitHubWorkItem[]
+): GitHubWorkItem[][] {
+  const firstPage = pages[0] ?? []
+  if (shouldResetTaskPagePaginationAfterLandingRefresh(firstPage, refreshedItems)) {
+    return [[...refreshedItems]]
+  }
+  const nextFirstPage = reconcileTaskPageItemsAfterLandingRefresh(firstPage, refreshedItems)
+  if (nextFirstPage === firstPage) {
+    return pages as GitHubWorkItem[][]
+  }
+  return [nextFirstPage, ...pages.slice(1)]
+}
+
+function linearIssueKey(issue: LinearIssue): string {
+  return issue.id
+}
+
+function linearIssueStatusSignature(issue: LinearIssue): string {
+  return JSON.stringify([
+    issue.identifier,
+    issue.title,
+    issue.url,
+    issue.state.name,
+    issue.state.type,
+    issue.state.color,
+    issue.team.id,
+    issue.team.name,
+    issue.team.key,
+    sortedStrings(issue.labels),
+    issue.assignee?.id ?? null,
+    issue.assignee?.displayName ?? null,
+    issue.priority,
+    issue.updatedAt
+  ])
+}
+
+export function shouldReplaceTaskPageLinearIssuesAfterRefresh(
+  currentIssues: readonly LinearIssue[],
+  refreshedIssues: readonly LinearIssue[]
+): boolean {
+  if (currentIssues.length !== refreshedIssues.length) {
+    return true
+  }
+  const currentKeys = new Set(currentIssues.map(linearIssueKey))
+  for (const issue of refreshedIssues) {
+    if (!currentKeys.has(linearIssueKey(issue))) {
+      return true
+    }
+  }
+  return false
+}
+
+export function reconcileTaskPageLinearIssuesAfterLandingRefresh(
+  currentIssues: readonly LinearIssue[],
+  refreshedIssues: readonly LinearIssue[]
+): LinearIssue[] {
+  if (shouldReplaceTaskPageLinearIssuesAfterRefresh(currentIssues, refreshedIssues)) {
+    return [...refreshedIssues]
+  }
+
+  const refreshedByKey = new Map(refreshedIssues.map((issue) => [linearIssueKey(issue), issue]))
+  let changed = false
+  const next = currentIssues.map((issue) => {
+    const refreshed = refreshedByKey.get(linearIssueKey(issue))
+    if (!refreshed || linearIssueStatusSignature(issue) === linearIssueStatusSignature(refreshed)) {
+      return issue
+    }
+    changed = true
+    return refreshed
+  })
+  return changed ? next : (currentIssues as LinearIssue[])
+}
+
 export function findTaskPageDialogWorkItem(
   workItemsCache: WorkItemsCache,
   dialogWorkItemKey: TaskPageDialogWorkItemKey

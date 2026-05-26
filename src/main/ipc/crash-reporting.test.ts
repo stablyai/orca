@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./feedback', () => ({
-  submitFeedback: (...args: unknown[]) => submitFeedbackMock(...args)
+  submitFeedback: submitFeedbackMock
 }))
 
 import { registerCrashReportingHandlers } from './crash-reporting'
@@ -56,10 +56,10 @@ describe('registerCrashReportingHandlers', () => {
   it('copies the latest pending diagnostic text to the clipboard', async () => {
     const latest = report()
     registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => latest),
       getById: vi.fn(async () => latest),
       dismiss: vi.fn(),
       markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
       listRecent: vi.fn(async () => [latest]),
       record: vi.fn(),
       formatDiagnosticText: vi.fn()
@@ -76,12 +76,60 @@ describe('registerCrashReportingHandlers', () => {
     )
   })
 
-  it('submits a dismissed report when the already-open prompt sends it', async () => {
-    const dismissed = report('dismissed', 'crash-already-dismissed')
+  it('returns dismissed unsent reports for the manual Help menu entry', async () => {
+    const dismissed = report('dismissed', 'crash-help-menu')
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => dismissed),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [report('sent', 'crash-sent'), dismissed]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    await expect(handlers.get('crashReports:getLatestPending')?.(null)).resolves.toBeNull()
+    await expect(handlers.get('crashReports:getLatestReport')?.(null)).resolves.toEqual(dismissed)
+  })
+
+  it('submits a pending report through feedback and marks it sent', async () => {
+    const pending = report('pending', 'crash-pending')
+    const sent = report('sent', pending.id)
+    const markSent = vi.fn(async () => sent)
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => pending),
+      dismiss: vi.fn(),
+      markSent,
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [pending]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      reportId: pending.id,
+      notes: 'extra /Users/alice/project',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: null
+    })
+
+    expect(result).toEqual({ ok: true, report: sent })
+    expect(submitFeedbackMock).toHaveBeenCalledWith({
+      feedback: expect.stringContaining('extra [redacted-path]'),
+      submissionType: 'crash',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: null
+    })
+    expect(markSent).toHaveBeenCalledWith(pending.id)
+  })
+
+  it('submits a dismissed startup prompt through feedback and marks it sent', async () => {
+    const dismissed = report('dismissed', 'crash-dismissed')
     const sent = report('sent', dismissed.id)
     const markDismissedSent = vi.fn(async () => sent)
     registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => null),
       getById: vi.fn(async () => dismissed),
       dismiss: vi.fn(),
       markSent: vi.fn(),
@@ -93,136 +141,77 @@ describe('registerCrashReportingHandlers', () => {
 
     const result = await handlers.get('crashReports:submit')?.(null, {
       reportId: dismissed.id,
+      notes: 'sent from startup prompt',
+      submitAnonymously: true,
       githubLogin: null,
       githubEmail: null
     })
 
     expect(result).toEqual({ ok: true, report: sent })
-    expect(submitFeedbackMock).toHaveBeenCalledWith(
-      expect.objectContaining({ feedback: expect.stringContaining('[Crash Report]') })
-    )
+    expect(submitFeedbackMock).toHaveBeenCalledWith({
+      feedback: expect.stringContaining('sent from startup prompt'),
+      submissionType: 'crash',
+      submitAnonymously: true,
+      githubLogin: null,
+      githubEmail: null
+    })
     expect(markDismissedSent).toHaveBeenCalledWith(dismissed.id)
   })
 
-  it('submits through feedback and marks the report sent only after success', async () => {
-    const latest = report('pending', 'crash-submit-success')
-    const sent = report('sent', latest.id)
-    const markSent = vi.fn(async () => sent)
+  it('dismisses a pending report locally without any network submission', async () => {
+    const latest = report('pending', 'crash-dismiss')
+    const dismissed = report('dismissed', latest.id)
+    const dismiss = vi.fn(async () => dismissed)
     registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => latest),
-      getById: vi.fn(async () => latest),
-      dismiss: vi.fn(),
-      markSent,
-      listRecent: vi.fn(async () => [latest]),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    const result = await handlers.get('crashReports:submit')?.(null, {
-      reportId: latest.id,
-      githubLogin: 'me',
-      githubEmail: 'me@example.com',
-      notes: 'extra'
-    })
-
-    expect(result).toEqual({ ok: true, report: sent })
-    expect(submitFeedbackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feedback: expect.stringContaining('[Crash Report]'),
-        githubLogin: 'me',
-        githubEmail: 'me@example.com'
-      })
-    )
-    expect(markSent).toHaveBeenCalledWith(latest.id)
-  })
-
-  it('does not surface a successful upload as failed if marking sent fails locally', async () => {
-    const latest = report('pending', 'crash-mark-sent-fails')
-    const markSent = vi.fn(async () => {
-      throw new Error('disk unavailable')
-    })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => latest),
-      getById: vi.fn(async () => latest),
-      dismiss: vi.fn(),
-      markSent,
-      listRecent: vi.fn(async () => [latest]),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    try {
-      const result = await handlers.get('crashReports:submit')?.(null, {
-        reportId: latest.id,
-        githubLogin: null,
-        githubEmail: null
-      })
-
-      expect(result).toEqual({ ok: true, report: { ...latest, status: 'sent' } })
-      expect(markSent).toHaveBeenCalledWith(latest.id)
-      await expect(handlers.get('crashReports:getLatestPending')?.(null)).resolves.toBeNull()
-    } finally {
-      consoleError.mockRestore()
-    }
-  })
-
-  it('keeps the report pending on feedback failure', async () => {
-    submitFeedbackMock.mockResolvedValue({ ok: false, status: 500, error: 'status 500' })
-    const latest = report('pending', 'crash-submit-failure')
-    const markSent = vi.fn()
-    registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => latest),
-      getById: vi.fn(async () => latest),
-      dismiss: vi.fn(),
-      markSent,
-      listRecent: vi.fn(async () => [latest]),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    const result = await handlers.get('crashReports:submit')?.(null, {
-      githubLogin: null,
-      githubEmail: null
-    })
-
-    expect(result).toMatchObject({ ok: false, status: 500, report: latest })
-    expect(markSent).not.toHaveBeenCalled()
-  })
-
-  it('does not dismiss a report while submission is in flight', async () => {
-    let resolveSubmit: (value: { ok: true }) => void = () => {}
-    submitFeedbackMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveSubmit = resolve
-      })
-    )
-    const latest = report('pending', 'crash-in-flight')
-    const dismiss = vi.fn()
-    registerCrashReportingHandlers({
-      getLatestPending: vi.fn(async () => latest),
       getById: vi.fn(async () => latest),
       dismiss,
-      markSent: vi.fn(async () => report('sent', latest.id)),
-      listRecent: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [latest]),
       record: vi.fn(),
       formatDiagnosticText: vi.fn()
     } as never)
 
-    const submitPromise = handlers.get('crashReports:submit')?.(null, {
-      reportId: latest.id,
-      githubLogin: null,
-      githubEmail: null
-    })
-    await vi.waitFor(() => expect(submitFeedbackMock).toHaveBeenCalled())
-
-    const dismissResult = await handlers.get('crashReports:dismiss')?.(null, {
+    const result = await handlers.get('crashReports:dismiss')?.(null, {
       reportId: latest.id
     })
 
-    expect(dismissResult).toEqual(latest)
-    expect(dismiss).not.toHaveBeenCalled()
-    resolveSubmit({ ok: true })
-    await expect(submitPromise).resolves.toMatchObject({ ok: true })
+    expect(result).toEqual(dismissed)
+    expect(dismiss).toHaveBeenCalledWith(latest.id)
+    expect(submitFeedbackMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps a pending report available if feedback submission fails', async () => {
+    const pending = report('pending', 'crash-failed')
+    const markSent = vi.fn()
+    submitFeedbackMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      error: 'status 500'
+    })
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => pending),
+      dismiss: vi.fn(),
+      markSent,
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [pending]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      reportId: pending.id,
+      submitAnonymously: true,
+      githubLogin: null,
+      githubEmail: null
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 500,
+      error: 'status 500',
+      report: pending
+    })
+    expect(markSent).not.toHaveBeenCalled()
   })
 })

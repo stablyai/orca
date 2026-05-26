@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  ALL_GROUP_META,
   buildRows,
   getGroupKeyForWorktree,
   getLineageGroupKey,
@@ -45,18 +46,70 @@ const repoMap = new Map([[repo.id, repo]])
 describe('getPRGroupKey', () => {
   it('puts merged PRs in the done group', () => {
     const prCache = {
-      '/tmp/orca::feature/super-critical': {
+      'repo-1::feature/super-critical': {
         data: { state: 'merged' }
       }
     }
 
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('done')
   })
+
+  it('prefers repo-scoped PR status over stale legacy path-scoped status', () => {
+    const prCache = {
+      '/tmp/orca::feature/super-critical': {
+        data: { state: 'closed' }
+      },
+      'repo-1::feature/super-critical': {
+        data: { state: 'merged' }
+      }
+    }
+
+    expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('done')
+  })
+
+  it('falls back to legacy path-scoped PR status when no repo-scoped entry exists', () => {
+    const prCache = {
+      '/tmp/orca::feature/super-critical': {
+        data: { state: 'closed' }
+      }
+    }
+
+    expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('closed')
+  })
+
+  it('does not fall back to local PR cache while runtime scoped data is loading', () => {
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { state: 'merged' }
+      }
+    }
+
+    expect(
+      getPRGroupKey(worktree, repoMap, prCache, {
+        activeRuntimeEnvironmentId: 'env-1'
+      } as never)
+    ).toBe('in-progress')
+  })
+
+  it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
+    const sshRepo = { ...repo, connectionId: 'ssh-1' }
+    const sshRepoMap = new Map([[sshRepo.id, sshRepo]])
+    const prCache = {
+      'repo-1::feature/super-critical': {
+        data: { state: 'merged' }
+      },
+      'ssh:ssh-1::repo-1::feature/super-critical': {
+        data: { state: 'closed' }
+      }
+    }
+
+    expect(getPRGroupKey(worktree, sshRepoMap, prCache)).toBe('closed')
+  })
 })
 
 describe('getGroupKeyForWorktree', () => {
-  it('returns no group key for the ungrouped mode', () => {
-    expect(getGroupKeyForWorktree('none', worktree, repoMap, null)).toBeNull()
+  it('returns the all group key for the ungrouped mode', () => {
+    expect(getGroupKeyForWorktree('none', worktree, repoMap, null)).toBe('all')
   })
 
   it('returns a workspace-status key only in status grouping mode', () => {
@@ -71,29 +124,43 @@ describe('buildRows with pinned worktrees', () => {
   const unpinned1 = { ...worktree, id: 'wt-1', displayName: 'alpha' }
   const unpinned2 = { ...worktree, id: 'wt-2', displayName: 'beta' }
 
-  it('emits a Pinned header followed by pinned items in groupBy none', () => {
+  it('emits Pinned and All headers in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned', count: 1 })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
+    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 2 })
+    expect(rows[2]).toMatchObject({ type: 'header', icon: ALL_GROUP_META.icon })
   })
 
-  it('renders a flat list without status headers in groupBy none', () => {
+  it('groups all worktrees under All in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
+      { type: 'header', key: 'all', label: 'All', count: 2 },
       { type: 'item', worktree: { id: 'wt-1' } },
       { type: 'item', worktree: { id: 'wt-2' } }
     ])
   })
 
-  it('keeps pinned worktrees above the flat list', () => {
+  it('keeps pinned worktrees above the All group', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'pinned', count: 1 },
       { type: 'item', worktree: { id: 'wt-pinned' } },
+      { type: 'header', key: 'all', count: 2 },
       { type: 'item', worktree: { id: 'wt-1' } },
       { type: 'item', worktree: { id: 'wt-2' } }
+    ])
+  })
+
+  it('collapses the All group in groupBy none', () => {
+    const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set(['all']))
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'item', worktree: { id: 'wt-pinned' } },
+      { type: 'header', key: 'all', count: 2 }
     ])
   })
 
@@ -440,8 +507,7 @@ describe('buildRows workspace lineage nesting', () => {
     expect(items[1]).toMatchObject({
       type: 'item',
       worktree: { id: child.id },
-      depth: 1,
-      parentLabel: 'coordinator'
+      depth: 1
     })
   })
 
@@ -515,7 +581,7 @@ describe('buildRows workspace lineage nesting', () => {
     })
   })
 
-  it('marks stale instance links as missing without creating a parent group', () => {
+  it('does not create a parent group for stale instance links', () => {
     const staleLineage = { ...lineage, parentWorktreeInstanceId: 'old-parent-instance' }
     const rows = buildRows(
       'none',
@@ -538,7 +604,7 @@ describe('buildRows workspace lineage nesting', () => {
     expect(items[0]).toMatchObject({
       type: 'item',
       worktree: { id: child.id },
-      lineageState: 'missing'
+      depth: 0
     })
   })
 
@@ -556,7 +622,7 @@ describe('buildRows workspace lineage nesting', () => {
     expect(info).toMatchObject({ state: 'missing' })
   })
 
-  it('keeps pinned children in Pinned with parent context', () => {
+  it('keeps pinned children in Pinned without a parent badge', () => {
     const pinnedChild = { ...child, isPinned: true }
     const rows = buildRows(
       'none',
@@ -578,9 +644,9 @@ describe('buildRows workspace lineage nesting', () => {
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
     expect(rows[1]).toMatchObject({
       type: 'item',
-      worktree: { id: child.id },
-      parentLabel: 'coordinator'
+      worktree: { id: child.id }
     })
+    expect(rows[1]).not.toHaveProperty('parentLabel')
   })
 })
 
@@ -601,5 +667,16 @@ describe('WorktreeList header styles', () => {
     )
 
     expect(source).toContain('[&_path]:cursor-pointer')
+  })
+
+  it('resolves repo header color from repo group headers only', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).toContain('resolveRepoGroupHeaderColor({')
+    expect(source).toContain('headerKey: row.key')
+    expect(source).toContain('color={repoHeaderColor}')
   })
 })

@@ -4,6 +4,7 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
+import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import {
   clearMigrationUnsupportedPtysForPaneKey,
@@ -12,8 +13,10 @@ import {
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
+import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
@@ -32,12 +35,15 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:claudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
+  ipcMain.removeHandler('agentHooks:antigravityStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
+  ipcMain.removeHandler('agentHooks:commandCodeStatus')
   ipcMain.removeHandler('agentHooks:grokStatus')
   ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
+  ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
@@ -63,6 +69,12 @@ export function registerAgentHookHandlers(): void {
     // Why: the renderer pulls this after workspace hydration, so startup cannot
     // lose replayed statuses while its local store is still empty.
     return agentHookServer.getStatusSnapshot()
+  })
+  ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
+    if (typeof request !== 'object' || request === null) {
+      return false
+    }
+    return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
   })
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
@@ -113,6 +125,19 @@ export function registerAgentHookHandlers(): void {
       }
     }
   })
+  ipcMain.handle('agentHooks:antigravityStatus', (): AgentHookInstallStatus => {
+    try {
+      return antigravityHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'antigravity',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
   ipcMain.handle('agentHooks:cursorStatus', (): AgentHookInstallStatus => {
     try {
       return cursorHookService.getStatus()
@@ -132,6 +157,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'droid',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:commandCodeStatus', (): AgentHookInstallStatus => {
+    try {
+      return commandCodeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'command-code',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

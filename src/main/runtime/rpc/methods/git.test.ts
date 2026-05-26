@@ -191,6 +191,11 @@ describe('git RPC methods', () => {
       generateRuntimeCommitMessage: vi
         .fn()
         .mockResolvedValue({ success: true, message: 'feat: test' }),
+      discoverRuntimeCommitMessageModels: vi.fn().mockResolvedValue({
+        success: true,
+        models: [{ id: 'auto', label: 'Auto' }],
+        defaultModelId: 'auto'
+      }),
       cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
@@ -202,13 +207,20 @@ describe('git RPC methods', () => {
     )
     await dispatcher.dispatch(makeRequest('git.generateCommitMessage', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
+      makeRequest('git.discoverCommitMessageModels', {
+        worktree: 'id:wt-1',
+        agentId: 'cursor',
+        agentCmdOverrides: { cursor: 'cursor-agent' }
+      })
+    )
+    await dispatcher.dispatch(
       makeRequest('git.cancelGenerateCommitMessage', { worktree: 'id:wt-1' })
     )
     await dispatcher.dispatch(
       makeRequest('git.push', {
         worktree: 'id:wt-1',
         publish: true,
-        pushTarget: { remote: 'origin' }
+        pushTarget: { remoteName: 'origin', branchName: 'feature' }
       })
     )
     const response = await dispatcher.dispatch(
@@ -221,9 +233,69 @@ describe('git RPC methods', () => {
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith('id:wt-1', 'cursor', {
+      agentCmdOverrides: { cursor: 'cursor-agent' }
+    })
     expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
-    expect(runtime.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, { remote: 'origin' })
+    expect(runtime.pushRuntimeGit).toHaveBeenCalledWith(
+      'id:wt-1',
+      true,
+      { remoteName: 'origin', branchName: 'feature' },
+      undefined
+    )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+  })
+
+  it('forwards force-with-lease push mode to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.push', {
+        worktree: 'id:wt-1',
+        forceWithLease: true
+      })
+    )
+
+    expect(runtime.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', undefined, undefined, true)
+  })
+
+  it('forwards rebase-from-base to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      rebaseRuntimeGitFromBase: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.rebaseFromBase', {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main'
+      })
+    )
+
+    expect(runtime.rebaseRuntimeGitFromBase).toHaveBeenCalledWith('id:wt-1', 'origin/main')
+  })
+
+  it('forwards fetch push target to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fetchRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await dispatcher.dispatch(
+      makeRequest('git.fetch', {
+        worktree: 'id:wt-1',
+        pushTarget
+      })
+    )
+
+    expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
   it('forwards commit-message settings to the runtime', async () => {
@@ -231,6 +303,15 @@ describe('git RPC methods', () => {
       enabled: true,
       agentId: 'codex',
       selectedModelByAgent: { codex: 'gpt-5.3-codex-spark' },
+      selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } },
+      discoveredModelsByAgent: {
+        cursor: [{ id: 'local-model', label: 'Local Model' }]
+      },
+      discoveredModelsByAgentByHost: {
+        'ssh:conn-1': {
+          cursor: [{ id: 'remote-model', label: 'Remote Model' }]
+        }
+      },
       selectedThinkingByModel: { 'gpt-5.3-codex-spark': 'medium' },
       customPrompt: '',
       customAgentCommand: ''
@@ -247,14 +328,16 @@ describe('git RPC methods', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true
+        enableGitHubAttribution: true,
+        commitMessageDiscoveryHostKey: 'runtime:env-1'
       })
     )
 
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
       commitMessageAi,
       agentCmdOverrides,
-      enableGitHubAttribution: true
+      enableGitHubAttribution: true,
+      commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
   })
 

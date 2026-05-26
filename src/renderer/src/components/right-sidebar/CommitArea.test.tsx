@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea } from './SourceControl'
+import { CommitArea, ConflictSummaryCard } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -22,10 +23,13 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
   return {
     worktreeId: 'wt-1',
+    groupId: 'group-1',
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    commitFailureRecoveryPrompt: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    isFixingCommitFailureWithAI: false,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -39,13 +43,18 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
+    onFixCommitFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
 }
 
 function renderCommitArea(props: ReturnType<typeof baseProps>): string {
-  return renderToStaticMarkup(<CommitArea {...props} />)
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <CommitArea {...props} />
+    </TooltipProvider>
+  )
 }
 
 function firstButton(markup: string): string {
@@ -133,7 +142,42 @@ describe('CommitArea', () => {
     expect(markup).toContain('aria-live="polite"')
     expect(markup).toContain('Lint failed during commit.')
     expect(markup).not.toContain('full lint output line')
+    expect(markup).toContain('Fix')
+    expect(markup).toContain('aria-label="Choose agent to fix commit failure"')
     expect(markup).toContain('Details')
+  })
+
+  it('disables the commit failure fix action while an AI launch is in progress', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.',
+      isFixingCommitFailureWithAI: true
+    })
+
+    const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+      .map((match) => match[0])
+      .find((entry) => entry.includes('aria-label="Fix commit failure with AI"'))
+
+    expect(button).toBeDefined()
+    expect(button).toContain('disabled=""')
+    expect(button).toContain('animate-spin')
+  })
+
+  it('enables the agent picker when commit failure context is available', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.'
+    })
+
+    const picker = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+      .map((match) => match[0])
+      .find((entry) => entry.includes('aria-label="Choose agent to fix commit failure"'))
+
+    expect(picker).toBeDefined()
+    expect(picker).not.toContain('disabled=""')
+    expect(picker).toContain('lucide-chevron-down')
   })
 
   it('omits the details trigger when the raw error matches the summary', () => {
@@ -272,5 +316,21 @@ describe('CommitArea', () => {
     const button = firstButton(renderCommitArea({ ...props, isCommitting: true }))
     expect(button).toContain('animate-spin')
     expect(button).not.toContain('lucide-check')
+  })
+})
+
+describe('ConflictSummaryCard', () => {
+  it('shows Resolve with AI above Review conflicts', () => {
+    const markup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="rebase"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(markup.indexOf('Resolve with AI')).toBeLessThan(markup.indexOf('Review conflicts'))
   })
 })

@@ -14,6 +14,7 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
 import type {
@@ -55,6 +56,7 @@ type SnapshotFreshness = {
 }
 
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+const hostSessionTabIdByLocalKey = new Map<string, string>()
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
@@ -63,6 +65,7 @@ type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSession
 
 type MirroredTerminalTab = {
   tab: TerminalTab
+  hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
 }
@@ -72,6 +75,7 @@ type MirroredBrowserTab = {
   page: BrowserPage
   remotePageId: string
   unifiedTab: Tab
+  hostTabId: string
 }
 
 type MirroredEditorTab = {
@@ -147,6 +151,26 @@ export function shouldApplyWebSessionTabsSnapshot(
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
+  hostSessionTabIdByLocalKey.clear()
+}
+
+function hostSessionTabMappingKey(args: {
+  environmentId: string
+  worktreeId: string
+  tabId: string
+}): string {
+  return `${args.environmentId}:${args.worktreeId}:${args.tabId}`
+}
+
+export function resolveHostSessionTabIdForWebSessionTab(
+  _state: WebSessionTabsSyncState,
+  args: {
+    environmentId: string
+    worktreeId: string
+    tabId: string
+  }
+): string | null {
+  return hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) ?? null
 }
 
 function isReadyTerminalTab(
@@ -341,6 +365,7 @@ function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index
       },
+      hostTabId: parentTabId,
       ptyIds,
       layout: chooseRemoteTerminalLayout(surfaces, ptyIdsByLeafId)
     }
@@ -531,7 +556,8 @@ function buildMirroredEditorTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   state: WebSessionTabsSyncState,
-  groupId: string,
+  hostGroupIdByTabId: ReadonlyMap<string, string>,
+  fallbackGroupId: string,
   sortOffset: number,
   now: number
 ): MirroredEditorTab[] {
@@ -547,6 +573,7 @@ function buildMirroredEditorTabs(
       tab.id
     )
     const sourceFileId = editorSourceFileId(tab)
+    const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const file: OpenFile = {
       ...existingFile,
       id: fileId,
@@ -614,7 +641,8 @@ function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   state: WebSessionTabsSyncState,
-  groupId: string,
+  hostGroupIdByTabId: ReadonlyMap<string, string>,
+  fallbackGroupId: string,
   sortOffset: number,
   now: number
 ): MirroredBrowserTab[] {
@@ -628,6 +656,7 @@ function buildMirroredBrowserTabs(
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
+    const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const title = tab.title.trim() || 'Browser'
     const page: BrowserPage = {
       id: pageId,
@@ -663,7 +692,8 @@ function buildMirroredBrowserTabs(
       workspace,
       page,
       remotePageId: tab.browserPageId,
-      unifiedTab: buildBrowserUnifiedTab(workspace, existing?.unifiedTab?.id ?? tab.id, groupId)
+      unifiedTab: buildBrowserUnifiedTab(workspace, existing?.unifiedTab?.id ?? tab.id, groupId),
+      hostTabId: tab.id
     }
   })
 }
@@ -709,6 +739,240 @@ function collectLayoutGroupIds(layout: TabGroupLayoutNode | undefined): Set<stri
   }
   visit(layout)
   return result
+}
+
+function buildHostGroupIdByTabId(
+  hostGroups: readonly RuntimeMobileSessionTabGroup[] | undefined
+): Map<string, string> {
+  const result = new Map<string, string>()
+  for (const group of hostGroups ?? []) {
+    for (const tabId of group.tabOrder) {
+      result.set(tabId, group.id)
+    }
+    if (group.activeTabId) {
+      result.set(group.activeTabId, group.id)
+    }
+  }
+  return result
+}
+
+function pruneTabGroupLayout(
+  layout: TabGroupLayoutNode | null | undefined,
+  validGroupIds: ReadonlySet<string>
+): TabGroupLayoutNode | null {
+  if (!layout) {
+    return null
+  }
+  if (layout.type === 'leaf') {
+    return validGroupIds.has(layout.groupId) ? layout : null
+  }
+  const first = pruneTabGroupLayout(layout.first, validGroupIds)
+  const second = pruneTabGroupLayout(layout.second, validGroupIds)
+  if (first && second) {
+    return { ...layout, first, second }
+  }
+  return first ?? second
+}
+
+function appendTabGroupLayout(
+  first: TabGroupLayoutNode | null,
+  second: TabGroupLayoutNode | null
+): TabGroupLayoutNode | null {
+  if (!first) {
+    return second
+  }
+  if (!second) {
+    return first
+  }
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first,
+    second
+  }
+}
+
+function tabGroupLayoutEqual(
+  a: TabGroupLayoutNode | null | undefined,
+  b: TabGroupLayoutNode | null | undefined
+): boolean {
+  if (!a || !b) {
+    return !a && !b
+  }
+  if (a.type !== b.type) {
+    return false
+  }
+  if (a.type === 'leaf') {
+    return b.type === 'leaf' && a.groupId === b.groupId
+  }
+  return (
+    b.type === 'split' &&
+    a.direction === b.direction &&
+    a.ratio === b.ratio &&
+    tabGroupLayoutEqual(a.first, b.first) &&
+    tabGroupLayoutEqual(a.second, b.second)
+  )
+}
+
+function mapHostRecentTabIds(
+  recentTabIds: readonly string[] | undefined,
+  hostToLocalTabId: ReadonlyMap<string, string>,
+  tabOrder: readonly string[]
+): string[] {
+  if (!recentTabIds || recentTabIds.length === 0) {
+    return []
+  }
+  const valid = new Set(tabOrder)
+  return sanitizeRecentTabIds(
+    recentTabIds.map((tabId) => hostToLocalTabId.get(tabId) ?? '').filter(Boolean),
+    [...valid]
+  )
+}
+
+function buildHostToLocalTabIdMap({
+  terminalSurfaces,
+  terminalTabs,
+  browserTabs,
+  editorTabs
+}: {
+  terminalSurfaces: readonly TerminalSurface[]
+  terminalTabs: readonly TerminalTab[]
+  browserTabs: readonly MirroredBrowserTab[]
+  editorTabs: readonly MirroredEditorTab[]
+}): Map<string, string> {
+  const hostToLocal = new Map<string, string>()
+  const terminalIds = new Set(terminalTabs.map((tab) => tab.id))
+  for (const surface of terminalSurfaces) {
+    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+    if (terminalIds.has(localId)) {
+      hostToLocal.set(surface.parentTabId, localId)
+      hostToLocal.set(surface.id, localId)
+    }
+  }
+  for (const entry of browserTabs) {
+    hostToLocal.set(entry.hostTabId, entry.unifiedTab.id)
+    hostToLocal.set(entry.unifiedTab.id, entry.unifiedTab.id)
+  }
+  for (const entry of editorTabs) {
+    hostToLocal.set(entry.hostTabId, entry.unifiedTab.id)
+  }
+  return hostToLocal
+}
+
+function updateHostSessionTabIdMappings(args: {
+  environmentId: string
+  worktreeId: string
+  terminalSurfaces: readonly TerminalSurface[]
+  terminalTabs: readonly TerminalTab[]
+  browserTabs: readonly MirroredBrowserTab[]
+  editorTabs: readonly MirroredEditorTab[]
+}): void {
+  const keyPrefix = `${args.environmentId}:${args.worktreeId}:`
+  for (const key of hostSessionTabIdByLocalKey.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      hostSessionTabIdByLocalKey.delete(key)
+    }
+  }
+
+  const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
+  for (const surface of args.terminalSurfaces) {
+    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+    if (mirroredTerminalIds.has(localId)) {
+      hostSessionTabIdByLocalKey.set(
+        hostSessionTabMappingKey({ ...args, tabId: localId }),
+        surface.parentTabId
+      )
+    }
+  }
+  for (const entry of args.browserTabs) {
+    hostSessionTabIdByLocalKey.set(
+      hostSessionTabMappingKey({ ...args, tabId: entry.unifiedTab.id }),
+      entry.hostTabId
+    )
+  }
+  for (const entry of args.editorTabs) {
+    hostSessionTabIdByLocalKey.set(
+      hostSessionTabMappingKey({ ...args, tabId: entry.unifiedTab.id }),
+      entry.hostTabId
+    )
+  }
+}
+
+function buildMirroredHostGroups({
+  currentGroups,
+  hostGroups,
+  hostToLocalTabId,
+  mirroredUnifiedIds,
+  nextActiveUnifiedTabId,
+  validUnifiedTabIds,
+  worktreeId
+}: {
+  currentGroups: readonly TabGroup[]
+  hostGroups: readonly RuntimeMobileSessionTabGroup[]
+  hostToLocalTabId: ReadonlyMap<string, string>
+  mirroredUnifiedIds: ReadonlySet<string>
+  nextActiveUnifiedTabId: string | null
+  validUnifiedTabIds: ReadonlySet<string>
+  worktreeId: string
+}): TabGroup[] | null {
+  const strippedGroups = currentGroups.map((group) => {
+    const tabOrder = group.tabOrder.filter(
+      (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
+    )
+    return {
+      ...group,
+      tabOrder,
+      recentTabIds: sanitizeRecentTabIds(group.recentTabIds, tabOrder)
+    }
+  })
+  const groupsById = new Map(strippedGroups.map((group) => [group.id, group]))
+  const orderedGroups: TabGroup[] = []
+  const seen = new Set<string>()
+
+  for (const hostGroup of hostGroups) {
+    const existing = groupsById.get(hostGroup.id)
+    const localHostOrder = hostGroup.tabOrder
+      .map((tabId) => hostToLocalTabId.get(tabId))
+      .filter((tabId): tabId is string => tabId !== undefined && validUnifiedTabIds.has(tabId))
+    const tabOrder = [
+      ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
+      ...localHostOrder
+    ]
+    if (tabOrder.length === 0) {
+      continue
+    }
+    const activeFromHost =
+      hostGroup.activeTabId !== null ? (hostToLocalTabId.get(hostGroup.activeTabId) ?? null) : null
+    const activeTabId =
+      nextActiveUnifiedTabId && tabOrder.includes(nextActiveUnifiedTabId)
+        ? nextActiveUnifiedTabId
+        : activeFromHost && tabOrder.includes(activeFromHost)
+          ? activeFromHost
+          : existing?.activeTabId && tabOrder.includes(existing.activeTabId)
+            ? existing.activeTabId
+            : (tabOrder[0] ?? null)
+    orderedGroups.push({
+      id: hostGroup.id,
+      worktreeId,
+      tabOrder,
+      activeTabId,
+      recentTabIds: activeTabId
+        ? pushRecentTabId(
+            mapHostRecentTabIds(hostGroup.recentTabIds, hostToLocalTabId, tabOrder),
+            activeTabId
+          )
+        : []
+    })
+    seen.add(hostGroup.id)
+  }
+
+  for (const group of strippedGroups) {
+    if (!seen.has(group.id) && group.tabOrder.length > 0) {
+      orderedGroups.push(group)
+    }
+  }
+
+  return orderedGroups.length > 0 ? orderedGroups : null
 }
 
 function sameStringArray(a: readonly string[], b: readonly string[]): boolean {
@@ -1064,12 +1328,14 @@ export function applyWebSessionTabsSnapshot(
   )
 
   const targetGroupId = chooseTargetGroupId(state, snapshot)
+  const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const readyBrowserTabs = snapshot.tabs.filter(isReadyBrowserTab)
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
   const mirroredBrowserTabs = buildMirroredBrowserTabs(
     snapshot,
     environmentId,
     state,
+    hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length,
     now
@@ -1109,6 +1375,7 @@ export function applyWebSessionTabsSnapshot(
     snapshot,
     environmentId,
     state,
+    hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
     now
@@ -1161,8 +1428,8 @@ export function applyWebSessionTabsSnapshot(
     }
     return !mirroredTerminalIds.has(tab.entityId) && !mirroredTerminalIds.has(tab.id)
   })
-  const mirroredTerminalUnifiedTabs = mirroredTerminalTabEntries.map((tab) =>
-    buildTerminalUnifiedTab(tab, targetGroupId)
+  const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
+    buildTerminalUnifiedTab(entry.tab, hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId)
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
   const mirroredEditorUnifiedTabs = mirroredEditorTabs.map((entry) => entry.unifiedTab)
@@ -1256,11 +1523,36 @@ export function applyWebSessionTabsSnapshot(
           nextActiveTerminalId)
         : nextActiveTerminalId
   const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
+  const hostToLocalTabId = buildHostToLocalTabIdMap({
+    terminalSurfaces: terminalSurfaceTabs,
+    terminalTabs: mirroredTerminalTabEntries,
+    browserTabs: mirroredBrowserTabs,
+    editorTabs: mirroredEditorTabs
+  })
+  updateHostSessionTabIdMappings({
+    environmentId,
+    worktreeId,
+    terminalSurfaces: terminalSurfaceTabs,
+    terminalTabs: mirroredTerminalTabEntries,
+    browserTabs: mirroredBrowserTabs,
+    editorTabs: mirroredEditorTabs
+  })
 
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
   const nextGroups = (() => {
     if (!nextUnifiedTabs || nextUnifiedTabs.length === 0) {
       return null
+    }
+    if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
+      return buildMirroredHostGroups({
+        currentGroups,
+        hostGroups: snapshot.tabGroups,
+        hostToLocalTabId,
+        mirroredUnifiedIds,
+        nextActiveUnifiedTabId,
+        validUnifiedTabIds,
+        worktreeId
+      })
     }
     const strippedGroups = currentGroups.map((group) => ({
       ...group,
@@ -1312,9 +1604,15 @@ export function applyWebSessionTabsSnapshot(
       ...retainedUnifiedTabs.map((tab) => tab.id),
       ...mirroredUnifiedTabs.map((tab) => tab.id)
     ])
+    const hostTabBarOrder =
+      snapshot.tabGroups?.flatMap((group) =>
+        group.tabOrder
+          .map((tabId) => hostToLocalTabId.get(tabId))
+          .filter((tabId): tabId is string => tabId !== undefined && validTabBarIds.has(tabId))
+      ) ?? []
     return [
       ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredUnifiedIds.has(tabId)),
-      ...mirroredUnifiedTabs.map((tab) => tab.id)
+      ...(hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id))
     ]
   })()
 
@@ -1436,17 +1734,56 @@ export function applyWebSessionTabsSnapshot(
     nextGroups,
     sameGroups
   )
+  const nextActiveGroupId =
+    nextGroups?.find((group) => group.id === snapshot.activeGroupId)?.id ??
+    nextGroups?.find((group) => group.activeTabId === nextActiveUnifiedTabId)?.id ??
+    nextGroups?.[0]?.id ??
+    null
   const nextActiveGroupIdByWorktree =
-    nextGroups && state.activeGroupIdByWorktree[worktreeId] !== targetGroupId
-      ? { ...state.activeGroupIdByWorktree, [worktreeId]: targetGroupId }
+    nextGroups && state.activeGroupIdByWorktree[worktreeId] !== nextActiveGroupId
+      ? { ...state.activeGroupIdByWorktree, [worktreeId]: nextActiveGroupId ?? targetGroupId }
       : state.activeGroupIdByWorktree
-  const nextLayoutByWorktree =
-    nextGroups && !state.layoutByWorktree[worktreeId]
-      ? {
-          ...state.layoutByWorktree,
-          [worktreeId]: { type: 'leaf' as const, groupId: targetGroupId }
-        }
-      : state.layoutByWorktree
+  const nextLayoutByWorktree = (() => {
+    if (!nextGroups) {
+      return state.layoutByWorktree
+    }
+    const validGroupIds = new Set(nextGroups.map((group) => group.id))
+    const hostLayout = pruneTabGroupLayout(snapshot.tabGroupLayout, validGroupIds)
+    const defaultLeafLayout = { type: 'leaf' as const, groupId: nextActiveGroupId ?? targetGroupId }
+    const hostLayoutGroupIds = collectLayoutGroupIds(hostLayout ?? undefined)
+    const hostGroupIds = new Set(snapshot.tabGroups?.map((group) => group.id) ?? [])
+    const extraGroupIds = new Set(
+      nextGroups
+        .map((group) => group.id)
+        .filter((groupId) =>
+          hostLayout
+            ? !hostLayoutGroupIds.has(groupId)
+            : snapshot.tabGroups && snapshot.tabGroups.length > 0
+              ? !hostGroupIds.has(groupId)
+              : false
+        )
+    )
+    const localExtraLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], extraGroupIds)
+    const hostBaseLayout =
+      hostLayout ?? (snapshot.tabGroups && snapshot.tabGroups.length > 0 ? defaultLeafLayout : null)
+    const fallbackLayout =
+      appendTabGroupLayout(hostBaseLayout, localExtraLayout) ??
+      (snapshot.tabGroups && snapshot.tabGroups.length > 0
+        ? defaultLeafLayout
+        : state.layoutByWorktree[worktreeId]
+          ? null
+          : defaultLeafLayout)
+    if (!fallbackLayout) {
+      return state.layoutByWorktree
+    }
+    if (tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], fallbackLayout)) {
+      return state.layoutByWorktree
+    }
+    return {
+      ...state.layoutByWorktree,
+      [worktreeId]: fallbackLayout
+    }
+  })()
   const nextTabBarOrderByWorktree = withWorktreeEntry(
     state.tabBarOrderByWorktree,
     worktreeId,

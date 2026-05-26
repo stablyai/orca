@@ -39,8 +39,12 @@ describe('shared agent-hook-listener', () => {
   it('routes pathnames to a known source or null', () => {
     expect(resolveHookSource('/hook/claude')).toBe('claude')
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
+    expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
     expect(resolveHookSource('/hook/grok')).toBe('grok')
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
+    expect(resolveHookSource('/hook/pi')).toBe('pi')
+    expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -74,6 +78,129 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
+    const event = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'wire omp status'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp',
+      toolName: 'bash',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('normalizes Command Code hooks and reads turn text from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'Run pwd and report it' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'Need to run pwd.' },
+              { type: 'text', text: 'The output is /tmp/project.' }
+            ]
+          })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        toolName: 'shell_command',
+        toolInput: 'pwd'
+      })
+
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        lastAssistantMessage: 'The output is /tmp/project.'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
   it('trims surrounding whitespace from extracted prompt text', () => {
@@ -129,6 +256,322 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('')
+  })
+
+  it('normalizes Antigravity invocation and tool hooks', () => {
+    const started = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        hook_event_name: 'PreInvocation',
+        payload: { prompt: 'run tests' }
+      },
+      'production'
+    )
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run tests',
+      agentType: 'antigravity'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        hook_event_name: 'PreToolUse',
+        payload: {
+          toolCall: {
+            name: 'run_command',
+            args: { CommandLine: 'pnpm test' }
+          }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run tests',
+      agentType: 'antigravity',
+      toolName: 'run_command',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('reads Antigravity user requests from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content:
+            '<USER_REQUEST>\nFix the failing test\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nignored\n</ADDITIONAL_METADATA>'
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+
+      expect(started?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Fix the failing test',
+        agentType: 'antigravity'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the cached Antigravity prompt instead of rescanning the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-cached-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: '<USER_REQUEST>\nFirst request\n</USER_REQUEST>'
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+      expect(started?.payload.prompt).toBe('First request')
+
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: '<USER_REQUEST>\nSecond request\n</USER_REQUEST>'
+        })}\n`,
+        { flag: 'a' }
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PostToolUse',
+          payload: { transcriptPath, toolCall: { name: 'run_command' } }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('First request')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('maps Antigravity feedback tools to waiting state', () => {
+    const question = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PreToolUse',
+        payload: {
+          toolCall: {
+            name: 'ask_question',
+            args: { Prompt: 'Which path should I use?' }
+          }
+        }
+      },
+      'production'
+    )
+    expect(question?.payload).toMatchObject({
+      state: 'waiting',
+      agentType: 'antigravity',
+      toolName: 'ask_question',
+      toolInput: 'Which path should I use?'
+    })
+
+    const permission = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PreToolUse',
+        payload: {
+          toolCall: {
+            name: 'ask_permission',
+            args: { Action: 'run command', Target: 'pnpm lint' }
+          }
+        }
+      },
+      'production'
+    )
+    expect(permission?.payload).toMatchObject({
+      state: 'waiting',
+      agentType: 'antigravity',
+      toolName: 'ask_permission',
+      toolInput: 'run command'
+    })
+  })
+
+  it('resets Antigravity tool state on a new invocation', () => {
+    normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PreToolUse',
+        payload: {
+          toolCall: { name: 'run_command', args: { CommandLine: 'pnpm test' } }
+        }
+      },
+      'production'
+    )
+
+    const nextTurn = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PreInvocation',
+        payload: { prompt: 'new task' }
+      },
+      'production'
+    )
+
+    expect(nextTurn?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'new task',
+      agentType: 'antigravity'
+    })
+    expect(nextTurn?.payload.toolName).toBeUndefined()
+    expect(nextTurn?.payload.toolInput).toBeUndefined()
+  })
+
+  it('normalizes Antigravity Stop hooks and reads final text from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({ source: 'USER', type: 'REQUEST', content: 'hi' }),
+          JSON.stringify({
+            source: 'MODEL',
+            type: 'PLANNER_RESPONSE',
+            content: 'Antigravity is wired up.'
+          })
+        ].join('\n')}\n`
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'Stop',
+          payload: { fullyIdle: true, transcriptPath }
+        },
+        'production'
+      )
+
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        prompt: 'hi',
+        agentType: 'antigravity',
+        lastAssistantMessage: 'Antigravity is wired up.'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('normalizes Antigravity Stop to done even when fullyIdle is false', () => {
+    const event = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { fullyIdle: false }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      agentType: 'antigravity'
+    })
+  })
+
+  it('ignores late Antigravity tool hooks after a completed Stop for the same transcript', () => {
+    const transcriptPath = '/tmp/antigravity-transcript.jsonl'
+    const done = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { transcriptPath, fullyIdle: true }
+      },
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+
+    const lateTool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PostToolUse',
+        payload: {
+          transcriptPath,
+          toolCall: { name: 'run_command', args: { CommandLine: 'pwd' } }
+        }
+      },
+      'production'
+    )
+
+    expect(lateTool).toBeNull()
+  })
+
+  it('treats Antigravity Stop transcripts as pending result text', () => {
+    expect(
+      hasPendingAgentResultText('antigravity', {
+        hook_event_name: 'Stop',
+        payload: { transcriptPath: '/tmp/antigravity-transcript.jsonl' }
+      })
+    ).toBe(true)
+    expect(
+      hasPendingAgentResultText('antigravity', {
+        hook_event_name: 'Stop',
+        payload: {
+          transcriptPath: '/tmp/antigravity-transcript.jsonl',
+          last_assistant_message: 'done'
+        }
+      })
+    ).toBe(false)
   })
 
   it('normalizes Grok hookEventName payloads and keeps prompt across tool events', () => {
@@ -431,6 +874,72 @@ describe('shared agent-hook-listener', () => {
     )
     expect(pluginTool?.payload.toolName).toBe('custom_plugin_tool')
     expect(pluginTool?.payload.toolInput).toBe('agent hooks')
+  })
+
+  it('clears stale Codex tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
+  })
+
+  it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
   })
 
   it('normalizes Hermes post_llm_call to done with assistant text', () => {

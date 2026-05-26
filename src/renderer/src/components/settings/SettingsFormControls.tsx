@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: these small settings form primitives and controls
 co-locate shared layout and keyboard interaction logic, which keeps the settings
 panel wiring simple even though the file exceeds the default line limit. */
+import type React from 'react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
@@ -8,6 +9,221 @@ import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { BUILTIN_TERMINAL_THEME_NAMES, normalizeColor } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import { cn } from '@/lib/utils'
+
+type SettingsSwitchProps = {
+  checked: boolean
+  onChange: () => void
+  ariaLabel?: string
+  ariaLabelledBy?: string
+  disabled?: boolean
+}
+
+export function SettingsSwitch({
+  checked,
+  onChange,
+  ariaLabel,
+  ariaLabelledBy,
+  disabled
+}: SettingsSwitchProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5'
+        )}
+      />
+    </button>
+  )
+}
+
+type SettingsRowProps = {
+  label: React.ReactNode
+  description?: React.ReactNode
+  control: React.ReactNode
+  /** Optional id applied to the label so the control can reference it via aria-labelledby. */
+  labelId?: string
+  /** When true, top-align label/description and control. Useful for tall control columns. */
+  alignTop?: boolean
+}
+
+/** Two-column row grammar: left min-w-0 label+description, right shrink-0 control. */
+export function SettingsRow({
+  label,
+  description,
+  control,
+  labelId,
+  alignTop
+}: SettingsRowProps): React.JSX.Element {
+  return (
+    <div
+      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+    >
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Label id={labelId}>{label}</Label>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className="shrink-0">{control}</div>
+    </div>
+  )
+}
+
+type SettingsSwitchRowProps = {
+  label: React.ReactNode
+  description?: React.ReactNode
+  checked: boolean
+  onChange: () => void
+  ariaLabel?: string
+}
+
+export function SettingsSwitchRow({
+  label,
+  description,
+  checked,
+  onChange,
+  ariaLabel
+}: SettingsSwitchRowProps): React.JSX.Element {
+  return (
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
+        <SettingsSwitch
+          checked={checked}
+          onChange={onChange}
+          ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
+        />
+      }
+    />
+  )
+}
+
+type SegmentedOption<T extends string | number> = {
+  value: T
+  label: React.ReactNode
+  disabled?: boolean
+  ariaLabel?: string
+}
+
+type SettingsSegmentedControlProps<T extends string | number> = {
+  value: T
+  onChange: (value: T) => void
+  options: readonly SegmentedOption<T>[]
+  ariaLabel?: string
+  size?: 'sm' | 'md'
+}
+
+/** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
+export function SettingsSegmentedControl<T extends string | number>({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  size = 'md'
+}: SettingsSegmentedControlProps<T>): React.JSX.Element {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex items-center rounded-md border border-border bg-background/50 p-0.5"
+    >
+      {options.map((opt) => {
+        const active = opt.value === value
+        return (
+          <button
+            key={String(opt.value)}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={opt.ariaLabel}
+            disabled={opt.disabled}
+            onClick={() => {
+              if (!opt.disabled) {
+                onChange(opt.value)
+              }
+            }}
+            className={cn(
+              'rounded-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+              active
+                ? 'bg-accent font-medium text-accent-foreground'
+                : opt.disabled
+                  ? 'cursor-not-allowed text-muted-foreground/50'
+                  : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+type SettingsBadgeProps = {
+  tone?: 'neutral' | 'accent' | 'muted'
+  children: React.ReactNode
+  className?: string
+}
+
+/** Tokenized badge for status pills inside settings (e.g. Detected, Not installed). */
+export function SettingsBadge({
+  tone = 'neutral',
+  children,
+  className
+}: SettingsBadgeProps): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
+        tone === 'accent'
+          ? 'border-foreground/20 bg-foreground/10 text-foreground'
+          : tone === 'muted'
+            ? 'border-border/40 bg-muted/30 text-muted-foreground'
+            : 'border-border/50 bg-background/50 text-foreground/80',
+        className
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+type SettingsSubsectionHeaderProps = {
+  title: React.ReactNode
+  description?: React.ReactNode
+  action?: React.ReactNode
+}
+
+/** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
+export function SettingsSubsectionHeader({
+  title,
+  description,
+  action
+}: SettingsSubsectionHeaderProps): React.JSX.Element {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
 
 type ThemePickerProps = {
   label: string
@@ -43,6 +259,11 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  /** Fires with whichever option the user is currently highlighting in the
+   *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
+   *  highlighted / the dropdown is closed. Lets a consumer show a live
+   *  preview of the font without committing the selection. */
+  onPreviewFontFamily?: (font: string | null) => void
 }
 
 export function ThemePicker({
@@ -119,26 +340,26 @@ export function ColorField({
   const normalized = normalizeColor(value, fallback)
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <input
-          type="color"
-          value={normalized}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-12 rounded-md border border-input bg-transparent p-1"
-        />
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={fallback}
-          className="max-w-xs text-xs"
-        />
-      </div>
-    </div>
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={normalized}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-10 rounded-md border border-input bg-transparent p-1"
+          />
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={fallback}
+            className="w-32 text-xs"
+          />
+        </div>
+      }
+    />
   )
 }
 
@@ -181,34 +402,37 @@ export function NumberField({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <Input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              commit()
-            }
-          }}
-          className="number-input-clean w-28 tabular-nums"
-        />
-        {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Current: {value}
-        {defaultValue !== undefined ? ` · Default: ${defaultValue}` : ''}
-      </p>
-    </div>
+    <SettingsRow
+      label={label}
+      description={
+        <>
+          {description}
+          {defaultValue !== undefined ? (
+            <span className="ml-1 text-muted-foreground/70">· Default: {defaultValue}</span>
+          ) : null}
+        </>
+      }
+      control={
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                commit()
+              }
+            }}
+            className="number-input-clean w-24 tabular-nums"
+          />
+          {suffix ? <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span> : null}
+        </div>
+      }
+    />
   )
 }
 
@@ -216,7 +440,8 @@ export function FontAutocomplete({
   value,
   suggestions,
   onChange,
-  placeholder = 'SF Mono'
+  placeholder = 'SF Mono',
+  onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -292,6 +517,31 @@ export function FontAutocomplete({
 
     optionRefs.current.get(highlightedFont)?.scrollIntoView({ block: 'nearest' })
   }, [filteredSuggestions, highlightedIndex, open])
+
+  // Why: notify the consumer of the currently-highlighted font so it can
+  // render a live preview. Closing the dropdown or moving past all options
+  // clears the preview back to the committed value.
+  useEffect(() => {
+    if (!onPreviewFontFamily) {
+      return
+    }
+    if (!open || highlightedIndex < 0) {
+      onPreviewFontFamily(null)
+      return
+    }
+    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
+  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
+
+  // Why: clear the live preview if this autocomplete is unmounted while a
+  // hovered preview is still active (e.g. the section is filtered out by
+  // settings search) — otherwise the consumer keeps showing a stale font.
+  useEffect(
+    () => () => {
+      onPreviewFontFamily?.(null)
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)

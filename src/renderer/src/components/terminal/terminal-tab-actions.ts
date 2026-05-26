@@ -109,9 +109,21 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
   const state = useAppStore.getState()
   const currentTabs = state.tabsByWorktree[activeWorktreeId] ?? []
   state.setActiveTab(tabId)
+  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
   for (const tab of currentTabs) {
     if (tab.id !== tabId) {
-      state.closeTab(tab.id)
+      if (closeHostTerminalTabs) {
+        // Why: paired web tabs are host-owned; local-only bulk close leaves
+        // the host to re-publish the supposedly closed terminal tabs.
+        void closeWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId: tab.id,
+          environmentId: runtimeEnvironmentId
+        })
+      } else {
+        state.closeTab(tab.id)
+      }
     }
   }
 }
@@ -124,6 +136,8 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   const state = useAppStore.getState()
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
   const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
   const terminalIds = currentTerminalTabs.map((t) => t.id)
   const terminalIdSet = new Set(terminalIds)
   const orderedIds = reconcileTabOrder(
@@ -139,7 +153,17 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   const rightIds = orderedIds.slice(index + 1)
   for (const id of rightIds) {
     if (terminalIdSet.has(id)) {
-      state.closeTab(id)
+      if (closeHostTerminalTabs) {
+        // Why: paired web tabs are host-owned; local-only bulk close leaves
+        // the host to re-publish the supposedly closed terminal tabs.
+        void closeWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId: id,
+          environmentId: runtimeEnvironmentId
+        })
+      } else {
+        state.closeTab(id)
+      }
     } else {
       useAppStore.getState().closeFile(id)
     }

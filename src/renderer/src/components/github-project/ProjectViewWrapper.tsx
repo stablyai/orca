@@ -5,7 +5,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ExternalLink,
-  Loader,
   RefreshCw,
   KanbanSquare,
   Map as MapIcon,
@@ -84,6 +83,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   )
 
   const [loading, setLoading] = useState(false)
+  const fetchRunIdRef = useRef(0)
   const [error, setError] = useState<{
     error: GitHubProjectViewError
     totalCount?: number
@@ -111,6 +111,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
   const doFetch = useCallback(
     async (selection: ResolvedProjectSelection, force = false, queryOverride?: string) => {
+      const runId = fetchRunIdRef.current + 1
+      fetchRunIdRef.current = runId
       setLoading(true)
       setError(null)
       try {
@@ -128,7 +130,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
-        setLoading(false)
+        // Why: a manual refresh can overlap with a tab/search fetch; an older
+        // request finishing first must not clear the newer refresh indicator.
+        if (fetchRunIdRef.current === runId) {
+          setLoading(false)
+        }
       }
     },
     [fetchProjectViewTable]
@@ -582,7 +588,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-none items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
+      <div className="flex min-w-0 flex-none flex-wrap items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
         <ProjectPicker
           activeProject={
             activeProject && table
@@ -665,7 +671,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 cursor-pointer disabled:pointer-events-auto disabled:cursor-wait"
               onClick={() => {
                 if (!activeProject || !currentCacheKey) {
                   return
@@ -686,7 +692,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                   currentAppliedOverride
                 )
               }}
-              aria-label="Refresh"
+              disabled={loading}
+              aria-busy={loading}
+              aria-label={loading ? 'Refreshing' : 'Refresh'}
+              title={loading ? 'Refreshing' : 'Refresh'}
             >
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
             </Button>
@@ -714,10 +723,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           Choose a project to get started.
         </div>
       ) : loading && !table ? (
-        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          <Loader className="mr-2 size-4 animate-spin" />
-          Loading project view…
-        </div>
+        <ProjectTableSkeleton />
       ) : error ? (
         <ErrorState
           error={error.error}
@@ -899,7 +905,7 @@ function ProjectSearchInput({
   }, [])
 
   return (
-    <div className="relative min-w-[280px] flex-1 max-w-xl">
+    <div className="relative min-w-0 max-w-xl flex-1 basis-64">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
@@ -1081,6 +1087,49 @@ function ErrorState({
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
           <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// Why: matches the shape of ProjectViewList's header + rows so the table
+// doesn't visibly jump in height when real data lands. A 12-row stub fills
+// a typical viewport at the table's min-h-10 row height.
+function ProjectTableSkeleton(): React.JSX.Element {
+  const headerCols = 6
+  const bodyCols = 5
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Loading project view"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className="grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2">
+        <div
+          className="grid items-center gap-3"
+          style={{
+            gridTemplateColumns: `repeat(${headerCols}, minmax(0, 1fr))`
+          }}
+        >
+          {Array.from({ length: headerCols }).map((_, i) => (
+            <div key={i} className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+          ))}
+        </div>
+      </div>
+      <div className="divide-y divide-border/30">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            className="grid min-h-10 items-center gap-3 px-3 py-2"
+            style={{ gridTemplateColumns: `repeat(${bodyCols}, minmax(0, 1fr))` }}
+          >
+            <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+            <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
+            <div className="h-4 w-2/5 animate-pulse rounded-full bg-muted/60" />
+            <div className="h-4 w-3/5 animate-pulse rounded bg-muted/60" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/60" />
+          </div>
+        ))}
       </div>
     </div>
   )

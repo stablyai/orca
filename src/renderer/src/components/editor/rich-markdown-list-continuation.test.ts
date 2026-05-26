@@ -6,6 +6,7 @@ import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
   convertEmptyNestedOrderedItemToContinuation,
+  exitTrailingEmptyOrderedListItem,
   isSingleEmptyTopLevelOrderedList
 } from './rich-markdown-list-continuation'
 
@@ -17,6 +18,24 @@ function createEditor(content: object): Editor {
     extensions,
     content
   })
+}
+
+function firstEmptyParagraphPosition(editor: Editor): number {
+  let position: number | null = null
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'paragraph' && node.content.size === 0) {
+      position = pos + 1
+      return false
+    }
+
+    return true
+  })
+
+  if (position === null) {
+    throw new Error('Expected an empty paragraph in the test document')
+  }
+
+  return position
 }
 
 describe('rich markdown list continuation', () => {
@@ -139,6 +158,65 @@ describe('rich markdown list continuation', () => {
       expect(isSingleEmptyTopLevelOrderedList(editor)).toBe(false)
       expect(commitEmptyOrderedListMarkerAsText(editor)).toBe(false)
       expect(editor.getMarkdown()).toBe('1. Parent')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('exits a loaded trailing empty ordered-list item into a body paragraph', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          attrs: { start: 1, type: null },
+          content: [
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 1' }] }]
+            },
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 2' }] }]
+            },
+            { type: 'listItem', content: [{ type: 'paragraph' }] }
+          ]
+        },
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Next section' }] }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(firstEmptyParagraphPosition(editor))
+
+      expect(exitTrailingEmptyOrderedListItem(editor)).toBe(true)
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.selection.$from.depth).toBe(1)
+      expect(editor.state.doc.toJSON()).toEqual({
+        type: 'doc',
+        content: [
+          {
+            type: 'orderedList',
+            attrs: { start: 1, type: null },
+            content: [
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 1' }] }]
+              },
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 2' }] }]
+              }
+            ]
+          },
+          { type: 'paragraph' },
+          {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'Next section' }]
+          }
+        ]
+      })
     } finally {
       editor.destroy()
     }

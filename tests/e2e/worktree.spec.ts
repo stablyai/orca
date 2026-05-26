@@ -57,14 +57,11 @@ test.describe('Create Workspace', () => {
     const workspaceName = `e2e-create-${Date.now()}`
 
     try {
-      // 1. Open the composer. Using the store setter (not clicking the
-      // sidebar affordance) keeps the spec stable under sidebar refactors;
-      // the modal open path itself is not what #1186 broke.
-      await orcaPage.evaluate(() => {
-        window.__store?.getState().openModal('new-workspace-composer')
-      })
+      // 1. Open the composer through the visible affordance so the lazy modal
+      // mount path stays covered along with the composer body.
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 
-      const dialog = orcaPage.getByRole('dialog', { name: /Create Workspace/i })
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
 
       // Wait for the composer to settle. The card fires several async effects
@@ -96,10 +93,10 @@ test.describe('Create Workspace', () => {
       await expect(nameInput).toBeVisible()
       await nameInput.fill(workspaceName)
 
-      // 4. Click Create Workspace. This fires the full submitQuick path:
+      // 4. Click Create. This fires the full submitQuick path:
       // createWorktree IPC, applyWorktreeMeta, activateAndRevealWorktree,
       // and closeModal via onCreated.
-      const createButton = dialog.getByRole('button', { name: /Create Workspace/i })
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
       await expect(createButton).toBeEnabled()
       await createButton.click()
 
@@ -145,6 +142,114 @@ test.describe('Create Workspace', () => {
     } finally {
       orcaPage.off('console', onConsole)
       // Best-effort close if the test failed mid-flow and left the modal open.
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('reuses a resolved pasted GitHub URL when quick create submits', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const title = `E2E smart URL resolution ${Date.now()}`
+    const url = 'https://github.com/stablyai/orca/pull/2049'
+    const titlePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+
+      await electronApp.evaluate(
+        ({ ipcMain }, { title, url }) => {
+          const counters = globalThis as unknown as {
+            __smartGitHubLookupCount: number
+            __smartResolvePrBaseCount: number
+          }
+          counters.__smartGitHubLookupCount = 0
+          counters.__smartResolvePrBaseCount = 0
+          ipcMain.removeHandler('gh:workItemByOwnerRepo')
+          ipcMain.handle(
+            'gh:workItemByOwnerRepo',
+            (
+              _event: unknown,
+              args: {
+                number: number
+                repoId?: string
+              }
+            ) => {
+              counters.__smartGitHubLookupCount += 1
+              return {
+                id: `e2e-pr-${args.number}`,
+                type: 'pr',
+                number: args.number,
+                title,
+                state: 'open',
+                url,
+                labels: [],
+                updatedAt: '2026-05-26T00:00:00.000Z',
+                author: 'e2e',
+                repoId: args.repoId ?? 'e2e-repo'
+              }
+            }
+          )
+          ipcMain.removeHandler('worktrees:resolvePrBase')
+          ipcMain.handle('worktrees:resolvePrBase', () => {
+            counters.__smartResolvePrBaseCount += 1
+            return { baseBranch: 'origin/main' }
+          })
+        },
+        { title, url }
+      )
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+      await nameInput.fill(url)
+
+      await expect
+        .poll(() =>
+          electronApp.evaluate(() => {
+            const counters = globalThis as unknown as {
+              __smartGitHubLookupCount?: number
+              __smartResolvePrBaseCount?: number
+            }
+            return {
+              githubLookupCount: counters.__smartGitHubLookupCount ?? -1,
+              resolvePrBaseCount: counters.__smartResolvePrBaseCount ?? -1
+            }
+          })
+        )
+        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 0 })
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(orcaPage.getByRole('option', { name: titlePattern })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect
+        .poll(() =>
+          electronApp.evaluate(() => {
+            const counters = globalThis as unknown as {
+              __smartGitHubLookupCount?: number
+              __smartResolvePrBaseCount?: number
+            }
+            return {
+              githubLookupCount: counters.__smartGitHubLookupCount ?? -1,
+              resolvePrBaseCount: counters.__smartResolvePrBaseCount ?? -1
+            }
+          })
+        )
+        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 0 })
+    } finally {
       await orcaPage
         .evaluate(() => {
           window.__store?.getState().closeModal()

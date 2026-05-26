@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this browser runtime client owns the E2EE
    WebSocket state machine, JSON-RPC request routing, streaming callbacks, and
    binary frame forwarding as one transport boundary. */
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type { WebPairingOffer } from './web-pairing'
 import {
@@ -50,7 +50,9 @@ export type WebRuntimeSubscriptionHandle = {
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 10_000
+const FILE_WATCH_READY_CLEANUP_TIMEOUT_MS = 5_000
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
+const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 
 export class WebRuntimeClient {
   private ws: WebSocket | null = null
@@ -101,6 +103,12 @@ export class WebRuntimeClient {
     callbacks: SubscriptionCallbacks,
     options?: { timeoutMs?: number }
   ): Promise<WebRuntimeSubscriptionHandle> {
+    if (SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)) {
+      // Why: file watches are text-only and already have an explicit
+      // files.unwatch RPC, so sharing the main socket avoids exhausting the
+      // server's WebSocket connection cap in large browser sessions.
+      return this.subscribeSharedFileWatch(params, callbacks, options)
+    }
     const client = new WebRuntimeClient(this.pairing)
     this.childClients.add(client)
     const closeChild = (notifySubscriptions = false): void => {
@@ -135,6 +143,112 @@ export class WebRuntimeClient {
     } catch (error) {
       closeChild()
       throw error
+    }
+  }
+
+  private async subscribeSharedFileWatch(
+    params: unknown,
+    callbacks: SubscriptionCallbacks,
+    options?: { timeoutMs?: number }
+  ): Promise<WebRuntimeSubscriptionHandle> {
+    let stopped = false
+    let remoteSubscriptionId: string | null = null
+    let unwatchStarted = false
+    let handle: WebRuntimeSubscriptionHandle | null = null
+    let readyCleanupTimer: number | null = null
+    const clearReadyCleanupTimer = (): void => {
+      if (readyCleanupTimer === null) {
+        return
+      }
+      window.clearTimeout(readyCleanupTimer)
+      readyCleanupTimer = null
+    }
+    const dropLocalSubscription = (): void => {
+      clearReadyCleanupTimer()
+      handle?.unsubscribe()
+    }
+    const schedulePreReadyCleanup = (): void => {
+      if (readyCleanupTimer !== null) {
+        return
+      }
+      // Why: if a stopped watch never reaches ready/error, no remote id exists
+      // to unwatch; bound the lifetime of the local callback on this socket.
+      readyCleanupTimer = window.setTimeout(() => {
+        readyCleanupTimer = null
+        handle?.unsubscribe()
+      }, FILE_WATCH_READY_CLEANUP_TIMEOUT_MS)
+    }
+    const unwatchAndDropLocalSubscription = (): void => {
+      if (unwatchStarted) {
+        return
+      }
+      unwatchStarted = true
+      if (!remoteSubscriptionId) {
+        dropLocalSubscription()
+        return
+      }
+      clearReadyCleanupTimer()
+      // Why: shared files.watch streams stay on this socket, so stop the
+      // server watcher before removing the local callback that receives ready.
+      void this.call(
+        'files.unwatch',
+        { subscriptionId: remoteSubscriptionId },
+        { timeoutMs: 5_000 }
+      )
+        .catch((error) => {
+          console.warn('Failed to unwatch remote file subscription:', error)
+        })
+        .finally(() => {
+          dropLocalSubscription()
+        })
+    }
+    const wrappedCallbacks: SubscriptionCallbacks = {
+      ...callbacks,
+      onResponse: (response) => {
+        if (isFileWatchReadyResponse(response)) {
+          remoteSubscriptionId = response.result.subscriptionId
+          if (stopped) {
+            unwatchAndDropLocalSubscription()
+            return
+          }
+        }
+        if (!stopped) {
+          callbacks.onResponse(response)
+        } else if (response.ok === false) {
+          dropLocalSubscription()
+        }
+      },
+      onError: (error) => {
+        if (!stopped) {
+          callbacks.onError?.(error)
+        }
+      },
+      onClose: () => {
+        if (!stopped) {
+          callbacks.onClose?.()
+        }
+      }
+    }
+    handle = await this.subscribeOnCurrentConnection(
+      'files.watch',
+      params,
+      wrappedCallbacks,
+      options
+    )
+
+    return {
+      unsubscribe: () => {
+        if (stopped) {
+          return
+        }
+        stopped = true
+        if (remoteSubscriptionId) {
+          unwatchAndDropLocalSubscription()
+        } else {
+          schedulePreReadyCleanup()
+        }
+      },
+      sendBinary: (bytes) => handle?.sendBinary(bytes)
     }
   }
 
@@ -526,6 +640,21 @@ function isRuntimeFailureResponse(
     !!response.error &&
     typeof response.error === 'object' &&
     'code' in response.error
+  )
+}
+
+function isFileWatchReadyResponse(
+  response: RuntimeRpcResponse<unknown>
+): response is RuntimeRpcSuccess<{ type: 'ready'; subscriptionId: string }> {
+  if (!response.ok) {
+    return false
+  }
+  const result = response.result
+  return (
+    !!result &&
+    typeof result === 'object' &&
+    (result as { type?: unknown }).type === 'ready' &&
+    typeof (result as { subscriptionId?: unknown }).subscriptionId === 'string'
   )
 }
 

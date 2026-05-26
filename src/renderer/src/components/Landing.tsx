@@ -4,6 +4,7 @@ import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
+import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import logo from '../../../../resources/logo.svg'
 
 type ShortcutItem = {
@@ -30,7 +31,7 @@ function getPreflightIssues(status: {
     issues.push({
       id: 'git',
       title: 'Git is not installed',
-      description: 'Git is required for Git repositories, source control, and worktree management.',
+      description: 'Git is required for Git projects, source control, and workspace management.',
       fixLabel: 'Install Git',
       fixUrl: 'https://git-scm.com/downloads'
     })
@@ -192,7 +193,9 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
+  const canCreateWorktree = repos.length > 0
+  const createTargetLabel =
+    canCreateWorktree && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -243,18 +246,20 @@ export default function Landing(): React.JSX.Element {
     return () => window.clearInterval(intervalId)
   }, [preflightIssues.length])
 
+  const createWorktreeKeys = useShortcutKeys('workspace.create')
+  const previousWorktreeKeys = useShortcutKeys('worktree.navigateUp')
+  const nextWorktreeKeys = useShortcutKeys('worktree.navigateDown')
   const shortcuts = useMemo<ShortcutItem[]>(() => {
-    // Use platform-appropriate modifier key labels so Windows users see Ctrl/Shift
-    // rather than the Mac-only ⌘/⇧ symbols.
-    const isMac = navigator.userAgent.includes('Mac')
-    const mod = isMac ? '⌘' : 'Ctrl'
-    const shift = isMac ? '⇧' : 'Shift'
     return [
-      { id: 'create', keys: [mod, 'N'], action: 'Create worktree' },
-      { id: 'up', keys: [mod, shift, '↑'], action: 'Move up worktree' },
-      { id: 'down', keys: [mod, shift, '↓'], action: 'Move down worktree' }
+      {
+        id: 'create',
+        keys: createWorktreeKeys,
+        action: `Create ${createTargetLabel.toLowerCase()}`
+      },
+      { id: 'up', keys: previousWorktreeKeys, action: 'Move up workspace' },
+      { id: 'down', keys: nextWorktreeKeys, action: 'Move down workspace' }
     ]
-  }, [])
+  }, [createTargetLabel, createWorktreeKeys, nextWorktreeKeys, previousWorktreeKeys])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -272,7 +277,7 @@ export default function Landing(): React.JSX.Element {
 
           <p className="text-sm text-muted-foreground text-center">
             {canCreateWorktree
-              ? 'Select a worktree from the sidebar to begin.'
+              ? 'Select a workspace from the sidebar to begin.'
               : 'Add a project to get started.'}
           </p>
 
@@ -288,11 +293,11 @@ export default function Landing(): React.JSX.Element {
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a Git project first' : undefined}
+              title={!canCreateWorktree ? 'Add a project first' : undefined}
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              Create Worktree
+              Create {createTargetLabel}
             </button>
           </div>
 

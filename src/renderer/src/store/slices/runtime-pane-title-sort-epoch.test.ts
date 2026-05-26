@@ -59,6 +59,32 @@ describe('runtimePaneTitle → sortEpoch', () => {
     expect(store.getState().sortEpoch).toBe(baseline)
   })
 
+  it('does not enumerate terminal tabs when the classification is unchanged', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
+      },
+      tabsByWorktree: {
+        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
+      }
+    })
+    store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
+    const baseline = store.getState().sortEpoch
+    store.setState({
+      tabsByWorktree: new Proxy(store.getState().tabsByWorktree, {
+        ownKeys() {
+          throw new Error('tabsByWorktree should not be enumerated')
+        }
+      })
+    })
+
+    store.getState().setRuntimePaneTitle('tab-1', 1, '⠙ Claude')
+
+    expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe('⠙ Claude')
+    expect(store.getState().sortEpoch).toBe(baseline)
+  })
+
   it('bumps sortEpoch when clearing a classified title back to none', () => {
     const store = createTestStore()
     seedStore(store, {
@@ -73,6 +99,32 @@ describe('runtimePaneTitle → sortEpoch', () => {
     const baseline = store.getState().sortEpoch
     store.getState().clearRuntimePaneTitle('tab-1', 1)
     expect(store.getState().sortEpoch).toBeGreaterThan(baseline)
+  })
+
+  it('does not enumerate terminal tabs when clearing an unclassified title', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
+      },
+      tabsByWorktree: {
+        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
+      }
+    })
+    store.getState().setRuntimePaneTitle('tab-1', 1, 'shell prompt')
+    const baseline = store.getState().sortEpoch
+    store.setState({
+      tabsByWorktree: new Proxy(store.getState().tabsByWorktree, {
+        ownKeys() {
+          throw new Error('tabsByWorktree should not be enumerated')
+        }
+      })
+    })
+
+    store.getState().clearRuntimePaneTitle('tab-1', 1)
+
+    expect(store.getState().runtimePaneTitlesByTabId['tab-1']).toBeUndefined()
+    expect(store.getState().sortEpoch).toBe(baseline)
   })
 
   it('does not bump sortEpoch when the changing pane belongs to the active worktree (set)', () => {

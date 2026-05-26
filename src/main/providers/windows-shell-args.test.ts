@@ -34,13 +34,20 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const piRestoreIndex = command.indexOf(
       '$env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR'
     )
+    const ompRestoreIndex = command.indexOf(
+      '$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR'
+    )
+    const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
 
     expect(command).not.toContain('$PROFILE')
     expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
     expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(piRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(promptIndex).toBeGreaterThan(piRestoreIndex)
+    expect(ompRestoreIndex).toBeGreaterThan(piRestoreIndex)
+    expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(codexRestoreIndex).toBeGreaterThan(ompRestoreIndex)
+    expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')
     expect(command).toContain(')]133;D;$fakeExitCode$(')
@@ -117,6 +124,26 @@ describe('resolveWindowsShellLaunchArgs', () => {
         value: originalPlatform
       })
     }
+  })
+
+  it('keeps POSIX cwd inside the worktree distro when WSL context is provided', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/home/alice/repo/subdir',
+      'C:\\Users\\alice',
+      { distro: 'Ubuntu' }
+    )
+
+    expect(result.shellArgs).toEqual([
+      '-d',
+      'Ubuntu',
+      '--',
+      'bash',
+      '-c',
+      "cd '/home/alice/repo/subdir' && exec bash -l"
+    ])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')
   })
 
   it('falls back to empty args + same cwd for unknown shells', () => {

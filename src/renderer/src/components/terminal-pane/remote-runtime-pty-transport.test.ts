@@ -494,7 +494,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
-  it('processes remote data chunks through title, bell, and OSC 9999 handlers before onData', async () => {
+  it('delivers cleaned remote data before deferred title, bell, and OSC 9999 handlers', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onData = vi.fn()
     const onTitleChange = vi.fn()
@@ -515,12 +515,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07after\x1b]0;. Claude working\x07\x07'
     )
 
-    expect(onAgentStatus).toHaveBeenCalledWith({
-      state: 'working',
-      prompt: 'ship it',
-      agentType: 'codex'
-    })
     expect(onData).toHaveBeenCalledWith('beforeafter\x1b]0;. Claude working\x07\x07')
+    await vi.waitFor(() =>
+      expect(onAgentStatus).toHaveBeenCalledWith({
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'codex'
+      })
+    )
     expect(onTitleChange).toHaveBeenCalledWith('. Claude working', '. Claude working')
     expect(onBell).toHaveBeenCalledTimes(1)
   })
@@ -546,12 +548,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07after'
     )
 
-    expect(onAgentStatus).toHaveBeenCalledWith({
-      state: 'working',
-      prompt: 'ship it',
-      agentType: 'codex'
-    })
     expect(onData).toHaveBeenCalledWith('beforeafter')
+    await vi.waitFor(() =>
+      expect(onAgentStatus).toHaveBeenCalledWith({
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'codex'
+      })
+    )
   })
 
   it('resubscribes without surfacing a PTY error when the remote runtime subscription closes', async () => {
@@ -661,7 +665,112 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('normalizes bare LF input to carriage returns before writing to the remote PTY', async () => {
+  it('returns runtime acceptance for acknowledged terminal input', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.send',
+      params: {
+        terminal: 'terminal-1',
+        text: '\x03',
+        client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('preserves queued remote input order before acknowledged terminal input', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'terminal.create') {
+          return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+        }
+        if (args.method === 'terminal.send') {
+          return Promise.resolve({
+            ok: true,
+            result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 2 } }
+          })
+        }
+        return Promise.resolve({ ok: true, result: {} })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      subscriptionSendBinary.mockClear()
+
+      expect(transport.sendInput('a')).toBe(true)
+      await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'terminal.send',
+        params: {
+          terminal: 'terminal-1',
+          text: 'a\x03',
+          client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+        },
+        timeoutMs: 15_000
+      })
+      expect(subscriptionSendBinary).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns false when acknowledged terminal input is rejected by the runtime', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(false)
+  })
+
+  it('preserves literal LF input when sending remote PTY binary frames', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -673,15 +782,18 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
       const { streamId } = latestSubscribePayload()
+      runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
+      expect(runtimeCall).not.toHaveBeenCalled()
+      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
       const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
-      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('echo one\recho two\r')
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('echo one\necho two\r\n')
     } finally {
       vi.useRealTimers()
     }
@@ -744,7 +856,9 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
 
     expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07')
-    expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
+    await vi.waitFor(() =>
+      expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
+    )
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
   })

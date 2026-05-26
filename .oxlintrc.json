@@ -69,6 +69,15 @@
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
       }
+    },
+    {
+      "files": [
+        "config/scripts/check-styled-scrollbars.mjs",
+        "config/scripts/styled-scrollbars/*.mjs"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+      }
     }
   ],
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]

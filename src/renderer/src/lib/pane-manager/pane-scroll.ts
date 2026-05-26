@@ -1,92 +1,188 @@
 import type { Terminal } from '@xterm/xterm'
 import type { ScrollState } from './pane-manager-types'
 
-// ---------------------------------------------------------------------------
-// Scroll restoration after reflow
-// ---------------------------------------------------------------------------
-
-// Why: xterm.js does NOT adjust viewportY for partially-scrolled buffers
-// during resize/reflow. Line N before reflow shows different content than
-// line N after reflow when wrapping changes (e.g. 80→40 cols makes each
-// line wrap to 2 rows). To preserve the user's scroll position, we find
-// the buffer line whose content matches what was at the top of the viewport
-// before the reflow, then scroll to it.
-//
-// Why hintRatio: terminals frequently contain duplicate short lines (shell
-// prompts, repeated log prefixes). A prefix-only search returns the first
-// match which may be far from the actual scroll position. The proportional
-// hint (viewportY / totalLines before reflow) disambiguates by preferring
-// the match closest to the expected position in the reflowed buffer.
-export function findLineByContent(terminal: Terminal, content: string, hintRatio?: number): number {
-  if (!content) {
-    return -1
+const terminalOutputEpochs = new WeakMap<Terminal, number>()
+const deferredScrollRestores = new WeakMap<
+  Terminal,
+  {
+    cancelled: boolean
+    rafIds: number[]
+    state: ScrollState
+    timeoutIds: ReturnType<typeof setTimeout>[]
   }
-  const buf = terminal.buffer.active
-  const totalLines = buf.baseY + terminal.rows
-  const prefix = content.substring(0, Math.min(content.length, 40))
-  if (!prefix) {
-    return -1
+>()
+
+export function recordTerminalOutput(terminal: Terminal): void {
+  terminalOutputEpochs.set(terminal, getTerminalOutputEpoch(terminal) + 1)
+}
+
+export function getTerminalOutputEpoch(terminal: Terminal): number {
+  return terminalOutputEpochs.get(terminal) ?? 0
+}
+
+export function cancelDeferredScrollRestore(terminal: Terminal): void {
+  const pending = deferredScrollRestores.get(terminal)
+  if (!pending) {
+    return
   }
-
-  const hintLine = hintRatio !== undefined ? Math.round(hintRatio * totalLines) : -1
-
-  let bestMatch = -1
-  let bestDistance = Infinity
-
-  for (let i = 0; i < totalLines; i++) {
-    const line = buf.getLine(i)?.translateToString(true)?.trimEnd() ?? ''
-    if (line.startsWith(prefix)) {
-      if (hintLine < 0) {
-        return i
-      }
-      const distance = Math.abs(i - hintLine)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestMatch = i
-      }
+  pending.cancelled = true
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const rafId of pending.rafIds) {
+      cancelAnimationFrame(rafId)
     }
   }
-  return bestMatch
+  for (const timeoutId of pending.timeoutIds) {
+    clearTimeout(timeoutId)
+  }
+  releaseScrollStateMarker(pending.state)
+  deferredScrollRestores.delete(terminal)
 }
 
 export function captureScrollState(terminal: Terminal): ScrollState {
   const buf = terminal.buffer.active
-  const bufferType = buf.type
   const viewportY = buf.viewportY
   const wasAtBottom = viewportY >= buf.baseY
-  const firstVisibleLineContent = buf.getLine(viewportY)?.translateToString(true)?.trimEnd() ?? ''
-  const totalLines = buf.baseY + terminal.rows
-  return { bufferType, wasAtBottom, firstVisibleLineContent, viewportY, totalLines }
+  return {
+    bufferType: buf.type,
+    wasAtBottom,
+    viewportY,
+    baseY: buf.baseY,
+    // Why: xterm markers track the same buffer line through resize reflow;
+    // a numeric viewport line alone can point at different content afterward.
+    firstVisibleLineMarker:
+      !wasAtBottom && buf.type === 'normal'
+        ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
+        : undefined
+  }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
-  if (state.wasAtBottom) {
-    terminal.scrollToBottom()
-    forceViewportScrollbarSync(terminal)
+  cancelDeferredScrollRestore(terminal)
+  restoreScrollStateNow(terminal, state)
+  releaseScrollStateMarker(state)
+}
+
+export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollState): void {
+  cancelDeferredScrollRestore(terminal)
+  restoreScrollStateNow(terminal, state)
+  if (typeof requestAnimationFrame !== 'function') {
+    releaseScrollStateMarker(state)
     return
   }
-  const hintRatio = state.totalLines > 0 ? state.viewportY / state.totalLines : undefined
-  const target = findLineByContent(terminal, state.firstVisibleLineContent, hintRatio)
-  if (target >= 0) {
-    terminal.scrollToLine(target)
+
+  const pending = {
+    cancelled: false,
+    rafIds: [] as number[],
+    state,
+    timeoutIds: [] as ReturnType<typeof setTimeout>[]
+  }
+  const restore = (): void => {
+    if (!pending.cancelled) {
+      restoreScrollStateNow(terminal, state)
+    }
+  }
+  const cancelPendingRafs = (): void => {
+    pending.cancelled = true
+    if (typeof cancelAnimationFrame !== 'function') {
+      return
+    }
+    for (const rafId of pending.rafIds) {
+      cancelAnimationFrame(rafId)
+    }
+  }
+  const firstRaf = requestAnimationFrame(() => {
+    restore()
+    if (pending.cancelled) {
+      return
+    }
+    const secondRaf = requestAnimationFrame(restore)
+    pending.rafIds.push(secondRaf)
+  })
+  const timeoutId = setTimeout(() => {
+    if (!pending.cancelled) {
+      restoreScrollStateNow(terminal, state)
+    }
+    // Why: background tabs can throttle rAF past the timeout. Once the
+    // authoritative timeout restore has run, stale frame callbacks must not
+    // later rewind a user-initiated scroll or follow-output jump.
+    cancelPendingRafs()
+    releaseScrollStateMarker(state)
+    deferredScrollRestores.delete(terminal)
+  }, 80)
+  pending.rafIds.push(firstRaf)
+  pending.timeoutIds.push(timeoutId)
+  deferredScrollRestores.set(terminal, pending)
+}
+
+function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
+  if (!terminal.element) {
+    return
+  }
+  const buf = terminal.buffer.active
+  if (state.bufferType === 'alternate' || buf.type !== state.bufferType) {
+    return
+  }
+
+  // Why: WebGL suspend disposes xterm's render service while leaving
+  // terminal.element attached, so scrollToBottom/scrollToLine/scrollLines all
+  // throw "cannot read dimensions" until the pane re-attaches. Swallow that
+  // window quietly — the next visibility flip re-fits and re-restores.
+  if (state.wasAtBottom) {
+    if (safeScrollCall(() => terminal.scrollToBottom())) {
+      forceViewportScrollbarSync(terminal)
+    }
+    return
+  }
+
+  const markerLine =
+    state.firstVisibleLineMarker && !state.firstVisibleLineMarker.isDisposed
+      ? state.firstVisibleLineMarker.line
+      : -1
+  const targetLine = Math.min(markerLine >= 0 ? markerLine : state.viewportY, buf.baseY)
+  state.viewportY = targetLine
+  // Why: deferred rAF/timeout restores re-invoke this function after xterm
+  // reflow settles; keep the marker alive so each call consults the live
+  // line. Callers (restoreScrollState, the timeout in
+  // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
+  if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
     forceViewportScrollbarSync(terminal)
   }
 }
 
-// Why: xterm 6's Viewport._sync() updates scrollDimensions after resize but
-// skips the scrollPosition update when ydisp matches _latestYDisp (a stale
-// internal value). This leaves the scrollbar thumb at a wrong position even
-// though the rendered content is correct. A scroll jiggle (-1/+1) in the
-// same JS turn forces _sync() to fire with a differing ydisp, which triggers
-// setScrollPosition and syncs the scrollbar. No paint occurs between the two
-// synchronous calls so the intermediate state is never visible.
+function safeScrollCall(fn: () => void): boolean {
+  try {
+    fn()
+    return true
+  } catch (err) {
+    // Why: xterm's renderer can null out internal dimensions during WebGL
+    // teardown, throwing "Cannot read properties of undefined (reading
+    // 'dimensions')". Tolerate that; surface anything else.
+    if (err instanceof TypeError && /dimensions/.test(err.message)) {
+      return false
+    }
+    throw err
+  }
+}
+
+function releaseScrollStateMarker(state: ScrollState): void {
+  state.firstVisibleLineMarker?.dispose()
+  state.firstVisibleLineMarker = undefined
+}
+
+// Why: xterm 6 can leave its scrollbar thumb stale when ydisp is unchanged.
+// A synchronous one-line jiggle updates the scrollbar without a visible paint.
 function forceViewportScrollbarSync(terminal: Terminal): void {
   const buf = terminal.buffer.active
+  if (buf.viewportY >= buf.baseY) {
+    // Why: jiggle-scrolling at bottom makes xterm stop following active output
+    // after split-pane resizes; scrollToBottom already places the thumb there.
+    return
+  }
   if (buf.viewportY > 0) {
-    terminal.scrollLines(-1)
-    terminal.scrollLines(1)
+    safeScrollCall(() => terminal.scrollLines(-1))
+    safeScrollCall(() => terminal.scrollLines(1))
   } else if (buf.viewportY < buf.baseY) {
-    terminal.scrollLines(1)
-    terminal.scrollLines(-1)
+    safeScrollCall(() => terminal.scrollLines(1))
+    safeScrollCall(() => terminal.scrollLines(-1))
   }
 }

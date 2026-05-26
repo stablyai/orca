@@ -13,9 +13,8 @@ import { scheduleSplitScrollRestore } from './pane-split-scroll'
 const scrollState = {
   bufferType: 'normal',
   wasAtBottom: true,
-  firstVisibleLineContent: '',
   viewportY: 0,
-  totalLines: 24
+  baseY: 0
 } satisfies ScrollState
 
 const alternateScrollState = {

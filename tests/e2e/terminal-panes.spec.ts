@@ -42,12 +42,7 @@ import {
 import { pressShortcut } from './helpers/shortcuts'
 
 async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {
-  const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] =
-    process.platform === 'win32' ? ['Control'] : []
-  await page
-    .locator('.xterm:visible')
-    .first()
-    .click({ button: 'right', position: { x: 40, y: 40 }, modifiers })
+  await openTerminalContextMenu(page)
   await page.getByText('Set Title…', { exact: true }).click()
   const titleInput = page.locator('.pane-title-input').first()
   await expect(titleInput).toBeVisible()
@@ -61,6 +56,24 @@ async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<
     await titleInput.evaluateAll(([input]) => (input as HTMLElement | undefined)?.blur())
   }
   await expect(titleInput).toHaveCount(0)
+}
+
+async function openTerminalContextMenu(page: Page): Promise<void> {
+  const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] = (await page.evaluate(() =>
+    navigator.userAgent.includes('Windows')
+  ))
+    ? ['Control']
+    : []
+  const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
+  await page
+    .locator('.xterm:visible')
+    .first()
+    .click({
+      button: isMac ? 'left' : 'right',
+      position: { x: 40, y: 40 },
+      modifiers: isMac ? ['Control'] : modifiers
+    })
+  await expect(page.getByText('Set Title…', { exact: true })).toBeVisible()
 }
 
 async function getTabCustomTitle(
@@ -209,6 +222,112 @@ test.describe('Terminal Panes', () => {
     await waitForTerminalOutput(orcaPage, `${marker}=${expectedPaneKey}`)
 
     expect(activeLeafId).toMatch(UUID_RE)
+  })
+
+  test('first Set Title from terminal context menu stays open for typing', async ({ orcaPage }) => {
+    const title = `First menu title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(250)
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+
+    await titleInput.fill(title)
+    await titleInput.press('Enter')
+
+    await expect(titleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
+  })
+
+  test('Set Title input stays open when clicked in a split terminal', async ({ orcaPage }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+
+    // Why: pane-level pointerdown focuses xterm for terminal clicks. Pane-local
+    // controls must be excluded or clicking the already-open title input blurs
+    // it and commits an empty title, which looks like the editor flashed closed.
+    await titleInput.evaluate((input) => {
+      const pointerInit: PointerEventInit = {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: 'mouse'
+      }
+      input.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      input.dispatchEvent(new PointerEvent('pointerup', pointerInit))
+      input.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await expect
+      .poll(
+        () => titleInput.evaluate((input) => input.isConnected && document.activeElement === input),
+        { timeout: 1_000 }
+      )
+      .toBe(true)
+
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+  })
+
+  test('Set Title survives an early blur during first focus handoff', async ({ orcaPage }) => {
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.evaluate(() => {
+      const blurOnFirstTitleFocus = (event: FocusEvent): void => {
+        const target = event.target
+        if (
+          !(target instanceof HTMLInputElement) ||
+          !target.classList.contains('pane-title-input')
+        ) {
+          return
+        }
+        document.removeEventListener('focusin', blurOnFirstTitleFocus, true)
+        queueMicrotask(() => target.blur())
+      }
+      document.addEventListener('focusin', blurOnFirstTitleFocus, true)
+    })
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(250)
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+  })
+
+  test('Set Title still commits by blur after focus settles', async ({ orcaPage }) => {
+    const title = `Blur commit title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(100)
+    await titleInput.fill(title)
+    await orcaPage
+      .locator('.xterm:visible')
+      .first()
+      .click({ position: { x: 40, y: 60 } })
+
+    await expect(titleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
   })
 
   test('Set Title stays pane-local during agent title churn', async ({ orcaPage }) => {

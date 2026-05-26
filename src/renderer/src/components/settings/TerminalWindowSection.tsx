@@ -139,7 +139,7 @@ export function TerminalWindowSection({
         title="Window Blur"
         description="Apply background blur to the terminal window. Requires restart."
         keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
-        className="space-y-3 px-1 py-2"
+        className="space-y-3 py-2"
       >
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
@@ -228,7 +228,7 @@ export function TerminalWindowSection({
         title="Hide Mouse While Typing"
         description="Hide the mouse cursor when typing in the terminal."
         keywords={['mouse', 'hide', 'typing', 'cursor']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Hide Mouse While Typing</Label>

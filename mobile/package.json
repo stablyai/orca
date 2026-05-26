@@ -30,6 +30,7 @@
     "expo-secure-store": "^55.0.13",
     "expo-splash-screen": "^55.0.20",
     "expo-status-bar": "^55.0.6",
+    "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "react": "^19.2.6",
     "react-native": "^0.83.9",
@@ -42,7 +43,7 @@
     "react-native-webview": "^13.16.1",
     "react-native-worklets": "^0.8.3",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
   },

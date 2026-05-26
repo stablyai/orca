@@ -79,6 +79,7 @@ function createDeps(
     storage,
     clipboardWrites,
     getCliStatus: vi.fn(async () => INSTALLED_CLI_STATUS),
+    showCliRegistrationPrompt: vi.fn(async () => undefined),
     installCli: vi.fn(async () => INSTALLED_CLI_STATUS),
     writeClipboardText: vi.fn(async (text: string) => {
       clipboardWrites.push(text)
@@ -183,6 +184,7 @@ describe('onboarding feature setup runner', () => {
       warnings: []
     })
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
     expect(deps.installCli).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).toHaveBeenCalledTimes(1)
     expect(deps.openComputerUsePermissionSetup).toHaveBeenCalledTimes(1)
@@ -208,6 +210,7 @@ describe('onboarding feature setup runner', () => {
     expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
     expect(deps.installCli).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
@@ -235,6 +238,7 @@ describe('onboarding feature setup runner', () => {
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.getCliStatus).not.toHaveBeenCalled()
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
     expect(deps.clipboardWrites).toEqual([])
   })
@@ -260,5 +264,33 @@ describe('onboarding feature setup runner', () => {
       }
     ])
     expect(deps.clipboardWrites).toEqual([])
+  })
+
+  it('shows CLI registration context before installing a missing CLI during onboarding', async () => {
+    const staleStatus: CliInstallStatus = {
+      ...INSTALLED_CLI_STATUS,
+      state: 'stale',
+      currentTarget: '/tmp/other-orca',
+      detail: '/usr/local/bin/orca points to a different launcher.'
+    }
+    const showCliRegistrationPrompt = vi.fn(async () => undefined)
+    const installCli = vi.fn(async () => INSTALLED_CLI_STATUS)
+    const deps = createDeps({
+      getCliStatus: vi.fn(async () => staleStatus),
+      showCliRegistrationPrompt,
+      installCli
+    })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: false, orchestration: false },
+      deps
+    )
+
+    expect(result.cliTouched).toBe(true)
+    expect(showCliRegistrationPrompt).toHaveBeenCalledTimes(1)
+    expect(installCli).toHaveBeenCalledTimes(1)
+    expect(showCliRegistrationPrompt.mock.invocationCallOrder[0]).toBeLessThan(
+      installCli.mock.invocationCallOrder[0]
+    )
   })
 })

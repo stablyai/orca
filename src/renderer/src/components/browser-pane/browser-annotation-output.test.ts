@@ -82,7 +82,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).toContain('**Source:** src/components/PricingCta.tsx:42:8')
     expect(markdown).toContain('**React:** <App> <PricingCta>')
     expect(markdown).toContain('**Intent:** change')
-    expect(markdown).toContain('**Priority:** important')
+    expect(markdown).not.toContain('**Priority:**')
     expect(markdown).toContain('- font-size: 16px')
     expect(markdown).toContain('**Feedback:** Make this primary action more obvious.')
   })

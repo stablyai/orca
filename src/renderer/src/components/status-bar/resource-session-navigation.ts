@@ -10,7 +10,7 @@ export type ResourceSessionNavigationDeps = {
   activateTabAndFocusPane: (
     tabId: string,
     leafId: string | null,
-    opts: { flashFocusedPane: true }
+    opts: { flashFocusedPane: true; scrollToBottomIfOutputSinceLastView: true }
   ) => void
 }
 
@@ -42,6 +42,7 @@ export function navigateResourceSessionToTab(
   // Legacy numeric keys degrade to tab-only activation instead of guessing.
   const parsed = paneKey ? parsePaneKey(paneKey) : null
   deps.activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null, {
-    flashFocusedPane: true
+    flashFocusedPane: true,
+    scrollToBottomIfOutputSinceLastView: true
   })
 }

@@ -34,10 +34,13 @@ export type AgentHookSource =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode'
   | 'cursor'
   | 'pi'
+  | 'omp'
   | 'droid'
+  | 'command-code'
   | 'grok'
   | 'copilot'
   | 'hermes'
@@ -54,6 +57,19 @@ export type AgentHookRelayEnvelope = {
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
   connectionId: null
+  /** Preserved from the relay-side normalized hook event so Orca can
+   *  distinguish a true same-prompt retry from a cached-prompt tool ping. */
+  hasExplicitPrompt?: boolean
+  /** Hook discriminator preserved for main-process transition rules. */
+  hookEventName?: string
+  /** Claude tool execution id, when the source hook provides one. */
+  toolUseId?: string
+  /** Claude subagent identity, when the source hook provides one. */
+  toolAgentId?: string
+  /** Claude agent type, used only as a lower-confidence identity fallback. */
+  toolAgentType?: string
+  /** True when the relay is replaying its cache after Orca reconnects. */
+  isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
    *  which marks transport location rather than dev/prod build env. */
   env?: string

@@ -30,7 +30,10 @@ import type {
 } from '../../../../shared/types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId
+} from '../../../../shared/worktree-id'
 
 // ─── View-model types (renderer-local) ──────────────────────────────
 
@@ -111,16 +114,7 @@ function deriveRepoIdFromWorktreeId(worktreeId: string): string {
 }
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
-  const parsed = splitWorktreeId(worktreeId)
-  if (!parsed) {
-    return worktreeId
-  }
-  const path = parsed.worktreePath
-  if (!path) {
-    return worktreeId
-  }
-  const parts = path.split(/[\\/]+/).filter(Boolean)
-  return parts.at(-1) ?? worktreeId
+  return getWorktreePathBasenameFromId(worktreeId) ?? worktreeId
 }
 
 function shortCwd(cwd: string): string {

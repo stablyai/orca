@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -31,11 +32,17 @@ const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
     badgeColor: OptionalString,
+    repoIcon: z
+      .unknown()
+      .transform((value) => sanitizeRepoIcon(value))
+      .optional(),
     hookSettings: z.unknown().optional(),
     worktreeBaseRef: OptionalString,
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
-    issueSourcePreference: z.enum(['auto', 'github', 'linear']).optional()
+    issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+    externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
+    externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional()
   })
 })
 
@@ -56,11 +63,35 @@ const RepoIssueCommandWrite = RepoSelector.extend({
   content: z.string()
 })
 
+const RepoSparsePresetSave = RepoSelector.extend({
+  id: OptionalString,
+  name: requiredString('Missing preset name'),
+  directories: z.array(z.string())
+})
+
 export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.list',
     params: null,
     handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
+  }),
+  defineMethod({
+    name: 'repo.sparsePresets',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => ({
+      presets: await runtime.listSparsePresets(params.repo)
+    })
+  }),
+  defineMethod({
+    name: 'repo.saveSparsePreset',
+    params: RepoSparsePresetSave,
+    handler: async (params, { runtime }) => ({
+      preset: await runtime.saveSparsePreset(params.repo, {
+        ...(params.id ? { id: params.id } : {}),
+        name: params.name,
+        directories: params.directories
+      })
+    })
   }),
   defineMethod({
     name: 'repo.add',
@@ -134,6 +165,11 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'repo.hooksCheck',
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+  }),
+  defineMethod({
+    name: 'repo.setupScriptImports',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.inspectRepoSetupScriptImports(params.repo)
   }),
   defineMethod({
     name: 'repo.issueCommandRead',

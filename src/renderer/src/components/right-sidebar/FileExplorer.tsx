@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
+import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -103,6 +104,7 @@ function FileExplorerInner(): React.JSX.Element {
     selectedPath,
     selectedPaths,
     setSingleSelectedPath,
+    setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
     preserveSelectionForContextMenu,
@@ -123,14 +125,12 @@ function FileExplorerInner(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
-  const { deleteShortcutLabel, requestDelete } = useFileDeletion({
+  const { deleteShortcutLabel, requestDelete, requestDeleteAll } = useFileDeletion({
     activeWorktreeId,
     openFiles,
     closeFile,
     refreshDir,
-    selectedPath,
-    setSelectedPath: setSingleSelectedPath,
-    isMac,
+    setSelectedPaths,
     isWindows
   })
 
@@ -288,14 +288,20 @@ function FileExplorerInner(): React.JSX.Element {
   }, [inlineInputIndex, virtualizer])
 
   const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
+  const selectedNodes = useMemo(
+    () => visibleFlatRows.filter((row) => selectedPaths.has(row.path)),
+    [visibleFlatRows, selectedPaths]
+  )
   useFileExplorerKeys({
     containerRef: explorerShellRef,
     flatRows: visibleFlatRows,
     inlineInput,
     selectedPaths,
     selectedNode,
+    selectedNodes,
     startRename,
-    requestDelete
+    requestDelete,
+    requestDeleteAll
   })
 
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
@@ -306,6 +312,20 @@ function FileExplorerInner(): React.JSX.Element {
     setSelectedPath: setSingleSelectedPath,
     scrollRef
   })
+
+  // Why: context-menu Delete should respect the multi-selection — if the
+  // right-clicked node is already part of a multi-selection, delete the whole
+  // set; otherwise fall through to single-node delete.
+  const handleContextMenuDelete = useCallback(
+    (node: TreeNode) => {
+      if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
+        requestDeleteAll(selectedNodes)
+      } else {
+        requestDelete(node)
+      }
+    },
+    [selectedPaths, selectedNodes, requestDelete, requestDeleteAll]
+  )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
@@ -321,6 +341,23 @@ function FileExplorerInner(): React.JSX.Element {
       collapseDirSubtree(activeWorktreeId, node.path)
     },
     [activeWorktreeId, collapseDirSubtree]
+  )
+  const seedFileSearchIncludePattern = useAppStore((s) => s.seedFileSearchIncludePattern)
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const handleFindInFolder = useCallback(
+    (node: (typeof flatRows)[number]) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      seedFileSearchIncludePattern(
+        activeWorktreeId,
+        folderRelativePathToIncludeGlob(node.relativePath)
+      )
+      setRightSidebarTab('search')
+      setRightSidebarOpen(true)
+    },
+    [activeWorktreeId, seedFileSearchIncludePattern, setRightSidebarTab, setRightSidebarOpen]
   )
 
   const handleAddFolderAsProject = useCallback(
@@ -339,7 +376,7 @@ function FileExplorerInner(): React.JSX.Element {
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        Select a worktree to browse files
+        Select a workspace to browse files
       </div>
     )
   }
@@ -351,14 +388,22 @@ function FileExplorerInner(): React.JSX.Element {
   const isEmptyState = visibleFlatRows.length === 0 && !inlineInput
   const isLoading = isEmptyState && (rootCache?.loading ?? true)
   const hasError = isEmptyState && !isLoading && !!rootError
-  const isEmpty = isEmptyState && !isLoading && !hasError
   const showTree = !isEmptyState
 
   return (
     <>
-      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+      <div
+        ref={explorerShellRef}
+        data-orca-explorer-shell
+        data-selected-folder-relative-path={
+          selectedNode?.isDirectory ? selectedNode.relativePath : undefined
+        }
+        className="flex h-full min-h-0 flex-col"
+      >
         <FileExplorerToolbar
           repoName={repoName}
+          worktreePath={worktreePath}
+          connectionId={activeRepo?.connectionId ?? null}
           refresh={manualRefresh}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
@@ -412,7 +457,7 @@ function FileExplorerInner(): React.JSX.Element {
             <FileExplorerTreeStatus
               isLoading={isLoading}
               error={hasError ? rootError : null}
-              isEmpty={isEmpty}
+              isEmpty={isEmptyState && !isLoading && !hasError}
             />
           )}
           {showTree && (
@@ -441,8 +486,9 @@ function FileExplorerInner(): React.JSX.Element {
               onDuplicate={handleDuplicate}
               onAddFolderAsProject={handleAddFolderAsProject}
               canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
-              onRequestDelete={requestDelete}
+              onRequestDelete={handleContextMenuDelete}
               onCollapseFolderSubtree={handleCollapseFolderSubtree}
+              onFindInFolder={handleFindInFolder}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
               onDragSourceChange={setDragSourcePath}

@@ -8,13 +8,15 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
-  SquareTerminal,
+  Play,
+  Plus,
   X
 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
@@ -24,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -41,8 +44,11 @@ type TerminalContextMenuProps = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
-  quickCommands: TerminalQuickCommand[]
+  repoQuickCommands: TerminalQuickCommand[]
+  globalQuickCommands: TerminalQuickCommand[]
+  quickCommandRepoLabel: string | null
   onQuickCommand: (command: TerminalQuickCommand) => void
+  onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
 }
@@ -63,14 +69,23 @@ export default function TerminalContextMenu({
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
-  quickCommands,
+  repoQuickCommands,
+  globalQuickCommands,
+  quickCommandRepoLabel,
   onQuickCommand,
+  onAddQuickCommand,
   onToggleExpand,
   onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
-  const isMac = navigator.userAgent.includes('Mac')
-  const mod = isMac ? '⌘' : 'Ctrl+'
-  const shift = isMac ? '⇧' : 'Shift+'
+  const copyShortcut = useShortcutLabel('terminal.copySelection')
+  const pasteShortcut = useShortcutLabel('terminal.paste')
+  const splitRightShortcut = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcut = useShortcutLabel('terminal.splitDown')
+  const equalizeShortcut = useShortcutLabel('terminal.equalizePaneSizes')
+  const expandShortcut = useShortcutLabel('terminal.expandPane')
+  const closeShortcut = useShortcutLabel('terminal.closePane')
+  const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
+  const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
 
   return (
     <DropdownMenu
@@ -119,57 +134,97 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           Copy
-          <DropdownMenuShortcut>{mod}C</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
           Paste
-          <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{pasteShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
-        {quickCommands.length > 0 ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <SquareTerminal />
-              Quick Commands
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-60">
-              {quickCommands.map((command) => (
-                <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                  <span className="truncate">{command.label}</span>
-                  {!command.appendEnter ? (
-                    <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Play fill="currentColor" strokeWidth={0} />
+            Quick Commands
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-60">
+            {hasQuickCommands ? (
+              <>
+                {quickCommandRepoLabel && repoQuickCommands.length > 0 ? (
+                  <>
+                    <DropdownMenuLabel className="truncate">
+                      {quickCommandRepoLabel}
+                    </DropdownMenuLabel>
+                    {repoQuickCommands.map((command) => (
+                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                        <span className="truncate">{command.label}</span>
+                        {!command.appendEnter ? (
+                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : null}
+                {globalQuickCommands.length > 0 ? (
+                  <>
+                    {repoQuickCommands.length > 0 ? <DropdownMenuSeparator /> : null}
+                    {repoQuickCommands.length > 0 ? (
+                      <DropdownMenuLabel>Global</DropdownMenuLabel>
+                    ) : null}
+                    {globalQuickCommands.map((command) => (
+                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                        <span className="truncate">{command.label}</span>
+                        {!command.appendEnter ? (
+                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                No quick commands
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                // Why: the dropdown sits above dialogs; force-close before
+                // opening the add modal even during the open-gesture guard.
+                onOpenChange(false)
+                onAddQuickCommand()
+              }}
+            >
+              <Plus />
+              Add Quick Command…
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
           Split Terminal Right
-          {/* Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
-              so split-right requires Shift on non-Mac platforms. */}
-          <DropdownMenuShortcut>{isMac ? `${mod}D` : `${mod}${shift}D`}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomClose />
           Split Terminal Down
-          {/* Why: on Windows/Linux, Alt+Shift+D is used for split-down because
-              Ctrl+Shift+D is taken by split-right (#586). */}
-          <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
             Equalize Pane Sizes
+            {showEqualizeShortcut ? (
+              <DropdownMenuShortcut>{equalizeShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         )}
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
             {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>{`${mod}${shift}↩`}</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{expandShortcut}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -183,7 +238,7 @@ export default function TerminalContextMenu({
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
               Close Pane
-              <DropdownMenuShortcut>{mod}W</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}

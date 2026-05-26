@@ -9,6 +9,7 @@ import {
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
+  resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
@@ -136,6 +137,338 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.activeTabId).toBe(mirroredId)
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
+  })
+
+  it('hydrates host split tab groups with mirrored terminal tab ids', () => {
+    const rightLeafId = SECOND_LEAF_ID
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-left::${LEAF_ID}`,
+            title: 'left shell',
+            parentTabId: 'host-left',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-left'
+          },
+          {
+            type: 'terminal',
+            id: `host-right::${rightLeafId}`,
+            title: 'right shell',
+            parentTabId: 'host-right',
+            leafId: rightLeafId,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-right'
+          }
+        ],
+        {
+          activeGroupId: 'group-right',
+          activeTabId: `host-right::${rightLeafId}`,
+          tabGroups: [
+            { id: 'group-left', activeTabId: 'host-left', tabOrder: ['host-left'] },
+            { id: 'group-right', activeTabId: 'host-right', tabOrder: ['host-right'] }
+          ],
+          tabGroupLayout: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          }
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const leftId = patch.tabsByWorktree?.[WT]?.find((tab) => tab.title === 'left shell')?.id
+    const rightId = patch.tabsByWorktree?.[WT]?.find((tab) => tab.title === 'right shell')?.id
+
+    expect(leftId).toBeTruthy()
+    expect(rightId).toBeTruthy()
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: leftId, groupId: 'group-left' }),
+        expect.objectContaining({ id: rightId, groupId: 'group-right' })
+      ])
+    )
+    expect(patch.groupsByWorktree?.[WT]).toEqual([
+      {
+        id: 'group-left',
+        worktreeId: WT,
+        activeTabId: leftId,
+        tabOrder: [leftId],
+        recentTabIds: [leftId]
+      },
+      {
+        id: 'group-right',
+        worktreeId: WT,
+        activeTabId: rightId,
+        tabOrder: [rightId],
+        recentTabIds: [rightId]
+      }
+    ])
+    expect(patch.layoutByWorktree?.[WT]).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'group-left' },
+      second: { type: 'leaf', groupId: 'group-right' }
+    })
+    expect(patch.activeGroupIdByWorktree?.[WT]).toBe('group-right')
+  })
+
+  it('assigns mirrored terminal, browser, and editor tabs to their host split groups', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-terminal::${LEAF_ID}`,
+            title: 'host shell',
+            parentTabId: 'host-terminal',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: false
+          },
+          {
+            type: 'markdown',
+            id: 'host-readme-unified',
+            title: 'README.md',
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: '/repo/README.md',
+            sourceFilePath: '/repo/README.md',
+            sourceRelativePath: 'README.md',
+            documentVersion: 'file:/repo/README.md'
+          }
+        ],
+        {
+          activeGroupId: 'group-editor',
+          activeTabId: 'host-readme-unified',
+          activeTabType: 'markdown',
+          tabGroups: [
+            { id: 'group-terminal', activeTabId: 'host-terminal', tabOrder: ['host-terminal'] },
+            {
+              id: 'group-browser',
+              activeTabId: 'host-browser-unified',
+              tabOrder: ['host-browser-unified']
+            },
+            {
+              id: 'group-editor',
+              activeTabId: 'host-readme-unified',
+              tabOrder: ['host-readme-unified']
+            }
+          ],
+          tabGroupLayout: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-terminal' },
+            second: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', groupId: 'group-browser' },
+              second: { type: 'leaf', groupId: 'group-editor' }
+            }
+          }
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const unifiedTabs = patch.unifiedTabsByWorktree?.[WT] ?? []
+    const terminalTab = unifiedTabs.find((tab) => tab.contentType === 'terminal')
+    const browserTab = unifiedTabs.find((tab) => tab.contentType === 'browser')
+    const editorTab = unifiedTabs.find((tab) => tab.contentType === 'editor')
+
+    expect(terminalTab).toMatchObject({ groupId: 'group-terminal' })
+    expect(browserTab).toMatchObject({ id: 'host-browser-unified', groupId: 'group-browser' })
+    expect(editorTab).toMatchObject({ id: 'host-readme-unified', groupId: 'group-editor' })
+  })
+
+  it('keeps retained local-only groups reachable when applying a host layout', () => {
+    const localTab: Tab = {
+      id: 'local-editor-tab',
+      entityId: 'local-editor-file',
+      groupId: 'local-group',
+      worktreeId: WT,
+      contentType: 'editor',
+      label: 'notes.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const currentLayout = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      first: { type: 'leaf' as const, groupId: 'host-group-1' },
+      second: { type: 'leaf' as const, groupId: 'local-group' }
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        unifiedTabsByWorktree: { [WT]: [localTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: null,
+              tabOrder: []
+            },
+            {
+              id: 'local-group',
+              worktreeId: WT,
+              activeTabId: localTab.id,
+              tabOrder: [localTab.id],
+              recentTabIds: [localTab.id]
+            }
+          ]
+        },
+        layoutByWorktree: { [WT]: currentLayout }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-terminal::${LEAF_ID}`,
+            title: 'host shell',
+            parentTabId: 'host-terminal',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1'
+          }
+        ],
+        {
+          activeGroupId: 'host-group-1',
+          activeTabId: `host-terminal::${LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: 'host-terminal', tabOrder: ['host-terminal'] }
+          ],
+          tabGroupLayout: { type: 'leaf', groupId: 'host-group-1' }
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.groupsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'local-group',
+          tabOrder: [localTab.id]
+        })
+      ])
+    )
+    expect(patch.layoutByWorktree).toBeUndefined()
+  })
+
+  it('keeps retained local-only groups reachable when host omits layout', () => {
+    const localTab: Tab = {
+      id: 'local-editor-tab',
+      entityId: 'local-editor-file',
+      groupId: 'local-group',
+      worktreeId: WT,
+      contentType: 'editor',
+      label: 'notes.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const currentLayout = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      first: { type: 'leaf' as const, groupId: 'host-group-1' },
+      second: { type: 'leaf' as const, groupId: 'local-group' }
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        unifiedTabsByWorktree: { [WT]: [localTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: null,
+              tabOrder: []
+            },
+            {
+              id: 'local-group',
+              worktreeId: WT,
+              activeTabId: localTab.id,
+              tabOrder: [localTab.id],
+              recentTabIds: [localTab.id]
+            }
+          ]
+        },
+        layoutByWorktree: { [WT]: currentLayout }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-terminal::${LEAF_ID}`,
+            title: 'host shell',
+            parentTabId: 'host-terminal',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1'
+          }
+        ],
+        {
+          activeGroupId: 'host-group-1',
+          activeTabId: `host-terminal::${LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: 'host-terminal', tabOrder: ['host-terminal'] }
+          ]
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.groupsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'local-group',
+          tabOrder: [localTab.id]
+        })
+      ])
+    )
+    expect(patch.layoutByWorktree).toBeUndefined()
   })
 
   it('preserves host pane titles without synthesizing them from tab titles', () => {
@@ -758,6 +1091,13 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual([
       'local-browser-unified'
     ])
+    expect(
+      resolveHostSessionTabIdForWebSessionTab(makeState(), {
+        environmentId: ENV,
+        worktreeId: WT,
+        tabId: 'local-browser-unified'
+      })
+    ).toBe('host-browser-unified')
   })
 
   it('removes mirrored browser tabs when the host closes the page', () => {

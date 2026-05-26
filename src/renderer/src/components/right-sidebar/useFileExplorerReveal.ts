@@ -20,8 +20,8 @@ type UseFileExplorerRevealParams = {
   rootCache: DirCache | undefined
   rowsByPath: Map<string, TreeNode>
   flatRows: TreeNode[]
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<void>
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  setSelectedPath: (path: string | null) => void
   setFlashingPath: Dispatch<SetStateAction<string | null>>
   flashTimeoutRef: RefObject<number | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -91,10 +91,16 @@ export function useFileExplorerReveal({
     })
 
     void (async () => {
-      await loadDir(worktreePath, -1)
+      const rootLoaded = await loadDir(worktreePath, -1)
+      if (!rootLoaded) {
+        return
+      }
 
       for (let depth = 0; depth < pendingRevealAncestorDirs.length; depth += 1) {
-        await loadDir(pendingRevealAncestorDirs[depth], depth)
+        const ancestorLoaded = await loadDir(pendingRevealAncestorDirs[depth], depth)
+        if (!ancestorLoaded) {
+          return
+        }
       }
     })()
   }, [

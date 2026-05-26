@@ -1,13 +1,22 @@
+/* eslint-disable max-lines -- Why: the card metadata hover keeps compact badge rendering,
+   provider-specific action rows, and markdown note preview together so the sidebar
+   card has one metadata contract. */
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { CircleDot, ExternalLink, GitMerge, Pencil, StickyNote } from 'lucide-react'
+import { CircleDot, ExternalLink, GitMerge, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import CommentMarkdown from './CommentMarkdown'
 import { PullRequestIcon } from './WorktreeCardHelpers'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
+import {
+  WorktreeCardDetailSection,
+  WorktreeCardDetailSectionContent
+} from './WorktreeCardDetailSection'
 import {
   IssueStateBadge,
   LinearStateBadge,
@@ -42,10 +51,17 @@ type WorktreeCardMetaBadgesProps = {
   comment: string | null
 }
 
+type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
+  React.HTMLAttributes<HTMLDivElement>
+
 type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
+  detailsAfter?: React.ReactNode
   onEditIssue: (event: React.MouseEvent) => void
   onEditComment: (event: React.MouseEvent) => void
+  onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenReviewInOrca?: (event: React.MouseEvent) => void
 }
 
 function hasComment(comment: string | null): boolean {
@@ -200,23 +216,31 @@ function MetadataActionIcon({
   )
 }
 
-export function WorktreeCardMetaBadges({
-  issue,
-  linearIssue,
-  review,
-  comment
-}: WorktreeCardMetaBadgesProps): React.JSX.Element | null {
+export const WorktreeCardMetaBadges = React.forwardRef<
+  HTMLDivElement,
+  WorktreeCardMetaBadgesRootProps
+>(function WorktreeCardMetaBadges(
+  { issue, linearIssue, review, comment, className, ...props },
+  ref
+): React.JSX.Element | null {
   if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
     return null
   }
 
   return (
-    // Why: inline agent rows reserve this same right inset for their dismiss X,
-    // so the card metadata icons align on the same visual rail.
+    // Why: Radix HoverCardTrigger uses `asChild`, so this group must forward
+    // trigger props/ref to the actual DOM node for attachment-only hover.
     <div
-      className="ml-auto flex shrink-0 items-center gap-1 pr-1.5"
+      ref={ref}
+      {...props}
+      className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
       aria-label="Workspace metadata"
     >
+      {hasComment(comment) && (
+        <MetaIconBadge label="Workspace notes">
+          <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
       {issue && (
         <MetaIconBadge label={`Linked issue #${issue.number}`}>
           <CircleDot className="text-muted-foreground" />
@@ -232,14 +256,9 @@ export function WorktreeCardMetaBadges({
           <ReviewIcon review={review} />
         </MetaIconBadge>
       )}
-      {hasComment(comment) && (
-        <MetaIconBadge label="Workspace notes">
-          <StickyNote className="text-muted-foreground" />
-        </MetaIconBadge>
-      )}
     </div>
   )
-}
+})
 
 export function WorktreeCardDetailsHover({
   issue,
@@ -247,10 +266,23 @@ export function WorktreeCardDetailsHover({
   review,
   comment,
   children,
+  detailsAfter,
   onEditIssue,
-  onEditComment
+  onEditComment,
+  onOpenGitHubIssueInOrca,
+  onOpenLinearIssueInOrca,
+  onOpenReviewInOrca
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+  const [open, setOpen] = React.useState(false)
+  const dismissAndRun = React.useCallback(
+    (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
+      setOpen(false)
+      handler?.(event)
+    },
+    []
+  )
+
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment }) && !detailsAfter) {
     return children
   }
 
@@ -259,23 +291,33 @@ export function WorktreeCardDetailsHover({
   const issueLabels = issue?.labels ?? []
 
   return (
-    <HoverCard openDelay={250} closeDelay={120}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={250} closeDelay={120}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side="right"
         align="start"
         sideOffset={8}
-        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs"
+        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+        {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
         onClick={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
       >
-        <div className="space-y-3">
+        <SelectedTextCopyMenu className="space-y-3">
           {issue && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<CircleDot className="size-3 text-muted-foreground" />}
                 label={`Issue #${issue.number}`}
                 actions={
                   <>
+                    {issue.url && onOpenGitHubIssueInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
+                      >
+                        <MonitorUp className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {issue.url && (
                       <MetadataActionIcon label="View on GitHub" href={issue.url}>
                         <ExternalLink className="size-3" />
@@ -287,7 +329,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {issue.title}
                 </div>
@@ -301,17 +343,25 @@ export function WorktreeCardDetailsHover({
                     ))}
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {linearIssue && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<LinearIcon className="size-3 text-muted-foreground" />}
                 label={`Linear ${linearIssue.identifier}`}
                 actions={
                   <>
+                    {linearIssue.url && onOpenLinearIssueInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
+                      >
+                        <MonitorUp className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {linearIssue.url && (
                       <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
                         <ExternalLink className="size-3" />
@@ -320,7 +370,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {linearIssue.title}
                 </div>
@@ -337,17 +387,25 @@ export function WorktreeCardDetailsHover({
                     ))}
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {review && reviewLabel && reviewProvider && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<ReviewIcon review={review} className="size-3" />}
                 label={`${reviewLabel} #${review.number}`}
                 actions={
                   <>
+                    {review.url && onOpenReviewInOrca && (
+                      <MetadataActionIcon
+                        label="Open in Orca"
+                        onClick={dismissAndRun(onOpenReviewInOrca)}
+                      >
+                        <MonitorUp className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {review.url && (
                       <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
                         <ExternalLink className="size-3" />
@@ -356,7 +414,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {review.title}
                 </div>
@@ -366,12 +424,12 @@ export function WorktreeCardDetailsHover({
                     <ReviewChecksBadge status={review.status} />
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {hasComment(comment) && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
                 label="Notes"
@@ -381,15 +439,17 @@ export function WorktreeCardDetailsHover({
                   </MetadataActionIcon>
                 }
               />
-              <div className="space-y-2">
+              <WorktreeCardDetailSectionContent className="space-y-2">
                 <CommentMarkdown
                   content={comment ?? ''}
                   className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
                 />
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
-        </div>
+
+          {detailsAfter}
+        </SelectedTextCopyMenu>
       </HoverCardContent>
     </HoverCard>
   )

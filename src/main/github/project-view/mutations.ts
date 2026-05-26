@@ -839,7 +839,7 @@ export async function getWorkItemDetailsBySlug(
     // Why: PR files/checks/review-thread tabs depend on a local repo path and
     // are out of Project-mode slug scope for v1. Omit them here; the dialog
     // branches on their absence and hides those tabs.
-    ...(args.type === 'issue' ? { assignees } : {})
+    assignees
   }
   return { ok: true, details }
 }

@@ -52,6 +52,10 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import type { SshConnection } from './ssh-connection'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
+} from '../../shared/ssh-types'
 
 function makeMockConnection(): SshConnection {
   return {
@@ -110,6 +114,63 @@ describe('deployAndLaunchRelay', () => {
 
     expect(progress).toContain('Detecting remote platform...')
     expect(progress).toContain('Starting relay...')
+  })
+
+  it('defaults fresh relays to the three-hour SSH disconnect grace window', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('/home/user')
+    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+    mockExecCommand.mockResolvedValueOnce('DEAD')
+    mockExecCommand.mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn)
+
+    const launchCommand = vi
+      .mocked(conn.exec)
+      .mock.calls.map(([cmd]) => cmd as string)
+      .find((cmd) => cmd.includes('--detached'))
+
+    expect(launchCommand).toContain(`--grace-time ${DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS}`)
+  })
+
+  it('allows an unlimited SSH disconnect grace window', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('/home/user')
+    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+    mockExecCommand.mockResolvedValueOnce('DEAD')
+    mockExecCommand.mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn, undefined, 0, 'target-a')
+
+    const launchCommand = vi
+      .mocked(conn.exec)
+      .mock.calls.map(([cmd]) => cmd as string)
+      .find((cmd) => cmd.includes('--detached'))
+
+    expect(launchCommand).toContain('--grace-time 0')
+  })
+
+  it('clamps configured SSH disconnect grace to the seven-day maximum', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('/home/user')
+    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+    mockExecCommand.mockResolvedValueOnce('DEAD')
+    mockExecCommand.mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn, undefined, MAX_SSH_RELAY_GRACE_PERIOD_SECONDS + 1, 'target-a')
+
+    const launchCommand = vi
+      .mocked(conn.exec)
+      .mock.calls.map(([cmd]) => cmd as string)
+      .find((cmd) => cmd.includes('--detached'))
+
+    expect(launchCommand).toContain(`--grace-time ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}`)
   })
 
   it('uses a content-hashed versioned remote install directory', async () => {

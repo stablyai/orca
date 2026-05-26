@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
@@ -11,10 +12,10 @@ import {
   redoFileExplorer,
   undoFileExplorer
 } from './fileExplorerUndoRedo'
-
-const isMac = navigator.userAgent.includes('Mac')
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 function isCmdZRedo(e: KeyboardEvent): boolean {
+  const isMac = navigator.userAgent.includes('Mac')
   const mod = isMac ? e.metaKey : e.ctrlKey
   if (!mod || e.altKey) {
     return false
@@ -27,6 +28,7 @@ function isCmdZRedo(e: KeyboardEvent): boolean {
 }
 
 function isCmdZUndo(e: KeyboardEvent): boolean {
+  const isMac = navigator.userAgent.includes('Mac')
   const mod = isMac ? e.metaKey : e.ctrlKey
   if (!mod || e.altKey || e.shiftKey) {
     return false
@@ -35,15 +37,12 @@ function isCmdZUndo(e: KeyboardEvent): boolean {
   return e.code === 'KeyZ' || e.key.toLowerCase() === 'z'
 }
 
-function isCopyRelativePathShortcut(e: KeyboardEvent): boolean {
-  return e.code === 'KeyC' && e.altKey && e.shiftKey && (isMac ? e.metaKey : e.ctrlKey)
-}
-
-function isCopyPathShortcut(e: KeyboardEvent): boolean {
+function matchesLegacyFileDeleteShortcut(e: KeyboardEvent): boolean {
+  const isMac = navigator.userAgent.includes('Mac')
   return (
-    e.code === 'KeyC' &&
-    e.altKey &&
-    ((isMac && e.metaKey && !e.shiftKey) || (!isMac && e.shiftKey && !e.ctrlKey))
+    (isMac && e.key === 'Backspace' && e.metaKey) ||
+    (isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) ||
+    (!isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey)
   )
 }
 
@@ -59,11 +58,14 @@ export function useFileExplorerKeys(opts: {
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
+  selectedNodes: TreeNode[]
   startRename: (node: TreeNode) => void
   requestDelete: (node: TreeNode) => void
+  requestDeleteAll: (nodes: TreeNode[]) => void
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const keybindings = useAppStore((s) => s.keybindings)
 
   const flatRowsRef = useRef(opts.flatRows)
   flatRowsRef.current = opts.flatRows
@@ -73,10 +75,14 @@ export function useFileExplorerKeys(opts: {
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
+  const selectedNodesRef = useRef(opts.selectedNodes)
+  selectedNodesRef.current = opts.selectedNodes
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
   requestDeleteRef.current = opts.requestDelete
+  const requestDeleteAllRef = useRef(opts.requestDeleteAll)
+  requestDeleteAllRef.current = opts.requestDeleteAll
 
   useEffect(() => {
     // Find the node that the focused button represents (for bare-key shortcuts).
@@ -136,20 +142,24 @@ export function useFileExplorerKeys(opts: {
       if (focusInExplorer()) {
         const node = findFocusedNode() ?? selectedNodeRef.current
         if (node) {
-          // Enter — Rename
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
             return
           }
-          // ⌘⌫ (Mac) / Delete (Win) / Forward Delete (Mac full keyboard) — Delete
-          if (
-            (isMac && e.key === 'Backspace' && e.metaKey) ||
-            (isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) ||
-            (!isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey)
-          ) {
+          const platform = getShortcutPlatform()
+          const hasDeleteOverride = Object.prototype.hasOwnProperty.call(
+            keybindings,
+            'fileExplorer.delete'
+          )
+          const wantsDelete = hasDeleteOverride
+            ? keybindingMatchesAction('fileExplorer.delete', e, platform, keybindings)
+            : matchesLegacyFileDeleteShortcut(e)
+          if (wantsDelete) {
             e.preventDefault()
-            requestDeleteRef.current(node)
+            requestDeleteAllRef.current(
+              selectedNodesRef.current.length > 1 ? selectedNodesRef.current : [node]
+            )
             return
           }
         }
@@ -160,8 +170,19 @@ export function useFileExplorerKeys(opts: {
       if (!focusInExplorer()) {
         return
       }
-      const wantsCopyRelativePath = isCopyRelativePathShortcut(e)
-      const wantsCopyPath = isCopyPathShortcut(e)
+      const platform = getShortcutPlatform()
+      const wantsCopyRelativePath = keybindingMatchesAction(
+        'fileExplorer.copyRelativePath',
+        e,
+        platform,
+        keybindings
+      )
+      const wantsCopyPath = keybindingMatchesAction(
+        'fileExplorer.copyPath',
+        e,
+        platform,
+        keybindings
+      )
       if (!wantsCopyRelativePath && !wantsCopyPath) {
         return
       }
@@ -193,5 +214,5 @@ export function useFileExplorerKeys(opts: {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [rightSidebarOpen, rightSidebarTab, opts.containerRef])
+  }, [keybindings, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

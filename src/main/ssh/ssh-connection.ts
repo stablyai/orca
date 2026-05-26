@@ -4,8 +4,14 @@ import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
-import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
-import { resolveWithSshG } from './ssh-config-parser'
+import {
+  spawnSystemSsh,
+  spawnSystemSshCommand,
+  uploadDirectoryViaSystemSsh,
+  writeFileViaSystemSsh,
+  type SystemSshProcess
+} from './ssh-system-fallback'
+import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -13,11 +19,13 @@ import {
   CONNECT_TIMEOUT_MS,
   isTransientError,
   isAuthError,
+  isAgentFallbackError,
   isPassphraseError,
   sleep,
   buildConnectConfig,
   resolveEffectiveProxy,
   spawnProxyCommand,
+  wrapRemoteCommandForPosixShell,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
@@ -26,6 +34,9 @@ export class SshConnection {
   private client: SshClient | null = null
   private proxyProcess: ChildProcess | null = null
   private systemSsh: SystemSshProcess | null = null
+  private systemCommandChannels = new Set<ClientChannel>()
+  private systemOperationAbortController = new AbortController()
+  private useSystemSshTransport = false
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
@@ -52,6 +63,9 @@ export class SshConnection {
   getClient(): SshClient | null {
     return this.client
   }
+  usesSystemSshTransport(): boolean {
+    return this.useSystemSshTransport
+  }
   getTarget(): SshTarget {
     return { ...this.target }
   }
@@ -67,17 +81,92 @@ export class SshConnection {
   }
 
   async exec(cmd: string): Promise<ClientChannel> {
+    if (this.useSystemSshTransport) {
+      if (this.disposed || this.state.status !== 'connected') {
+        throw new Error('Not connected')
+      }
+      return this.spawnTrackedSystemSshCommand(cmd)
+    }
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) => this.client!.exec(cmd, (e, ch) => (e ? rej(e) : res(ch))))
+    return new Promise((res, rej) =>
+      this.client!.exec(wrapRemoteCommandForPosixShell(cmd), (e, ch) => (e ? rej(e) : res(ch)))
+    )
   }
 
   async sftp(): Promise<SFTPWrapper> {
+    if (this.useSystemSshTransport) {
+      throw new Error('SFTP is not available when using system SSH transport')
+    }
     if (!this.client) {
       throw new Error('Not connected')
     }
     return new Promise((res, rej) => this.client!.sftp((e, s) => (e ? rej(e) : res(s))))
+  }
+
+  async uploadDirectory(localDir: string, remoteDir: string): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      try {
+        const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+        await uploadDirectory(sftp, localDir, remoteDir)
+      } finally {
+        sftp.end()
+      }
+      return
+    }
+    await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
+      signal: this.systemOperationAbortController.signal
+    })
+  }
+
+  async writeFile(remotePath: string, contents: string): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      const swallowLateSftpError = (): void => {}
+      sftp.on('error', swallowLateSftpError)
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const ws = sftp.createWriteStream(remotePath)
+          let settled = false
+          const cleanup = (): void => {
+            ws.removeListener('close', onClose)
+            ws.removeListener('error', onError)
+          }
+          const onClose = (): void => {
+            if (settled) {
+              return
+            }
+            settled = true
+            cleanup()
+            resolve()
+          }
+          const onError = (err: Error): void => {
+            sftp.removeListener('error', onError)
+            if (settled) {
+              return
+            }
+            settled = true
+            cleanup()
+            reject(err)
+          }
+          sftp.prependOnceListener('error', onError)
+          ws.once('close', onClose)
+          ws.once('error', onError)
+          ws.end(contents)
+        })
+      } finally {
+        sftp.end()
+        setImmediate(() => {
+          sftp.removeListener('error', swallowLateSftpError)
+        })
+      }
+      return
+    }
+    await writeFileViaSystemSsh(this.target, remotePath, contents, {
+      signal: this.systemOperationAbortController.signal
+    })
   }
 
   async connect(): Promise<void> {
@@ -124,6 +213,11 @@ export class SshConnection {
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
     )
+    if (shouldUseSystemSshTransport(this.target, resolved)) {
+      await this.doSystemSshProbe(connectGeneration)
+      return
+    }
+
     const config = buildConnectConfig(this.target, resolved)
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively. Spawn the
@@ -145,27 +239,87 @@ export class SshConnection {
     try {
       await this.doSsh2Connect(config, connectGeneration)
     } catch (err) {
-      if (!(err instanceof Error) || !this.callbacks.onCredentialRequest) {
+      if (!(err instanceof Error)) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw err
       }
+
+      let authError = err
+      let passphrasePromptHandled = false
+      let credentialRetryConfig = config
+
+      // Why: ssh2 parses encrypted privateKey values before it tries agent
+      // auth. When an agent is available, give it the first attempt and only
+      // fall back to direct key parsing after agent auth fails.
+      if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
+        const keyConfig = buildConnectConfig(this.target, resolved, {
+          includeAgent: false,
+          includePrivateKey: true
+        })
+        // Why: if the agent path failed, password/passphrase retries should not
+        // go back through the same agent-only config.
+        credentialRetryConfig = keyConfig
+        if (this.cachedPassphrase) {
+          keyConfig.passphrase = this.cachedPassphrase
+        }
+        if (this.cachedPassword) {
+          keyConfig.password = this.cachedPassword
+        }
+        if (keyConfig.privateKey || keyConfig.password) {
+          this.respawnProxy(keyConfig, effectiveProxy)
+          try {
+            await this.doSsh2Connect(keyConfig, connectGeneration)
+            return
+          } catch (keyErr) {
+            if (!(keyErr instanceof Error)) {
+              this.proxyProcess?.kill()
+              this.proxyProcess = null
+              throw keyErr
+            }
+            authError = keyErr
+            if (isPassphraseError(authError) && !this.cachedPassphrase) {
+              passphrasePromptHandled = true
+              const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+              const val = await this.callbacks.onCredentialRequest?.(
+                this.target.id,
+                'passphrase',
+                detail
+              )
+              if (val) {
+                this.cachedPassphrase = val
+                keyConfig.passphrase = val
+                this.respawnProxy(keyConfig, effectiveProxy)
+                await this.doSsh2Connect(keyConfig, connectGeneration)
+                return
+              }
+            }
+          }
+        }
+      }
+
+      if (!this.callbacks.onCredentialRequest) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw authError
+      }
+
       // Why: prompt for passphrase on encrypted-key error, then retry with
       // a fresh proxy socket (ssh2 may have destroyed the original).
-      if (isPassphraseError(err) && !this.cachedPassphrase) {
+      if (isPassphraseError(authError) && !this.cachedPassphrase && !passphrasePromptHandled) {
         const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
         const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
         if (val) {
           this.cachedPassphrase = val
-          config.passphrase = val
-          this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config, connectGeneration)
+          credentialRetryConfig.passphrase = val
+          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
-      // Why: prompt for password on auth failure. Check the original error
-      // (not a retry error) to avoid conflating passphrase vs password failures.
-      if (isAuthError(err) && !this.cachedPassword) {
+      // Why: an agent socket failure can still be recovered by password auth,
+      // but the retry must use the no-agent config selected above.
+      if (isAgentFallbackError(authError) && !this.cachedPassword) {
         const val = await this.callbacks.onCredentialRequest(
           this.target.id,
           'password',
@@ -173,16 +327,104 @@ export class SshConnection {
         )
         if (val) {
           this.cachedPassword = val
-          config.password = val
-          this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config, connectGeneration)
+          credentialRetryConfig.password = val
+          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
       this.proxyProcess?.kill()
       this.proxyProcess = null
+      throw authError
+    }
+  }
+
+  async reconnect(): Promise<void> {
+    if (this.disposed || this.state.status === 'connecting') {
+      return
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still
+    // connected. Tear down the local transport and run the normal reconnect
+    // path so the relay session can reattach remote PTYs after wake.
+    this.closeTransportsForReconnect()
+    this.state.reconnectAttempt = 0
+    this.setState('reconnecting')
+    await this.runReconnectAttempt(0)
+  }
+
+  private async doSystemSshProbe(connectGeneration: number): Promise<void> {
+    this.useSystemSshTransport = true
+    this.client = null
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+
+    const channel = this.spawnTrackedSystemSshCommand('printf ORCA-SYSTEM-SSH-OK')
+    try {
+      await new Promise<void>((resolve, reject) => {
+        let stdout = ''
+        let stderr = ''
+        let settled = false
+        const timeout = setTimeout(() => {
+          settled = true
+          channel.close()
+          reject(new Error('System SSH connection timed out'))
+        }, CONNECT_TIMEOUT_MS)
+
+        channel.on('data', (data: Buffer) => {
+          stdout += data.toString('utf-8')
+        })
+        channel.stderr.on('data', (data: Buffer) => {
+          stderr += data.toString('utf-8')
+        })
+        channel.on('error', (err: Error) => {
+          if (settled) {
+            return
+          }
+          settled = true
+          clearTimeout(timeout)
+          reject(err)
+        })
+        channel.on('close', (code: number | null) => {
+          if (settled) {
+            return
+          }
+          settled = true
+          clearTimeout(timeout)
+          if (this.disposed || connectGeneration !== this.connectGeneration) {
+            reject(new Error('SSH connection attempt was cancelled'))
+            return
+          }
+          if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
+            reject(
+              new Error(
+                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+              )
+            )
+            return
+          }
+          this.setState('connected')
+          resolve()
+        })
+      })
+    } catch (err) {
+      this.useSystemSshTransport = false
       throw err
     }
+  }
+
+  private spawnTrackedSystemSshCommand(command: string): ClientChannel {
+    const channel = spawnSystemSshCommand(this.target, command)
+    this.systemCommandChannels.add(channel)
+    const cleanup = (): void => {
+      this.systemCommandChannels.delete(channel)
+    }
+    channel.once('close', cleanup)
+    channel.once('error', cleanup)
+    return channel
   }
 
   // Why: ssh2 may destroy the proxy socket on auth failure, so credential
@@ -290,28 +532,55 @@ export class SshConnection {
       if (this.disposed) {
         return
       }
-      try {
-        // Why: reset reconnectAttempt before attemptConnect so setState('connected')
-        // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
-        this.state.reconnectAttempt = 0
-        await this.attemptConnect()
-      } catch (err) {
-        if (this.disposed) {
-          return
-        }
-        const error = err instanceof Error ? err : new Error(String(err))
-        if (isAuthError(error) || isPassphraseError(error)) {
-          this.setState('auth-failed', error.message)
-          return
-        }
-        if (!isTransientError(error)) {
-          this.setState('error', error.message)
-          return
-        }
-        this.state.reconnectAttempt = attempt + 1
-        this.scheduleReconnect()
-      }
+      await this.runReconnectAttempt(attempt)
     }, RECONNECT_BACKOFF_MS[attempt])
+  }
+
+  private async runReconnectAttempt(attempt: number): Promise<void> {
+    try {
+      // Why: reset reconnectAttempt before attemptConnect so setState('connected')
+      // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
+      this.state.reconnectAttempt = 0
+      await this.attemptConnect()
+    } catch (err) {
+      if (this.disposed) {
+        return
+      }
+      const error = err instanceof Error ? err : new Error(String(err))
+      if (isAuthError(error) || isPassphraseError(error)) {
+        this.setState('auth-failed', error.message)
+        return
+      }
+      if (!isTransientError(error)) {
+        this.setState('error', error.message)
+        return
+      }
+      this.state.reconnectAttempt = attempt + 1
+      this.scheduleReconnect()
+    }
+  }
+
+  private closeTransportsForReconnect(): void {
+    this.connectGeneration += 1
+    const client = this.client
+    this.client = null
+    try {
+      client?.end()
+      client?.destroy()
+    } catch {
+      /* best-effort transport teardown */
+    }
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+    this.systemOperationAbortController.abort()
+    this.systemOperationAbortController = new AbortController()
+    for (const channel of this.systemCommandChannels) {
+      channel.close()
+    }
+    this.systemCommandChannels.clear()
+    this.systemSsh?.kill()
+    this.systemSsh = null
+    this.useSystemSshTransport = false
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
@@ -381,8 +650,15 @@ export class SshConnection {
     this.client = null
     this.proxyProcess?.kill()
     this.proxyProcess = null
+    this.systemOperationAbortController.abort()
+    this.systemOperationAbortController = new AbortController()
+    for (const channel of this.systemCommandChannels) {
+      channel.close()
+    }
+    this.systemCommandChannels.clear()
     this.systemSsh?.kill()
     this.systemSsh = null
+    this.useSystemSshTransport = false
     this.setState('disconnected')
   }
 
@@ -390,6 +666,13 @@ export class SshConnection {
     this.state = { ...this.state, status, error: error ?? null }
     this.callbacks.onStateChange(this.target.id, { ...this.state })
   }
+}
+
+export function shouldUseSystemSshTransport(
+  _target: SshTarget,
+  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass'> | null
+): boolean {
+  return process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' || resolved?.proxyUseFdpass === true
 }
 
 export { SshConnectionManager } from './ssh-connection-manager'

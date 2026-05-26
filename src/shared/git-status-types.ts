@@ -56,6 +56,10 @@ export type GitUpstreamStatus = {
   upstreamName?: string
   ahead: number
   behind: number
+  // Why: when a branch was rebased, the upstream-only commits can be older
+  // patch-equivalent copies. Pulling them reintroduces stale history; a
+  // lease-protected force push is the correct reconciliation.
+  behindCommitsArePatchEquivalent?: boolean
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'

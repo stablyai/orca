@@ -35,6 +35,7 @@ type FileExplorerVirtualRowsProps = {
   canAddFolderAsProject: (node: TreeNode) => boolean
   onRequestDelete: (node: TreeNode) => void
   onCollapseFolderSubtree: (node: TreeNode) => void
+  onFindInFolder: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -74,6 +75,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     canAddFolderAsProject,
     onRequestDelete,
     onCollapseFolderSubtree,
+    onFindInFolder,
     onMoveDrop,
     onDragTargetChange,
     onDragSourceChange,
@@ -155,6 +157,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
+              selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
@@ -174,6 +177,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               canAddAsProject={canAddFolderAsProject(n)}
               onRequestDelete={() => onRequestDelete(n)}
               onCollapseFolderSubtree={() => onCollapseFolderSubtree(n)}
+              onFindInFolder={() => onFindInFolder(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}
               onDragSourceChange={onDragSourceChange}

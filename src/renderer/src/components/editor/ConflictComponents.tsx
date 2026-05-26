@@ -1,5 +1,14 @@
 import React from 'react'
-import { CircleCheck, GitMerge, PanelLeftOpen, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
+  GitMerge,
+  PanelLeftOpen,
+  RefreshCw,
+  TriangleAlert,
+  X
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -29,13 +38,41 @@ export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
 
 const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
 let conflictReviewFileTreeCollapsedPreference = false
+type ConflictNavigationDirection = 'previous' | 'next'
+type ConflictReviewPanelEntry = ConflictReviewEntry & {
+  liveEntry?: GitStatusEntry
+}
+
+export function getNextConflictNavigationIndex({
+  currentIndex,
+  direction,
+  total
+}: {
+  currentIndex: number | null
+  direction: ConflictNavigationDirection
+  total: number
+}): number | null {
+  if (total <= 0) {
+    return null
+  }
+  if (currentIndex === null || currentIndex < 0 || currentIndex >= total) {
+    return direction === 'previous' ? total - 1 : 0
+  }
+  return direction === 'previous' ? (currentIndex + total - 1) % total : (currentIndex + 1) % total
+}
 
 export function ConflictBanner({
   file,
-  entry
+  entry,
+  conflictNavigation
 }: {
   file: OpenFile
   entry: GitStatusEntry | null
+  conflictNavigation?: {
+    currentIndex: number | null
+    total: number
+    onJump: (direction: ConflictNavigationDirection) => void
+  }
 }): React.JSX.Element | null {
   const conflict = file.conflict
   if (!conflict) {
@@ -54,15 +91,58 @@ export function ConflictBanner({
           : 'border-emerald-500/20 bg-emerald-500/5'
       )}
     >
-      <div className="flex items-center gap-2">
-        {isUnresolved ? (
-          <TriangleAlert className="size-3.5 shrink-0 text-destructive" />
-        ) : (
-          <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isUnresolved ? (
+            <TriangleAlert className="size-3.5 shrink-0 text-destructive" />
+          ) : (
+            <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          )}
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {label} conflict · {CONFLICT_KIND_LABELS[conflict.conflictKind]}
+          </span>
+          {conflictNavigation && conflictNavigation.total > 0 && (
+            <span className="shrink-0 px-1 text-[11px] tabular-nums text-muted-foreground">
+              {(conflictNavigation.currentIndex ?? 0) + 1} / {conflictNavigation.total}
+            </span>
+          )}
+        </div>
+        {conflictNavigation && conflictNavigation.total > 0 && (
+          <div className="flex shrink-0 items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Previous conflict"
+                  onClick={() => conflictNavigation.onJump('previous')}
+                >
+                  <ChevronUp className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Previous conflict
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Next conflict"
+                  onClick={() => conflictNavigation.onJump('next')}
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Next conflict
+              </TooltipContent>
+            </Tooltip>
+          </div>
         )}
-        <span className="font-medium text-foreground">
-          {label} conflict · {CONFLICT_KIND_LABELS[conflict.conflictKind]}
-        </span>
       </div>
       {/* Why: the hint is omitted here because the file is already open in the
          editor below. Showing "Open and edit…" or similar would be confusing
@@ -131,7 +211,7 @@ export function ConflictReviewPanel({
     () => new Map(liveEntries.map((entry) => [entry.path, entry])),
     [liveEntries]
   )
-  const treeEntries = React.useMemo(
+  const treeEntries = React.useMemo<readonly ConflictReviewPanelEntry[]>(
     () =>
       snapshotEntries.map((entry) => ({
         ...entry,
@@ -143,7 +223,6 @@ export function ConflictReviewPanel({
     (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
   )
   const unresolvedCount = unresolvedSnapshotEntries.length
-  const resolvedCount = Math.max(0, snapshotEntries.length - unresolvedCount)
   const snapshotTime = new Date(
     file.conflictReview?.snapshotTimestamp ?? Date.now()
   ).toLocaleTimeString()
@@ -219,40 +298,10 @@ export function ConflictReviewPanel({
             Refresh
           </Button>
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
           {selectedContent ?? (
-            <div className="flex h-full min-h-0 items-center justify-center px-6 text-center">
-              <div className="max-w-md space-y-3">
-                <div className="mx-auto flex size-10 items-center justify-center rounded-md border border-border bg-card text-muted-foreground">
-                  <GitMerge className="size-4" />
-                </div>
-                <div className="text-sm font-medium text-foreground">
-                  Select a conflict from the file tree
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Open each unresolved file, edit the conflict markers, then refresh this snapshot.
-                </div>
-                {resolvedCount > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    {resolvedCount} conflict{resolvedCount === 1 ? '' : 's'} no longer live in Git.
-                  </div>
-                )}
-                <div className="flex items-center justify-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={onReturnToSourceControl}
-                  >
-                    <GitMerge className="size-3.5" />
-                    Source Control
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
-                    <X className="size-3.5" />
-                    Dismiss
-                  </Button>
-                </div>
-              </div>
+            <div className="flex h-full min-h-0 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+              Loading conflict contents...
             </div>
           )}
         </div>

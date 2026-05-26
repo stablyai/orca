@@ -1,7 +1,15 @@
 import type React from 'react'
+import { createContext, useContext } from 'react'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
+
+// Why: avoids threading `activeSectionId` through every <SettingsSection /> call
+// site in Settings.tsx — the page wraps its content tree in this provider.
+const ActiveSettingsSectionContext = createContext<string | null>(null)
+
+export const ActiveSettingsSectionProvider = ActiveSettingsSectionContext.Provider
 
 type SettingsSectionProps = {
   id: string
@@ -10,9 +18,15 @@ type SettingsSectionProps = {
   searchEntries?: SettingsSearchEntry[]
   children?: React.ReactNode
   className?: string
+  bodyClassName?: string
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
+  /** When true, this section is the one currently selected in the sidebar.
+   *  Sections render only when active or when a non-empty search matches them
+   *  — that way the Settings page shows one focused pane at a time instead of
+   *  one giant scrolling document. */
+  isActive?: boolean
   /** Rendered in the section header's upper-right corner — intended for
    *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
    *  crowd the settings list as their own row. */
@@ -26,44 +40,56 @@ export function SettingsSection({
   searchEntries,
   children,
   className,
+  bodyClassName,
   badge,
   badgeAccessory,
   forceVisible = false,
+  isActive,
   headerAction
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (!forceVisible && searchEntries && !matchesSettingsSearch(query, searchEntries)) {
-    return null
+  const activeFromContext = useContext(ActiveSettingsSectionContext)
+  const sectionIsActive = isActive ?? activeFromContext === id
+  const hasQuery = query.trim() !== ''
+  const matchesQuery = !searchEntries || matchesSettingsSearch(query, searchEntries)
+  if (!forceVisible) {
+    if (hasQuery) {
+      if (!matchesQuery) {
+        return null
+      }
+    } else if (!sectionIsActive) {
+      return null
+    }
   }
 
   return (
-    <section
-      id={id}
-      data-settings-section={id}
-      className={
-        // Why: these sections already contain many internal borders and cards, so a lone divider
-        // line gets lost in the visual noise. Giving each section its own padded surface creates a
-        // clear outer silhouette that still works when the inner content changes.
-        className ??
-        'scroll-mt-6 space-y-8 rounded-2xl border border-border/60 bg-card/35 px-6 py-6 shadow-sm'
-      }
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
+    <section id={id} data-settings-section={id} className={cn('scroll-mt-8 space-y-6', className)}>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-5">
+        <div className="min-w-0 space-y-2">
+          <h2 className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-tight text-foreground">
             {title}
             {badge ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
                 {badge}
               </span>
             ) : null}
             {badgeAccessory}
           </h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {children}
+      {/* Why: body content sits in a visually distinct band — a soft card with
+          rounded corners and tight inner padding — so each row group reads as
+          contained inside the section, not as a continuation of the sidebar. */}
+      <div
+        className={cn(
+          'rounded-xl border border-border/40 bg-card/30 px-8 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]',
+          bodyClassName
+        )}
+      >
+        {children}
+      </div>
     </section>
   )
 }

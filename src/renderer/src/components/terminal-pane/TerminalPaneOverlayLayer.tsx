@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
@@ -50,6 +50,9 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const [shouldMeasureHiddenStartup] = useState(
+    () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
+  )
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName
@@ -60,7 +63,8 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             left: `anchor(${anchorName} left)`,
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
-            display: isVisible ? 'flex' : 'none',
+            display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+            opacity: isVisible ? 1 : 0,
             pointerEvents: isVisible ? 'auto' : 'none'
           }
         : {
@@ -72,7 +76,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             display: 'none',
             pointerEvents: 'none'
           },
-    [anchorName, isVisible]
+    [anchorName, isVisible, shouldMeasureHiddenStartup]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {

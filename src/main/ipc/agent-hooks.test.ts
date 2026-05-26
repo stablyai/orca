@@ -9,6 +9,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 
 const dropStatusEntry = vi.fn()
 const getStatusSnapshot = vi.fn()
+const inferInterrupt = vi.fn()
 const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>()
 const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
 const removeHandler = vi.fn()
@@ -36,7 +37,8 @@ vi.mock('../agent-hooks/server', async () => {
     ...actual,
     agentHookServer: {
       dropStatusEntry,
-      getStatusSnapshot
+      getStatusSnapshot,
+      inferInterrupt
     }
   }
 })
@@ -50,14 +52,23 @@ vi.mock('../codex/hook-service', () => ({
 vi.mock('../gemini/hook-service', () => ({
   geminiHookService: { getStatus: vi.fn(() => ({ agent: 'gemini', state: 'absent' })) }
 }))
+vi.mock('../antigravity/hook-service', () => ({
+  antigravityHookService: { getStatus: vi.fn(() => ({ agent: 'antigravity', state: 'absent' })) }
+}))
 vi.mock('../cursor/hook-service', () => ({
   cursorHookService: { getStatus: vi.fn(() => ({ agent: 'cursor', state: 'absent' })) }
 }))
 vi.mock('../droid/hook-service', () => ({
   droidHookService: { getStatus: vi.fn(() => ({ agent: 'droid', state: 'absent' })) }
 }))
+vi.mock('../command-code/hook-service', () => ({
+  commandCodeHookService: { getStatus: vi.fn(() => ({ agent: 'command-code', state: 'absent' })) }
+}))
 vi.mock('../grok/hook-service', () => ({
   grokHookService: { getStatus: vi.fn(() => ({ agent: 'grok', state: 'absent' })) }
+}))
+vi.mock('../copilot/hook-service', () => ({
+  copilotHookService: { getStatus: vi.fn(() => ({ agent: 'copilot', state: 'absent' })) }
 }))
 vi.mock('../hermes/hook-service', () => ({
   hermesHookService: { getStatus: vi.fn(() => ({ agent: 'hermes', state: 'absent' })) }
@@ -66,6 +77,7 @@ vi.mock('../hermes/hook-service', () => ({
 beforeEach(() => {
   dropStatusEntry.mockReset()
   getStatusSnapshot.mockReset()
+  inferInterrupt.mockReset()
   onHandlers.clear()
   handleHandlers.clear()
   removeHandler.mockReset()
@@ -95,6 +107,62 @@ describe('agentStatus:getSnapshot IPC', () => {
     const handler = handleHandlers.get('agentStatus:getSnapshot')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual(snapshot)
+  })
+})
+
+describe('agentHooks:antigravityStatus IPC', () => {
+  it('returns Antigravity hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:antigravityStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'antigravity', state: 'absent' })
+  })
+})
+
+describe('agentHooks:commandCodeStatus IPC', () => {
+  it('returns Command Code hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:commandCodeStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
+  })
+})
+
+describe('agentStatus:inferInterrupt IPC', () => {
+  it('forwards valid inference requests to the hook server', async () => {
+    inferInterrupt.mockReturnValue(true)
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentStatus:inferInterrupt')
+    expect(handler).toBeDefined()
+    const request = {
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'long task',
+      baselineAgentType: 'codex',
+      intent: 'ctrl-c'
+    }
+
+    expect(handler!({}, request)).toBe(true)
+    expect(inferInterrupt).toHaveBeenCalledWith(request)
+  })
+
+  it('rejects malformed requests before the hook server boundary', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentStatus:inferInterrupt')
+    expect(handler).toBeDefined()
+    for (const value of [null, undefined, '', 123, true]) {
+      expect(handler!({}, value)).toBe(false)
+    }
+    expect(inferInterrupt).not.toHaveBeenCalled()
   })
 })
 

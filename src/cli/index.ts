@@ -2,6 +2,7 @@
 import {
   findCommandSpec,
   isCommandGroup,
+  normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
   validateCommandAndFlags
@@ -16,11 +17,13 @@ export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
-  return commandPath[0] === 'environment' || commandPath[0] === 'serve'
+  return (
+    commandPath[0] === 'environment' || commandPath[0] === 'serve' || commandPath[0] === 'agent'
+  )
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
-  const parsed = parseArgs(argv)
+  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv))
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)

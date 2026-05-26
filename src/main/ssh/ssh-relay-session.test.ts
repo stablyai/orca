@@ -7,6 +7,7 @@ import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 
 const { muxRequestMock, installRemoteManagedAgentHooksMock } = vi.hoisted(() => ({
   muxRequestMock: vi.fn(),
@@ -179,6 +180,11 @@ describe('SshRelaySession', () => {
       ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
     )
     expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
+    const installPluginsParams = muxRequestMock.mock.calls[installPluginsCallIndex]?.[1]
+    expect(installPluginsParams).toMatchObject({
+      piExtensionSource: expect.stringContaining('/hook/pi'),
+      ompExtensionSource: expect.stringContaining('/hook/omp')
+    })
     expect(mockConn.sftp).toHaveBeenCalledTimes(1)
     expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca')
     expect(sftp.end).toHaveBeenCalledTimes(1)
@@ -290,14 +296,14 @@ describe('SshRelaySession', () => {
       attach: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
-    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:target-1@@pty-1'])
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
 
     expect(mockAttach).toHaveBeenCalledWith('pty-1')
-    expect(setPtyOwnership).toHaveBeenCalledWith('pty-1', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'target-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-1', 'attached')
   })
 
@@ -321,7 +327,7 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
-    expect(setPtyOwnership).toHaveBeenCalledWith('pty-live', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
   })
 
@@ -411,10 +417,10 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-stale')
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(clearProviderPtyState).toHaveBeenCalledWith('pty-stale')
-    expect(deletePtyOwnership).toHaveBeenCalledWith('pty-stale')
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
-      id: 'pty-stale',
+      id: 'ssh:target-1@@pty-stale',
       code: -1
     })
   })
@@ -517,6 +523,30 @@ describe('SshRelaySession', () => {
     await session.establish(mockConn, 600)
 
     expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, 600, 'target-1')
+  })
+
+  it('restores the configured relay grace after establish', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn, 600)
+
+    expect(session.getMux()?.notify).toHaveBeenCalledWith(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, {
+      graceTimeSeconds: 600
+    })
+  })
+
+  it('sets relay grace to unlimited before host sleep', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    vi.mocked(session.getMux()!.notify).mockClear()
+
+    session.prepareForHostSleep()
+
+    expect(session.getMux()?.notify).toHaveBeenCalledWith(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, {
+      graceTimeSeconds: 0
+    })
   })
 
   it('cleans up port forwards on dispose', async () => {

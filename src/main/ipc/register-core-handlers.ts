@@ -30,9 +30,12 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerDiagnosticsHandlers } from './diagnostics'
 import { registerSkillsHandlers } from './skills'
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
+import { registerWorkspacePortHandlers } from './workspace-ports'
 import { registerAutomationHandlers } from './automations'
+import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
@@ -56,8 +59,13 @@ import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { KeybindingService } from '../keybindings/keybinding-service'
 
 let registered = false
+
+type CoreHandlerLifecycleOptions = {
+  onBeforeRelaunch?: () => void
+}
 
 export function registerCoreHandlers(
   store: Store,
@@ -73,7 +81,9 @@ export function registerCoreHandlers(
   automations?: AutomationService,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
   agentAwakeService?: AgentAwakeService,
-  crashReports?: CrashReportStore
+  crashReports?: CrashReportStore,
+  keybindings?: KeybindingService,
+  lifecycleOptions: CoreHandlerLifecycleOptions = {}
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -86,7 +96,7 @@ export function registerCoreHandlers(
   }
   registered = true
 
-  registerAppHandlers()
+  registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)
@@ -112,11 +122,19 @@ export function registerCoreHandlers(
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
+  // Why: diagnostics handlers are wired alongside telemetry but the two
+  // lanes never share a code path — `ipc/diagnostics.ts` imports only from
+  // `src/main/observability/`, never from `src/main/telemetry/`. Order is
+  // not load-bearing; both register independent ipcMain channels.
+  registerDiagnosticsHandlers()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
+  }
+  if (keybindings) {
+    registerKeybindingHandlers(keybindings)
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()
@@ -131,6 +149,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerWorkspaceSpaceHandlers(store)
+  registerWorkspacePortHandlers(store)
   if (commitMessageAgentEnv) {
     registerFilesystemHandlers(store, commitMessageAgentEnv)
   } else {

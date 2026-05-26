@@ -66,6 +66,7 @@ export type Automation = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string | null
   baseBranch: string | null
+  reuseSession: boolean
   timezone: string
   rrule: string
   dtstart: number
@@ -108,6 +109,7 @@ export type AutomationCreateInput = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId?: string | null
   baseBranch?: string | null
+  reuseSession?: boolean
   timezone: string
   rrule: string
   dtstart: number
@@ -125,6 +127,7 @@ export type AutomationUpdateInput = Partial<
     | 'workspaceMode'
     | 'workspaceId'
     | 'baseBranch'
+    | 'reuseSession'
     | 'timezone'
     | 'rrule'
     | 'dtstart'

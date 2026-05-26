@@ -151,6 +151,20 @@ describe('configureDevUserDataPath', () => {
   })
 })
 
+describe('shouldInstallManagedHooks', () => {
+  it('keeps managed hook auto-install enabled for default dev runs', async () => {
+    const { shouldInstallManagedHooks } = await import('./configure-process')
+
+    expect(shouldInstallManagedHooks(true)).toBe(true)
+  })
+
+  it('allows managed hook auto-install for packaged runs', async () => {
+    const { shouldInstallManagedHooks } = await import('./configure-process')
+
+    expect(shouldInstallManagedHooks(false)).toBe(true)
+  })
+})
+
 describe('installDevParentDisconnectQuit', () => {
   it('quits the dev app when the supervising IPC channel disconnects', async () => {
     const { app } = await import('electron')

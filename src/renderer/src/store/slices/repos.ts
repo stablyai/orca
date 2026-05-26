@@ -7,11 +7,63 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 const ERROR_TOAST_DURATION = 60_000
+
+type RepoUpdate = Partial<
+  Pick<
+    Repo,
+    | 'displayName'
+    | 'badgeColor'
+    | 'repoIcon'
+    | 'hookSettings'
+    | 'worktreeBaseRef'
+    | 'kind'
+    | 'symlinkPaths'
+    | 'issueSourcePreference'
+    | 'externalWorktreeVisibility'
+    | 'externalWorktreeVisibilityPromptDismissedAt'
+  >
+>
+
+function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
+  const sanitized = { ...updates }
+  if ('repoIcon' in sanitized) {
+    const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
+    if (repoIcon === undefined) {
+      delete sanitized.repoIcon
+    } else {
+      sanitized.repoIcon = repoIcon
+    }
+  }
+  return sanitized
+}
+
+const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
+
+function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>> {
+  let chains = updateRepoChainsByStore.get(get)
+  if (!chains) {
+    chains = new Map<string, Promise<boolean>>()
+    updateRepoChainsByStore.set(get, chains)
+  }
+  return chains
+}
+
+function getKnownRepoWorktreeIds(state: AppState, repoId: string): string[] {
+  const ids = new Set<string>()
+  for (const worktree of state.worktreesByRepo[repoId] ?? []) {
+    ids.add(worktree.id)
+  }
+  for (const worktree of state.detectedWorktreesByRepo[repoId]?.worktrees ?? []) {
+    ids.add(worktree.id)
+  }
+  return [...ids]
+}
 
 export type RepoSlice = {
   repos: Repo[]
@@ -21,21 +73,7 @@ export type RepoSlice = {
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
-  updateRepo: (
-    repoId: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-      >
-    >
-  ) => Promise<void>
+  updateRepo: (repoId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (repoId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
 }
@@ -66,7 +104,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return {
           repos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds.filter((repoId) =>
+            validRepoIds.has(repoId)
+          )
         }
       })
     } catch (err) {
@@ -179,7 +220,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           onboarding,
           hadProjectBeforeAdd
         )
-        activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
+        activateAndRevealWorktree(folderWorktree.id, {
+          sidebarRevealBehavior: 'auto',
+          ...(startup ? { startup } : {})
+        })
       }
       return repo
     } catch (err) {
@@ -204,7 +248,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       clearRepoSlugCacheEntry(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
+      const worktreeIds = getKnownRepoWorktreeIds(get(), repoId)
       const killedTabIds = new Set<string>()
       const killedPtyIds = new Set<string>()
       if (target.kind === 'environment') {
@@ -230,6 +274,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set((s) => {
         const nextWorktrees = { ...s.worktreesByRepo }
         delete nextWorktrees[repoId]
+        const nextDetectedWorktrees = { ...s.detectedWorktreesByRepo }
+        delete nextDetectedWorktrees[repoId]
         const nextTabs = { ...s.tabsByWorktree }
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
@@ -280,6 +326,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           activeRepoId: s.activeRepoId === repoId ? null : s.activeRepoId,
           filterRepoIds: s.filterRepoIds.filter((id) => id !== repoId),
           worktreesByRepo: nextWorktrees,
+          detectedWorktreesByRepo: nextDetectedWorktrees,
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
@@ -312,17 +359,42 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateRepo: async (repoId, updates) => {
-    try {
-      const target = getActiveRuntimeTarget(get().settings)
-      await (target.kind === 'local'
-        ? window.api.repos.update({ repoId, updates })
-        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
-      set((s) => ({
-        repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
-      }))
-    } catch (err) {
-      console.error('Failed to update repo:', err)
+    const updateRepoChains = getRepoUpdateChains(get)
+    const applyRepoUpdate = async () => {
+      try {
+        const sanitizedUpdates = sanitizeRepoUpdate(updates)
+        const target = getActiveRuntimeTarget(get().settings)
+        await (target.kind === 'local'
+          ? window.api.repos.update({ repoId, updates: sanitizedUpdates })
+          : callRuntimeRpc(
+              target,
+              'repo.update',
+              { repo: repoId, updates: sanitizedUpdates },
+              { timeoutMs: 15_000 }
+            ))
+        set((s) => ({
+          repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...sanitizedUpdates } : r))
+        }))
+        return true
+      } catch (err) {
+        console.error('Failed to update repo:', err)
+        return false
+      }
     }
+    const previous = updateRepoChains.get(repoId)
+    // Why: repo settings are persisted as full nested values. Preserve call
+    // order per repo so a slower IPC/RPC response cannot overwrite newer state.
+    const next = previous
+      ? previous.catch(() => undefined).then(applyRepoUpdate)
+      : applyRepoUpdate()
+    updateRepoChains.set(repoId, next)
+    const cleanup = () => {
+      if (updateRepoChains.get(repoId) === next) {
+        updateRepoChains.delete(repoId)
+      }
+    }
+    void next.then(cleanup, cleanup)
+    return next
   },
 
   setActiveRepo: (repoId) => set({ activeRepoId: repoId }),

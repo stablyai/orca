@@ -2,6 +2,7 @@ import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { cn } from '@/lib/utils'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -18,7 +19,12 @@ type Props = {
   startLine?: number
   label?: string
   body: string
-  onDelete: () => void
+  sentAt?: number
+  author?: string
+  authorAvatarUrl?: string
+  createdAtLabel?: string
+  url?: string
+  onDelete?: () => void
   // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
   // and aren't auto-measured. While the user is in edit mode the textarea
   // grows, so the parent decorator passes a callback we fire on resize and
@@ -33,6 +39,11 @@ export function DiffCommentCard({
   startLine,
   label,
   body,
+  sentAt,
+  author,
+  authorAvatarUrl,
+  createdAtLabel,
+  url,
   onDelete,
   onContentResize,
   onSubmitEdit,
@@ -105,6 +116,7 @@ export function DiffCommentCard({
 
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
+  const lineLabel = label ?? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase()
 
   const handleSubmit = async (): Promise<void> => {
     if (!canSubmit || !onSubmitEdit) {
@@ -131,7 +143,8 @@ export function DiffCommentCard({
     <div className="orca-diff-comment-card">
       <div className="orca-diff-comment-header">
         <span className="orca-diff-comment-meta">
-          Note · {label ?? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase()}
+          {author ? 'Review comment' : 'Note'} · {lineLabel}
+          {sentAt ? ' · sent' : ''}
         </span>
         <div className="orca-diff-comment-actions">
           {!editing && headerActions}
@@ -151,7 +164,7 @@ export function DiffCommentCard({
               <Pencil className="size-3.5" />
             </button>
           )}
-          {!editing && (
+          {onDelete && !editing && (
             <button
               type="button"
               className="orca-diff-comment-delete"
@@ -169,6 +182,35 @@ export function DiffCommentCard({
           )}
         </div>
       </div>
+      {author ? (
+        <div className="orca-diff-comment-author-row">
+          {authorAvatarUrl ? (
+            <img className="orca-diff-comment-avatar" src={authorAvatarUrl} alt="" />
+          ) : (
+            <span className="orca-diff-comment-avatar orca-diff-comment-avatar-fallback">
+              {author.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <span className="orca-diff-comment-author">{author}</span>
+          {createdAtLabel ? (
+            <span className="orca-diff-comment-created-at">{createdAtLabel}</span>
+          ) : null}
+          {url ? (
+            <button
+              type="button"
+              className="orca-diff-comment-link"
+              onMouseDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => {
+                ev.preventDefault()
+                ev.stopPropagation()
+                void window.api.shell.openUrl(url)
+              }}
+            >
+              Open
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {editing ? (
         <>
           <textarea
@@ -224,7 +266,9 @@ export function DiffCommentCard({
           </div>
         </>
       ) : (
-        <div className="orca-diff-comment-body">{body}</div>
+        <div className={cn('orca-diff-comment-body', author && 'orca-diff-comment-review-body')}>
+          {body}
+        </div>
       )}
     </div>
   )

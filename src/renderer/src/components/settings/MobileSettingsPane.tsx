@@ -1,35 +1,17 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
-import { MobilePane, MOBILE_PANE_SEARCH_ENTRIES } from './MobilePane'
+import { MobilePane } from './MobilePane'
+import {
+  MOBILE_ENABLE_SEARCH_ENTRY,
+  MOBILE_SETTINGS_PANE_SEARCH_ENTRIES
+} from './mobile-settings-search'
+export { MOBILE_SETTINGS_PANE_SEARCH_ENTRIES }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.8'
-
-const MOBILE_ENABLE_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Mobile',
-  description: 'Control terminals and agents from your phone.',
-  keywords: [
-    'mobile',
-    'phone',
-    'pair',
-    'qr',
-    'code',
-    'scan',
-    'remote',
-    'android',
-    'apk',
-    'beta',
-    'experimental'
-  ]
-}
-
-export const MOBILE_SETTINGS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  MOBILE_ENABLE_SEARCH_ENTRY,
-  ...MOBILE_PANE_SEARCH_ENTRIES
-]
+const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.9'
 
 type MobileSettingsPaneProps = {
   settings: GlobalSettings
@@ -51,7 +33,7 @@ export function MobileSettingsPane({
           title="Mobile"
           description="Control terminals and agents from your phone."
           keywords={MOBILE_ENABLE_SEARCH_ENTRY.keywords}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-1.5">

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
 type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'setup'
@@ -24,7 +25,8 @@ export function useCreateRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
   setStep: (step: DialogStep) => void,
   setAddedRepo: (repo: Repo | null) => void,
-  closeModal: () => void
+  closeModal: () => void,
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
@@ -128,21 +130,22 @@ export function useCreateRepo(
         // Why: setAddedRepo only drives the git "setup" step; the folder
         // branch closes the dialog, which resets addedRepo to null anyway.
         setAddedRepo(repo)
+        setExistingWorkspaceSource?.('create_project')
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current) {
           return
         }
         setStep('setup')
       } else {
-        // Why: without activating the new folder, the dialog closes and users
-        // see no change. Matches addNonGitFolder's behavior in the store slice.
+        // Why: folder repos skip the Git setup step, so activate the synthetic
+        // root workspace before closing. Matches addNonGitFolder's behavior.
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current) {
           return
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id)
+          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
         closeModal()
       }
@@ -159,7 +162,16 @@ export function useCreateRepo(
         setIsCreating(false)
       }
     }
-  }, [createName, createParent, createKind, fetchWorktrees, setStep, setAddedRepo, closeModal])
+  }, [
+    createName,
+    createParent,
+    createKind,
+    fetchWorktrees,
+    setStep,
+    setAddedRepo,
+    closeModal,
+    setExistingWorkspaceSource
+  ])
 
   return {
     createName,

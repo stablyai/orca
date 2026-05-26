@@ -19,8 +19,6 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 
-const isMac = navigator.userAgent.includes('Mac')
-
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp
@@ -55,7 +53,6 @@ function EditorPanelInner({
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
-  const markdownReviewToolsEnabled = settings?.markdownReviewToolsEnabled ?? true
 
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
@@ -91,7 +88,7 @@ function EditorPanelInner({
 
   useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
-  useMarkdownPreviewShortcut({ activeFile, panelRef, isMac, openMarkdownPreview })
+  useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
   useEffect(() => {
     if (!copiedPathToast) {
       return
@@ -174,24 +171,6 @@ function EditorPanelInner({
   )
   useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
 
-  const handleEditorToggleChange = useCallback(
-    (next: EditorToggleValue): void => {
-      const fileId = activeFile?.id
-      if (!fileId) {
-        return
-      }
-      if (next === 'changes') {
-        setEditorViewMode(fileId, 'changes')
-        return
-      }
-      setEditorViewMode(fileId, 'edit')
-      if (next !== 'edit') {
-        setMarkdownViewMode(fileId, next)
-      }
-    },
-    [activeFile?.id, setEditorViewMode, setMarkdownViewMode]
-  )
-
   const handleCopyPath = useCallback(async (): Promise<void> => {
     if (!activeFile) {
       return
@@ -234,7 +213,7 @@ function EditorPanelInner({
       sourceGroupId
     })
   }
-  const handleOpenDiffTargetFile = (): void => {
+  const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
     if (!model.openFileState.canOpen) {
       return
     }
@@ -246,15 +225,37 @@ function EditorPanelInner({
       language: detectLanguage(activeFile.relativePath),
       mode: 'edit'
     })
+    if (preferredMarkdownViewMode) {
+      setEditorViewMode(activeFile.filePath, 'edit')
+      setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
+    }
+  }
+  const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    const fileId = activeFile.id
+    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
+      handleOpenDiffTargetFile('rich')
+      return
+    }
+    if (next === 'changes') {
+      setEditorViewMode(fileId, 'changes')
+      return
+    }
+    setEditorViewMode(fileId, 'edit')
+    if (next !== 'edit') {
+      setMarkdownViewMode(fileId, next)
+    }
   }
   const handleOpenMarkdownPreview = (): void => {
-    openMarkdownPreview({
-      filePath: activeFile.filePath,
-      relativePath: activeFile.relativePath,
-      worktreeId: activeFile.worktreeId,
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-      language: model.resolvedLanguage
-    })
+    openMarkdownPreview(
+      {
+        filePath: activeFile.filePath,
+        relativePath: activeFile.relativePath,
+        worktreeId: activeFile.worktreeId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        language: model.resolvedLanguage
+      },
+      { sourceFileId: activeFile.id }
+    )
   }
   const handleOpenContainingFolder = (): void => {
     if (
@@ -283,7 +284,6 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
-      markdownReviewToolsEnabled={markdownReviewToolsEnabled}
       sideBySide={sideBySide}
       openFiles={openFiles}
       fileContents={fileContents}

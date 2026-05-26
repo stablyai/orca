@@ -2,6 +2,7 @@
 
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
+import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 
 // Why: this module owns the pure state-machine logic for the Source Control
 // primary action (split button). Keeping the logic outside the React component
@@ -30,7 +31,7 @@ export type PrimaryActionKind =
 // because Fetch participates in the busy flag, but it is intentionally NOT
 // in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
 // the primary keeps its natural label and CommitArea suppresses the spinner.
-export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish'
+export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish' | 'rebase'
 
 export type PrimaryAction = {
   kind: PrimaryActionKind
@@ -81,6 +82,12 @@ function describePullCount(behind: number): string {
 
 function describeSyncCounts(ahead: number, behind: number): string {
   return `Pull ${behind}, push ${ahead}`
+}
+
+function describeForcePushWithLease(count: number | undefined, upstreamName?: string): string {
+  const countText =
+    count && count > 0 ? `${count} branch commit${count === 1 ? '' : 's'}` : 'this branch'
+  return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
 /**
@@ -286,6 +293,14 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (upstreamStatus.ahead > 0 && upstreamStatus.behind > 0) {
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return {
+        kind: 'push',
+        label: 'Force Push',
+        title: describeForcePushWithLease(branchCommitsAhead, upstreamStatus.upstreamName),
+        disabled: false
+      }
+    }
     return {
       kind: 'sync',
       label: 'Sync',

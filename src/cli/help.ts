@@ -17,6 +17,15 @@ Environments:
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
 
+Automations:
+  automations list          List scheduled Orca automations
+  automations show          Show one Orca automation
+  automations create        Create a scheduled Orca automation
+  automations edit          Edit an Orca automation
+  automations remove        Remove an Orca automation and its run history
+  automations run           Run an Orca automation now
+  automations runs          List automation run history
+
 Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path
@@ -32,6 +41,11 @@ Worktrees:
   worktree set              Update Orca metadata for a worktree
   worktree rm               Remove a worktree from Orca and git
   worktree ps               Show a compact orchestration summary across worktrees
+
+Files:
+  file open                 Open a workspace file in the Orca editor
+  file diff                 Open a workspace file diff in the Orca editor
+  file open-changed         Open all git-changed files for a workspace
 
 Terminals:
   terminal list             List live Orca-managed terminals
@@ -158,9 +172,12 @@ Common Commands:
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
+  orca file open <path> [--worktree <selector>] [--json]
+  orca file diff <path> [--staged] [--worktree <selector>] [--json]
+  orca file open-changed [--mode edit|diff|both] [--worktree <selector>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--json]
   orca terminal show [--terminal <handle>] [--json]
-  orca terminal read [--terminal <handle>] [--json]
+  orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
@@ -178,8 +195,8 @@ Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
-  --parent-worktree <selector> Parent worktree selector; create infers one from the Orca terminal or current directory by default
-  --no-parent               Force worktree creation/update to have no parent lineage
+  --parent-worktree <selector> Parent worktree selector; create infers a child of the caller/current worktree by default
+  --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
   --text <text>             Text to send to the terminal
@@ -243,6 +260,8 @@ Examples:
   $ orca worktree current
   $ orca worktree set --worktree active --comment "waiting on review"
   $ orca worktree ps --limit 10
+  $ orca file open-changed --mode diff
+  $ orca file open src/App.tsx
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
@@ -344,14 +363,15 @@ export function formatFlagHelp(flag: string): string {
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
     limit: '--limit <n>            Maximum number of rows to return',
+    mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
-    name: '--name <name>          Name for the new worktree',
-    'no-parent': '--no-parent            Force no parent lineage',
+    name: '--name <name>          Name for the new worktree or automation',
+    'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
     'parent-worktree':
-      '--parent-worktree <selector> Parent worktree selector; create infers one by default',
-    path: '--path <path>          Filesystem path to the repo',
+      '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
+    path: '--path <path>          Path argument for the command',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
@@ -367,6 +387,22 @@ export function formatFlagHelp(flag: string): string {
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+    workspace: '--workspace <selector> Existing worktree selector for automation runs',
+    prompt: '--prompt <text>        Automation prompt to pass to the agent',
+    staged: '--staged               Open staged source-control changes',
+    provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
+    trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',
+    schedule: '--schedule <schedule>  Alias for --trigger',
+    time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',
+    day: '--day <0-6>           Day used with weekly preset, Sunday=0',
+    timezone: '--timezone <tz>       IANA timezone for the automation',
+    enabled: '--enabled              Enable the automation',
+    disabled: '--disabled             Disable the automation',
+    'reuse-session':
+      '--reuse-session        Reuse the previous live session for existing-workspace runs',
+    'fresh-session': '--fresh-session        Disable session reuse for future runs',
+    'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
+    'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
     'value-stdin': '--value-stdin         Read set-value payload from stdin',
     'window-id': '--window-id <id>      Target a window id from list-windows',
     'window-index': '--window-index <n>   Target a window index from list-windows',

@@ -208,7 +208,7 @@ export default function GrabConfirmationSheet({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 HTML
               </h3>
-              <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground/80">
+              <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground/80 scrollbar-sleek">
                 <EscapedText text={target.htmlSnippet} />
               </pre>
             </div>

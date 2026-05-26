@@ -1,155 +1,16 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import {
-  OptionalBoolean,
-  OptionalFiniteNumber,
-  OptionalPlainString,
-  OptionalString,
-  TriStateLinkedIssue
-} from '../schemas'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-
-const WorktreeListParams = z.object({
-  repo: OptionalString,
-  limit: OptionalFiniteNumber
-})
-
-const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
-})
-
-const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
-})
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
-
-const WorktreeCreate = z
-  .object({
-    repo: z
-      .unknown()
-      .transform((v) => (typeof v === 'string' ? v : ''))
-      .pipe(z.string().min(1, 'Missing repo selector')),
-    name: OptionalString,
-    baseBranch: OptionalString,
-    branchNameOverride: OptionalString,
-    linkedIssue: TriStateLinkedIssue,
-    linkedPR: TriStateLinkedIssue,
-    linkedLinearIssue: z.string().optional(),
-    comment: OptionalString,
-    displayName: OptionalString,
-    workspaceStatus: OptionalString,
-    sparseCheckout: z
-      .object({
-        directories: z.array(z.string()),
-        presetId: OptionalString
-      })
-      .optional(),
-    pushTarget: z
-      .object({
-        remoteName: z.string(),
-        branchName: z.string(),
-        remoteUrl: OptionalString
-      })
-      .optional(),
-    runHooks: OptionalBoolean,
-    activate: OptionalBoolean,
-    parentWorktree: OptionalString,
-    cwdParentWorktree: OptionalString,
-    noParent: OptionalBoolean,
-    callerTerminalHandle: OptionalString,
-    orchestrationContext: z
-      .object({
-        parentWorktreeId: OptionalString,
-        orchestrationRunId: OptionalString,
-        taskId: OptionalString,
-        coordinatorHandle: OptionalString
-      })
-      .optional(),
-    setupDecision: z
-      .unknown()
-      .transform((v) =>
-        typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
-      )
-      .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
-      .optional(),
-    // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-    // terminal pane launches the selected agent instead of an idle shell.
-    startupCommand: OptionalString,
-    createdWithAgent: z
-      .unknown()
-      .transform((value) => (isTuiAgent(value) ? value : undefined))
-      .optional()
-  })
-  .superRefine((params, ctx) => {
-    if (params.parentWorktree && params.noParent === true) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Choose either --parent-worktree or --no-parent, not both.'
-      })
-    }
-  })
-
-const WorktreeSet = WorktreeSelector.extend({
-  displayName: OptionalString,
-  // Why: empty comments are meaningful metadata updates, so use the plain
-  // string parser instead of OptionalString's empty-as-undefined behavior.
-  comment: OptionalPlainString,
-  linkedIssue: TriStateLinkedIssue,
-  linkedPR: TriStateLinkedIssue,
-  linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
-  isArchived: OptionalBoolean,
-  isUnread: OptionalBoolean,
-  isPinned: OptionalBoolean,
-  sortOrder: OptionalFiniteNumber,
-  lastActivityAt: OptionalFiniteNumber,
-  createdAt: OptionalFiniteNumber,
-  sparseDirectories: z.array(z.string()).optional(),
-  sparseBaseRef: OptionalString,
-  sparsePresetId: OptionalString,
-  baseRef: OptionalString,
-  workspaceStatus: OptionalString,
-  pushTarget: z
-    .object({
-      remoteName: z.string(),
-      branchName: z.string(),
-      remoteUrl: OptionalString
-    })
-    .optional(),
-  diffComments: z.array(z.unknown()).optional(),
-  parentWorktree: OptionalString,
-  noParent: OptionalBoolean
-}).superRefine((params, ctx) => {
-  if (params.parentWorktree && params.noParent === true) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Choose either --parent-worktree or --no-parent, not both.'
-    })
-  }
-})
-
-const WorktreeRemove = WorktreeSelector.extend({
-  force: OptionalBoolean,
-  runHooks: OptionalBoolean
-})
-
-const WorktreeResolvePrBase = z.object({
-  repo: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector')),
-  prNumber: z
-    .unknown()
-    .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
-    .pipe(z.number().int().positive('Missing PR number')),
-  headRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
-})
+  WorktreeCreate,
+  WorktreeDetectedListParams,
+  WorktreeListParams,
+  WorktreePsParams,
+  WorktreeRemove,
+  WorktreeResolveMrBase,
+  WorktreeResolvePrBase,
+  WorktreeSelector,
+  WorktreeSet,
+  WorktreeSortOrder
+} from './worktree-schemas'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
@@ -161,6 +22,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.list',
     params: WorktreeListParams,
     handler: async (params, { runtime }) => runtime.listManagedWorktrees(params.repo, params.limit)
+  }),
+  defineMethod({
+    name: 'worktree.detectedList',
+    params: WorktreeDetectedListParams,
+    handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
   }),
   defineMethod({
     name: 'worktree.lineageList',
@@ -196,9 +62,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         linkedLinearIssue: params.linkedLinearIssue,
+        linkedGitLabMR: params.linkedGitLabMR,
+        linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
         displayName: params.displayName,
         workspaceStatus: params.workspaceStatus,
+        manualOrder: params.manualOrder,
         sparseCheckout: params.sparseCheckout,
         pushTarget: params.pushTarget,
         runHooks: params.runHooks === true,
@@ -206,6 +75,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         setupDecision: params.setupDecision,
         createdWithAgent: params.createdWithAgent,
         startup: params.startupCommand ? { command: params.startupCommand } : undefined,
+        startupDraft: params.startupDraft,
         lineage: {
           parentWorktree: params.parentWorktree,
           ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
@@ -224,11 +94,14 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         linkedLinearIssue: params.linkedLinearIssue,
+        linkedGitLabMR: params.linkedGitLabMR,
+        linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
         isArchived: params.isArchived,
         isUnread: params.isUnread,
         isPinned: params.isPinned,
         sortOrder: params.sortOrder,
+        manualOrder: params.manualOrder,
         lastActivityAt: params.lastActivityAt,
         createdAt: params.createdAt,
         sparseDirectories: params.sparseDirectories,
@@ -259,9 +132,20 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     params: WorktreeResolvePrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedPrBase({
-        repoId: params.repo,
+        repoSelector: params.repo,
         prNumber: params.prNumber,
         headRefName: params.headRefName,
+        isCrossRepository: params.isCrossRepository
+      })
+  }),
+  defineMethod({
+    name: 'worktree.resolveMrBase',
+    params: WorktreeResolveMrBase,
+    handler: async (params, { runtime }) =>
+      runtime.resolveManagedMrBase({
+        repoSelector: params.repo,
+        mrIid: params.mrIid,
+        sourceBranch: params.sourceBranch,
         isCrossRepository: params.isCrossRepository
       })
   }),

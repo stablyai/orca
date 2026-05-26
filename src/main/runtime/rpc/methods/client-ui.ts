@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { PersistedUIState } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
@@ -11,8 +12,10 @@ const WorktreeCardProperty = z.enum([
   'unread',
   'ci',
   'issue',
+  'linear-issue',
   'pr',
   'comment',
+  'ports',
   'inline-agents'
 ])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
@@ -27,6 +30,7 @@ const TaskResumeState = z
     githubMode: z.enum(['items', 'project']).optional(),
     githubItemsPreset: z.string().nullable().optional(),
     githubItemsQuery: z.string().optional(),
+    githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
     linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
     linearQuery: z.string().optional()
   })
@@ -44,17 +48,61 @@ const WorkspaceCleanup = z
     dismissals: z.record(z.string(), WorkspaceCleanupDismissal)
   })
   .strict()
+const GitHubProjectRef = z
+  .object({
+    owner: z.string(),
+    ownerType: z.enum(['organization', 'user']),
+    number: z.number().int()
+  })
+  .strict()
+const GitHubProjectSettings = z
+  .object({
+    pinned: z.array(GitHubProjectRef),
+    recent: z.array(
+      GitHubProjectRef.extend({
+        lastOpenedAt: z.string()
+      }).strict()
+    ),
+    lastViewByProject: z.record(z.string(), z.object({ viewId: z.string() }).strict()),
+    activeProject: GitHubProjectRef.nullable()
+  })
+  .strict()
+
+const SettingsUpdate = z
+  .object({
+    defaultTuiAgent: z
+      .unknown()
+      .transform((value) =>
+        value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
+      )
+      .optional(),
+    defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
+    defaultTaskViewPreset: z
+      .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
+      .optional(),
+    agentStatusHooksEnabled: z.boolean().optional(),
+    defaultRepoSelection: z.array(z.string()).nullable().optional(),
+    defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
+    githubProjects: GitHubProjectSettings.optional()
+  })
+  .strict()
+  .default({})
 
 const UiUpdate = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
+    rightSidebarOpen: z.boolean().optional(),
+    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
-    sortBy: z.enum(['name', 'smart', 'recent', 'repo']).optional(),
+    sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
     showActiveOnly: z.boolean().optional(),
+    hideSleepingWorkspaces: z.boolean().optional(),
+    showSleepingWorkspaces: z.boolean().optional(),
+    showInactiveWorkspaces: z.boolean().optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
@@ -101,6 +149,7 @@ const UiUpdate = z
     starNagNextThreshold: z.number().finite().optional(),
     starNagCompleted: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
+    setupScriptPromptDismissedRepoIds: StringArray.optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),
@@ -116,6 +165,16 @@ const UiUpdate = z
   .default({})
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'settings.get',
+    params: null,
+    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+  }),
+  defineMethod({
+    name: 'settings.update',
+    params: SettingsUpdate,
+    handler: (params, { runtime }) => ({ settings: runtime.updateClientSettings(params) })
+  }),
   defineMethod({
     name: 'ui.get',
     params: null,

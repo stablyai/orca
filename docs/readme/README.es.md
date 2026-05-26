@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>El orquestador de IA para desarrolladores 100x.</strong><br/>
-  Ejecuta Claude Code, Codex, Grok u OpenCode en paralelo entre repositorios — cada uno en su propio worktree, todo administrado desde un solo lugar.<br/>
+  Ejecuta Claude Code, Codex, Grok, Antigravity u OpenCode en paralelo entre repositorios — cada uno en su propio worktree, todo administrado desde un solo lugar.<br/>
   Disponible para <strong>macOS, Windows y Linux</strong>.
 </p>
 
@@ -28,14 +28,16 @@
 
 ## Agentes compatibles
 
-Orca es compatible con cualquier agente CLI (*no solo los de esta lista*).
+Orca es compatible con cualquier agente CLI (_no solo los de esta lista_).
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
+  <a href="https://antigravity.google/docs/cli-overview"><kbd><img src="https://www.google.com/s2/favicons?domain=antigravity.google&sz=64" width="16" valign="middle" /> Antigravity</kbd></a> &nbsp;
   <a href="https://pi.dev"><kbd><img src="https://pi.dev/favicon.svg" width="16" valign="middle" /> Pi</kbd></a> &nbsp;
+  <a href="https://omp.sh"><kbd><img src="https://omp.sh/favicon.svg" width="16" valign="middle" /> oh-my-pi</kbd></a> &nbsp;
   <a href="https://hermes-agent.nousresearch.com/docs/"><kbd><img src="https://www.google.com/s2/favicons?domain=nousresearch.com&sz=64" width="16" valign="middle" /> Hermes Agent</kbd></a> &nbsp;
   <a href="https://opencode.ai/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=opencode.ai&sz=64" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://block.github.io/goose/docs/quickstart/"><kbd><img src="https://www.google.com/s2/favicons?domain=goose-docs.ai&sz=64" width="16" valign="middle" /> Goose</kbd></a> &nbsp;
@@ -45,6 +47,7 @@ Orca es compatible con cualquier agente CLI (*no solo los de esta lista*).
   <a href="https://github.com/charmbracelet/crush"><kbd><img src="https://www.google.com/s2/favicons?domain=charm.sh&sz=64" width="16" valign="middle" /> Charm</kbd></a> &nbsp;
   <a href="https://docs.cline.bot/cline-cli/overview"><kbd><img src="https://www.google.com/s2/favicons?domain=cline.bot&sz=64" width="16" valign="middle" /> Cline</kbd></a> &nbsp;
   <a href="https://www.codebuff.com/docs/help/quick-start"><kbd><img src="https://www.google.com/s2/favicons?domain=codebuff.com&sz=64" width="16" valign="middle" /> Codebuff</kbd></a> &nbsp;
+  <a href="https://commandcode.ai/docs/quickstart"><kbd><img src="https://www.google.com/s2/favicons?domain=commandcode.ai&sz=64" width="16" valign="middle" /> Command Code</kbd></a> &nbsp;
   <a href="https://docs.continue.dev/guides/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=continue.dev&sz=64" width="16" valign="middle" /> Continue</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="../assets/droid-logo.svg" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
@@ -61,7 +64,7 @@ Orca es compatible con cualquier agente CLI (*no solo los de esta lista*).
 
 ## Características
 
-- **Sin login** — Usa tu propia suscripción de Claude Code o Codex.
+- **Sin login** — Usa tu propia suscripción de Claude Code, Codex, Grok o Antigravity.
 - **Nativo con worktrees** — Cada feature vive en su propio worktree. Nada de stash ni malabares entre ramas. Crea y cambia al instante.
 - **Terminales multi-agente** — Ejecuta varios agentes de IA en paralelo en pestañas y paneles. Mira de un vistazo cuáles están activos.
 - **Control de versiones integrado** — Revisa los diffs generados por IA, haz ediciones rápidas y haz commit sin salir de Orca.
@@ -78,7 +81,7 @@ Orca es compatible con cualquier agente CLI (*no solo los de esta lista*).
 - **[Descarga desde onOrca.dev](https://onOrca.dev)**
 - O desde la **[página de GitHub Releases](https://github.com/stablyai/orca/releases/latest)**
 
-*También puedes instalar desde un gestor de paquetes:*
+_También puedes instalar desde un gestor de paquetes:_
 
 ### macOS (Homebrew)
 

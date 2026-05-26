@@ -157,6 +157,15 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
   })
 }
 
+async function enableActivityAgentsView(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const settings = await window.api.settings.set({ experimentalActivity: true })
+    // Why: these specs exercise the experimental Agents page. E2E profiles use
+    // production defaults, where the sidebar entry is hidden unless enabled.
+    window.__store?.setState({ settings })
+  })
+}
+
 async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<void> {
   const rowLabel = page
     .getByRole('group', { name: 'Agents' })
@@ -232,6 +241,7 @@ async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerm
 test.describe('Activity Agent Pane Isolation', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
+    await enableActivityAgentsView(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     const hasPaneManager = await waitForActiveTerminalManager(orcaPage, 30_000)

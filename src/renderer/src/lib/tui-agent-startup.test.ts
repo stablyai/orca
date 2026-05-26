@@ -38,6 +38,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('uses Antigravity interactive prompt mode with the agy binary', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'antigravity',
+        prompt: 'Investigate this regression',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'antigravity',
+      launchCommand: "agy --prompt-interactive 'Investigate this regression'",
+      expectedProcess: 'agy',
+      followupPrompt: null
+    })
+  })
+
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({
@@ -131,6 +147,22 @@ describe('buildAgentStartupPlan', () => {
       launchCommand: 'grok',
       expectedProcess: 'grok',
       followupPrompt: 'Trace the failing test'
+    })
+  })
+
+  it('launches Command Code by its unambiguous binary with a positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'command-code',
+        prompt: 'Fix the issue',
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toEqual({
+      agent: 'command-code',
+      launchCommand: "command-code --trust 'Fix the issue'",
+      expectedProcess: 'command-code',
+      followupPrompt: null
     })
   })
 

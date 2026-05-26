@@ -94,6 +94,7 @@ export function mapGitLabIssueInfo(data: {
   web_url?: string
   url?: string
   labels?: { name: string }[] | string[]
+  updated_at?: string
   description?: string | null
   author?: { username?: string | null; avatar_url?: string | null } | null
 }): GitLabIssueInfo {
@@ -107,6 +108,7 @@ export function mapGitLabIssueInfo(data: {
     state: data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed',
     url: data.web_url ?? data.url ?? '',
     labels,
+    ...(data.updated_at ? { updatedAt: data.updated_at } : {}),
     // Why: same description / author optional plumbing as mapMRInfo —
     // list payloads strip these so callers can tell "absent" from "blank".
     ...(typeof data.description === 'string' ? { description: data.description } : {}),
@@ -245,7 +247,11 @@ type GitLabMRRawForWorkItem = {
   target_project_id?: number
 }
 
-export function mapMRToWorkItem(data: GitLabMRRawForWorkItem, repoId: string): GitLabWorkItem {
+export function mapMRToWorkItem(
+  data: GitLabMRRawForWorkItem,
+  repoId: string,
+  projectRef?: GitLabWorkItem['projectRef']
+): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
   return {
@@ -266,7 +272,8 @@ export function mapMRToWorkItem(data: GitLabMRRawForWorkItem, repoId: string): G
       data.source_project_id !== undefined &&
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
-    repoId
+    repoId,
+    ...(projectRef ? { projectRef } : {})
   }
 }
 
@@ -284,7 +291,8 @@ type GitLabIssueRawForWorkItem = {
 
 export function mapIssueToWorkItem(
   data: GitLabIssueRawForWorkItem,
-  repoId: string
+  repoId: string,
+  projectRef?: GitLabWorkItem['projectRef']
 ): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
@@ -301,7 +309,8 @@ export function mapIssueToWorkItem(
     labels,
     updatedAt: data.updated_at ?? '',
     author: data.author?.username ?? null,
-    repoId
+    repoId,
+    ...(projectRef ? { projectRef } : {})
   }
 }
 

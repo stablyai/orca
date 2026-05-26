@@ -12,6 +12,7 @@ import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -159,12 +160,33 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
+function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
+  const payload: FsChangedPayload = {
+    worktreePath: rootKey,
+    events: [{ kind: 'overflow', absolutePath: rootKey }]
+  }
+  for (const [, wc] of root.listeners) {
+    if (!wc.isDestroyed()) {
+      wc.send('fs:changed', payload)
+    }
+  }
+}
+
 async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
+  const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
+  root.batch.overflowed = false
   root.batch.timer = null
   root.batch.firstEventAt = 0
 
-  if (rawEvents.length === 0 || root.listeners.size === 0) {
+  if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
+    return
+  }
+
+  if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
+    // Why: deletion storms can be valid but too large to coalesce/stat/send
+    // per path. One overflow asks the renderer for the same conservative refresh.
+    emitOverflowPayload(rootKey, root)
     return
   }
 
@@ -231,7 +253,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], timer: null, firstEventAt: 0 }
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
   }
 
   try {
@@ -257,15 +279,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // as overflow so the renderer conservatively refreshes all visible
           // tree state rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
-          const overflowPayload: FsChangedPayload = {
-            worktreePath: rootKey,
-            events: [{ kind: 'overflow', absolutePath: rootKey }]
-          }
-          for (const [, wc] of root.listeners) {
-            if (!wc.isDestroyed()) {
-              wc.send('fs:changed', overflowPayload)
-            }
-          }
+          emitOverflowPayload(rootKey, root)
           // Why: after a watcher error the native subscription may be invalid
           // (e.g. watched root was deleted). Tear down the dead watcher so we
           // don't leave a dangling subscription for a root that no longer
@@ -285,7 +299,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           return
         }
 
-        root.batch.events.push(...events)
+        queueWatcherEvents(root.batch, events)
         scheduleBatchFlush(rootKey, root)
       },
       watcherOptions
