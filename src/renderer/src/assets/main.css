@@ -1969,19 +1969,18 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 /* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
    to a dark "Start workspace →" pill, then a workspace card slides in. */
 .feature-tour-tasks-cursor {
-  /* Why: anchored from the row's right edge so the cursor lands on the
-     ml-auto pill regardless of preview width. The pill's morphed center
-     sits ~40px from the right edge (12px row padding + half of 56px pill).
-     We offset 33px so the cursor's arrow tip (top-left of the SVG) lands on
-     the pill center; SVG top-left + ~7px tip-to-center adjustment. */
+  /* Why: anchored from the row's right edge so the cursor sits just past the
+     pill's right edge (12px row padding + ~6px past pill end) instead of
+     covering the label text. The arrow tip (top-left of the SVG) lands on the
+     dark pill's trailing edge with the body of the cursor extending right. */
   position: absolute;
   top: 50%;
-  right: 33px;
+  right: 14px;
   width: 14px;
   height: 14px;
   pointer-events: none;
   z-index: 8;
-  transform: translate(120px, -50%);
+  transform: translate(120px, -30%);
   opacity: 0;
   animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
     infinite;
@@ -1994,22 +1993,30 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 }
 @keyframes feature-tour-tasks-cursor {
   0% {
-    transform: translate(160px, -30%);
+    transform: translate(160px, -10%);
     opacity: 0;
   }
   2% {
     opacity: 1;
   }
   5% {
-    transform: translate(60px, -50%);
+    transform: translate(60px, -30%);
     opacity: 1;
   }
   8% {
-    transform: translate(0px, -50%);
+    transform: translate(0px, -30%);
+    opacity: 1;
+  }
+  9% {
+    transform: translate(0px, -10%);
+    opacity: 1;
+  }
+  10.5% {
+    transform: translate(0px, -30%);
     opacity: 1;
   }
   23.5% {
-    transform: translate(0px, -50%);
+    transform: translate(0px, -30%);
     opacity: 1;
   }
   24.5% {
@@ -2017,7 +2024,7 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   }
   25%,
   100% {
-    transform: translate(0px, -50%);
+    transform: translate(0px, -30%);
     opacity: 0;
   }
 }
@@ -2057,22 +2064,26 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
     width: 28px;
     background: rgb(34 197 94 / 0.14);
     border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
   }
   8% {
-    width: 56px;
+    width: 78px;
     background: var(--primary);
     border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   23.5% {
-    width: 56px;
+    width: 78px;
     background: var(--primary);
     border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   25%,
   100% {
     width: 28px;
     background: rgb(34 197 94 / 0.14);
     border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
   }
 }
 
@@ -2104,15 +2115,15 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 /* Click ring fires when the cursor "clicks" the morphed pill on the tasks
    row. Positioned to overlay the right-side pill of the second task. */
 .feature-tour-tasks-click-ring {
-  /* Why: right-edge anchored to overlay the morphed pill no matter how wide
-     the preview is. Right-offset = 12px row padding + half pill (28) - half
-     ring (11) so the ring centers on the pill. */
+  /* Why: ring is centered on the cursor tip (right=28 from row's right edge)
+     so the click feedback lands where the cursor is, on the arrow icon — not
+     centered on the pill, which would visually disconnect from the cursor. */
   position: absolute;
   top: 50%;
-  right: 29px;
-  width: 22px;
-  height: 22px;
-  margin-top: -11px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
   border-radius: 9999px;
   border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   opacity: 0;

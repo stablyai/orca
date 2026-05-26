@@ -241,9 +241,23 @@ function TasksFrame(): JSX.Element {
             <span className="truncate text-[15px] font-medium leading-none text-foreground">
               Worktree picker truncates
             </span>
-            <span className="feature-tour-tasks-pill relative ml-auto flex h-5 items-center justify-center overflow-hidden rounded-full border border-emerald-500/30 bg-emerald-500/15">
-              <span className="feature-tour-tasks-pill-label whitespace-nowrap text-[14px] font-medium leading-none text-primary-foreground">
-                Start →
+            <span className="feature-tour-tasks-pill relative ml-auto flex h-6 items-center justify-center overflow-hidden rounded-full border border-emerald-500/30 bg-emerald-500/15">
+              <span className="feature-tour-tasks-pill-label flex items-center gap-1 whitespace-nowrap pl-3 pr-2.5 text-[13px] font-semibold leading-none tracking-[0.01em] text-primary-foreground">
+                Start
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 8h10" />
+                  <path d="M9 4l4 4-4 4" />
+                </svg>
               </span>
             </span>
             {/* Why: cursor + ring live inside the row so they anchor to the
