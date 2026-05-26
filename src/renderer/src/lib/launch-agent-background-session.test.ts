@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
@@ -190,6 +191,23 @@ describe('launchAgentBackgroundSession', () => {
     expect(onAgentStatus).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
     )
+  })
+
+  it('seeds a working status for Command Code prompt launches', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'check the status spinner'
+    })
+
+    const paneKey = expectStablePaneSpawn()
+    expect(state.setAgentStatus).toHaveBeenCalledWith(paneKey, {
+      state: 'working',
+      prompt: 'check the status spinner',
+      agentType: 'command-code'
+    })
   })
 
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {
