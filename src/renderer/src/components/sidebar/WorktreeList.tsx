@@ -274,6 +274,9 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
 }
 
 const LINEAGE_INDENT = 18
+// Why: top-level worktrees are children of their project header; indent the
+// group one step so the status dots nest under the folder icon for hierarchy.
+const WORKTREE_GROUP_INDENT = 18
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
 type VirtualizedWorktreeViewportProps = {
@@ -2230,6 +2233,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // Why: child cards render inside the parent card body, so their
               // first nested level starts flush with that inset.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
+              // Why: nested cards inherit the parent row's base indent, so only
+              // top-level rows add the group inset.
+              const basePadding = nested ? 0 : WORKTREE_GROUP_INDENT
+              const paddingLeft = basePadding + paddingDepth * LINEAGE_INDENT
               const worktreeDragGroupKey = groupKeyByWorktreeId.get(itemRow.worktree.id)
               const worktreeDragGroupIndex = groupIndexByWorktreeId.get(itemRow.worktree.id)
               return (
@@ -2262,7 +2269,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     nested ? undefined : handleWorktreeRowPointerDown(event, itemRow.worktree.id)
                   }
                   style={{
-                    paddingLeft: paddingDepth > 0 ? `${paddingDepth * LINEAGE_INDENT}px` : undefined
+                    paddingLeft: paddingLeft > 0 ? `${paddingLeft}px` : undefined
                   }}
                 >
                   <WorktreeCard
