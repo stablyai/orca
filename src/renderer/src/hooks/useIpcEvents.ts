@@ -1429,7 +1429,7 @@ export function useIpcEvents(): void {
     )
 
     // Why: CLI-driven tab creation sends a request with a specific worktreeId and
-    // url. The renderer creates the tab and replies with the workspace ID so the
+    // url. The renderer creates the tab and replies with the page ID so the
     // main process can wait for registerGuest before returning to the CLI.
     unsubs.push(
       window.api.ui.onRequestTabCreate((data) => {
