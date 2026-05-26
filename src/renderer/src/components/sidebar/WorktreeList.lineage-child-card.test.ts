@@ -155,7 +155,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
-function setLineageFixtureState(): void {
+function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
   const repo = makeRepo()
   const parent = makeWorktree({
     id: 'parent',
@@ -188,7 +188,7 @@ function setLineageFixtureState(): void {
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
     filterRepoIds: [],
-    groupBy: 'none',
+    groupBy,
     hideDefaultBranchWorkspace: false,
     issueCache: {},
     migrationUnsupportedByPtyId: {},
@@ -249,5 +249,22 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeGreaterThan(childStart)
     expect(childToggleIndex).toBeGreaterThan(childStart)
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
+  })
+
+  it('does not add group indentation when grouping is disabled', async () => {
+    setLineageFixtureState('none')
+    const { default: WorktreeList } = await import('./WorktreeList')
+
+    const markup = renderToStaticMarkup(
+      React.createElement(WorktreeList, {
+        scrollOffsetRef: { current: 0 },
+        scrollAnchorRef: { current: null }
+      })
+    )
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('id="worktree-list-option-parent"')
+    expect(parentRow).not.toContain('padding-left')
   })
 })

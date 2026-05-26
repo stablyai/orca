@@ -2233,9 +2233,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // Why: child cards render inside the parent card body, so their
               // first nested level starts flush with that inset.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
-              // Why: nested cards inherit the parent row's base indent, so only
-              // top-level rows add the group inset.
-              const basePadding = nested ? 0 : WORKTREE_GROUP_INDENT
+              // Why: ungrouped mode keeps workspace cards flush; grouped modes
+              // indent top-level cards under their visible section header.
+              const basePadding = !nested && groupBy !== 'none' ? WORKTREE_GROUP_INDENT : 0
               const paddingLeft = basePadding + paddingDepth * LINEAGE_INDENT
               const worktreeDragGroupKey = groupKeyByWorktreeId.get(itemRow.worktree.id)
               const worktreeDragGroupIndex = groupIndexByWorktreeId.get(itemRow.worktree.id)
