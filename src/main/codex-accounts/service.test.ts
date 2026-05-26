@@ -100,6 +100,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     keepComputerAwakeWhileAgentsRun: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
     experimentalPet: false,

@@ -517,6 +517,17 @@ export function useTerminalPaneLifecycle({
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          // JIS Yen (¥) key to Backslash (\) conversion logic
+          if (settingsRef.current?.terminalJISYenToBackslash === true && e.key === '¥') {
+            if (e.type === 'keydown') {
+              const transport = paneTransportsRef.current.get(pane.id)
+              if (transport) {
+                transport.sendInput('\\')
+              }
+            }
+            return false
+          }
+
           return !shouldBypassXtermKeyboardEvent(e, {
             isMac: navigator.userAgent.includes('Mac'),
             hasSelection: pane.terminal.hasSelection()

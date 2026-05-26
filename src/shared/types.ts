@@ -1792,6 +1792,11 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
+  /** Controls whether pressing the Yen key (¥) on Japanese JIS keyboards sends a backslash (\).
+   *  On macOS, entering a backslash typically requires pressing Option+¥ (Alt+¥). Enabling this
+   *  setting allows users to input a backslash with a single keypress of the Yen key without
+   *  needing to hold the Option modifier. */
+  terminalJISYenToBackslash: boolean
   experimentalMobile: boolean
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size

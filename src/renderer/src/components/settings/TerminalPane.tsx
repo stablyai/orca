@@ -44,6 +44,7 @@ import {
   TERMINAL_DARK_THEME_SEARCH_ENTRIES,
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
+  TERMINAL_MAC_YEN_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
@@ -721,7 +722,9 @@ export function TerminalPane({
         searchQuery,
         TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY
       )) ||
-    (isMac && matchesSettingsSearch(searchQuery, TERMINAL_MAC_OPTION_SEARCH_ENTRIES)) ? (
+    (isMac &&
+      (matchesSettingsSearch(searchQuery, TERMINAL_MAC_OPTION_SEARCH_ENTRIES) ||
+        matchesSettingsSearch(searchQuery, TERMINAL_MAC_YEN_SEARCH_ENTRIES))) ? (
       <section key="advanced" className="space-y-3">
         <SettingsSubsectionHeader
           title="Advanced"
@@ -886,53 +889,81 @@ export function TerminalPane({
           ) : null}
 
           {isMac ? (
-            <SearchableSetting
-              title="Option as Alt"
-              description="Controls whether the macOS Option key sends Alt/Esc sequences or composes characters."
-              keywords={[
-                'terminal',
-                'option',
-                'alt',
-                'key',
-                'meta',
-                'compose',
-                'mac',
-                'macos',
-                'keyboard',
-                'german',
-                'international',
-                'readline',
-                'ghostty'
-              ]}
-            >
-              <SettingsRow
-                alignTop
-                label="Option as Alt"
-                description={
-                  settings.terminalMacOptionAsAlt === 'auto'
-                    ? `Auto — detected: ${detectedLayoutLabel}.`
-                    : settings.terminalMacOptionAsAlt === 'false'
-                      ? 'Option composes special characters for your keyboard layout.'
-                      : settings.terminalMacOptionAsAlt === 'true'
-                        ? 'Both Option keys send Alt/Esc sequences.'
-                        : `The ${settings.terminalMacOptionAsAlt} Option key sends Alt/Esc; the other composes special characters.`
-                }
-                control={
-                  <SettingsSegmentedControl
-                    ariaLabel="Option as Alt"
-                    value={settings.terminalMacOptionAsAlt}
-                    onChange={(option) => updateSettings({ terminalMacOptionAsAlt: option })}
-                    options={[
-                      { value: 'auto', label: 'Auto' },
-                      { value: 'true', label: 'Both' },
-                      { value: 'left', label: 'Left' },
-                      { value: 'right', label: 'Right' },
-                      { value: 'false', label: 'Off' }
-                    ]}
-                  />
-                }
-              />
-            </SearchableSetting>
+            <>
+              <SearchableSetting
+                title="Option as Alt"
+                description="Controls whether the macOS Option key sends Alt/Esc sequences or composes characters."
+                keywords={[
+                  'terminal',
+                  'option',
+                  'alt',
+                  'key',
+                  'meta',
+                  'compose',
+                  'mac',
+                  'macos',
+                  'keyboard',
+                  'german',
+                  'international',
+                  'readline',
+                  'ghostty'
+                ]}
+              >
+                <SettingsRow
+                  alignTop
+                  label="Option as Alt"
+                  description={
+                    settings.terminalMacOptionAsAlt === 'auto'
+                      ? `Auto — detected: ${detectedLayoutLabel}.`
+                      : settings.terminalMacOptionAsAlt === 'false'
+                        ? 'Option composes special characters for your keyboard layout.'
+                        : settings.terminalMacOptionAsAlt === 'true'
+                          ? 'Both Option keys send Alt/Esc sequences.'
+                          : `The ${settings.terminalMacOptionAsAlt} Option key sends Alt/Esc; the other composes special characters.`
+                  }
+                  control={
+                    <SettingsSegmentedControl
+                      ariaLabel="Option as Alt"
+                      value={settings.terminalMacOptionAsAlt}
+                      onChange={(option) => updateSettings({ terminalMacOptionAsAlt: option })}
+                      options={[
+                        { value: 'auto', label: 'Auto' },
+                        { value: 'true', label: 'Both' },
+                        { value: 'left', label: 'Left' },
+                        { value: 'right', label: 'Right' },
+                        { value: 'false', label: 'Off' }
+                      ]}
+                    />
+                  }
+                />
+              </SearchableSetting>
+
+              <SearchableSetting
+                title="JIS Yen(¥) to Backslash(\)"
+                description="Controls whether pressing the Japanese Yen (¥) key sends a backslash (\\) instead."
+                keywords={[
+                  'terminal',
+                  'yen',
+                  'backslash',
+                  'japanese',
+                  'keyboard',
+                  'mac',
+                  'macos',
+                  'jis'
+                ]}
+              >
+                <SettingsSwitchRow
+                  label="JIS Yen(¥) to Backslash(\)"
+                  description="Pressing the Yen (¥) key sends a backslash (\\) instead."
+                  checked={settings.terminalJISYenToBackslash ?? false}
+                  onChange={() =>
+                    updateSettings({
+                      terminalJISYenToBackslash: !settings.terminalJISYenToBackslash
+                    })
+                  }
+                />
+              </SearchableSetting>
+            </>
           ) : null}
         </div>
       </section>
