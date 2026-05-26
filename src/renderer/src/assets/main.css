@@ -209,8 +209,9 @@
   /* --popover is the frosted floating-panel tier — higher alpha so
      dialogs / dropdowns / floating workspace clearly stand out from the
      see-through canvas. With glass-surface-strong (3× blur) it reads
-     as proper frosted glass. */
-  --popover: rgba(255, 255, 255, 0.65);
+     as proper frosted glass. Tuned to ~0.78 to sit near the dropdown
+     surface alpha (0.82) so all floating panels read as one solid tier. */
+  --popover: rgba(255, 255, 255, 0.78);
   --popover-foreground: rgba(20, 20, 20, 1);
   --primary: rgba(20, 20, 20, 1);
   --primary-foreground: rgba(255, 255, 255, 0.98);
@@ -257,7 +258,7 @@
   --editor-surface: rgba(15, 18, 32, 0.4);
   --card: rgba(15, 18, 32, 0.15);
   --card-foreground: rgba(235, 240, 255, 1);
-  --popover: rgba(15, 18, 32, 0.65);
+  --popover: rgba(15, 18, 32, 0.78);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
@@ -511,6 +512,16 @@
 .glass-surface-strong {
   backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
+}
+
+/* Why: content-editor modals (e.g. the automation editor) are surfaces you
+   read and type into, so even the frosted --popover tier lets canvas text
+   bleed through and compete with the editor content. Force an opaque fill,
+   but only under glass — non-glass themes already use an opaque elevated
+   --popover, so they keep bg-popover via the base component. */
+:root.glass-light .glass-surface-opaque,
+:root.glass-dark .glass-surface-opaque {
+  background-color: var(--background-opaque);
 }
 
 /* Why: respect the user's system-level reduce-transparency setting. macOS

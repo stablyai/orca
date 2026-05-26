@@ -117,7 +117,7 @@ export function AutomationEditorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[90vh] flex-col gap-0 p-0 dark:border-border dark:bg-card dark:text-card-foreground sm:max-w-[920px]"
+        className="flex max-h-[90vh] flex-col gap-0 p-0 dark:border-border sm:max-w-[920px]"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
         }}

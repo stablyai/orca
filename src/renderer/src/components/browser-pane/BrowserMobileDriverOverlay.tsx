@@ -46,7 +46,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
         'mobile-browser-driver-banner'
       )}
     >
-      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
+      <div className="glass-surface-strong pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-popover p-6 pb-5 text-popover-foreground shadow-xs">
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
           <span aria-hidden="true">●</span>
           <span>Mobile is driving this browser</span>

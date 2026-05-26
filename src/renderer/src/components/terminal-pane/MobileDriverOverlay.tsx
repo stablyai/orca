@@ -155,7 +155,7 @@ function LoudOverlay({
         rootClassName
       )}
     >
-      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
+      <div className="glass-surface-strong pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-popover p-6 pb-5 text-popover-foreground shadow-xs">
         <div
           className={cn(
             'flex items-center gap-1.5 text-xs font-medium',
@@ -205,7 +205,7 @@ function LockChip({ actionPending, onAction, onExpand, rootClassName }: ChipProp
   return (
     <div
       className={cn(
-        'absolute right-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground shadow-xs',
+        'glass-surface absolute right-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-xs',
         rootClassName
       )}
     >

@@ -89,7 +89,7 @@ function SheetContent({
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
       <SheetPrimitive.Content
         data-slot="sheet-content"
-        className={cn('glass-surface', sheetContentVariants({ side }), className)}
+        className={cn('glass-surface-strong', sheetContentVariants({ side }), className)}
         // Why: same as SheetOverlay — the sheet content portals to the
         // document root and its header overlaps the titlebar drag strip.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
