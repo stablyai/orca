@@ -9464,6 +9464,13 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
+      if (candidates.length > 1) {
+        // Why: registering another worktree from the same Git repo makes git
+        // report the same physical worktree path under multiple repo IDs.
+        // A path selector is already exact, so prefer the first resolved row
+        // instead of surfacing a duplicate-registration ambiguity.
+        candidates = [candidates[0]]
+      }
     } else if (selector.startsWith('branch:')) {
       const branchSelector = selector.slice(7)
       candidates = worktrees.filter((worktree) =>
