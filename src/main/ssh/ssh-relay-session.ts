@@ -48,11 +48,28 @@ import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
-import type { DetectedPort } from '../../shared/ssh-types'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type DetectedPort,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
+} from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
+
+function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
+  const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  const requested = Number.isFinite(raw) ? Math.floor(raw) : DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  return requested === 0
+    ? 0
+    : Math.max(
+        MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+        Math.min(MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, requested)
+      )
+}
 
 export class SshRelaySession {
   private _state: RelaySessionState = 'idle'
@@ -133,6 +150,14 @@ export class SshRelaySession {
     return this.portScanner
   }
 
+  prepareForHostSleep(): void {
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this.isDisposed()) {
+      return
+    }
+    mux.notify(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, { graceTimeSeconds: 0 })
+  }
+
   // Why: single entry point for relay setup — used by both initial connect
   // and app-restart reconnect. Having one path eliminates the risk of
   // forgetting a registration step.
@@ -203,6 +228,7 @@ export class SshRelaySession {
         throw new Error('Session disposed during establish')
       }
 
+      this.configureRelayGraceTime(mux, graceTimeSeconds)
       this.watchMuxForRelayLoss(mux)
       this._state = 'ready'
       this.startPortScanning()
@@ -328,6 +354,7 @@ export class SshRelaySession {
         return
       }
 
+      this.configureRelayGraceTime(mux, graceTimeSeconds)
       this.watchMuxForRelayLoss(mux)
       this._state = 'ready'
       this.startPortScanning()
@@ -460,6 +487,15 @@ export class SshRelaySession {
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
     return true
+  }
+
+  private configureRelayGraceTime(
+    mux: SshChannelMultiplexer,
+    graceTimeSeconds: number | undefined
+  ): void {
+    mux.notify(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, {
+      graceTimeSeconds: normalizeRelayGracePeriodSeconds(graceTimeSeconds)
+    })
   }
 
   // Why: the relay can inject ORCA_AGENT_HOOK_* env into SSH PTYs, but

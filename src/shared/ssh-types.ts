@@ -3,6 +3,7 @@
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 export type SshTarget = {
   id: string
