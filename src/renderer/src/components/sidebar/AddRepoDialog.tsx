@@ -15,9 +15,10 @@ import { Input } from '@/components/ui/input'
 import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
-import { SetupStep } from './AddRepoSetupStep'
+import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
 import { getDefaultCloneParent } from './clone-defaults'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type {
   AddRepoExistingWorkspaceSource,
@@ -47,6 +48,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
 
   const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
@@ -157,6 +159,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       return a.displayName.localeCompare(b.displayName)
     })
   }, [worktrees])
+  const primaryWorktree = useMemo(
+    () => sortedWorktrees.find((worktree) => worktree.isMainWorktree) ?? null,
+    [sortedWorktrees]
+  )
+  const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
   const resetState = useCallback(() => {
     cloneGenRef.current++
@@ -362,6 +369,18 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     },
     [closeModal, openModal, repoId, trackSetupAction]
   )
+
+  const handleStartPrimaryWorktree = useCallback(() => {
+    if (!primaryWorktree) {
+      return
+    }
+    trackSetupAction('open_primary')
+    closeModal()
+    if (useAppStore.getState().hideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+    activateAndRevealWorktree(primaryWorktree.id)
+  }, [closeModal, primaryWorktree, setHideDefaultBranchWorkspace, trackSetupAction])
 
   const handleConfigureRepo = useCallback(() => {
     trackSetupAction('configure')
@@ -677,6 +696,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           <SetupStep
             repoName={addedRepo?.displayName ?? ''}
             hiddenWorktreeCount={hiddenWorktreeCount}
+            primaryBranchName={primaryBranchName}
+            onStartPrimaryWorktree={handleStartPrimaryWorktree}
             onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
             onCreateWorktree={handleCreateWorktree}
             onConfigureRepo={handleConfigureRepo}

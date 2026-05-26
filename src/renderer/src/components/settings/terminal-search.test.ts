@@ -32,6 +32,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'Option as Alt')).toBe(false)
   })
 
+  it('includes the JIS Yen mapping setting only on macOS', () => {
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+
+    expect(entriesMac.some((entry) => entry.title === 'JIS Yen (¥) to Backslash (\\)')).toBe(true)
+    expect(entriesLinux.some((entry) => entry.title === 'JIS Yen (¥) to Backslash (\\)')).toBe(
+      false
+    )
+  })
+
   it('includes the Manage Sessions entry on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })

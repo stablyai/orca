@@ -2241,6 +2241,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
+      activeWorktreeId: worktreeId,
       rightSidebarOpen: true,
       rightSidebarTab: 'source-control',
       worktreesByRepo: {
@@ -2396,6 +2397,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
+      activeWorktreeId: 'wt-1',
       rightSidebarOpen: true,
       rightSidebarTab: 'source-control',
       worktreesByRepo: {
@@ -2440,6 +2442,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
+      activeWorktreeId: 'wt-1',
       rightSidebarOpen: true,
       rightSidebarTab: 'source-control',
       worktreesByRepo: {

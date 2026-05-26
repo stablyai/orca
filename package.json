@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.28-rc.0",
+  "version": "1.4.28",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -41,8 +41,8 @@
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/install-dev-cli.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build:web": "vite build --config vite.web.config.ts && node config/scripts/verify-web-build.mjs",
-    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
-    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
+    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:cli && pnpm run build:electron-vite && pnpm run build:web",
+    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite && pnpm run build:web",
     "postinstall": "pnpm rebuild electron && node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "rebuild:node": "pnpm rebuild better-sqlite3 node-pty",

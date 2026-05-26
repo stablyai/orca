@@ -717,6 +717,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
   })
 
+  it("maps 'command-code' to 'Command Code'", () => {
+    expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -738,6 +742,7 @@ describe('agentTypeToIconAgent', () => {
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
+    expect(agentTypeToIconAgent('command-code')).toBe('command-code')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

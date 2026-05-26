@@ -21,7 +21,7 @@ type UseFileExplorerRevealParams = {
   rowsByPath: Map<string, TreeNode>
   flatRows: TreeNode[]
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  setSelectedPath: (path: string | null) => void
   setFlashingPath: Dispatch<SetStateAction<string | null>>
   flashTimeoutRef: RefObject<number | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>

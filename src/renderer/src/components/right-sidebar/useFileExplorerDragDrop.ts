@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getWorkspaceFileDragPaths, WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
@@ -340,9 +340,10 @@ export function useFileExplorerDragDrop({
         // not the React drop handler. We only clear native drag visual state
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
-        const sourcePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-        if (sourcePath && worktreePath) {
-          handleMoveDrop(sourcePath, worktreePath)
+        if (worktreePath) {
+          for (const sourcePath of getWorkspaceFileDragPaths(e.dataTransfer)) {
+            handleMoveDrop(sourcePath, worktreePath)
+          }
         }
       },
       [worktreePath, handleMoveDrop, stopDragEdgeScroll, clearNativeDragState]

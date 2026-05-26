@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Terminal } from 'lucide-react'
+import { RefreshCw, Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
@@ -128,9 +128,11 @@ export function AgentSkillSetupPanel({
             type="button"
             variant="ghost"
             size="sm"
+            className="gap-1.5"
             onClick={() => void onRecheck()}
             disabled={loading}
           >
+            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
             Re-check
           </Button>
         ) : null}

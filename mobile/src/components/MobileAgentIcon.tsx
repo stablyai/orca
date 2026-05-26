@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { Terminal } from 'lucide-react-native'
-import Svg, { G, Path } from 'react-native-svg'
+import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
@@ -17,6 +17,23 @@ function PiIcon({ size = 16 }: { size?: number }) {
         d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
       />
       <Path fill={colors.textPrimary} d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+    </Svg>
+  )
+}
+
+function OmpIcon({ size = 16 }: { size?: number }) {
+  // SVG sourced from omp.sh's transparent homepage mark. Why: react-native-svg
+  // does not support the homepage's CSS oklch stops, so use its favicon hex stops.
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Defs>
+        <LinearGradient id="ompMarkGradient" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#ed4abf" />
+          <Stop offset=".5" stopColor="#9b4dff" />
+          <Stop offset="1" stopColor="#5ad8e6" />
+        </LinearGradient>
+      </Defs>
+      <Path fill="url(#ompMarkGradient)" d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
     </Svg>
   )
 }
@@ -65,6 +82,7 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   if (agentId === 'claude') return <ClaudeIcon size={size} />
   if (agentId === 'codex') return <OpenAIIcon size={size} />
   if (agentId === 'pi') return <PiIcon size={size} />
+  if (agentId === 'omp') return <OmpIcon size={size} />
   if (agentId === 'aider') return <AiderIcon size={size} />
   if (agentId === '__blank__' || agentId === 'blank') {
     return <Terminal size={size} color={colors.textMuted} />

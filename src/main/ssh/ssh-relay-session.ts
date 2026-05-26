@@ -19,6 +19,7 @@ import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { installRemoteManagedAgentHooks } from '../agent-hooks/remote-managed-hook-installers'
+import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -467,7 +468,7 @@ export class SshRelaySession {
   // configs before registering the PTY provider so newly spawned agent panes
   // report status from their first prompt.
   private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled()) {
+    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
     }
 
@@ -519,13 +520,14 @@ export class SshRelaySession {
   // they upgrade. Hook-script-based agents use a separate explicit remote
   // installer flow because that mutates user-owned agent config files.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled()) {
+    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
     }
     try {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
-        piExtensionSource: getPiAgentStatusExtensionSource()
+        piExtensionSource: getPiAgentStatusExtensionSource('pi'),
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler (treat as soft skip).
@@ -546,6 +548,11 @@ export class SshRelaySession {
         }`
       )
     }
+  }
+
+  private areAgentStatusHooksEnabled(): boolean {
+    const store = this.store as { getSettings?: Store['getSettings'] }
+    return isAgentStatusHooksEnabled(store.getSettings?.())
   }
 
   private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {

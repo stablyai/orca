@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
     repos: [] as Repo[],
     updateRepo: vi.fn(),
     fetchWorktrees: vi.fn(),
-    detectedWorktreesByRepo: {}
+    detectedWorktreesByRepo: {},
+    worktreesByRepo: {} as Record<string, Worktree[]>,
+    setHideDefaultBranchWorkspace: vi.fn()
   }
 }))
 
@@ -32,6 +34,10 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
 }))
 
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
+
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactModule.ReactNode }) =>
     open ? <div>{children}</div> : null,
@@ -39,7 +45,19 @@ vi.mock('@/components/ui/dialog', () => ({
 }))
 
 vi.mock('./AddRepoSetupStep', () => ({
-  ProjectAddedContent: ({ repoName }: { repoName: string }) => <div>setup:{repoName}</div>
+  ProjectAddedContent: ({
+    repoName,
+    primaryBranchName
+  }: {
+    repoName: string
+    primaryBranchName?: string
+  }) => (
+    <div>
+      setup:{repoName}:{primaryBranchName ?? ''}
+    </div>
+  ),
+  getProjectAddedPrimaryBranchName: (worktree: Pick<Worktree, 'branch'> | null | undefined) =>
+    worktree?.branch.replace(/^refs\/heads\//, '').trim() ?? ''
 }))
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -60,6 +78,7 @@ describe('ProjectAddedDialog', () => {
     mocks.state.modalData = { repoId: 'repo-1' }
     mocks.state.repos = [makeRepo()]
     mocks.state.detectedWorktreesByRepo = {}
+    mocks.state.worktreesByRepo = {}
   })
 
   it('renders the Git setup step for Git repos', async () => {
@@ -69,6 +88,37 @@ describe('ProjectAddedDialog', () => {
 
     expect(markup).toContain('setup:orca')
     expect(mocks.state.closeModal).not.toHaveBeenCalled()
+  })
+
+  it('passes the primary branch name to the setup step', async () => {
+    mocks.state.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'repo-1::/repo',
+          repoId: 'repo-1',
+          path: '/repo',
+          displayName: 'main',
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          linkedLinearIssue: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0,
+          head: 'abc',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ]
+    }
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    const markup = renderToStaticMarkup(<ProjectAddedDialog />)
+
+    expect(markup).toContain('setup:orca:main')
   })
 
   it('closes without rendering Git setup for folder repos', async () => {

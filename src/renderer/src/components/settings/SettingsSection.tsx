@@ -18,6 +18,7 @@ type SettingsSectionProps = {
   searchEntries?: SettingsSearchEntry[]
   children?: React.ReactNode
   className?: string
+  bodyClassName?: string
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
@@ -39,6 +40,7 @@ export function SettingsSection({
   searchEntries,
   children,
   className,
+  bodyClassName,
   badge,
   badgeAccessory,
   forceVisible = false,
@@ -80,7 +82,12 @@ export function SettingsSection({
       {/* Why: body content sits in a visually distinct band — a soft card with
           rounded corners and tight inner padding — so each row group reads as
           contained inside the section, not as a continuation of the sidebar. */}
-      <div className="rounded-xl border border-border/40 bg-card/30 px-8 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+      <div
+        className={cn(
+          'rounded-xl border border-border/40 bg-card/30 px-8 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]',
+          bodyClassName
+        )}
+      >
         {children}
       </div>
     </section>

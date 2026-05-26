@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import {
   DEFAULT_ICON_THEME_ID,
@@ -18,6 +18,8 @@ import {
 import { FileExplorerPreview } from './FileExplorerPreview'
 import { IconThemeMarketplaceDialog } from './IconThemeMarketplaceDialog'
 
+export { FILE_EXPLORER_PANE_SEARCH_ENTRIES } from './file-explorer-search'
+
 const ICON_SIZE_MIN = 12
 const ICON_SIZE_MAX = 32
 const ICON_SIZE_DEFAULT = 16
@@ -26,32 +28,6 @@ type FileExplorerPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
-
-const ICON_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Icon Theme',
-    description: 'Choose which icon set the file explorer uses.',
-    keywords: ['icon', 'icons', 'theme', 'material', 'lucide', 'file explorer']
-  },
-  {
-    title: 'Size',
-    description: 'Size of icons and text in the file explorer.',
-    keywords: ['icon', 'size', 'font', 'text', 'file explorer', 'px']
-  }
-]
-
-const PREVIEW_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Preview',
-    description: 'Live preview of the active file explorer theme.',
-    keywords: ['preview', 'file explorer']
-  }
-]
-
-export const FILE_EXPLORER_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...ICON_ENTRIES,
-  ...PREVIEW_ENTRIES
-]
 
 export function FileExplorerPane({
   settings,

@@ -181,6 +181,24 @@ export const TERMINAL_MAC_OPTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_MAC_YEN_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'JIS Yen (¥) to Backslash (\\)',
+    description: 'Controls whether pressing the JIS Yen (¥) key sends a backslash (\\) instead.',
+    keywords: [
+      'terminal',
+      'yen',
+      'backslash',
+      'japanese',
+      'keyboard',
+      'mac',
+      'macos',
+      'jis',
+      'intl'
+    ]
+  }
+]
+
 export const TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Import from Ghostty',
@@ -286,6 +304,8 @@ export function getTerminalPaneSearchEntries(platform: {
     ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
     ...MANAGE_SESSIONS_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
-    ...(platform.isMac ? TERMINAL_MAC_OPTION_SEARCH_ENTRIES : [])
+    ...(platform.isMac
+      ? [...TERMINAL_MAC_OPTION_SEARCH_ENTRIES, ...TERMINAL_MAC_YEN_SEARCH_ENTRIES]
+      : [])
   ]
 }

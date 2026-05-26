@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const mockSpawn = vi.fn()
@@ -74,11 +71,8 @@ describe('launchAgentBackgroundSession', () => {
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
     mockRuntimeEnvironmentTransportCall.mockImplementation(
-      (args: RuntimeEnvironmentCallRequest) => {
-        return (
-          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
-        )
-      }
+      (args) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
     )
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
     state.repos = [{ id: 'repo-1', connectionId: null }]

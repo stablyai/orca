@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn<(name: string) => string>()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
 import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
 
 describe('parseCodexUsageRecord', () => {

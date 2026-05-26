@@ -32,6 +32,7 @@ import type {
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import {
   handleSwitchRecentTab,
@@ -71,7 +72,8 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelVisible
+  isFloatingWorkspacePanelFocused,
+  switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   observeAgentHookCompletionForNotification,
@@ -661,7 +663,11 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
-        useAppStore.getState().toggleRightSidebar()
+        const store = useAppStore.getState()
+        if (!canShowRightSidebarForView(store.activeView)) {
+          return
+        }
+        store.toggleRightSidebar()
       })
     )
 
@@ -775,16 +781,24 @@ export function useIpcEvents(): void {
             // not this local Electron event.
             return
           }
+          const existedBeforeFetch = Boolean(
+            useAppStore.getState().getKnownWorktreeById(worktreeId)
+          )
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
           // the main process and is not yet in the renderer state.
           await useAppStore.getState().fetchWorktrees(repoId)
+          const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
           // Why: route through activateAndRevealWorktree so CLI-created
           // worktrees share the canonical activation path with UI-created
           // ones. This records the visit in the back/forward history stack
           // (recordWorktreeVisit), without which the nav buttons would
           // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, { setup, startup })
+          activateAndRevealWorktree(worktreeId, {
+            ...(setup ? { setup } : {}),
+            ...(startup ? { startup } : {}),
+            ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
+          })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
@@ -1530,7 +1544,7 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onNewTerminalTab(() => {
         const store = useAppStore.getState()
-        if (isFloatingWorkspacePanelVisible()) {
+        if (isFloatingWorkspacePanelFocused()) {
           void createFloatingWorkspaceTerminalTab(store)
           return
         }
@@ -1600,10 +1614,37 @@ export function useIpcEvents(): void {
       })
     )
 
-    unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
-    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
+    unsubs.push(
+      window.api.ui.onSwitchTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'same-type')
+          return
+        }
+        handleSwitchTab(direction)
+      })
+    )
+    unsubs.push(
+      window.api.ui.onSwitchTabAcrossAllTypes((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'all-types')
+          return
+        }
+        handleSwitchTabAcrossAllTypes(direction)
+      })
+    )
     unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
-    unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
+    unsubs.push(
+      window.api.ui.onSwitchTerminalTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'terminal')
+          return
+        }
+        handleSwitchTerminalTab(direction)
+      })
+    )
 
     // Hydrate initial rate limit state then subscribe to push updates
     window.api.rateLimits.get().then((state) => {

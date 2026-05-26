@@ -1765,6 +1765,110 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('tracks Codex agent statuses from form-encoded managed hook posts', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const postCodexHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const params = new URLSearchParams({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'production',
+          version: env.ORCA_AGENT_HOOK_VERSION ?? '',
+          payload: JSON.stringify(payload)
+        })
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: params
+        })
+        expect(response.status).toBe(204)
+      }
+
+      await postCodexHook({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'ship codex hook status'
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          state: 'working',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: undefined,
+          toolInput: undefined
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'pnpm test', workdir: '/repo' }
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: 'exec_command',
+          toolInput: 'pnpm test'
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'git push', workdir: '/repo' }
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'waiting',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: 'exec_command',
+          toolInput: 'git push'
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'done'
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          lastAssistantMessage: 'done'
+        })
+      ])
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'ship codex hook status',
+            lastAssistantMessage: 'done'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('accepts Hermes plugin hook posts on /hook/hermes', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -2928,6 +3032,30 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('pi')
     expect(result?.payload.prompt).toBe('rename this fn')
+  })
+
+  it('OMP uses Pi-compatible events but keeps OMP agent attribution', () => {
+    const started = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for omp' }),
+      'production'
+    )
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
+
+    const done = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
   })
 
   it('agent_start without a prompt keeps the cached prompt from the current turn', () => {

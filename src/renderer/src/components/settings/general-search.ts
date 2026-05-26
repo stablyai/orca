@@ -61,6 +61,23 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_NAVIGATION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Tab Order',
+    description: 'Recent or tab strip.',
+    keywords: [
+      'recent tab order',
+      'tab',
+      'ctrl',
+      'control',
+      'recent',
+      'mru',
+      'sequential',
+      'switch'
+    ]
+  }
+]
+
 export const GENERAL_CLI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Shell command',
@@ -101,6 +118,7 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'codex',
       'opencode',
       'pi',
+      'omp',
       'gemini',
       'aider',
       'copilot',
@@ -119,6 +137,7 @@ export const GENERAL_SUPPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
+  ...GENERAL_NAVIGATION_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,

@@ -1465,6 +1465,7 @@ export type TuiAgent =
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
+  | 'omp' // OMP (omp.sh)
   | 'gemini' // Gemini CLI
   | 'antigravity' // Google Antigravity CLI
   | 'aider' // Aider
@@ -1476,6 +1477,7 @@ export type TuiAgent =
   | 'aug' // Augment/Auggie
   | 'cline' // Cline
   | 'codebuff' // Codebuff
+  | 'command-code' // Command Code
   | 'continue' // Continue
   | 'cursor' // Cursor
   | 'droid' // Factory Droid
@@ -1668,6 +1670,7 @@ export type GlobalSettings = {
   openLinksInApp: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
@@ -1780,6 +1783,9 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Why: disabling must persist so startup does not reinstall global agent
+   *  hook entries right after the user removes them from Settings or CLI. */
+  agentStatusHooksEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -1802,6 +1808,9 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
+  /** Controls whether macOS terminal input translates the physical JIS Yen (¥)
+   *  key to a backslash, matching the common terminal expectation for that key. */
+  terminalJISYenToBackslash: boolean
   experimentalMobile: boolean
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size
@@ -2089,10 +2098,14 @@ export type TaskResumeState = {
   linearQuery?: string
 }
 
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   sidebarWidth: number
+  rightSidebarOpen: boolean
+  rightSidebarTab: RightSidebarTab
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

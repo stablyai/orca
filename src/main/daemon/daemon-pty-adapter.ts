@@ -117,6 +117,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       rows: effectiveRows,
       cwd: effectiveCwd,
       env: opts.env,
+      envToDelete: opts.envToDelete,
       command: opts.command,
       // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
       // PowerShell as a fallback — regardless of which shell the renderer

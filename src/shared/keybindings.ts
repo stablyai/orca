@@ -50,6 +50,7 @@ export type KeybindingActionId =
   | 'tab.newTerminal'
   | 'tab.newBrowser'
   | 'tab.newMarkdown'
+  | 'tab.openMarkdown'
   | 'tab.close'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -71,7 +72,6 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
-  | 'composer.addAttachment'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.paste'
@@ -387,6 +387,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+M'])
   },
   {
+    id: 'tab.openMarkdown',
+    title: 'Open markdown tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'open'],
+    defaultBindings: platformBindings(['Mod+Shift+O'])
+  },
+  {
     id: 'tab.close',
     title: 'Close active tab',
     group: 'Tabs',
@@ -565,14 +573,6 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       win32: ['Delete']
     },
     allowBareKeybindings: true
-  },
-  {
-    id: 'composer.addAttachment',
-    title: 'Add Attachment',
-    group: 'Composer',
-    scope: 'composer',
-    searchKeywords: ['shortcut', 'composer', 'attachment', 'upload'],
-    defaultBindings: platformBindings(['Mod+U'])
   },
   {
     id: 'settings.search',

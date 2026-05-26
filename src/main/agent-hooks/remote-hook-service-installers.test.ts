@@ -24,9 +24,12 @@ type FakeFs = {
   failRenameTo: Set<string>
 }
 
-function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
+function createFakeSftp(initialFiles: Record<string, string> = {}): {
+  sftp: SFTPWrapper
+  fs: FakeFs
+} {
   const fs: FakeFs = {
-    files: new Map(),
+    files: new Map(Object.entries(initialFiles)),
     dirs: new Set(['/']),
     modes: new Map(),
     failRenameTo: new Set()

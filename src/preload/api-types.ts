@@ -205,6 +205,7 @@ import type {
 } from '../shared/developer-permissions-types'
 import type {
   ComputerUsePermissionId,
+  ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../shared/computer-use-permissions-types'
@@ -1389,6 +1390,7 @@ export type PreloadApi = {
     openSetup: (args?: {
       id?: ComputerUsePermissionId
     }) => Promise<ComputerUsePermissionSetupResult>
+    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>

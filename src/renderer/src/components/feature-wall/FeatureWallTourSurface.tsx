@@ -1,5 +1,6 @@
+/* eslint-disable max-lines -- Why: orchestrator for the inline tour surface; splitting it here would scatter related state across helpers without making the file easier to read. */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { JSX, KeyboardEvent } from 'react'
+import type { JSX, KeyboardEvent, ReactNode } from 'react'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
@@ -41,6 +42,7 @@ type FeatureWallTourSurfaceProps = {
   enableKeyboardShortcut?: boolean
   compactRail?: boolean
   detachedFooter?: boolean
+  leadingFooterContent?: ReactNode
   onTourDepthSummaryChange?: (summary: FeatureWallTourDepthSummary) => void
 }
 
@@ -55,6 +57,7 @@ export function FeatureWallTourSurface({
   enableKeyboardShortcut = true,
   compactRail = false,
   detachedFooter = false,
+  leadingFooterContent,
   onTourDepthSummaryChange
 }: FeatureWallTourSurfaceProps): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
@@ -412,6 +415,7 @@ export function FeatureWallTourSurface({
       updateSettings={updateSettings}
       footerText={footerText}
       continueButton={continueButton}
+      leadingFooterContent={leadingFooterContent}
     />
   )
 }

@@ -32,6 +32,7 @@ export type PtySubprocessOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
@@ -184,6 +185,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  for (const key of opts.envToDelete ?? []) {
+    delete env[key]
+  }
   // Why: the daemon is forked from Electron and can inherit the pane identity
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
@@ -260,7 +264,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       ? getShellReadyLaunchConfig(shellPath)
       : env.ORCA_ATTRIBUTION_SHIM_DIR ||
           env.ORCA_OPENCODE_CONFIG_DIR ||
-          env.ORCA_PI_CODING_AGENT_DIR
+          env.ORCA_PI_CODING_AGENT_DIR ||
+          env.ORCA_OMP_CODING_AGENT_DIR ||
+          env.ORCA_CODEX_HOME
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {

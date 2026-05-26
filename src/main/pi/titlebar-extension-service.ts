@@ -11,6 +11,7 @@ import {
   mirrorEntry,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
+import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
 // public surface to lock in the Windows-junction ordering invariant against
@@ -20,34 +21,61 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
-const PI_AGENT_DIR_NAME = '.pi'
 const PI_AGENT_SUBDIR = 'agent'
-const PI_OVERLAY_DIR_NAME = 'pi-agent-overlays'
 
-// Why: env-var name read by the prefill extension. Mirrors Claude's
-// `--prefill <text>` semantics for pi — the editor mounts with the text
-// already in its input box but unsubmitted, so the user can review/edit
-// before sending. Used by the new-workspace draft-launch flow to drop a
-// linked GitHub/Linear issue URL into pi without racing pi's lengthy
-// startup output (banner + skills + extensions) against the bracketed-
-// paste readiness detector.
-export const ORCA_PI_PREFILL_ENV_VAR = 'ORCA_PI_PREFILL'
+// Why: each agent owns its own overlay tree so OMP launches never touch
+// Pi's overlay dir (and vice versa). Shadowing one inside the other would
+// re-introduce the cross-agent state leak the per-kind PR exists to prevent.
+const OVERLAY_ROOT_DIR_NAME: Record<PiAgentKind, string> = {
+  pi: 'pi-agent-overlays',
+  omp: 'omp-agent-overlays'
+}
 
-// Why: pi exposes `pi.ui.setEditorText(text)` from inside an extension's
-// session_start handler — that's the equivalent of Claude's `--prefill`.
-// We can't use a CLI flag (pi has none) and bracketed-paste-after-ready
-// races against pi's startup output, so we ship a tiny extension that
-// reads ORCA_PI_PREFILL on session_start and types it into the editor.
-// The env var is consumed (deleted from process.env) so /new in the same
-// session doesn't re-prefill.
-function getPiPrefillExtensionSource(): string {
+// Why: the overlay source dir is chosen by which agent is being launched, NOT
+// by which `~/.<agent>/agent` dir happens to exist on disk first. A
+// cross-agent fallback (Pi -> OMP or vice versa) silently shadows the other
+// agent's user extensions when both are installed and the user picks the
+// shadowed one in Orca's per-launch agent picker.
+const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
+  pi: '.pi',
+  omp: '.omp'
+}
+
+// Why: prefill-without-submit needs an env-var the bundled `orca-prefill.ts`
+// extension can read on session_start. Each kind owns its own variable so an
+// OMP PTY never honors a Pi draft (or vice versa) - the only state the two
+// share is the binary-mandated `PI_CODING_AGENT_DIR` itself. Pi keeps its
+// original name for back-compat with PTYs already in flight at upgrade time;
+// OMP gets a parallel `ORCA_OMP_PREFILL`.
+const PREFILL_ENV_VAR_BY_KIND: Record<PiAgentKind, string> = {
+  pi: 'ORCA_PI_PREFILL',
+  omp: 'ORCA_OMP_PREFILL'
+}
+
+/** Pi's prefill env var. Exported for callers that need the literal name
+ *  (renderer draft-launch plan builder, tests). OMP callers should read
+ *  `ORCA_OMP_PREFILL_ENV_VAR` instead. */
+export const ORCA_PI_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.pi
+
+/** OMP's prefill env var. Mirrors `ORCA_PI_PREFILL_ENV_VAR` for OMP launches
+ *  so renderer plans and shell-ready restore lines can stay agent-scoped. */
+export const ORCA_OMP_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.omp
+
+// Why: pi/OMP both expose an `ExtensionAPI` to the default-exported factory.
+// The extension reads its kind-specific env var on session_start and types
+// the payload into the editor without submitting. The env var is consumed
+// (deleted from process.env) so `/new` in the same session doesn't re-prefill.
+// The extension API name is identical between pi and OMP because OMP keeps
+// Pi's `@oh-my-pi/*` runtime packages.
+function getPiPrefillExtensionSource(kind: PiAgentKind): string {
+  const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
   return [
     'export default function (pi) {',
     "  pi.on('session_start', async (event, ctx) => {",
     "    if (event.reason !== 'startup') return",
-    `    const prefill = process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    `    const prefill = process.env.${envVar}`,
     '    if (!prefill) return',
-    `    delete process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    `    delete process.env.${envVar}`,
     '    try {',
     '      ctx.ui.setEditorText(prefill)',
     '    } catch {}',
@@ -119,24 +147,24 @@ function getPiTitlebarExtensionSource(): string {
   ].join('\n')
 }
 
-function getDefaultPiAgentDir(): string {
-  return join(homedir(), PI_AGENT_DIR_NAME, PI_AGENT_SUBDIR)
+function getDefaultPiAgentDir(kind: PiAgentKind): string {
+  return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
 }
 
 export class PiTitlebarExtensionService {
-  private getOverlayRoot(): string {
-    return join(app.getPath('userData'), PI_OVERLAY_DIR_NAME)
+  private getOverlayRoot(kind: PiAgentKind): string {
+    return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
-  private getOverlayDir(ptyId: string): string {
-    return join(this.getOverlayRoot(), ptyId)
+  private getOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    return join(this.getOverlayRoot(kind), ptyId)
   }
 
   // Why: overlay teardown must use the shared safeRemoveOverlay so the
   // Windows-junction guard from issue #1083 stays in lock-step across all
   // overlay consumers (Pi here, OpenCode in src/main/opencode/hook-service.ts).
-  private safeRemoveOverlay(overlayDir: string): void {
-    safeRemoveOverlay(overlayDir, this.getOverlayRoot())
+  private safeRemoveOverlay(overlayDir: string, kind: PiAgentKind): void {
+    safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
 
   private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
@@ -159,26 +187,31 @@ export class PiTitlebarExtensionService {
         continue
       }
 
-      // Why: PI_CODING_AGENT_DIR controls Pi's entire state tree, not just
-      // extension discovery. Mirror the user's top-level Pi resources into the
-      // overlay so enabling Orca's titlebar extension preserves auth, sessions,
-      // skills, prompts, themes, and any future files Pi stores there.
+      // Why: PI_CODING_AGENT_DIR controls Pi's / OMP's entire state tree, not
+      // just extension discovery. Mirror the user's top-level resources into
+      // the overlay so enabling Orca's titlebar extension preserves auth,
+      // sessions, skills, prompts, themes, and any future files stored there.
       mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
     }
   }
 
-  buildPtyEnv(ptyId: string, existingAgentDir: string | undefined): Record<string, string> {
-    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir()
-    const overlayDir = this.getOverlayDir(ptyId)
+  buildPtyEnv(
+    ptyId: string,
+    existingAgentDir: string | undefined,
+    kind: PiAgentKind
+  ): Record<string, string> {
+    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
+    const overlayDir = this.getOverlayDir(ptyId, kind)
 
     try {
-      this.safeRemoveOverlay(overlayDir)
+      this.safeRemoveOverlay(overlayDir, kind)
     } catch {
       // Why: on Windows the overlay directory can be locked by another process
       // (e.g. antivirus, indexer, or a previous Orca session that didn't clean up).
-      // If we can't remove the stale overlay, fall back to the user's own Pi agent
-      // dir so the terminal still spawns — the titlebar spinner is not worth
-      // blocking the PTY.
+      // If we can't remove the stale overlay, fall back to the user's own
+      // agent dir (Pi or OMP - both consume PI_CODING_AGENT_DIR) so the
+      // terminal still spawns - the titlebar spinner is not worth blocking
+      // the PTY.
       return existingAgentDir ? { PI_CODING_AGENT_DIR: existingAgentDir } : {}
     }
 
@@ -188,28 +221,31 @@ export class PiTitlebarExtensionService {
 
       const extensionsDir = join(overlayDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
-      // Why: Pi auto-loads global extensions from PI_CODING_AGENT_DIR/extensions.
-      // Add Orca's titlebar extension alongside the user's existing extensions
-      // instead of replacing that directory, otherwise Orca terminals would
-      // silently disable the user's Pi customization inside Orca only.
+      // Why: Pi / OMP both auto-load global extensions from
+      // PI_CODING_AGENT_DIR/extensions. Add Orca's titlebar extension alongside
+      // the user's existing extensions instead of replacing that directory,
+      // otherwise Orca terminals would silently disable the user's
+      // customization inside Orca only.
       writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
       writeFileSync(
         join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
-        getPiPrefillExtensionSource()
+        getPiPrefillExtensionSource(kind)
       )
-      // Why: bundled status extension that bridges pi's in-process event API
-      // to the unified /hook/pi endpoint. Without this, pi panes would have
-      // no entry in agentStatusByPaneKey and the dashboard would fall back
-      // to terminal-title heuristics like any uninstrumented CLI.
+      // Why: bundled status extension that bridges the in-process event API
+      // (`pi.on('agent_start', ...)` etc., identical between Pi and OMP) to the
+      // unified /hook/<kind> endpoint. Without this, panes would have no entry in
+      // agentStatusByPaneKey and the dashboard would fall back to terminal-title
+      // heuristics like any uninstrumented CLI.
       writeFileSync(
         join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
-        getPiAgentStatusExtensionSource()
+        getPiAgentStatusExtensionSource(kind)
       )
     } catch {
-      // Why: overlay creation is best-effort — permission errors (EPERM/EACCES)
+      // Why: overlay creation is best-effort - permission errors (EPERM/EACCES)
       // on Windows can occur when the userData directory is restricted or when
-      // symlink/junction creation fails without developer mode. Fall back to the
-      // user's Pi agent dir so the terminal spawns without the Orca extension.
+      // symlink/junction creation fails without developer mode. Fall back to
+      // the user's own agent dir (Pi or OMP) so the terminal spawns without
+      // the Orca extension.
       this.clearPty(ptyId)
       return existingAgentDir ? { PI_CODING_AGENT_DIR: existingAgentDir } : {}
     }
@@ -220,12 +256,19 @@ export class PiTitlebarExtensionService {
   }
 
   clearPty(ptyId: string): void {
-    try {
-      this.safeRemoveOverlay(this.getOverlayDir(ptyId))
-    } catch {
-      // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by antivirus
-      // or indexers. Overlay cleanup is best-effort — a stale directory in userData
-      // is harmless and will be overwritten on the next PTY spawn attempt.
+    // Why: PTY teardown doesn't know which kind was launched (the daemon
+    // exit path discards the launch command). Sweep both overlay roots so
+    // either kind's overlay is cleaned up; the per-kind root scoping keeps
+    // each safeRemoveOverlay call bounded to its own tree.
+    for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as PiAgentKind[]) {
+      try {
+        this.safeRemoveOverlay(this.getOverlayDir(ptyId, kind), kind)
+      } catch {
+        // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
+        // antivirus or indexers. Overlay cleanup is best-effort - a stale
+        // directory in userData is harmless and will be overwritten on the
+        // next PTY spawn attempt.
+      }
     }
   }
 }

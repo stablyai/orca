@@ -3,13 +3,16 @@ import { GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { Worktree } from '../../../../shared/types'
 
-type ProjectAddedChoice = 'create' | 'existing'
+type ProjectAddedChoice = 'primary' | 'create' | 'existing'
 
 type ProjectAddedContentProps = {
   repoName: string
   hiddenWorktreeCount: number
+  primaryBranchName?: string
   defaultWorktreeName?: string
+  onStartPrimaryWorktree: () => void
   onUseExistingWorktrees: () => void
   onCreateWorktree: (name?: string) => void
   onConfigureRepo: () => void
@@ -25,7 +28,31 @@ export function getInitialProjectAddedWorktreeName(
   return defaultWorktreeName?.trim() ? defaultWorktreeName : DEFAULT_PROJECT_ADDED_WORKTREE_NAME
 }
 
-export function getInitialProjectAddedChoice(_hiddenWorktreeCount: number): ProjectAddedChoice {
+export function getProjectAddedPrimaryBranchName(
+  primaryWorktree: Pick<Worktree, 'branch'> | null | undefined
+): string {
+  return primaryWorktree?.branch.replace(/^refs\/heads\//, '').trim() ?? ''
+}
+
+export function getProjectAddedChoiceOrder(
+  hiddenWorktreeCount: number,
+  primaryBranchName?: string
+): ProjectAddedChoice[] {
+  const choices: ProjectAddedChoice[] = []
+  if (primaryBranchName?.trim()) {
+    choices.push('primary')
+  }
+  if (hiddenWorktreeCount > 0) {
+    choices.push('existing')
+  }
+  choices.push('create')
+  return choices
+}
+
+export function getInitialProjectAddedChoice(
+  _hiddenWorktreeCount: number,
+  _primaryBranchName?: string
+): ProjectAddedChoice {
   return 'create'
 }
 
@@ -61,7 +88,7 @@ function StartChoiceCard({
       data-choice={value}
       onClick={onSelect}
       onKeyDown={(event) => {
-        // Why: this is a true two-option decision, so arrow keys follow the
+        // Why: this is a true single-choice decision, so arrow keys follow the
         // WAI-ARIA radio pattern instead of acting like ordinary buttons.
         if (
           event.key === 'ArrowLeft' ||
@@ -102,7 +129,9 @@ function StartChoiceCard({
 export function ProjectAddedContent({
   repoName,
   hiddenWorktreeCount,
+  primaryBranchName = '',
   defaultWorktreeName = '',
+  onStartPrimaryWorktree,
   onUseExistingWorktrees,
   onCreateWorktree,
   onConfigureRepo
@@ -111,25 +140,31 @@ export function ProjectAddedContent({
     getInitialProjectAddedWorktreeName(defaultWorktreeName)
   )
   const [choice, setChoice] = useState<ProjectAddedChoice>(() =>
-    getInitialProjectAddedChoice(hiddenWorktreeCount)
+    getInitialProjectAddedChoice(hiddenWorktreeCount, primaryBranchName)
   )
   const radioGroupRef = useRef<HTMLDivElement>(null)
   const trimmedName = worktreeName.trim()
   const hasHiddenWorktrees = hiddenWorktreeCount > 0
-  const selectedChoice = hasHiddenWorktrees ? choice : 'create'
+  const normalizedPrimaryBranchName = primaryBranchName.trim()
+  const choices = getProjectAddedChoiceOrder(hiddenWorktreeCount, normalizedPrimaryBranchName)
+  const selectedChoice = choices.includes(choice) ? choice : (choices[0] ?? 'create')
 
   const cycleChoice = useCallback(() => {
-    const nextChoice: ProjectAddedChoice = selectedChoice === 'create' ? 'existing' : 'create'
+    const index = choices.indexOf(selectedChoice)
+    const nextChoice = choices[(index + 1) % choices.length] ?? 'create'
     setChoice(nextChoice)
     requestAnimationFrame(() => {
       radioGroupRef.current
         ?.querySelector<HTMLButtonElement>(`[data-choice="${nextChoice}"]`)
         ?.focus()
     })
-  }, [selectedChoice])
+  }, [choices, selectedChoice])
 
   const handlePrimaryAction = (): void => {
-    if (selectedChoice === 'existing') {
+    if (selectedChoice === 'primary') {
+      onStartPrimaryWorktree()
+      return
+    } else if (selectedChoice === 'existing') {
       onUseExistingWorktrees()
       return
     }
@@ -148,22 +183,35 @@ export function ProjectAddedContent({
       </DialogHeader>
 
       <div className="space-y-3 pt-1">
-        {hasHiddenWorktrees ? (
+        {choices.length > 1 ? (
           <div
             ref={radioGroupRef}
             role="radiogroup"
             aria-label="How to start working"
             className="space-y-2"
           >
-            <StartChoiceCard
-              value="existing"
-              selected={selectedChoice === 'existing'}
-              onSelect={() => setChoice('existing')}
-              onArrowNav={cycleChoice}
-              icon={<GitBranch className="size-4" />}
-              title="Use existing worktrees"
-              caption={`${formatWorktreeCount(hiddenWorktreeCount)} found in this repo.`}
-            />
+            {normalizedPrimaryBranchName ? (
+              <StartChoiceCard
+                value="primary"
+                selected={selectedChoice === 'primary'}
+                onSelect={() => setChoice('primary')}
+                onArrowNav={cycleChoice}
+                icon={<GitBranch className="size-4" />}
+                title={`Start from ${normalizedPrimaryBranchName}`}
+                caption="Use the primary checkout without creating a worktree."
+              />
+            ) : null}
+            {hasHiddenWorktrees ? (
+              <StartChoiceCard
+                value="existing"
+                selected={selectedChoice === 'existing'}
+                onSelect={() => setChoice('existing')}
+                onArrowNav={cycleChoice}
+                icon={<GitBranch className="size-4" />}
+                title="Use existing worktrees"
+                caption={`${formatWorktreeCount(hiddenWorktreeCount)} found in this repo.`}
+              />
+            ) : null}
             <StartChoiceCard
               value="create"
               selected={selectedChoice === 'create'}
@@ -205,7 +253,12 @@ export function ProjectAddedContent({
           Configure repo
         </button>
         <Button type="button" size="sm" onClick={handlePrimaryAction}>
-          {selectedChoice === 'existing' ? (
+          {selectedChoice === 'primary' ? (
+            <>
+              <GitBranch className="size-4" />
+              Start
+            </>
+          ) : selectedChoice === 'existing' ? (
             <>
               <GitBranch className="size-4" />
               Use existing

@@ -162,16 +162,15 @@ export default function TabGroupPanel({
   )
 
   const menuButtonClassName =
-    'flex h-7 w-7 -translate-y-0.5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+    'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
   // Why: focused-only — the QC split-button and Pane Actions ellipsis both
   // appear together so the action cluster never reflows when focus shifts
   // between groups. Unfocused groups collapse the cluster fully (no
   // reserved width) since the surrounding tab strip already absorbs the
   // freed space.
-  const actionChromeClassName = `flex h-full shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
+  const actionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
-
   return (
     <div
       // Why: vertical borders are always `border-border` so the focus

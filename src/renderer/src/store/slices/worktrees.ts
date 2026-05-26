@@ -1232,7 +1232,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreeMeta: async (worktreeId, updates) => {
     const existingWorktree = get().getKnownWorktreeById(worktreeId)
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
-    // branch here so Push targets the review branch, not the checkout mirror.
+    // branch here so Push targets the review branch, but don't repeat that
+    // network lookup for no-op linkedPR metadata saves.
     const linkedPrForPushTarget =
       typeof updates.linkedPR === 'number' && Number.isFinite(updates.linkedPR)
         ? updates.linkedPR
@@ -1241,6 +1242,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       linkedPrForPushTarget !== null &&
       updates.pushTarget === undefined &&
       existingWorktree &&
+      existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
         ? await resolveLinkedPrPushTarget(
             get().settings,
@@ -1673,7 +1675,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const restoredFileId = s.activeFileIdByWorktree[worktreeId] ?? null
       const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[worktreeId] ?? null
       const restoredTabType = s.activeTabTypeByWorktree[worktreeId] ?? 'terminal'
-      const restoredRightSidebarTab = s.rightSidebarTabByWorktree[worktreeId] ?? 'explorer'
       const activeGroupId =
         s.activeGroupIdByWorktree[worktreeId] ?? s.groupsByWorktree[worktreeId]?.[0]?.id ?? null
       const activeGroup = activeGroupId
@@ -1843,7 +1844,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeFileId,
         activeBrowserTabId,
         activeTabType,
-        rightSidebarTab: restoredRightSidebarTab,
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,

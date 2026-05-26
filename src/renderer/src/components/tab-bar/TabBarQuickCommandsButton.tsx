@@ -95,9 +95,6 @@ export function TabBarQuickCommandsButton({
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
-  // Why: the bordered quick-command chip reads lower than adjacent icon-only
-  // toolbar buttons in the 32px tab row; lift the chip to match optically.
-  const quickCommandToolbarLiftClass = '-translate-y-0.5'
 
   const handleOpenChange = (next: boolean): void => {
     setMenuOpen(next)
@@ -155,10 +152,7 @@ export function TabBarQuickCommandsButton({
                   command: createTerminalQuickCommandDraft({ type: 'repo', repoId })
                 })
               }
-              className={cn(
-                quickCommandToolbarLiftClass,
-                'flex h-7 shrink-0 items-center gap-1 self-center rounded-md px-1.5 leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-              )}
+              className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="Add quick command"
             >
               <Plus className="size-3.5" />
@@ -181,9 +175,10 @@ export function TabBarQuickCommandsButton({
     )
   }
 
-  const splitButtonClass = `flex h-7 ${quickCommandToolbarLiftClass} shrink-0 items-stretch self-center overflow-hidden rounded-md leading-none text-muted-foreground ring-1 ring-inset ring-border/60`
+  const splitButtonClass =
+    'my-auto flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-border/60 text-muted-foreground'
   const innerButtonBase =
-    'flex h-full items-center bg-transparent leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+    'flex items-center bg-transparent leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
 
   const renderItem = (command: TerminalQuickCommand): React.JSX.Element => (
     <CommandItem

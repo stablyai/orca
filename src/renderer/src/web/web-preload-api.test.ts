@@ -170,6 +170,33 @@ describe('web keybindings preload API', () => {
   })
 })
 
+describe('web UI preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
+    const { api } = await installApi('Linux')
+
+    const ui = await api.ui.get()
+
+    expect(ui.rightSidebarOpen).toBe(false)
+  })
+
+  it('keeps explicit local right sidebar visibility over the legacy default', async () => {
+    const { api, storage } = await installApi('Linux')
+    storage.setItem('orca.web.ui.v1', JSON.stringify({ rightSidebarOpen: true }))
+
+    const ui = await api.ui.get()
+
+    expect(ui.rightSidebarOpen).toBe(true)
+  })
+})
+
 describe('web worktree preload API', () => {
   beforeEach(() => {
     vi.resetModules()

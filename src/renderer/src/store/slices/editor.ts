@@ -23,6 +23,7 @@ import type {
   Tab,
   TabGroup,
   GitUpstreamStatus,
+  RightSidebarTab,
   SearchResult,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
@@ -45,6 +46,10 @@ import {
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+
+export type { RightSidebarTab } from '../../../../shared/types'
 
 export type DiffSource =
   | 'unstaged'
@@ -176,7 +181,6 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
@@ -286,6 +290,7 @@ export type EditorSlice = {
       suppressActiveRuntimeFallback?: boolean
     }
   ) => void
+  openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: dispatcher for markdown link activation. Lives on the slice because it
   // sequences openFile, setMarkdownViewMode, and setPendingEditorReveal around
   // an async Monaco remount — all reading/writing state in this slice. See
@@ -1060,13 +1065,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-  setRightSidebarTab: (tab) =>
-    set((s) => ({
-      rightSidebarTab: tab,
-      rightSidebarTabByWorktree: s.activeWorktreeId
-        ? { ...s.rightSidebarTabByWorktree, [s.activeWorktreeId]: tab }
-        : s.rightSidebarTabByWorktree
-    })),
+  setRightSidebarTab: (tab) => set({ rightSidebarTab: tab }),
   setActivityBarPosition: (position) => set({ activityBarPosition: position }),
 
   // File explorer
@@ -1111,15 +1110,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   pendingExplorerReveal: null,
   revealInExplorer: (worktreeId, filePath) =>
-    set((s) => ({
+    set({
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
-      rightSidebarTabByWorktree: {
-        ...s.rightSidebarTabByWorktree,
-        [worktreeId]: 'explorer'
-      },
       pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
-    })),
+    }),
   clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null }),
 
   // Open files
@@ -1378,6 +1373,31 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       options?.preview ?? false,
       editorItemTargetGroupId
     )
+  },
+
+  openNewMarkdownInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    if (!worktree) {
+      return
+    }
+    try {
+      const connectionId =
+        state.repos.find((entry) => entry.id === worktree.repoId)?.connectionId ?? undefined
+      const fileInfo = await createUntitledMarkdownFile(
+        worktree.path,
+        worktreeId,
+        connectionId,
+        get().settings
+      )
+      get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+    }
   },
 
   openMarkdownPreview: (file, options) => {

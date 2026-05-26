@@ -20,7 +20,8 @@ describe('packaged CLI assets', () => {
       expect.arrayContaining([
         'node_modules/ws/**',
         'node_modules/tweetnacl/**',
-        'node_modules/zod/**'
+        'node_modules/zod/**',
+        'node_modules/yaml/**'
       ])
     )
   })

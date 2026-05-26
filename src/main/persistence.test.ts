@@ -257,6 +257,8 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
+    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarTab).toBe('explorer')
     expect(ui.groupBy).toBe('repo')
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
@@ -732,6 +734,8 @@ describe('Store', () => {
     // ui should have defaults
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
+    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarTab).toBe('explorer')
     // settings should preserve the overridden value
     expect(store.getSettings().theme).toBe('dark')
     // new fields get defaults when missing from persisted data
@@ -1263,7 +1267,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSave).toBe(true)
   })
 
-  it('preserves rightSidebarOpenByDefault when set to true in persisted data', async () => {
+  it('keeps legacy rightSidebarOpenByDefault readable from persisted data', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -1544,7 +1548,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSave).toBe(false)
   })
 
-  it('updateSettings toggles rightSidebarOpenByDefault', async () => {
+  it('keeps legacy rightSidebarOpenByDefault writable for backward compatibility', async () => {
     const store = await createStore()
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
 
@@ -1701,6 +1705,81 @@ describe('Store', () => {
     expect(ui.sidebarWidth).toBe(400)
     expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
+  })
+
+  it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(false)
+  })
+
+  it('migrates missing rightSidebarOpen to open when the legacy default was open', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(true)
+  })
+
+  it('keeps explicit rightSidebarOpen authoritative over the legacy default setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: true },
+      ui: { rightSidebarOpen: false },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(false)
+  })
+
+  it('preserves explicit rightSidebarTab in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'checks' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('checks')
+  })
+
+  it('normalizes invalid rightSidebarTab in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'bogus' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('explorer')
   })
 
   it('updateUI restores fixed card properties from direct UI writes', async () => {

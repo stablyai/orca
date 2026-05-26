@@ -14,13 +14,15 @@ describe('AgentFeatureSetupStep', () => {
         onFeatureSetupChange={vi.fn()}
         featureSetupCommand={null}
         featureSetupCommandSelection={null}
+        setupBusyLabel={null}
+        onStartFeatureSetup={vi.fn()}
       />
     )
 
-    expect(html).toContain('Set up agent features')
     expect(html).toContain('Agent Browser Use')
     expect(html).toContain('Computer Use')
     expect(html).toContain('Agent Orchestration')
+    expect(html).toContain('Enable capabilities')
     expect(html).toContain('role="checkbox"')
   })
 })

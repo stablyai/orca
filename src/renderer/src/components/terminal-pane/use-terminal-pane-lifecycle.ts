@@ -35,6 +35,7 @@ import {
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
 import { parseOsc7 } from './parse-osc7'
+import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -515,10 +516,24 @@ export function useTerminalPaneLifecycle({
         // matching keyups so kitty release sequences do not leak after a
         // bypassed press. Returning false here short-circuits xterm before the
         // encoder runs, letting the browser and Electron paths fire normally.
-        // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
+        // See xterm-bypass-policy.ts for the rule derivation.
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const isMac = navigator.userAgent.includes('Mac')
+          const jisYenInput = resolveTerminalJisYenInput(e, {
+            enabled: settingsRef.current?.terminalJISYenToBackslash === true,
+            isMac
+          })
+          if (jisYenInput) {
+            if (jisYenInput.type === 'input') {
+              // Why: this is a translated character, not a terminal shortcut.
+              // Keep it on xterm's onData path so PTY input guards still run.
+              pane.terminal.input(jisYenInput.data)
+            }
+            return false
+          }
+
           return !shouldBypassXtermKeyboardEvent(e, {
-            isMac: navigator.userAgent.includes('Mac'),
+            isMac,
             hasSelection: pane.terminal.hasSelection()
           })
         })

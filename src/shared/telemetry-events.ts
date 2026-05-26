@@ -43,6 +43,7 @@ export const AGENT_KIND_VALUES = [
   'autohand',
   'opencode',
   'pi',
+  'omp',
   'gemini',
   'antigravity',
   'aider',
@@ -54,6 +55,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'command-code',
   'continue',
   'cursor',
   'droid',
@@ -92,11 +94,12 @@ export type ErrorClass = z.infer<typeof errorClassSchema>
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
-// Five Setup-step affordances the user can pick after `repo_added` fires (see
+// Setup-step affordances the user can pick after `repo_added` fires (see
 // AddRepoSetupStep). One enum because every value lives on the same screen and
-// the funnel question is "which one did they pick" — adding a sixth value
-// later is additive-safe per the schema-evolution doctrine below.
+// the funnel question is "which one did they pick" — adding values later is
+// additive-safe per the schema-evolution doctrine below.
 export const addRepoSetupStepActionSchema = z.enum([
+  'open_primary',
   'create_worktree',
   'configure',
   'skip',
@@ -578,10 +581,9 @@ void _onboardingChecklistItemSyncCheck
 const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()
 
 // `'button' | 'keyboard'` records whether the user advanced via a footer
-// button click or via Cmd/Ctrl+Enter. Skip and dismiss don't have a keyboard
-// path today (the field will only ever be `'button'` for those events) but
-// the uniform shape lets a future keyboard skip arrive without a schema
-// migration.
+// button click, Cmd/Ctrl+Enter, or an equivalent keyboard exit like Escape.
+// The uniform shape lets keyboard skip/dismiss paths arrive without a
+// schema migration.
 const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 
 const onboardingStartedSchema = z

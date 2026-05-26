@@ -150,6 +150,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Command Code by its unambiguous binary and injects after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'command-code',
+        prompt: 'Fix the issue',
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toEqual({
+      agent: 'command-code',
+      launchCommand: 'command-code',
+      expectedProcess: 'command-code',
+      followupPrompt: 'Fix the issue'
+    })
+  })
+
   it('returns null when there is no prompt to inject', () => {
     expect(
       buildAgentStartupPlan({

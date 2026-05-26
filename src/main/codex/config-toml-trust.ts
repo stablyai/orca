@@ -5,11 +5,13 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  realpathSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
 import { dirname, join } from 'path'
 import { createHash, randomUUID } from 'crypto'
+import { escapeRegex } from '../../shared/string-utils'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -101,7 +103,18 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
 }
 
 export function computeTrustKey(entry: CodexTrustEntry): string {
-  return `${entry.sourcePath}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
+  return `${getCodexCanonicalTrustPath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
+}
+
+export function getCodexCanonicalTrustPath(sourcePath: string): string {
+  try {
+    // Why: Codex canonicalizes trust paths before building config keys. On
+    // macOS, /var is a symlink to /private/var; trusting the raw path still
+    // leaves the TUI in review/trust prompts.
+    return realpathSync.native(sourcePath)
+  } catch {
+    return sourcePath
+  }
 }
 
 export function parseTrustKey(key: string): {
@@ -232,13 +245,14 @@ export function upsertProjectTrustLevelInContent(
 ): string {
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
-  const headerPattern = buildProjectHeaderPattern(projectPath)
+  const trustedProjectPath = getCodexCanonicalTrustPath(projectPath)
+  const headerPattern = buildProjectHeaderPattern(trustedProjectPath)
   const match = headerPattern.exec(existing)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
   const trustLine = `trust_level = "${trustLevel}"`
 
   if (!match) {
-    const block = [`[projects."${escapeTomlString(projectPath)}"]`, trustLine].join(eol)
+    const block = [`[projects."${escapeTomlString(trustedProjectPath)}"]`, trustLine].join(eol)
     if (existing.length === 0) {
       return `${block}${eol}`
     }
@@ -281,7 +295,7 @@ function buildTrustBlock(key: string, hash: string, enabled: boolean): string {
 
 // Why: TOML basic strings forbid raw control chars; escape backslash first so
 // later substitutions don't double-escape the inserted backslashes.
-function escapeTomlString(value: string): string {
+export function escapeTomlString(value: string): string {
   return value
     .replaceAll('\\', '\\\\')
     .replaceAll('"', '\\"')
@@ -352,11 +366,6 @@ function buildProjectHeaderPattern(projectPath: string): RegExp {
     `(^|\\r?\\n)[ \\t]*\\[projects\\."${escapedPath}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
   )
 }
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 // Why: quoted keys can contain `]` (e.g. `[hooks.state."a]b"]`) and `[` lines
 // inside multi-line strings aren't headers, so we need a stateful scanner —
 // a flat regex misclassifies both cases.
@@ -495,7 +504,7 @@ function isCompleteTableHeader(line: string): boolean {
 // half-written config.toml can brick a user's Codex install, so write to
 // tmp and rename. Random-suffix tmp name avoids cross-process races on
 // rapid reinstalls.
-function writeConfigAtomically(configPath: string, contents: string): void {
+export function writeConfigAtomically(configPath: string, contents: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)

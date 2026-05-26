@@ -557,6 +557,7 @@ describe('agent completion coordinator', () => {
     'opencode',
     'cursor',
     'pi',
+    'omp',
     'droid',
     'grok',
     'copilot',

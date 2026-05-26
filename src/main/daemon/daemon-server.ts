@@ -212,6 +212,7 @@ export class DaemonServer {
           rows: p.rows,
           cwd: p.cwd,
           env: p.env,
+          envToDelete: p.envToDelete,
           command: p.command,
           shellOverride: p.shellOverride,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,

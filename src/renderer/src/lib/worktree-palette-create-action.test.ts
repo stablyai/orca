@@ -3,60 +3,71 @@ import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
+  getWorktreePaletteSelectionItemIds,
   getWorktreePaletteCreateActionState
 } from './worktree-palette-create-action'
 
 describe('worktree-palette-create-action', () => {
-  it('shows create for typed queries with workspace matches but selects the first real row', () => {
+  it('shows create for typed queries with workspace matches but selects the first workspace row', () => {
     const state = getWorktreePaletteCreateActionState({
       canCreateWorktree: true,
-      query: 'feature',
-      selectableItemIds: ['worktree:one']
+      query: 'feature'
     })
 
     expect(state).toEqual({
       createWorktreeName: 'feature',
-      showCreateAction: true,
-      shouldDefaultToCreate: false
+      showCreateAction: true
     })
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
-        selectableItemIds: ['worktree:one'],
+        selectableItemIds: ['worktree:one', CREATE_WORKTREE_ITEM_ID, 'settings:provider'],
         showCreateAction: state.showCreateAction
       })
     ).toBe('worktree:one')
   })
 
-  it('shows create for typed queries with browser-only matches but selects the browser row', () => {
+  it('selects create when it appears before actions, settings, and browser rows', () => {
     const state = getWorktreePaletteCreateActionState({
       canCreateWorktree: true,
-      query: 'localhost',
-      selectableItemIds: ['browser-page:one']
+      query: 'opencode-issue'
     })
 
     expect(state.showCreateAction).toBe(true)
-    expect(state.shouldDefaultToCreate).toBe(false)
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
-        selectableItemIds: ['browser-page:one'],
+        selectableItemIds: [
+          CREATE_WORKTREE_ITEM_ID,
+          'settings:ai-provider-accounts',
+          'quick-action:new-terminal',
+          'browser-page:one'
+        ],
         showCreateAction: state.showCreateAction
       })
-    ).toBe('browser-page:one')
+    ).toBe(CREATE_WORKTREE_ITEM_ID)
+  })
+
+  it('selects create when it appears before a browser-only match', () => {
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds: [CREATE_WORKTREE_ITEM_ID, 'browser-page:one'],
+        showCreateAction: true
+      })
+    ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
   it('defaults to create for typed queries with no real matches', () => {
     const state = getWorktreePaletteCreateActionState({
       canCreateWorktree: true,
-      query: 'new-workspace',
-      selectableItemIds: []
+      query: 'new-workspace'
     })
 
     expect(state.showCreateAction).toBe(true)
-    expect(state.shouldDefaultToCreate).toBe(true)
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
@@ -65,6 +76,28 @@ describe('worktree-palette-create-action', () => {
         showCreateAction: state.showCreateAction
       })
     ).toBe(CREATE_WORKTREE_ITEM_ID)
+  })
+
+  it('returns empty selection when no create action or rows are available', () => {
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds: [],
+        showCreateAction: false
+      })
+    ).toBe('')
+  })
+
+  it('does not keep create selected after the create row disappears', () => {
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: CREATE_WORKTREE_ITEM_ID,
+        queryChanged: false,
+        selectableItemIds: ['settings:ai-provider-accounts'],
+        showCreateAction: false
+      })
+    ).toBe('settings:ai-provider-accounts')
   })
 
   it('moves selection back to the first real row when the query changes after manual create selection', () => {
@@ -93,8 +126,7 @@ describe('worktree-palette-create-action', () => {
     expect(
       getWorktreePaletteCreateActionState({
         canCreateWorktree: false,
-        query: 'new-workspace',
-        selectableItemIds: []
+        query: 'new-workspace'
       }).showCreateAction
     ).toBe(false)
   })
@@ -103,10 +135,31 @@ describe('worktree-palette-create-action', () => {
     expect(
       getWorktreePaletteCreateActionState({
         canCreateWorktree: true,
-        query: '   ',
-        selectableItemIds: []
+        query: '   '
       }).showCreateAction
     ).toBe(false)
+  })
+
+  it('derives selection ids from rendered entries while skipping headers and hints', () => {
+    expect(
+      getWorktreePaletteSelectionItemIds([
+        { id: '__header_worktrees__', type: 'section-header' },
+        { id: 'worktree:one', type: 'worktree' },
+        { id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' },
+        { id: '__hint_worktree_cap__', type: 'hint' },
+        { id: '__header_actions_settings__', type: 'section-header' },
+        { id: 'settings:ai-provider-accounts', type: 'settings' },
+        { id: 'quick-action:new-terminal', type: 'quick-action' },
+        { id: '__header_browser__', type: 'section-header' },
+        { id: 'browser-page:one', type: 'browser-page' }
+      ])
+    ).toEqual([
+      'worktree:one',
+      CREATE_WORKTREE_ITEM_ID,
+      'settings:ai-provider-accounts',
+      'quick-action:new-terminal',
+      'browser-page:one'
+    ])
   })
 
   it('falls back deterministically when the selected row disappears', () => {

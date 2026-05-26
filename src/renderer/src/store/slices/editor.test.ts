@@ -93,13 +93,13 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
-  it('setRightSidebarTab writes the active worktree entry', () => {
+  it('setRightSidebarTab updates the global tab without writing a worktree entry', () => {
     const store = createEditorStore()
 
     store.getState().setRightSidebarTab('search')
 
     expect(store.getState().rightSidebarTab).toBe('search')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({ 'wt-1': 'search' })
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
   it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
@@ -113,22 +113,20 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
   })
 
-  it('revealInExplorer records explorer for the target worktree', () => {
+  it('revealInExplorer selects explorer globally without writing a worktree entry', () => {
     const store = createEditorStore()
+    const remembered = { 'wt-1': 'search' as const, 'wt-2': 'checks' as const }
     store.setState({
       activeWorktreeId: 'wt-1',
       rightSidebarTab: 'search',
-      rightSidebarTabByWorktree: { 'wt-1': 'search', 'wt-2': 'checks' }
+      rightSidebarTabByWorktree: remembered
     })
 
     store.getState().revealInExplorer('wt-2', '/repo/file.ts')
 
     expect(store.getState().rightSidebarOpen).toBe(true)
     expect(store.getState().rightSidebarTab).toBe('explorer')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({
-      'wt-1': 'search',
-      'wt-2': 'explorer'
-    })
+    expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
     expect(store.getState().pendingExplorerReveal).toMatchObject({
       worktreeId: 'wt-2',
       filePath: '/repo/file.ts'

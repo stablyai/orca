@@ -100,6 +100,7 @@ import {
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
 import { useRepoHeaderDrag } from './repo-header-drag'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import {
@@ -215,6 +216,55 @@ function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
+function getMountedWorktreeBounds(
+  container: HTMLElement,
+  worktreeId: string
+): VirtualItemBounds | null {
+  const element = document.getElementById(getWorktreeOptionId(worktreeId))
+  if (!element || !container.contains(element)) {
+    return null
+  }
+
+  const containerRect = container.getBoundingClientRect()
+  const elementRect = element.getBoundingClientRect()
+  return {
+    index: -1,
+    start: elementRect.top - containerRect.top + container.scrollTop,
+    end: elementRect.bottom - containerRect.top + container.scrollTop
+  }
+}
+
+export function getScrollTopToRevealBounds(
+  container: HTMLElement,
+  bounds: Pick<VirtualItemBounds, 'start' | 'end'>
+): number | null {
+  const viewportTop = container.scrollTop
+  const viewportBottom = viewportTop + container.clientHeight
+  if (bounds.start < viewportTop) {
+    return bounds.start
+  }
+  if (bounds.end > viewportBottom) {
+    return bounds.end - container.clientHeight
+  }
+  return null
+}
+
+function revealMountedWorktreeElement(
+  container: HTMLElement,
+  worktreeId: string,
+  behavior: ScrollBehavior
+): boolean {
+  const bounds = getMountedWorktreeBounds(container, worktreeId)
+  if (!bounds) {
+    return false
+  }
+  const nextScrollTop = getScrollTopToRevealBounds(container, bounds)
+  if (nextScrollTop !== null) {
+    container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
+  }
+  return true
+}
+
 function getWorktreeVisibilityMenuLabel(repo: Repo): string {
   const visibility = effectiveExternalWorktreeVisibility(
     repo,
@@ -315,6 +365,12 @@ type WorktreeDragSession = {
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
   rects: readonly WorktreeDragRect[]
+}
+
+type VirtualItemBounds = {
+  index: number
+  start: number
+  end: number
 }
 
 type WorktreePointerDrag = {
@@ -565,9 +621,30 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
     WORKTREE_ROW_DRAG_INITIAL_STATE
   )
+  const [pendingRevealRetryTick, setPendingRevealRetryTick] = useState(0)
   const [documentVisibilityRevision, setDocumentVisibilityRevision] = useState(0)
+  const [highlightedRevealWorktreeId, setHighlightedRevealWorktreeId] = useState<string | null>(
+    null
+  )
   const worktreeDragSessionRef = useRef<WorktreeDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
+  const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
+  const revealHighlightTimeoutRef = useRef<number | null>(null)
+  const flashRevealedWorktree = useCallback((worktreeId: string) => {
+    if (revealHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(revealHighlightTimeoutRef.current)
+    }
+    // Why: remove before add restarts the CSS glow when the user repeatedly
+    // asks to reveal the same active workspace.
+    setHighlightedRevealWorktreeId(null)
+    window.requestAnimationFrame(() => {
+      setHighlightedRevealWorktreeId(worktreeId)
+      revealHighlightTimeoutRef.current = window.setTimeout(() => {
+        revealHighlightTimeoutRef.current = null
+        setHighlightedRevealWorktreeId(null)
+      }, 1500)
+    })
+  }, [])
   const suppressWorktreeClickUntilRef = useRef(0)
   const canReorderRepoHeaders = groupBy === 'repo' && repoGroupOrdering === 'manual'
   const lastVisibleRefreshKeyRef = useRef('')
@@ -929,20 +1006,65 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       )
       const outcome = resolvePendingSidebarReveal({ targetIndex, targetWorktreeStillExists })
       if (outcome === 'scroll-and-clear') {
-        // Why: `align: 'auto'` is a no-op when the card is already visible and
-        // otherwise scrolls the minimum amount to bring it into view. Using
-        // 'center' here made every worktree click re-center the sidebar, which
-        // is visually jumpy even when nothing needed to move. `behavior: 'smooth'`
-        // animates that minimum scroll so off-screen reveals slide into view
-        // instead of snapping — matching the native scroll-into-view feel.
+        const targetRow = renderRows[targetIndex]
+        const container = scrollRef.current
+        const retryExactRevealOnNextFrame = () => {
+          const previousRetry = pendingRevealRetryRef.current
+          const nextRetryCount =
+            previousRetry?.worktreeId === pendingRevealWorktree.worktreeId
+              ? previousRetry.count + 1
+              : 1
+          pendingRevealRetryRef.current = {
+            worktreeId: pendingRevealWorktree.worktreeId,
+            count: nextRetryCount
+          }
+          if (nextRetryCount <= 8) {
+            requestAnimationFrame(() => setPendingRevealRetryTick((tick) => tick + 1))
+          } else {
+            pendingRevealRetryRef.current = null
+            clearPendingRevealWorktreeId()
+          }
+        }
+        if (
+          container &&
+          revealMountedWorktreeElement(
+            container,
+            pendingRevealWorktree.worktreeId,
+            pendingRevealWorktree.behavior
+          )
+        ) {
+          if (pendingRevealWorktree.highlight) {
+            flashRevealedWorktree(pendingRevealWorktree.worktreeId)
+          }
+          pendingRevealRetryRef.current = null
+          clearPendingRevealWorktreeId()
+          return
+        }
+
+        if (targetRow?.type !== 'lineage-group') {
+          // Why: virtual row indexing can leave the card edge slightly clipped;
+          // stage it into the mounted window, then retry the exact DOM reveal.
+          virtualizer.scrollToIndex(targetIndex, {
+            align: 'auto',
+            behavior: 'auto'
+          })
+          retryExactRevealOnNextFrame()
+          return
+        }
+
+        // Why: for grouped lineage rows the virtual row is only a staging
+        // target. Jump it into the mounted window first, then retry the exact
+        // card reveal instead of clearing while a smooth virtual scroll is
+        // still in flight.
         virtualizer.scrollToIndex(targetIndex, {
           align: 'auto',
-          behavior: pendingRevealWorktree.behavior
+          behavior: 'auto'
         })
-        clearPendingRevealWorktreeId()
+        retryExactRevealOnNextFrame()
         return
       }
       if (outcome === 'clear') {
+        pendingRevealRetryRef.current = null
         clearPendingRevealWorktreeId()
       }
     })
@@ -960,7 +1082,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     toggleGroup,
     collapsedGroups,
     workspaceStatuses,
-    settings
+    settings,
+    pendingRevealRetryTick,
+    flashRevealedWorktree
   ])
 
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
@@ -1184,6 +1308,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const handleScroll = useCallback(() => {
     markScrollMovement()
   }, [markScrollMovement])
+
+  useEffect(() => {
+    return () => {
+      if (revealHighlightTimeoutRef.current !== null) {
+        window.clearTimeout(revealHighlightTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const cleanupWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
@@ -2112,9 +2244,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-drag-group-index={worktreeDragGroupIndex}
                   className={cn(
                     'relative transition-[opacity,transform,filter] duration-150 ease-out',
+                    highlightedRevealWorktreeId === itemRow.worktree.id &&
+                      'scroll-to-current-workspace-reveal-highlight',
                     worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
                       'z-20 scale-[0.985] opacity-35 saturate-75'
                   )}
+                  data-scroll-reveal-highlight={
+                    highlightedRevealWorktreeId === itemRow.worktree.id ? 'true' : undefined
+                  }
                   // Why: nested child cards live inside the parent's clickable
                   // card body; bubbling would activate/edit the parent too.
                   onClick={nested ? stopNestedWorktreeCardBubble : undefined}
@@ -2197,11 +2334,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       aria-selected={selectedWorktreeIds.has(child.worktree.id)}
                       aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
+                        'relative flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
+                        highlightedRevealWorktreeId === child.worktree.id &&
+                          'scroll-to-current-workspace-reveal-highlight',
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                          : 'hover:bg-sidebar-accent/40'
+                          : 'worktree-sidebar-card-hover'
                       )}
+                      data-scroll-reveal-highlight={
+                        highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
+                      }
                       onClick={handleClick}
                       onDoubleClick={(event) => event.stopPropagation()}
                     >
@@ -2416,6 +2558,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
+  const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
   // Read tabsByWorktree when needed for filtering or sorting
@@ -2705,7 +2848,6 @@ const WorktreeList = React.memo(function WorktreeList({
   ])
 
   const worktrees = visibleWorktrees
-
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
@@ -3017,6 +3159,35 @@ const WorktreeList = React.memo(function WorktreeList({
       setHideDefaultBranchWorkspace(false)
     }
   }, [setShowSleepingWorkspaces, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
+
+  const handleRevealCurrentWorkspaceRequest = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const activeWorktree = worktreeMap.get(activeWorktreeId)
+    if (!activeWorktree || activeWorktree.isArchived) {
+      return
+    }
+    if (!worktrees.some((worktree) => worktree.id === activeWorktreeId)) {
+      // Why: the toolbar action promises to reveal the current workspace; when
+      // sidebar filters hide it, relax those filters before queuing the reveal.
+      clearFilters()
+    }
+    revealWorktreeInSidebar(activeWorktreeId, { behavior: 'smooth', highlight: true })
+  }, [activeWorktreeId, clearFilters, revealWorktreeInSidebar, worktreeMap, worktrees])
+
+  useEffect(() => {
+    window.addEventListener(
+      SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
+      handleRevealCurrentWorkspaceRequest
+    )
+    return () => {
+      window.removeEventListener(
+        SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
+        handleRevealCurrentWorkspaceRequest
+      )
+    }
+  }, [handleRevealCurrentWorkspaceRequest])
 
   if (worktrees.length === 0) {
     return (

@@ -466,6 +466,36 @@ export function useOnboardingFlow(
   // step. A ref flips synchronously so re-entries bail immediately.
   const nextInFlightRef = useRef(false)
   const featureSetupStepCompletedTrackedRef = useRef(false)
+  const trackCurrentStepCompleted = useCallback(
+    (advancedVia: 'button' | 'keyboard'): void => {
+      if (currentStep.id === 'agentSetup') {
+        if (featureSetupStepCompletedTrackedRef.current) {
+          return
+        }
+        // Why: feature setup can keep the user on this already-persisted
+        // step to review a terminal command; later checklist edits must
+        // not double-count the same step completion.
+        featureSetupStepCompletedTrackedRef.current = true
+      }
+      const durationMs = consumeStepDurationMs()
+      track('onboarding_step_completed', {
+        step: currentStep.stepNumber,
+        value_kind: currentStep.valueKind,
+        duration_ms: durationMs,
+        advanced_via: advancedVia
+      })
+      if (currentStep.id === 'integrations') {
+        trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
+      }
+    },
+    [
+      consumeStepDurationMs,
+      currentStep.id,
+      currentStep.stepNumber,
+      currentStep.valueKind,
+      trackTaskSourcesSnapshot
+    ]
+  )
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
@@ -476,63 +506,68 @@ export function useOnboardingFlow(
         return
       }
       nextInFlightRef.current = true
-      if (currentStep.id === 'agentSetup' && hasSelectedFeatureSetup) {
-        setBusyLabel('Setting up features…')
-      }
       try {
-        const trackCurrentStepCompleted = (): void => {
-          if (currentStep.id === 'agentSetup') {
-            if (featureSetupStepCompletedTrackedRef.current) {
-              return
-            }
-            // Why: feature setup can keep the user on this already-persisted
-            // step to review a terminal command; later checklist edits must
-            // not double-count the same step completion.
-            featureSetupStepCompletedTrackedRef.current = true
-          }
-          const durationMs = consumeStepDurationMs()
-          track('onboarding_step_completed', {
-            step: currentStep.stepNumber,
-            value_kind: currentStep.valueKind,
-            duration_ms: durationMs,
-            advanced_via: advancedVia
-          })
-          if (currentStep.id === 'integrations') {
-            trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
-          }
-        }
         const result = await persistCurrentStep()
         const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
         if (currentStep.id === 'agentSetup' && nextCommand) {
-          trackCurrentStepCompleted()
+          trackCurrentStepCompleted(advancedVia)
           setFeatureSetupTerminalSelection(featureSetupSelection)
           setFeatureSetupTerminalCommand(nextCommand)
           return
         }
         if (result.ok) {
-          trackCurrentStepCompleted()
+          trackCurrentStepCompleted(advancedVia)
           setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         }
       } finally {
-        if (currentStep.id === 'agentSetup') {
-          setBusyLabel(null)
-        }
         nextInFlightRef.current = false
       }
     },
     [
       busyLabel,
-      consumeStepDurationMs,
       currentStep.id,
-      currentStep.stepNumber,
-      currentStep.valueKind,
       featureSetupSelection,
       featureSetupTerminalCommand,
-      hasSelectedFeatureSetup,
       persistCurrentStep,
-      trackTaskSourcesSnapshot
+      trackCurrentStepCompleted
     ]
   )
+
+  const startFeatureSetup = useCallback(async () => {
+    if (
+      nextInFlightRef.current ||
+      busyLabel ||
+      currentStep.id !== 'agentSetup' ||
+      featureSetupTerminalCommand ||
+      !hasSelectedFeatureSetup
+    ) {
+      return
+    }
+    nextInFlightRef.current = true
+    setBusyLabel('Setting up features…')
+    try {
+      const result = await persistCurrentStep({ runFeatureSetup: true })
+      const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
+      if (result.ok) {
+        trackCurrentStepCompleted('button')
+      }
+      if (nextCommand) {
+        setFeatureSetupTerminalSelection(featureSetupSelection)
+        setFeatureSetupTerminalCommand(nextCommand)
+      }
+    } finally {
+      setBusyLabel(null)
+      nextInFlightRef.current = false
+    }
+  }, [
+    busyLabel,
+    currentStep.id,
+    featureSetupSelection,
+    featureSetupTerminalCommand,
+    hasSelectedFeatureSetup,
+    persistCurrentStep,
+    trackCurrentStepCompleted
+  ])
 
   const openFolder = useCallback(
     async (kind: 'git' | 'folder' = 'git') => {
@@ -693,27 +728,35 @@ export function useOnboardingFlow(
     if (currentStep.id === 'agent' && selectedAgent) {
       await updateSettings({ defaultTuiAgent: selectedAgent })
     }
-    try {
-      const nextState = await persistStep(repoStep.stepNumber - 1)
-      onOnboardingChange(nextState)
-      // Why: users can skip optional preferences, but onboarding remains open
-      // because Orca needs a project before the app has a useful first state.
-      track('onboarding_step_skipped', {
-        step: currentStep.stepNumber,
-        value_kind: currentStep.valueKind,
-        duration_ms: durationMs,
-        advanced_via: 'button'
-      })
-      if (currentStep.id === 'integrations') {
-        trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+    const stepId = currentStep.id
+    const stepNumber = currentStep.stepNumber
+    const valueKind = currentStep.valueKind
+    setStepIndex(repoStepIndex)
+    setTourStarted(false)
+    // Why: progress persist is bookkeeping — advance the UI immediately and
+    // run the IPC + telemetry in the background.
+    void persistStep(repoStep.stepNumber - 1).then(
+      (nextState) => {
+        onOnboardingChange(nextState)
+        // Why: users can skip optional preferences, but onboarding remains
+        // open because Orca needs a project before the app has a useful
+        // first state.
+        track('onboarding_step_skipped', {
+          step: stepNumber,
+          value_kind: valueKind,
+          duration_ms: durationMs,
+          advanced_via: 'button'
+        })
+        if (stepId === 'integrations') {
+          trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+        }
+      },
+      (err) => {
+        toast.error('Could not save progress', {
+          description: err instanceof Error ? err.message : String(err)
+        })
       }
-      setStepIndex(repoStepIndex)
-      setTourStarted(false)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setError(message)
-      toast.error('Could not skip to Add Project', { description: message })
-    }
+    )
   }, [
     busyLabel,
     consumeStepDurationMs,
@@ -727,6 +770,24 @@ export function useOnboardingFlow(
     updateSettings
   ])
 
+  const dismissOnboarding = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
+      if (busyLabel) {
+        return false
+      }
+      setError(null)
+      const closed = await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
+        durationMs: consumeStepDurationMs(),
+        advancedVia
+      })
+      if (closed) {
+        emitPendingTourOutcome()
+      }
+      return closed
+    },
+    [busyLabel, closeWith, consumeStepDurationMs, currentStep.stepNumber, emitPendingTourOutcome]
+  )
+
   const startTour = useCallback(() => {
     if (busyLabel) {
       return
@@ -737,7 +798,7 @@ export function useOnboardingFlow(
   }, [busyLabel])
 
   const completeTour = useCallback(
-    async (markSuccessfulExit?: () => void): Promise<boolean> => {
+    (markSuccessfulExit?: () => void): boolean => {
       if (busyLabel || currentStep.id !== 'tour') {
         return false
       }
@@ -747,43 +808,45 @@ export function useOnboardingFlow(
       if (!repoStep) {
         return false
       }
+      const stepNumber = currentStep.stepNumber
+      const valueKind = currentStep.valueKind
       const durationMs = consumeStepDurationMs()
-      setBusyLabel('Saving…')
-      try {
-        const nextState = await persistStep(repoStep.stepNumber - 1)
-        onOnboardingChange(nextState)
-        track('onboarding_step_completed', {
-          step: currentStep.stepNumber,
-          value_kind: currentStep.valueKind,
-          duration_ms: durationMs,
-          advanced_via: 'button'
-        })
-        emitTourOutcome('completed_inline', 'button')
-        markSuccessfulExit?.()
-        setTourStarted(false)
-        setStepIndex(repoStepIndex)
-        return true
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setError(message)
-        toast.error('Could not continue to project setup', { description: message })
-        return false
-      } finally {
-        setBusyLabel(null)
-      }
+      markSuccessfulExit?.()
+      setTourStarted(false)
+      setStepIndex(repoStepIndex)
+      // Why: persist is pure progress bookkeeping — advance the UI immediately
+      // and don't show the user a "Saving…" spinner for invisible work.
+      void persistStep(repoStep.stepNumber - 1).then(
+        (nextState) => {
+          onOnboardingChange(nextState)
+          track('onboarding_step_completed', {
+            step: stepNumber,
+            value_kind: valueKind,
+            duration_ms: durationMs,
+            advanced_via: 'button'
+          })
+          emitTourOutcome('completed_inline', 'button')
+        },
+        (err) => {
+          toast.error('Could not save tour progress', {
+            description: err instanceof Error ? err.message : String(err)
+          })
+        }
+      )
+      return true
     },
     [
       busyLabel,
       consumeStepDurationMs,
-      emitTourOutcome,
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      emitTourOutcome,
       onOnboardingChange
     ]
   )
 
-  const skipTourToRepo = useCallback(async () => {
+  const skipTourToRepo = useCallback(() => {
     if (busyLabel || currentStep.id !== 'tour') {
       return
     }
@@ -793,27 +856,28 @@ export function useOnboardingFlow(
     if (!repoStep) {
       return
     }
+    const stepNumber = currentStep.stepNumber
+    const valueKind = currentStep.valueKind
     const durationMs = consumeStepDurationMs()
-    setBusyLabel('Saving…')
-    try {
-      const nextState = await persistStep(repoStep.stepNumber - 1)
-      onOnboardingChange(nextState)
-      track('onboarding_step_skipped', {
-        step: currentStep.stepNumber,
-        value_kind: currentStep.valueKind,
-        duration_ms: durationMs,
-        advanced_via: 'button'
-      })
-      emitTourOutcome('skipped_intro', 'button')
-      setTourStarted(false)
-      setStepIndex(repoStepIndex)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setError(message)
-      toast.error('Could not continue to project setup', { description: message })
-    } finally {
-      setBusyLabel(null)
-    }
+    setTourStarted(false)
+    setStepIndex(repoStepIndex)
+    void persistStep(repoStep.stepNumber - 1).then(
+      (nextState) => {
+        onOnboardingChange(nextState)
+        track('onboarding_step_skipped', {
+          step: stepNumber,
+          value_kind: valueKind,
+          duration_ms: durationMs,
+          advanced_via: 'button'
+        })
+        emitTourOutcome('skipped_intro', 'button')
+      },
+      (err) => {
+        toast.error('Could not save tour progress', {
+          description: err instanceof Error ? err.message : String(err)
+        })
+      }
+    )
   }, [
     busyLabel,
     consumeStepDurationMs,
@@ -894,6 +958,14 @@ export function useOnboardingFlow(
     setStepIndex((idx) => Math.max(idx - 1, 0))
   }, [])
 
+  // Why: returns the user to the "Take the tour" intro without leaving the
+  // tour step. Don't emit the tour outcome here — re-entry must still let
+  // `completed_inline` win per the telemetry contract; the existing skip /
+  // complete / unmount paths handle the eventual emission.
+  const exitTour = useCallback(() => {
+    setTourStarted(false)
+  }, [])
+
   const jumpToStep = useCallback((idx: number) => {
     setTourStarted(false)
     setStepIndex(Math.min(Math.max(idx, 0), STEPS.length - 1))
@@ -926,11 +998,14 @@ export function useOnboardingFlow(
     detectedSet,
     isDetectingAgents,
     next,
+    startFeatureSetup,
     skipAgentSetup,
     skipToRepo,
+    dismissOnboarding,
     startTour,
     completeTour,
     skipTourToRepo,
+    exitTour,
     recordTourDepthSummary,
     back,
     jumpToStep,

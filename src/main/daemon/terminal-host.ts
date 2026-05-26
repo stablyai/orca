@@ -12,6 +12,7 @@ export type CreateOrAttachOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
    *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
@@ -38,6 +39,7 @@ export type TerminalHostOptions = {
     rows: number
     cwd?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     command?: string
     shellOverride?: string
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -101,6 +103,7 @@ export class TerminalHost {
       rows: size.rows,
       cwd: opts.cwd,
       env: opts.env,
+      envToDelete: opts.envToDelete,
       command: opts.command,
       shellOverride: opts.shellOverride,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation

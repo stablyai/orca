@@ -18,14 +18,11 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES } from './browser-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
+import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
-
-export const BROWSER_PANE_SEARCH_ENTRIES = [
-  ...BROWSER_USE_PANE_SEARCH_ENTRIES,
-  ...BROWSER_CORE_SEARCH_ENTRIES
-]
+export { BROWSER_PANE_SEARCH_ENTRIES }
 
 type BrowserPaneProps = {
   settings: GlobalSettings

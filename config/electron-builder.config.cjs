@@ -35,7 +35,7 @@ module.exports = {
     '!resources/onboarding/feature-wall/**'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
-  // from out/shared/ (e.g. runtime-bootstrap). Both directories must be
+  // from out/shared/ and local hook mutators from out/main/. These paths must be
   // unpacked so that Node's require() can resolve the cross-directory imports
   // when the CLI runs outside the asar archive.
   // Why: daemon-entry.js is forked as a separate Node.js process and must be
@@ -54,6 +54,17 @@ module.exports = {
   asarUnpack: [
     'out/cli/**',
     'out/shared/**',
+    'out/main/agent-hooks/**',
+    'out/main/antigravity/**',
+    'out/main/claude/**',
+    'out/main/codex/**',
+    'out/main/copilot/**',
+    'out/main/cursor/**',
+    'out/main/droid/**',
+    'out/main/gemini/**',
+    'out/main/grok/**',
+    'out/main/hermes/**',
+    'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/chunks/**',
@@ -61,6 +72,7 @@ module.exports = {
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
+    'node_modules/yaml/**',
     'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {

@@ -49,7 +49,8 @@ import {
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import {
   markTerminalBracketedPasteInterrupted,
-  observeTerminalBracketedPasteModeOutput
+  observeTerminalBracketedPasteModeOutput,
+  pasteTerminalText
 } from './terminal-bracketed-paste'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
@@ -818,10 +819,11 @@ export function connectPanePty(
       : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
   const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
-    command: paneStartup?.command,
+    command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
@@ -1101,12 +1103,11 @@ export function connectPanePty(
       }
     }
 
-    // Why: for local connections (connectionId === null) the local PTY provider
-    // already writes the startup command via writeStartupCommandWhenShellReady,
-    // which is shell-ready-aware and reliable. Re-sending it here would cause
-    // the command to appear twice in the terminal. For SSH connections the relay
-    // has no equivalent mechanism, so the renderer must inject it via sendInput.
-    let pendingStartupCommand = connectionId ? (paneStartup?.command ?? null) : null
+    // Why: for ordinary local startup commands, the local PTY provider already
+    // writes via the shell-ready barrier. terminal-paste startup commands must
+    // stay renderer-delivered so xterm can apply bracketed-paste semantics.
+    let pendingStartupCommand =
+      shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
 
     const startFreshSpawn = (): void => {
       // Why: pre-signal the main process so its cooperation gate suppresses
@@ -1210,11 +1211,27 @@ export function connectPanePty(
         }
         startupInjectTimer = setTimeout(() => {
           startupInjectTimer = null
-          if (!pendingStartupCommand || disposed) {
-            return
-          }
-          transport.sendInput(`${pendingStartupCommand}\r`)
-          pendingStartupCommand = null
+          void (async () => {
+            const command = pendingStartupCommand
+            if (!command || disposed) {
+              return
+            }
+            if (shouldDeliverStartupViaTerminalPaste) {
+              await waitForTerminalOutputParsed(pane.terminal)
+            }
+            if (pendingStartupCommand !== command || disposed) {
+              return
+            }
+            if (shouldDeliverStartupViaTerminalPaste) {
+              // Why: multiline quick commands must be delivered as terminal paste
+              // before Enter, otherwise foreground commands can read later lines.
+              pasteTerminalText(pane.terminal, command)
+              transport.sendInput('\r')
+            } else {
+              transport.sendInput(`${command}\r`)
+            }
+            pendingStartupCommand = null
+          })()
         }, 50)
       }
     }

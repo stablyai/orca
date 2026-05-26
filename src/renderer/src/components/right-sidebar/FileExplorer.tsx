@@ -31,6 +31,7 @@ import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
 import { useFileExplorerColors } from '@/hooks/useFileExplorerColors'
 import { buildFileExplorerCssVars } from '@/hooks/useFileExplorerCssVars'
+import type { TreeNode } from './file-explorer-types'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -113,6 +114,7 @@ function FileExplorerInner(): React.JSX.Element {
     selectedPath,
     selectedPaths,
     setSingleSelectedPath,
+    setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
     preserveSelectionForContextMenu,
@@ -133,13 +135,12 @@ function FileExplorerInner(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
-  const { deleteShortcutLabel, requestDelete } = useFileDeletion({
+  const { deleteShortcutLabel, requestDelete, requestDeleteAll } = useFileDeletion({
     activeWorktreeId,
     openFiles,
     closeFile,
     refreshDir,
-    selectedPath,
-    setSelectedPath: setSingleSelectedPath,
+    setSelectedPaths,
     isWindows
   })
 
@@ -297,14 +298,20 @@ function FileExplorerInner(): React.JSX.Element {
   }, [inlineInputIndex, virtualizer])
 
   const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
+  const selectedNodes = useMemo(
+    () => visibleFlatRows.filter((row) => selectedPaths.has(row.path)),
+    [visibleFlatRows, selectedPaths]
+  )
   useFileExplorerKeys({
     containerRef: explorerShellRef,
     flatRows: visibleFlatRows,
     inlineInput,
     selectedPaths,
     selectedNode,
+    selectedNodes,
     startRename,
-    requestDelete
+    requestDelete,
+    requestDeleteAll
   })
 
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
@@ -315,6 +322,20 @@ function FileExplorerInner(): React.JSX.Element {
     setSelectedPath: setSingleSelectedPath,
     scrollRef
   })
+
+  // Why: context-menu Delete should respect the multi-selection — if the
+  // right-clicked node is already part of a multi-selection, delete the whole
+  // set; otherwise fall through to single-node delete.
+  const handleContextMenuDelete = useCallback(
+    (node: TreeNode) => {
+      if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
+        requestDeleteAll(selectedNodes)
+      } else {
+        requestDelete(node)
+      }
+    },
+    [selectedPaths, selectedNodes, requestDelete, requestDeleteAll]
+  )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
@@ -364,7 +385,6 @@ function FileExplorerInner(): React.JSX.Element {
   const isEmptyState = visibleFlatRows.length === 0 && !inlineInput
   const isLoading = isEmptyState && (rootCache?.loading ?? true)
   const hasError = isEmptyState && !isLoading && !!rootError
-  const isEmpty = isEmptyState && !isLoading && !hasError
   const showTree = !isEmptyState
 
   return (
@@ -435,7 +455,7 @@ function FileExplorerInner(): React.JSX.Element {
             <FileExplorerTreeStatus
               isLoading={isLoading}
               error={hasError ? rootError : null}
-              isEmpty={isEmpty}
+              isEmpty={isEmptyState && !isLoading && !hasError}
             />
           )}
           {showTree && (
@@ -462,7 +482,7 @@ function FileExplorerInner(): React.JSX.Element {
               onStartNew={startNew}
               onStartRename={startRename}
               onDuplicate={handleDuplicate}
-              onRequestDelete={requestDelete}
+              onRequestDelete={handleContextMenuDelete}
               onCollapseFolderSubtree={handleCollapseFolderSubtree}
               onFindInFolder={handleFindInFolder}
               onMoveDrop={handleMoveDrop}
