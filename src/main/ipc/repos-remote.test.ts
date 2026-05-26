@@ -722,7 +722,17 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('short-circuits an empty query without calling the relay', async () => {
+  it('returns refs for an empty query so remote Branch pickers open populated', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/upstream/feature-x\0upstream/feature-x'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -735,14 +745,16 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: ''
     })
 
-    // Why: empty-query short-circuit must happen in the handler (mirrors the
-    // local path's normalizeRefSearchQuery guard). Without it a user-typed
-    // empty query would leak every ref from the remote.
-    expect(result).toEqual([])
-    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(result).toEqual(['origin/main', 'upstream/feature-x'])
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
+    const [argv] = mockGitProvider.exec.mock.calls[0]
+    expect(argv).toContain('refs/remotes/**/*')
+    expect(argv).toContain('refs/remotes/*/**')
+    expect(argv).toContain('refs/heads/**')
   })
 
-  it('short-circuits a query containing only glob metacharacters', async () => {
+  it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -750,17 +762,17 @@ describe('repos:searchBaseRefs SSH relay', () => {
       kind: 'git'
     })
 
-    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+    await handlers.get('repos:searchBaseRefs')!(null, {
       repoId: 'r1',
       query: '***'
     })
 
-    // Why: normalizeRefSearchQuery strips `*?[]\`, so a query made up only of
-    // glob metacharacters normalizes to '' and must be treated like an empty
-    // query (no relay call, no leaked refs). Guards against glob injection
-    // via the SSH branch.
-    expect(result).toEqual([])
-    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    // Why: normalizeRefSearchQuery still strips glob metacharacters before
+    // building argv; the resulting empty query now intentionally lists refs.
+    const [argv] = mockGitProvider.exec.mock.calls[0]
+    expect(argv).toContain('refs/remotes/**/*')
+    expect(argv).toContain('refs/remotes/*/**')
+    expect(argv).toContain('refs/heads/**')
   })
 
   it('sends the widened argv (refs/remotes/*/*) so upstream branches are discoverable', async () => {

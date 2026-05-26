@@ -5466,9 +5466,6 @@ export class OrcaRuntimeService {
       return []
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
       const [result, remotesResult] = await Promise.all([
         provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
