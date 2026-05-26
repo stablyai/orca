@@ -78,6 +78,25 @@ describe('PluginOverlayManager', () => {
     expect(existsSync(file)).toBe(true)
   })
 
+  it('uses the kind-specific Pi-compatible extension source when available', () => {
+    manager.setSources({
+      piExtensionSource: '// pi extension',
+      ompExtensionSource: '// omp extension'
+    })
+
+    const piDir = manager.materializePi('tab-kind-pi:0', undefined, 'pi')
+    const ompDir = manager.materializePi('tab-kind-omp:0', undefined, 'omp')
+
+    expect(piDir).not.toBeNull()
+    expect(ompDir).not.toBeNull()
+    expect(readFileSync(join(piDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+      '// pi extension'
+    )
+    expect(readFileSync(join(ompDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+      '// omp extension'
+    )
+  })
+
   it('mirrors the remote default Pi agent dir before adding Orca status extension', () => {
     const piAgentDir = join(homeDir, '.pi', 'agent')
     mkdirSync(join(piAgentDir, 'skills', 'my-skill'), { recursive: true })
@@ -201,7 +220,8 @@ describe('PluginOverlayManager', () => {
   it('clearOverlay removes opencode + every Pi-kind overlay root for an id', () => {
     manager.setSources({
       opencodePluginSource: 'opencode',
-      piExtensionSource: 'pi'
+      piExtensionSource: 'pi',
+      ompExtensionSource: 'omp'
     })
     const opencodeDir = manager.materializeOpenCode('tab-3:0')!
     const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!

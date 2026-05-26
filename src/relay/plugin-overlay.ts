@@ -65,13 +65,18 @@ function isUsableId(id: string): boolean {
 export type PluginSources = {
   /** Source body of `orca-opencode-status.js` to drop into <overlay>/plugins/. */
   opencodePluginSource?: string
-  /** Source body of `orca-agent-status.ts` to drop into <overlay>/extensions/. */
+  /** Source body of Pi's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   piExtensionSource?: string
+  /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
+  ompExtensionSource?: string
 }
 
 export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
-  private piExtensionSource: string | null = null
+  private piExtensionSources: Record<PiAgentKind, string | null> = {
+    pi: null,
+    omp: null
+  }
   private homeDir: string
   private opencodeRoot: string
   private piRoots: Record<PiAgentKind, string>
@@ -99,7 +104,10 @@ export class PluginOverlayManager {
       this.opencodePluginSource = sources.opencodePluginSource
     }
     if (typeof sources.piExtensionSource === 'string') {
-      this.piExtensionSource = sources.piExtensionSource
+      this.piExtensionSources.pi = sources.piExtensionSource
+    }
+    if (typeof sources.ompExtensionSource === 'string') {
+      this.piExtensionSources.omp = sources.ompExtensionSource
     }
   }
 
@@ -107,8 +115,15 @@ export class PluginOverlayManager {
     return this.opencodePluginSource !== null
   }
 
-  hasPiSource(): boolean {
-    return this.piExtensionSource !== null
+  hasPiSource(kind?: PiAgentKind): boolean {
+    if (kind) {
+      return this.getPiExtensionSource(kind) !== null
+    }
+    return this.piExtensionSources.pi !== null || this.piExtensionSources.omp !== null
+  }
+
+  private getPiExtensionSource(kind: PiAgentKind): string | null {
+    return this.piExtensionSources[kind] ?? this.piExtensionSources.pi
   }
 
   private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {
@@ -244,7 +259,8 @@ export class PluginOverlayManager {
    *  materializes the overlay from empty (Orca extensions only) rather than
    *  silently mirroring the other agent's state. */
   materializePi(id: string, existingAgentDir?: string, kind: PiAgentKind = 'pi'): string | null {
-    if (!this.piExtensionSource || !isUsableId(id)) {
+    const extensionSource = this.getPiExtensionSource(kind)
+    if (!extensionSource || !isUsableId(id)) {
       return null
     }
     const root = this.piRoots[kind]
@@ -263,7 +279,7 @@ export class PluginOverlayManager {
       this.mirrorPiAgentDir(sourceAgentDir, dir)
       const extensionsDir = join(dir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
-      writeFileSync(join(extensionsDir, PI_EXTENSION_FILE), this.piExtensionSource)
+      writeFileSync(join(extensionsDir, PI_EXTENSION_FILE), extensionSource)
       return dir
     } catch (err) {
       process.stderr.write(

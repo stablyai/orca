@@ -15,8 +15,7 @@ describe('terminal agent quick command presets', () => {
       gemini: "gemini --prompt-interactive 'your prompt here'",
       antigravity: "agy --prompt-interactive 'your prompt here'",
       cursor: "cursor-agent 'your prompt here'",
-      droid: "droid 'your prompt here'",
-      omp: "omp 'your prompt here'"
+      droid: "droid 'your prompt here'"
     }
 
     const promptStartingCommands = Object.keys(TUI_AGENT_CONFIG)

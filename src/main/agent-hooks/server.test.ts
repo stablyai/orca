@@ -3034,6 +3034,30 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.prompt).toBe('rename this fn')
   })
 
+  it('OMP uses Pi-compatible events but keeps OMP agent attribution', () => {
+    const started = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for omp' }),
+      'production'
+    )
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
+
+    const done = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
+  })
+
   it('agent_start without a prompt keeps the cached prompt from the current turn', () => {
     _internals.normalizeHookPayload(
       'pi',

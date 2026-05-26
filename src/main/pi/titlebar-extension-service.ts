@@ -233,12 +233,12 @@ export class PiTitlebarExtensionService {
       )
       // Why: bundled status extension that bridges the in-process event API
       // (`pi.on('agent_start', ...)` etc., identical between Pi and OMP) to the
-      // unified /hook/pi endpoint. Without this, panes would have no entry in
+      // unified /hook/<kind> endpoint. Without this, panes would have no entry in
       // agentStatusByPaneKey and the dashboard would fall back to terminal-title
       // heuristics like any uninstrumented CLI.
       writeFileSync(
         join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
-        getPiAgentStatusExtensionSource()
+        getPiAgentStatusExtensionSource(kind)
       )
     } catch {
       // Why: overlay creation is best-effort - permission errors (EPERM/EACCES)

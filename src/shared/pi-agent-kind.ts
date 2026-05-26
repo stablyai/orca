@@ -54,9 +54,7 @@ export function detectPiAgentKindFromCommand(command: string | undefined): PiAge
   }
   // Why: PI launches and the no-command (bare-shell) fallback both resolve to
   // 'pi'. A bare shell that later invokes `pi` keeps the historical default;
-  // a bare shell that later invokes `omp` will load the Pi overlay, which
-  // matches today's pre-fix behavior for that user-driven path. The fix
-  // targets the launch-time resolution, which is where Orca actually owns
-  // the agent-kind decision.
+  // if it later invokes `omp`, the status extension re-routes at runtime based
+  // on the executable name so attribution still lands on OMP.
   return 'pi'
 }

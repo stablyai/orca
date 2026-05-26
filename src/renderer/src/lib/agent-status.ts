@@ -119,6 +119,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
+  omp: 'OMP',
   droid: 'Droid',
   grok: 'Grok',
   hermes: 'Hermes'

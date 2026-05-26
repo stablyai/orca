@@ -94,6 +94,13 @@ describe('PiTitlebarExtensionService', () => {
       'orca-titlebar-spinner.ts',
       'user-ext'
     ])
+    const statusExtensionSource = readFileSync(
+      join(env.PI_CODING_AGENT_DIR!, 'extensions', 'orca-agent-status.ts'),
+      'utf-8'
+    )
+    expect(statusExtensionSource).toContain('/hook/pi')
+    expect(statusExtensionSource).toContain('process.title')
+    expect(statusExtensionSource).toContain("return '/hook/omp'")
     // User's top-level resources are reachable via the overlay.
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'skills', 'my-skill', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'))).toBe(true)
@@ -212,6 +219,12 @@ describe('PiTitlebarExtensionService', () => {
         const overlayExtensions = readdirSync(join(env.PI_CODING_AGENT_DIR!, 'extensions')).sort()
         expect(overlayExtensions).toContain('omp-ext')
         expect(overlayExtensions).not.toContain('pi-ext')
+        expect(
+          readFileSync(
+            join(env.PI_CODING_AGENT_DIR!, 'extensions', 'orca-agent-status.ts'),
+            'utf-8'
+          )
+        ).toContain('/hook/omp')
         // Pi's overlay root MUST NOT have been touched by the OMP launch.
         expect(existsSync(join(userDataDir, 'pi-agent-overlays', 'pty-omp-both'))).toBe(false)
       } finally {

@@ -439,16 +439,20 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
+    const omp = params.ompExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
-      piExtensionSource: typeof pi === 'string' ? pi : undefined
+      piExtensionSource: typeof pi === 'string' ? pi : undefined,
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
-        pi: pluginOverlay.hasPiSource()
+        pi: pluginOverlay.hasPiSource('pi'),
+        omp: pluginOverlay.hasPiSource('omp')
       }
     }
   })
