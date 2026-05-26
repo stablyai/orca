@@ -59,6 +59,7 @@ import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalSettingsPreview } from './TerminalSettingsPreview'
+import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -587,6 +588,7 @@ export function TerminalPane({
           </SearchableSetting>
 
           <SearchableSetting
+            id={OSC52_CLIPBOARD_SETTING_ID}
             title="Allow TUI Clipboard Writes (OSC 52)"
             description="Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH)."
             keywords={[

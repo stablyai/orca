@@ -33,7 +33,8 @@ import {
   installMode2031Handlers,
   mode2031SequenceFor
 } from './terminal-appearance'
-import { parseOsc52 } from './osc52-clipboard'
+import { handleOsc52ClipboardRequest } from './osc52-clipboard'
+import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
@@ -463,22 +464,13 @@ export function useTerminalPaneLifecycle({
         // both the enabled and disabled paths so xterm doesn't fall
         // through to any other OSC 52 handler and so our intentional drop
         // in the disabled path is explicit.
-        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) => {
-          if (!settingsRef.current?.terminalAllowOsc52Clipboard) {
-            return true
-          }
-          const parsed = parseOsc52(data)
-          if (parsed.kind !== 'write') {
-            // Queries and malformed payloads are intentionally dropped —
-            // answering a query would leak the user's clipboard to any
-            // process writing to the PTY.
-            return true
-          }
-          void window.api.ui.writeClipboardText(parsed.text).catch(() => {
-            /* ignore clipboard write failures */
+        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
+          handleOsc52ClipboardRequest(data, {
+            allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
+            writeClipboardText: window.api.ui.writeClipboardText,
+            onBlockedWrite: showOsc52ClipboardBlockedToast
           })
-          return true
-        })
+        )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
         // OSC 7 — shell-reported current working directory. Drives split-pane
