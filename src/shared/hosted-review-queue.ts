@@ -99,6 +99,15 @@ export function reviewReadyToMerge(summary: HostedReviewQueueSummary): boolean {
   if (summary.mergeable !== 'MERGEABLE') {
     return false
   }
+  if (summary.mergeStateStatus === 'BEHIND' || summary.mergeStateStatus === 'BLOCKED') {
+    return false
+  }
+  if (
+    summary.reviewDecision === 'review_required' ||
+    summary.reviewDecision === 'changes_requested'
+  ) {
+    return false
+  }
   if (summary.checksStatus !== 'success' && summary.checksStatus !== 'neutral') {
     return false
   }

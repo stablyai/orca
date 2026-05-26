@@ -948,6 +948,13 @@ export type PreloadApi = {
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    setPRAutoMerge: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      enabled: boolean
+      prRepo?: GitHubOwnerRepo | null
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
     updatePRState: (args: {
       repoPath: string
       repoId?: string

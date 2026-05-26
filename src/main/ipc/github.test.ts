@@ -8,6 +8,7 @@ const {
   listWorkItemsMock,
   getAuthenticatedViewerMock,
   mergePRMock,
+  setPRAutoMergeMock,
   getAllWebContentsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -17,6 +18,7 @@ const {
   listWorkItemsMock: vi.fn(),
   getAuthenticatedViewerMock: vi.fn(),
   mergePRMock: vi.fn(),
+  setPRAutoMergeMock: vi.fn(),
   getAllWebContentsMock: vi.fn()
 }))
 
@@ -35,7 +37,8 @@ vi.mock('../github/client', () => ({
   listIssues: listIssuesMock,
   listWorkItems: listWorkItemsMock,
   getAuthenticatedViewer: getAuthenticatedViewerMock,
-  mergePR: mergePRMock
+  mergePR: mergePRMock,
+  setPRAutoMerge: setPRAutoMergeMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -70,6 +73,7 @@ describe('registerGitHubHandlers', () => {
     listWorkItemsMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
     mergePRMock.mockReset()
+    setPRAutoMergeMock.mockReset()
     getAllWebContentsMock.mockReset()
     getAllWebContentsMock.mockReturnValue([])
     for (const key of Object.keys(handlers)) {
@@ -251,6 +255,28 @@ describe('registerGitHubHandlers', () => {
     )
 
     expect(mergePRMock).toHaveBeenCalledWith('/workspace/repo', 42, 'squash', 'openclaw-2', {
+      owner: 'acme',
+      repo: 'orca'
+    })
+  })
+
+  it('threads SSH connectionId through pull request auto-merge', async () => {
+    repos[0].connectionId = 'openclaw-2'
+    setPRAutoMergeMock.mockResolvedValue({ ok: true })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:setPRAutoMerge'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        enabled: true,
+        prRepo: { owner: 'acme', repo: 'orca' }
+      }
+    )
+
+    expect(setPRAutoMergeMock).toHaveBeenCalledWith('/workspace/repo', 42, true, 'openclaw-2', {
       owner: 'acme',
       repo: 'orca'
     })

@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 
@@ -61,6 +62,35 @@ export default function PRActions({
     [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
   )
 
+  const mergePresentation = presentGitHubPRMergeState(pr)
+  const handleAutoMerge = useCallback(async () => {
+    if (!mergePresentation.autoMergeAction) {
+      return
+    }
+    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
+    setMerging(true)
+    setMergeError(null)
+    setMergeMenuOpen(false)
+    try {
+      const result = await window.api.gh.setPRAutoMerge({
+        repoPath: repo.path,
+        repoId: repo.id,
+        prNumber: pr.number,
+        enabled,
+        prRepo: pr.prRepo ?? null
+      })
+      if (!result.ok) {
+        setMergeError(result.error)
+      } else {
+        await onRefreshPR()
+      }
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : 'Auto-merge update failed')
+    } finally {
+      setMerging(false)
+    }
+  }, [mergePresentation.autoMergeAction, onRefreshPR, pr.number, pr.prRepo, repo.id, repo.path])
+
   useEffect(() => {
     if (!mergeMenuOpen) {
       return
@@ -80,10 +110,9 @@ export default function PRActions({
     runWorktreeDelete(worktree.id)
   }, [worktree.id])
 
-  // Why: merging a PR with unresolved conflicts would fail on GitHub anyway;
-  // disabling the button prevents a confusing error and signals the user must
-  // resolve conflicts first.
-  const hasConflicts = pr.mergeable === 'CONFLICTING'
+  const primaryActionDisabled =
+    merging || (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
+  const directMergeDisabled = merging || !mergePresentation.directMergeAvailable
 
   if (pr.state === 'open') {
     return (
@@ -93,11 +122,11 @@ export default function PRActions({
             <TooltipTrigger asChild>
               {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
                 events even when the buttons inside are disabled. */}
-              <span className={cn(hasConflicts && 'cursor-not-allowed')}>
+              <span className={cn(primaryActionDisabled && 'cursor-not-allowed')}>
                 <div
                   className={cn(
                     'relative flex items-stretch',
-                    hasConflicts && 'pointer-events-none'
+                    primaryActionDisabled && 'pointer-events-none'
                   )}
                   ref={mergeMenuRef}
                 >
@@ -109,15 +138,23 @@ export default function PRActions({
                       'bg-green-600 text-white hover:bg-green-700',
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
-                    onClick={() => void handleMerge('squash')}
-                    disabled={merging || hasConflicts}
+                    onClick={() =>
+                      mergePresentation.autoMergeAction && !mergePresentation.directMergeAvailable
+                        ? void handleAutoMerge()
+                        : void handleMerge('squash')
+                    }
+                    disabled={primaryActionDisabled}
                   >
                     {merging ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <GitMerge className="size-3.5" />
                     )}
-                    {merging ? 'Merging\u2026' : 'Squash and merge'}
+                    {merging
+                      ? 'Working\u2026'
+                      : mergePresentation.directMergeAvailable
+                        ? 'Squash and merge'
+                        : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                   </Button>
                   <Button
                     type="button"
@@ -128,12 +165,23 @@ export default function PRActions({
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
                     onClick={() => setMergeMenuOpen((v) => !v)}
-                    disabled={merging || hasConflicts}
+                    disabled={merging}
                   >
                     <ChevronDown className="size-3.5" />
                   </Button>
                   {mergeMenuOpen && (
                     <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-popover shadow-md overflow-hidden">
+                      {mergePresentation.autoMergeAction && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
+                          onClick={() => void handleAutoMerge()}
+                        >
+                          {mergePresentation.autoMergeAction.label}
+                        </Button>
+                      )}
                       {MERGE_METHODS.map((method) => (
                         <Button
                           key={method}
@@ -142,6 +190,7 @@ export default function PRActions({
                           size="xs"
                           className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
                           onClick={() => void handleMerge(method)}
+                          disabled={!mergePresentation.directMergeAvailable}
                         >
                           {MERGE_LABELS[method]}
                         </Button>
@@ -151,9 +200,9 @@ export default function PRActions({
                 </div>
               </span>
             </TooltipTrigger>
-            {hasConflicts && (
+            {directMergeDisabled && (
               <TooltipContent side="bottom" sideOffset={4}>
-                Merge conflicts must be resolved before merging
+                {mergePresentation.tooltip}
               </TooltipContent>
             )}
           </Tooltip>

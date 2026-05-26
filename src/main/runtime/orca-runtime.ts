@@ -158,6 +158,7 @@ import {
   updatePRTitle,
   updatePRDetails,
   mergePR,
+  setPRAutoMerge,
   updatePRState,
   requestPRReviewers,
   removePRReviewers,
@@ -6081,6 +6082,16 @@ export class OrcaRuntimeService {
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return mergePR(repo.path, prNumber, method, repo.connectionId ?? null, prRepo ?? null)
+  }
+
+  async setRepoPRAutoMerge(
+    repoSelector: string,
+    prNumber: number,
+    enabled: boolean,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return setPRAutoMerge(repo.path, prNumber, enabled, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async updateRepoPRState(

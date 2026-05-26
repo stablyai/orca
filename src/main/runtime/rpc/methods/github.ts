@@ -122,6 +122,12 @@ const MergePr = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+const SetPrAutoMerge = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  enabled: z.boolean(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 const UpdatePrState = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   updates: z.object({
@@ -432,6 +438,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: MergePr,
     handler: async (params, { runtime }) =>
       runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.setPRAutoMerge',
+    params: SetPrAutoMerge,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRAutoMerge(
+        params.repo,
+        params.prNumber,
+        params.enabled,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.updatePRState',

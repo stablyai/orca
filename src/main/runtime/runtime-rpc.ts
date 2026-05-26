@@ -167,6 +167,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.listLabels',
   'github.listWorkItems',
   'github.mergePR',
+  'github.setPRAutoMerge',
   'github.requestPRReviewers',
   'github.project.listAccessible',
   'github.project.listAssignableUsersBySlug',

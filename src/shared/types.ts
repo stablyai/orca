@@ -623,6 +623,7 @@ export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 
 export type PRConflictSummary = {
   baseRef: string
@@ -641,6 +642,10 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
+  mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
@@ -898,12 +903,14 @@ export type GitHubWorkItem = {
   additions?: number
   deletions?: number
   changedFiles?: number
-  reviewDecision?: string | null
+  reviewDecision?: PRReviewDecision | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
   assignees?: GitHubAssignableUser[]
   checksSummary?: GitHubPRCheckSummary
   mergeable?: PRMergeableState
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
