@@ -5,7 +5,7 @@ import { spawnSync } from 'child_process'
 import { getShellReadyLaunchConfig } from '../../local-pty-shell-ready'
 import { escapeRegex } from '../../../../shared/string-utils'
 
-const RUN_MARKER = /^[ \t]*#[ \t]*Run:[ \t]*$/m
+const RUN_MARKER = /^[ \t]*#[ \t]*Run:.*$/m
 
 /**
  * Shell-script-literal test framework for shell-ready tests.

@@ -12,7 +12,7 @@
  */
 import { tmpdir } from 'os'
 import { basename, win32 as pathWin32 } from 'path'
-import { mkdirSync, writeFileSync, chmodSync } from 'fs'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
 import {
@@ -83,6 +83,20 @@ function getShellReadyWrapperRoot(): string {
   return `${userDataPath}/shell-ready`
 }
 
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
+  return [
+    `${root}/zsh/.zshenv`,
+    `${root}/zsh/.zprofile`,
+    `${root}/zsh/.zshrc`,
+    `${root}/zsh/.zlogin`,
+    `${root}/bash/rcfile`
+  ]
+}
+
+function shellReadyWrappersExist(): boolean {
+  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+}
+
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
 // itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
 // a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
@@ -118,6 +132,10 @@ function resolveOriginalZdotdir(): string {
     process.env.HOME ||
     ''
   )
+}
+
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
 }
 
 export function getBashShellReadyRcfileContent(): string {
@@ -285,7 +303,10 @@ preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
 }
 
 function ensureShellReadyWrappers(): void {
-  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    return
+  }
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
     return
   }
   didEnsureShellReadyWrappers = true
@@ -391,6 +412,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

@@ -14,15 +14,15 @@ it('discovers ZDOTDIR from multi-file config', async () => {
     cat > ~/.config/zsh/env <<'EOF'
 export ZDOTDIR="$HOME/.config/zsh"
 EOF
-    
+
     cat > ~/.zshenv <<'EOF'
 source "$HOME/.config/zsh/env"
 EOF
-    
+
     # Run: check discovered ZDOTDIR
     zsh -c 'env | grep -E "^(ORCA_|ZDOTDIR|HOME)=" | sort'
   `)
-  
+
   expect(stdout).toMatchInlineSnapshot(`
     "HOME=<HOME>
     ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh

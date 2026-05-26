@@ -67,6 +67,7 @@ EOF
   it('handles conditional ZDOTDIR based on SSH_CONNECTION', async () => {
     const { stdout } = await shellScriptTest(
       `
+      mkdir -p ~/.config/zsh-local ~/.config/zsh-remote
       cat > ~/.zshenv <<'EOF'
 if [[ -n "$SSH_CONNECTION" ]]; then
   export ZDOTDIR="$HOME/.config/zsh-remote"
@@ -82,7 +83,7 @@ EOF
     )
 
     expect(stdout).toMatchInlineSnapshot(`
-      "ORCA_ORIG_ZDOTDIR=<USER_HOME>/.config/zsh
+      "ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh-remote
       ZDOTDIR=<WRAPPER_DIR>
       "
     `)

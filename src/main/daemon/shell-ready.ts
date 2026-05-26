@@ -62,6 +62,10 @@ function resolveOriginalZdotdir(): string {
   )
 }
 
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
+}
+
 function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
   return [
     join(root, 'zsh', '.zshenv'),
@@ -357,6 +361,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: join(root, 'zsh'),
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

@@ -205,6 +205,7 @@ describePosix('local PTY shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -230,6 +231,7 @@ describePosix('local PTY shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -260,6 +262,7 @@ describePosix('local PTY shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -285,9 +288,9 @@ describePosix('local PTY shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('local _orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
-    expect(zshenv).toContain('[[ -f "$_orca_user_zdotdir/.zshenv" ]]')
-    expect(zshenv).toContain('*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
+    expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
   })
 
   it('writes wrappers that restore agent config homes after user startup files', async () => {
@@ -400,6 +403,7 @@ describePosix('local PTY shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice/.config/zsh')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -471,55 +475,46 @@ describePosix('local PTY shell-ready launch config', () => {
     }
   })
 
-  it('discovers ZDOTDIR from user .zshenv in a subshell to preserve scoping', async () => {
+  it('sources user .zshenv at wrapper top level before repinning ZDOTDIR', async () => {
     // Why: PR #1737 sourced .zshenv inside a wrapper function, which broke
-    // common patterns like "typeset -U path". The safer fix sources .zshenv in
-    // a subshell to preserve top-level zsh scoping and isolate early returns.
+    // common patterns like "typeset -U path". The fix must keep .zshenv at
+    // zsh top level while still capturing the ZDOTDIR it resolved.
     const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
-    // The wrapper must:
-    // 1. Unset ZDOTDIR before sourcing user .zshenv (so ${ZDOTDIR:-...} defaults work)
     expect(zshenv).toContain('unset ZDOTDIR')
-
-    // 2. Source user .zshenv in a subshell $(...) to preserve top-level scoping
-    expect(zshenv).toMatch(/_orca_discovered_zdotdir=\$\(\s*unset ZDOTDIR/)
-    expect(zshenv).toContain('if [[ -n "${HOME:-}" && -f "$HOME/.zshenv" ]]; then')
-
-    // 3. Capture the ZDOTDIR value via printf (safer than echo for special chars)
-    expect(zshenv).toMatch(/printf '%s\\n' "\$\{ZDOTDIR:-\}"/)
-
-    // 4. Use discovered ZDOTDIR with fallback chain
+    expect(zshenv).toContain('_orca_zshenv_source_dir="${ORCA_ZSHENV_SOURCE_DIR:-$HOME}"')
+    expect(zshenv).toContain('source "${_orca_zshenv_path}"')
+    expect(zshenv).toContain('_orca_discovered_zdotdir="${ZDOTDIR:-}"')
     expect(zshenv).toContain(
-      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}"'
+      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}"'
     )
+    expect(zshenv).toContain('export ZDOTDIR=')
   })
 
   it('preserves spawn-env ORCA_ORIG_ZDOTDIR as fallback when discovery yields nothing', async () => {
-    // Why: if user .zshenv returns early or doesn't set ZDOTDIR, the subshell
-    // yields an empty string. The wrapper should then fall back to the spawn-env
-    // ORCA_ORIG_ZDOTDIR (if present), then HOME.
+    // Why: if user .zshenv returns early or doesn't set ZDOTDIR, the wrapper
+    // should fall back to the spawn-env ORCA_ORIG_ZDOTDIR (if present), then HOME.
     const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
-    // Save spawn-env value before subshell
+    // Save spawn-env value before sourcing user .zshenv
     expect(zshenv).toContain('_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"')
 
-    // Fallback chain: discovered → spawn-env → HOME
-    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_spawn_orig_zdotdir:-$HOME}}')
+    // Fallback chain: discovered → normalized spawn-env path → HOME
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
   })
 })
 
-// Why: end-to-end validation that the subshell discovery approach actually
-// preserves top-level zsh scoping for common patterns like "typeset -U path".
-// These tests spawn real zsh subprocesses, so they're gated on zsh availability
-// and skipped on platforms where zsh is not found.
+// Why: end-to-end validation that wrapper ZDOTDIR discovery preserves top-level
+// zsh semantics. These tests spawn real zsh subprocesses, so they're gated on
+// zsh availability and skipped on platforms where zsh is not found.
 describePosix('live zsh subprocess tests', () => {
   const hasZsh = (() => {
     const result = spawnSync('which', ['zsh'], { encoding: 'utf8' })
@@ -545,9 +540,8 @@ describePosix('live zsh subprocess tests', () => {
 
     it('preserves typeset -U path scoping when user .zshrc uses it', async () => {
       // Why: this was the breakage pattern in PR #1737. The function-wrapper
-      // approach made "typeset -U path" function-scoped. The subshell discovery
-      // fix isolates only the ZDOTDIR capture; user rcfiles (.zshrc) are still
-      // sourced at the wrapper's top level, preserving scoping.
+      // approach made "typeset -U path" function-scoped. User rcfiles must
+      // still be sourced at the wrapper's top level, preserving scoping.
 
       // Create XDG-style config: .zshenv sets ZDOTDIR, .zshrc modifies PATH
       const xdgZshDir = join(testHome, '.config', 'zsh')
@@ -601,9 +595,55 @@ path=(/custom/bin $path)
       expect(output).toContain('PATH_HAS_CUSTOM=/custom/bin')
     })
 
+    it('preserves top-level .zshenv path and function side effects', async () => {
+      // Why: .zshenv is the normal place for always-on zsh env/path setup.
+      // Dropping those side effects regresses non-Orca zsh startup semantics.
+      const xdgZshDir = join(testHome, '.config', 'zsh')
+      mkdirSync(xdgZshDir, { recursive: true })
+      writeFileSync(
+        join(testHome, '.zshenv'),
+        `typeset -U path
+path=(/env/bin $path)
+export MY_VAR=from-zshenv
+orca_zshenv_func() { echo "from-zshenv-function"; }
+export ZDOTDIR="$HOME/.config/zsh"
+`
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      const cleanEnv: Record<string, string | undefined> = {
+        ...process.env,
+        HOME: testHome,
+        PATH: '/usr/bin:/bin'
+      }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      delete cleanEnv.MY_VAR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR
+
+      const result = spawnSync(
+        'zsh',
+        [
+          '-c',
+          'echo "PATH_HEAD=${PATH%%:*}" && echo "MY_VAR=${MY_VAR:-unset}" && orca_zshenv_func'
+        ],
+        {
+          env: cleanEnv as NodeJS.ProcessEnv,
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('PATH_HEAD=/env/bin')
+      expect(result.stdout).toContain('MY_VAR=from-zshenv')
+      expect(result.stdout).toContain('from-zshenv-function')
+    })
+
     it('survives early return in user .zshenv without crashing', async () => {
-      // Why: common pattern to skip non-interactive sourcing. The subshell
-      // must isolate this return so the wrapper continues.
+      // Why: common pattern to skip non-interactive sourcing. A direct source
+      // at zsh top level must keep the wrapper running, matching normal zsh.
       writeFileSync(
         join(testHome, '.zshenv'),
         `[[ -o interactive ]] || return 0
@@ -636,8 +676,8 @@ export ZDOTDIR="$HOME/.config/zsh"
     })
 
     it('falls back to HOME when user .zshenv does not set ZDOTDIR', async () => {
-      // Why: vanilla zsh users don't set ZDOTDIR. The subshell should yield
-      // an empty string, and the fallback chain should land on HOME.
+      // Why: vanilla zsh users don't set ZDOTDIR. The fallback chain should
+      // land on HOME after preserving the rest of .zshenv behavior.
       writeFileSync(
         join(testHome, '.zshenv'),
         `# Vanilla zsh config, no ZDOTDIR
@@ -895,8 +935,8 @@ export MY_VAR=foo
 
       const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
-      // Verify wrapper checks HOME is non-empty before sourcing
-      expect(zshenv).toContain('if [[ -n "${HOME:-}"')
+      // Verify wrapper checks the resolved source root is non-empty before sourcing
+      expect(zshenv).toContain('if [[ -n "${_orca_zshenv_source_dir:-}"')
     })
 
     it('handles ZDOTDIR with single quote in path', async () => {
@@ -1162,6 +1202,65 @@ export MY_VAR=foo
         }
       }
     })
+
+    it('sources launch-time ZDOTDIR .zshenv when it is explicitly inherited', async () => {
+      const homeZdotdir = join(testHome, '.config', 'zsh-home')
+      const inheritedZdotdir = join(testHome, '.config', 'zsh-inherited')
+      mkdirSync(homeZdotdir, { recursive: true })
+      mkdirSync(inheritedZdotdir, { recursive: true })
+      writeFileSync(
+        join(testHome, '.zshenv'),
+        `export SOURCE_MARKER=home\nexport ZDOTDIR="${homeZdotdir}"\n`
+      )
+      writeFileSync(
+        join(inheritedZdotdir, '.zshenv'),
+        `export SOURCE_MARKER=inherited\nexport ZDOTDIR="${inheritedZdotdir}"\n`
+      )
+
+      const previousZdotdir = process.env.ZDOTDIR
+      const previousHome = process.env.HOME
+      process.env.ZDOTDIR = inheritedZdotdir
+      process.env.HOME = testHome
+
+      try {
+        const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+        const config = getShellReadyLaunchConfig('/bin/zsh')
+        expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe(inheritedZdotdir)
+
+        const cleanEnv: Record<string, string | undefined> = {
+          ...process.env,
+          ...config.env,
+          HOME: testHome
+        }
+
+        const result = spawnSync(
+          'zsh',
+          [
+            '-c',
+            'echo "ORCA_ORIG_ZDOTDIR=${ORCA_ORIG_ZDOTDIR}" && echo "SOURCE_MARKER=${SOURCE_MARKER:-unset}"'
+          ],
+          {
+            env: cleanEnv as NodeJS.ProcessEnv,
+            encoding: 'utf8'
+          }
+        )
+
+        expect(result.status).toBe(0)
+        expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${inheritedZdotdir}`)
+        expect(result.stdout).toContain('SOURCE_MARKER=inherited')
+      } finally {
+        if (previousZdotdir === undefined) {
+          delete process.env.ZDOTDIR
+        } else {
+          process.env.ZDOTDIR = previousZdotdir
+        }
+        if (previousHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = previousHome
+        }
+      }
+    })
   })
 
   describeIfZsh('automation and edge cases', () => {
@@ -1179,7 +1278,7 @@ export MY_VAR=foo
       rmSync(userDataPath, { recursive: true, force: true })
     })
 
-    it('survives user .zshenv that calls exit', async () => {
+    it('matches normal zsh when user .zshenv calls exit', async () => {
       writeFileSync(join(testHome, '.zshenv'), 'export ZDOTDIR="$HOME/.config/zsh"\nexit 42\n')
 
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
@@ -1195,8 +1294,8 @@ export MY_VAR=foo
         encoding: 'utf8'
       })
 
-      expect(result.status).toBe(0)
-      expect(result.stdout).toContain('survived')
+      expect(result.status).toBe(42)
+      expect(result.stdout).not.toContain('survived')
     })
 
     it('survives user .zshenv with set -e and failing command', async () => {
@@ -1219,7 +1318,7 @@ export MY_VAR=foo
       })
 
       expect(result.status).toBe(0)
-      // Subshell exits at 'false', discovery yields empty, falls back to HOME
+      // No ZDOTDIR was reached after the failing command, so we fall back.
       expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${testHome}`)
     })
 
@@ -1296,10 +1395,10 @@ export MY_VAR=foo
       expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${xdgZshDir}`)
     })
 
-    it('does not leak subshell environment changes to wrapper', async () => {
+    it('preserves exported .zshenv environment changes in the wrapper shell', async () => {
       writeFileSync(
         join(testHome, '.zshenv'),
-        'export MY_VAR=leaked\nexport ZDOTDIR="$HOME/.config/zsh"\n'
+        'export MY_VAR=from-zshenv\nexport ZDOTDIR="$HOME/.config/zsh"\n'
       )
 
       const xdgZshDir = join(testHome, '.config', 'zsh')
@@ -1320,8 +1419,7 @@ export MY_VAR=foo
       })
 
       expect(result.status).toBe(0)
-      // MY_VAR should not leak from subshell
-      expect(result.stdout).toContain('MY_VAR=unset')
+      expect(result.stdout).toContain('MY_VAR=from-zshenv')
     })
 
     it('handles empty HOME gracefully', async () => {
