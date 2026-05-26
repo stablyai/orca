@@ -290,7 +290,10 @@ type VirtualizedWorktreeViewportProps = {
   handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
-  onRevealCurrentWorkspace: (worktreeId: string) => void
+  onRevealCurrentWorkspace: (
+    worktreeId: string,
+    options?: Pick<PendingSidebarWorktreeReveal, 'highlight'>
+  ) => void
   clearPendingRevealWorktreeId: () => void
   worktrees: Worktree[]
   selectedWorktreeIds: ReadonlySet<string>
@@ -1035,7 +1038,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             pendingRevealWorktree.behavior
           )
         ) {
-          flashRevealedWorktree(pendingRevealWorktree.worktreeId)
+          if (pendingRevealWorktree.highlight) {
+            flashRevealedWorktree(pendingRevealWorktree.worktreeId)
+          }
           pendingRevealRetryRef.current = null
           clearPendingRevealWorktreeId()
           return
@@ -1319,7 +1324,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       flashRevealedWorktree(currentWorktreeId)
       return
     }
-    onRevealCurrentWorkspace(currentWorktreeId)
+    onRevealCurrentWorkspace(currentWorktreeId, { highlight: true })
   }, [currentWorktreeId, flashRevealedWorktree, onRevealCurrentWorkspace])
 
   useEffect(() => {
@@ -3160,8 +3165,11 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const revealCurrentWorkspace = useCallback(
-    (worktreeId: string) => {
-      revealWorktreeInSidebar(worktreeId, { behavior: 'smooth' })
+    (worktreeId: string, options?: Pick<PendingSidebarWorktreeReveal, 'highlight'>) => {
+      revealWorktreeInSidebar(worktreeId, {
+        behavior: 'smooth',
+        ...(options?.highlight ? { highlight: true } : {})
+      })
     },
     [revealWorktreeInSidebar]
   )

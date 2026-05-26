@@ -73,6 +73,22 @@ async function forceCurrentWorkspaceClipped(page: Page, targetId: string): Promi
     .toBe(true)
 }
 
+async function expectNoRevealHighlightDuring(
+  page: Page,
+  targetId: string,
+  durationMs: number
+): Promise<void> {
+  const deadline = Date.now() + durationMs
+  while (Date.now() < deadline) {
+    const isHighlighted = await page.evaluate((targetId) => {
+      const target = document.getElementById(`worktree-list-option-${encodeURIComponent(targetId)}`)
+      return target?.getAttribute('data-scroll-reveal-highlight') === 'true'
+    }, targetId)
+    expect(isHighlighted).toBe(false)
+    await page.waitForTimeout(50)
+  }
+}
+
 test.describe('Reveal active workspace button', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -98,6 +114,7 @@ test.describe('Reveal active workspace button', () => {
 
     await renderedOptions.last().click()
     await expect(targetRow).toHaveAttribute('aria-current', 'page')
+    await expectNoRevealHighlightDuring(orcaPage, targetId, 400)
     await expect(revealButton).toBeVisible()
     await expect(revealButton).toBeEnabled()
     await forceCurrentWorkspaceClipped(orcaPage, targetId)
