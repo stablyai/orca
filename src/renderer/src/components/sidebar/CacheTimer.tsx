@@ -17,21 +17,31 @@ import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selectio
  * uncached input tokens — up to 10x more expensive. Showing a countdown lets
  * users decide whether to resume interaction before the cache drops.
  */
+/**
+ * The most-urgent cache start time when a countdown should show, else null.
+ * Shared so the worktree card can decide whether the timer occupies its
+ * metadata row without subscribing to the per-second tick.
+ */
+export function usePromptCacheCountdownStartedAt(worktreeId: string): number | null {
+  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
+  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
+  const startedAt = useAppStore((s) =>
+    getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
+  )
+  return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
+}
+
 export default function CacheTimer({
   worktreeId
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
-  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
   const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
+  const startedAt = usePromptCacheCountdownStartedAt(worktreeId)
 
-  const mostUrgentStartedAt = useAppStore((s) => {
-    return getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
-  })
-
-  const countdownActive = enabled && mostUrgentStartedAt != null && ttlMs > 0
+  const countdownActive = startedAt != null
   const now = usePromptCacheCountdownNow(countdownActive)
-  const remainingMs = countdownActive ? Math.max(0, ttlMs - (now - mostUrgentStartedAt)) : null
+  const remainingMs = countdownActive ? Math.max(0, ttlMs - (now - startedAt)) : null
 
   if (remainingMs === null) {
     return null
