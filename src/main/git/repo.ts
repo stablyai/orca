@@ -491,13 +491,13 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   const tokens = normalizedQuery.split('/').filter((t) => t.length > 0)
   if (tokens.length <= 1) {
     const q = tokens[0] ?? ''
-    // Why three globs for a single-segment query: `git for-each-ref`
-    // uses fnmatch-style globs where `*` does NOT cross `/`. A single
-    // `refs/remotes/*\/*<q>*` only matches when `<q>` is in the branch
-    // segment, so typing `upstream` (a remote name) returns nothing.
-    // The extra `refs/remotes/*<q>*\/*` matches when the query lives in
-    // the remote segment, making remote-name filtering work.
-    return [...base, `refs/remotes/*${q}*/*`, `refs/remotes/*/*${q}*`, `refs/heads/*${q}*`]
+    // Why `**`, not `*`: git for-each-ref globs are fnmatch-style where a
+    // single `*` does NOT cross `/`. Slash-named branches (`user/feature`)
+    // are the norm, so `refs/heads/*<q>*` misses everything but flat names.
+    // `**` spans ref segments (`**/` also matches zero, so flat `main`
+    // still matches). The third glob matches the query against the remote
+    // NAME segment so typing a remote (`upstream`) keeps working.
+    return [...base, `refs/heads/**/*${q}*`, `refs/remotes/**/*${q}*`, `refs/remotes/*${q}*/**`]
   }
   // Why: multi-token queries like `upstream/main` map one `*token*` per
   // ref segment, so each token is matched within a single git ref

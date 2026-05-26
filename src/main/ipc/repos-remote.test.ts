@@ -763,10 +763,11 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('sends the widened argv (refs/remotes/*/*) so upstream branches are discoverable', async () => {
+  it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
     // Why: this is the core issue-624 behavior — the SSH path must glob all
-    // remotes, not just origin. If this ever regresses to refs/remotes/origin/*,
-    // SSH fork users go back to being structurally blocked.
+    // remotes, not just origin. The `**` globs additionally span ref segments
+    // so slash-named branches (`user/feature`) are found by a single-word
+    // query; a single `*` would not cross `/`.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -782,9 +783,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv, path] = mockGitProvider.exec.mock.calls[0]
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
-    expect(argv).toContain('refs/remotes/*upstream*/*')
-    expect(argv).toContain('refs/remotes/*/*upstream*')
-    expect(argv).toContain('refs/heads/*upstream*')
+    expect(argv).toContain('refs/heads/**/*upstream*')
+    expect(argv).toContain('refs/remotes/**/*upstream*')
+    expect(argv).toContain('refs/remotes/*upstream*/**')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
     expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
