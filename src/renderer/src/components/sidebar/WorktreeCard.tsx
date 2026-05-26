@@ -737,7 +737,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
               >
                 {repo ? getRepoKindLabel(repo) : 'Folder'}
               </Badge>
-            ) : (
+            ) : branch === worktree.displayName ? null : (
+              // Why: the branch defaults to the display name for un-renamed
+              // worktrees, so showing it again is pure duplication — omit it
+              // when they match (the title's tooltip recovers a clipped name).
               <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
                 {branch}
               </span>

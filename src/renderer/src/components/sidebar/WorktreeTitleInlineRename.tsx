@@ -182,6 +182,10 @@ export function WorktreeTitleInlineRename({
       )}
       data-worktree-title-inline-rename=""
       onDoubleClick={startRename}
+      // Why: the title truncates and the branch sub-line is hidden when it
+      // matches the title, so the native tooltip is the only way to recover the
+      // full name when it's clipped.
+      title={displayName}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
       {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
