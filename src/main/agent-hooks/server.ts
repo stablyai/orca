@@ -269,17 +269,72 @@ function isClaudePermissionResumingApprovedTool(
     hasMatchingConcreteAgentId &&
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
+  const hasMatchingToolUseId =
+    typeof previous.toolUseId === 'string' &&
+    previous.toolUseId.trim().length > 0 &&
+    previous.toolUseId === next.toolUseId
 
   return (
-    next.hookEventName === 'PreToolUse' &&
+    (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&
     typeof next.toolUseId === 'string' &&
     next.toolUseId.trim().length > 0 &&
     // Why: subagents can share `agent_type`; a concrete agent id is the
     // strongest available signal that the permission owner resumed execution.
-    (hasMatchingConcreteAgentId || hasSameExplicitAgentType) &&
+    // Claude's approval path omits identity but preserves the original
+    // tool_use_id on PostToolUse, so that exact id is also a safe clear signal.
+    (hasMatchingConcreteAgentId || hasSameExplicitAgentType || hasMatchingToolUseId) &&
     sameToolName &&
     (sameKnownToolInput || sameUnknownInputFromConcreteAgent)
   )
+}
+
+function shouldInheritClaudeToolUseIdForPermission(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): boolean {
+  if (
+    previous?.payload.agentType !== 'claude' ||
+    previous.payload.state !== 'working' ||
+    previous.hookEventName !== 'PreToolUse' ||
+    typeof previous.toolUseId !== 'string' ||
+    previous.toolUseId.trim().length === 0 ||
+    next.payload.agentType !== 'claude' ||
+    next.payload.state !== 'waiting' ||
+    next.hookEventName !== 'PermissionRequest' ||
+    next.toolUseId !== undefined
+  ) {
+    return false
+  }
+  if (
+    previous.toolAgentId !== next.toolAgentId ||
+    previous.toolAgentType !== next.toolAgentType ||
+    previous.payload.toolName === undefined ||
+    previous.payload.toolName !== next.payload.toolName ||
+    previous.payload.toolInput === undefined ||
+    previous.payload.toolInput !== next.payload.toolInput
+  ) {
+    return false
+  }
+  return true
+}
+
+function attachClaudePermissionToolUseId(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): AgentHookEventPayload {
+  const inheritedToolUseId = previous?.toolUseId
+  if (
+    !shouldInheritClaudeToolUseIdForPermission(previous, next) ||
+    typeof inheritedToolUseId !== 'string'
+  ) {
+    return next
+  }
+  return {
+    ...next,
+    // Why: Claude emits PermissionRequest without tool_use_id, then reports the
+    // approved command as PostToolUse with the original PreToolUse id.
+    toolUseId: inheritedToolUseId
+  }
 }
 
 export class AgentHookServer {
@@ -466,7 +521,8 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    if (previous && shouldKeepClaudePermissionVisible(previous, payload)) {
+    const effectivePayload = attachClaudePermissionToolUseId(previous, payload)
+    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
     }
     // Why: some TUIs can emit a delayed tool/working hook after Ctrl+C already
@@ -474,9 +530,9 @@ export class AgentHookServer {
     if (
       previous?.payload.state === 'done' &&
       previous.payload.interrupted === true &&
-      payload.payload.state === 'done' &&
-      previous.payload.agentType === payload.payload.agentType &&
-      previous.payload.prompt === payload.payload.prompt &&
+      effectivePayload.payload.state === 'done' &&
+      previous.payload.agentType === effectivePayload.payload.agentType &&
+      previous.payload.prompt === effectivePayload.payload.prompt &&
       Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS
     ) {
       return previous
@@ -484,19 +540,22 @@ export class AgentHookServer {
     if (
       previous?.payload.state === 'done' &&
       previous.payload.interrupted === true &&
-      payload.payload.state === 'working' &&
-      previous.payload.agentType === payload.payload.agentType &&
-      previous.payload.prompt === payload.payload.prompt &&
-      (payload.isReplay === true ||
-        (payload.hasExplicitPrompt !== true &&
+      effectivePayload.payload.state === 'working' &&
+      previous.payload.agentType === effectivePayload.payload.agentType &&
+      previous.payload.prompt === effectivePayload.payload.prompt &&
+      (effectivePayload.isReplay === true ||
+        (effectivePayload.hasExplicitPrompt !== true &&
           Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
     ) {
       return previous
     }
-    if (payload.payload.state !== 'done' || payload.payload.lastAssistantMessage) {
-      this.clearAssistantMessageRetry(payload.paneKey)
+    if (
+      effectivePayload.payload.state !== 'done' ||
+      effectivePayload.payload.lastAssistantMessage
+    ) {
+      this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
-    const enriched = this.attachStatusTiming(payload)
+    const enriched = this.attachStatusTiming(effectivePayload)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
