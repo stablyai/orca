@@ -468,6 +468,72 @@ describe('markDiffCommentsSent', () => {
   })
 })
 
+describe('clearDeliveredDiffComments', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('clears delivered notes and persists the remaining pending notes', async () => {
+    const store = createTestStore()
+    const delivered = makeComment({ id: 'c1', filePath: 'src/foo.ts' })
+    const pending = makeComment({ id: 'c2', filePath: 'src/bar.ts' })
+    seed(store, [delivered, pending])
+
+    const ok = await store.getState().clearDeliveredDiffComments(WT, [delivered])
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toEqual([pending])
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: { diffComments: [pending] }
+    })
+  })
+
+  it('keeps a note that changed while delivery was pending', async () => {
+    const store = createTestStore()
+    const sentSnapshot = makeComment({ id: 'c1', body: 'old body' })
+    const edited = makeComment({ id: 'c1', body: 'new body' })
+    const delivered = makeComment({ id: 'c2', body: 'unchanged' })
+    seed(store, [edited, delivered])
+
+    const ok = await store.getState().clearDeliveredDiffComments(WT, [sentSnapshot, delivered])
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toEqual([edited])
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: { diffComments: [edited] }
+    })
+  })
+
+  it('rolls back delivered-note clearing on persist failure', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValueOnce(new Error('disk full'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const ok = await store.getState().clearDeliveredDiffComments(WT, [comments[0]])
+
+    expect(ok).toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    errSpy.mockRestore()
+  })
+})
+
 describe('bulk clear diff comments', () => {
   beforeEach(() => {
     vi.clearAllMocks()

@@ -38,6 +38,7 @@ import {
   parseGitHubIssueOrPRLink,
   type RepoSlug
 } from '@/lib/github-links'
+import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
@@ -338,16 +339,22 @@ export default function SmartWorkspaceNameField({
           }
           if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
             handledCrossRepoUrlRef.current = debouncedQuery.trim()
-            const item = await window.api.gh.workItemByOwnerRepo({
+            const item = await lookupSmartGitHubSubmitItem({
               repoPath: selectedRepo.path,
               repoId: selectedRepo.id,
-              owner: directLink.slug.owner,
-              repo: directLink.slug.repo,
-              number: directLink.number,
-              type: directLink.type
+              intent: {
+                kind: 'link',
+                owner: directLink.slug.owner,
+                repo: directLink.slug.repo,
+                number: directLink.number,
+                type: directLink.type
+              },
+              workItem: (args) => window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>,
+              workItemByOwnerRepo: (args) =>
+                window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>
             })
             if (!stale) {
-              setGithubItems(item ? [{ ...item, repoId: selectedRepo.id } as GitHubWorkItem] : [])
+              setGithubItems(item ? [item] : [])
             }
             return
           }
@@ -373,25 +380,28 @@ export default function SmartWorkspaceNameField({
     }
     if (directNumber !== null) {
       setGithubLoading(true)
-      const request =
+      const intent =
         directLink !== null
-          ? window.api.gh.workItemByOwnerRepo({
-              repoPath: selectedRepo.path,
-              repoId: selectedRepo.id,
+          ? {
+              kind: 'link' as const,
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
               number: directLink.number,
               type: directLink.type
-            })
-          : window.api.gh.workItem({
-              repoPath: selectedRepo.path,
-              repoId: selectedRepo.id,
-              number: directNumber
-            })
+            }
+          : { kind: 'hash-number' as const, number: directNumber }
+      const request = lookupSmartGitHubSubmitItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        intent,
+        workItem: (args) => window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>,
+        workItemByOwnerRepo: (args) =>
+          window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>
+      })
       void request
         .then((item) => {
           if (!stale) {
-            setGithubItems(item ? [{ ...item, repoId: selectedRepo.id } as GitHubWorkItem] : [])
+            setGithubItems(item ? [item] : [])
           }
         })
         .catch(() => {

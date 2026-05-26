@@ -865,7 +865,11 @@ describe('registerPtyHandlers', () => {
 
       function setupDaemonAdapter() {
         const daemonSpawn = vi.fn(
-          async (options: { env: Record<string, string>; sessionId?: string }) => ({
+          async (options: {
+            env: Record<string, string>
+            sessionId?: string
+            isNewSession?: boolean
+          }) => ({
             id: options.sessionId ?? 'daemon-pty'
           })
         )
@@ -886,6 +890,7 @@ describe('registerPtyHandlers', () => {
       type DaemonSpawnCall = {
         env: Record<string, string>
         envToDelete?: string[]
+        isNewSession?: boolean
       }
 
       async function daemonSpawnAndGetOptions(
@@ -1223,6 +1228,7 @@ describe('registerPtyHandlers', () => {
         const sessionId = spawnOpts.sessionId
         expect(sessionId).toEqual(expect.any(String))
         expect((sessionId ?? '').length).toBeGreaterThan(0)
+        expect(spawnOpts.isNewSession).toBe(true)
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
@@ -1237,6 +1243,7 @@ describe('registerPtyHandlers', () => {
           sessionId: 'user-session-42'
         })
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
+        expect(daemonSpawn.mock.calls.at(-1)![0].isNewSession).toBeUndefined()
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
       })
 

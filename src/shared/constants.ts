@@ -260,6 +260,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     // Why: indefinite hold by default — the desktop "Restore" banner is the
     // explicit return-to-desktop-size action, no wall-clock guess.

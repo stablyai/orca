@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Animated, AppState, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   BackHandler,
+  FlatList,
   View,
   Text,
   StyleSheet,
@@ -12,7 +13,9 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
-  type KeyboardEvent
+  type KeyboardEvent,
+  type ListRenderItem,
+  type TextStyle
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -62,6 +65,7 @@ import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
+import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -72,6 +76,15 @@ import {
   buildMobileDiffLines,
   type MobileDiffLine
 } from '../../../../src/session/mobile-diff-lines'
+import {
+  buildPlainMobileDiffSyntaxLines,
+  highlightMobileCode,
+  highlightMobileDiffLines,
+  resolveMobileSyntaxLanguage,
+  type MobileHighlightedDiffLine,
+  type MobileSyntaxSegment,
+  type MobileSyntaxTokenKind
+} from '../../../../src/session/mobile-file-syntax'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
 type Terminal = {
@@ -151,6 +164,22 @@ type FileDocState =
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'error'; message: string }
+
+type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
+
+type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
+
+type FileSyntaxState = {
+  doc: ReadyFileDocState
+  language: string
+  segments: MobileSyntaxSegment[]
+}
+
+type DiffSyntaxState = {
+  doc: ReadyFileDocState
+  language: string
+  lines: RenderableDiffLine[]
+}
 
 type DirtyMarkdownDraft = {
   tabId: string
@@ -272,6 +301,11 @@ function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   return tab.title || 'Terminal'
 }
 
+function isFileExistsErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return normalized.includes('eexist') || normalized.includes('already exists')
+}
+
 type TerminalCreateResult = {
   tab: Extract<MobileSessionTab, { type: 'terminal' }>
 }
@@ -369,6 +403,7 @@ function TerminalPaneView({
 }
 
 function MarkdownReader({
+  documentId,
   doc,
   onRefresh,
   onChange,
@@ -376,6 +411,7 @@ function MarkdownReader({
   onCopy,
   onDiscard
 }: {
+  documentId: string
   doc: MarkdownDocState | undefined
   onRefresh: () => void
   onChange: (content: string) => void
@@ -416,16 +452,11 @@ function MarkdownReader({
 
   return (
     <View style={styles.markdownEditor}>
-      <TextInput
-        style={styles.markdownTextInput}
-        value={doc.localContent}
-        onChangeText={onChange}
+      <MobileRichMarkdownEditor
+        key={documentId}
+        content={doc.localContent}
         editable={doc.editable && !doc.saving}
-        multiline
-        textAlignVertical="top"
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
+        onChange={onChange}
       />
       {showFloatingActions ? (
         <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
@@ -478,7 +509,111 @@ function MarkdownReader({
   )
 }
 
-function FileReader({ doc, title }: { doc: FileDocState | undefined; title: string }) {
+function SyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
+  return (
+    <>
+      {segments.map((segment, index) => (
+        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
+          {segment.text}
+        </Text>
+      ))}
+    </>
+  )
+}
+
+function DiffLineRow({
+  line,
+  title,
+  index
+}: {
+  line: RenderableDiffLine
+  title: string
+  index: number
+}) {
+  return (
+    <View
+      style={[
+        styles.diffLine,
+        line.kind === 'add' && styles.diffLineAdded,
+        line.kind === 'delete' && styles.diffLineDeleted
+      ]}
+    >
+      <Text style={styles.diffGutter}>{line.oldLineNumber ?? line.newLineNumber ?? ''}</Text>
+      <Text
+        selectable
+        style={styles.diffText}
+        accessibilityLabel={`${title} diff line ${index + 1}`}
+      >
+        <Text
+          style={[
+            styles.diffPrefix,
+            line.kind === 'add' && styles.diffPrefixAdded,
+            line.kind === 'delete' && styles.diffPrefixDeleted
+          ]}
+        >
+          {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
+        </Text>
+        <SyntaxSegments segments={line.segments} />
+      </Text>
+    </View>
+  )
+}
+
+function FileReader({
+  doc,
+  title,
+  relativePath,
+  language
+}: {
+  doc: FileDocState | undefined
+  title: string
+  relativePath: string
+  language?: string
+}) {
+  const syntaxLanguage = useMemo(
+    () => resolveMobileSyntaxLanguage(relativePath || title, language),
+    [language, relativePath, title]
+  )
+  const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
+  const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
+  const plainDiffLines = useMemo(
+    () =>
+      doc?.status === 'ready' && doc.kind === 'diff'
+        ? buildPlainMobileDiffSyntaxLines(doc.lines)
+        : [],
+    [doc]
+  )
+  const renderDiffLine: ListRenderItem<RenderableDiffLine> = useCallback(
+    ({ item, index }) => <DiffLineRow line={item} title={title} index={index} />,
+    [title]
+  )
+
+  useEffect(() => {
+    if (doc?.status !== 'ready') {
+      return undefined
+    }
+
+    // Why: highlighting can create many nested Text nodes; defer it one tick so
+    // large files show immediately as plain text before colors are applied.
+    const timer = setTimeout(() => {
+      if (doc.kind === 'file') {
+        setFileSyntax({
+          doc,
+          language: syntaxLanguage,
+          segments: highlightMobileCode(doc.content, syntaxLanguage).segments
+        })
+        return
+      }
+      setDiffSyntax({
+        doc,
+        language: syntaxLanguage,
+        lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
+      })
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [doc, syntaxLanguage])
+
   if (!doc || doc.status === 'loading') {
     return (
       <View style={styles.markdownState}>
@@ -495,39 +630,23 @@ function FileReader({ doc, title }: { doc: FileDocState | undefined; title: stri
   }
 
   if (doc.kind === 'diff') {
+    const activeDiffSyntax =
+      diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
     return (
       <View style={styles.markdownEditor}>
-        <ScrollView
+        <FlatList
+          data={activeDiffSyntax ?? plainDiffLines}
           style={styles.filePreviewScroll}
           contentContainerStyle={styles.filePreviewContent}
-        >
-          {doc.lines.map((line, index) => (
-            <View
-              key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
-              style={[
-                styles.diffLine,
-                line.kind === 'add' && styles.diffLineAdded,
-                line.kind === 'delete' && styles.diffLineDeleted
-              ]}
-            >
-              <Text style={styles.diffGutter}>
-                {line.oldLineNumber ?? line.newLineNumber ?? ''}
-              </Text>
-              <Text
-                selectable
-                style={[
-                  styles.diffText,
-                  line.kind === 'add' && styles.diffTextAdded,
-                  line.kind === 'delete' && styles.diffTextDeleted
-                ]}
-                accessibilityLabel={`${title} diff line`}
-              >
-                {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
-                {line.text}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
+          keyExtractor={(line, index) =>
+            `${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`
+          }
+          renderItem={renderDiffLine}
+          initialNumToRender={32}
+          maxToRenderPerBatch={48}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS !== 'web'}
+        />
       </View>
     )
   }
@@ -539,7 +658,13 @@ function FileReader({ doc, title }: { doc: FileDocState | undefined; title: stri
         contentContainerStyle={styles.filePreviewContent}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          {doc.content}
+          <SyntaxSegments
+            segments={
+              fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
+                ? fileSyntax.segments
+                : [{ text: doc.content, kind: 'plain' }]
+            }
+          />
         </Text>
       </ScrollView>
     </View>
@@ -580,6 +705,7 @@ export default function SessionScreen() {
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
   const [creating, setCreating] = useState(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
+  const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createWarning, setCreateWarning] = useState(initialCreateWarning)
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
@@ -2434,6 +2560,50 @@ export default function SessionScreen() {
     }
   }
 
+  async function handleCreateMarkdownNote() {
+    if (!client || creatingMarkdown) return
+
+    setCreatingMarkdown(true)
+    setCreateError('')
+
+    try {
+      const worktree = `id:${worktreeId}`
+      for (let attempt = 1; attempt <= 100; attempt += 1) {
+        const relativePath = attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
+        const createResponse = await client.sendRequest(
+          'files.createFile',
+          { worktree, relativePath },
+          { timeoutMs: 15_000 }
+        )
+        if (!createResponse.ok) {
+          const message = (createResponse as RpcFailure).error.message
+          if (isFileExistsErrorMessage(message) && attempt < 100) {
+            continue
+          }
+          throw new Error(message || 'Failed to create markdown note')
+        }
+
+        const openResponse = await client.sendRequest(
+          'files.open',
+          { worktree, relativePath },
+          { timeoutMs: 15_000 }
+        )
+        if (!openResponse.ok) {
+          throw new Error((openResponse as RpcFailure).error.message)
+        }
+        setTimeout(() => void fetchSessionTabs(), 300)
+        return
+      }
+      throw new Error('Unable to create untitled markdown note')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create markdown note'
+      setCreateError(message)
+      showToast(message, 1800)
+    } finally {
+      setCreatingMarkdown(false)
+    }
+  }
+
   async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
     if (!client || creatingBrowser) return false
     if (browserScreencastSupported !== true) {
@@ -2756,10 +2926,15 @@ export default function SessionScreen() {
                   style={({ pressed }) => [
                     styles.newTerminalButton,
                     pressed && styles.newTerminalButtonPressed,
-                    (creating || creatingBrowser || connState !== 'connected') &&
+                    (creating ||
+                      creatingBrowser ||
+                      creatingMarkdown ||
+                      connState !== 'connected') &&
                       styles.newTerminalButtonDisabled
                   ]}
-                  disabled={creating || creatingBrowser || connState !== 'connected'}
+                  disabled={
+                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                  }
                   onPress={() => {
                     setCreateError('')
                     setShowCreateTabDrawer(true)
@@ -2800,17 +2975,19 @@ export default function SessionScreen() {
               <Pressable
                 style={[
                   styles.createButton,
-                  (creating || creatingBrowser || connState !== 'connected') &&
+                  (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
                     styles.createButtonDisabled
                 ]}
-                disabled={creating || creatingBrowser || connState !== 'connected'}
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
                 onPress={() => {
                   setCreateError('')
                   setShowCreateTabDrawer(true)
                 }}
               >
                 <Text style={styles.createButtonText}>
-                  {creating || creatingBrowser ? 'Creating…' : 'Create Tab'}
+                  {creating || creatingBrowser || creatingMarkdown ? 'Creating...' : 'Create Tab'}
                 </Text>
               </Pressable>
             </View>
@@ -2818,6 +2995,7 @@ export default function SessionScreen() {
         ) : activeMarkdownTab ? (
           <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
             <MarkdownReader
+              documentId={activeMarkdownTab.id}
               doc={markdownDocs.get(activeMarkdownTab.id)}
               onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
               onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
@@ -2836,6 +3014,8 @@ export default function SessionScreen() {
             <FileReader
               doc={fileDocs.get(activeFileTab.id)}
               title={activeFileTab.title || 'File'}
+              relativePath={activeFileTab.relativePath}
+              language={activeFileTab.language}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -3122,6 +3302,14 @@ export default function SessionScreen() {
                 return
               }
               setShowCreateBrowserModal(true)
+            }
+          },
+          {
+            label: 'Markdown Note',
+            icon: FileText,
+            onPress: () => {
+              setShowCreateTabDrawer(false)
+              void handleCreateMarkdownNote()
             }
           }
         ]}
@@ -3581,7 +3769,7 @@ const styles = StyleSheet.create({
   filePreviewScroll: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.editorSurface
   },
   filePreviewContent: {
     paddingHorizontal: spacing.lg,
@@ -3597,16 +3785,16 @@ const styles = StyleSheet.create({
   diffLine: {
     flexDirection: 'row',
     borderLeftWidth: 2,
-    borderLeftColor: colors.bgBase,
+    borderLeftColor: colors.editorSurface,
     paddingRight: spacing.sm
   },
   diffLineAdded: {
-    backgroundColor: colors.bgPanel,
-    borderLeftColor: colors.statusGreen
+    backgroundColor: colors.diffAddedBg,
+    borderLeftColor: colors.gitDecorationAdded
   },
   diffLineDeleted: {
-    backgroundColor: colors.bgPanel,
-    borderLeftColor: colors.statusRed
+    backgroundColor: colors.diffDeletedBg,
+    borderLeftColor: colors.gitDecorationDeleted
   },
   diffGutter: {
     width: 42,
@@ -3624,11 +3812,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
   },
-  diffTextAdded: {
-    color: colors.statusGreen
+  diffPrefix: {
+    color: colors.textMuted
   },
-  diffTextDeleted: {
-    color: colors.statusRed
+  diffPrefixAdded: {
+    color: colors.gitDecorationAdded
+  },
+  diffPrefixDeleted: {
+    color: colors.gitDecorationDeleted
   },
   markdownRefreshButton: {
     alignSelf: 'flex-start',
@@ -3654,7 +3845,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     right: spacing.md,
-    top: spacing.md,
+    bottom: spacing.lg,
     alignItems: 'flex-end',
     gap: spacing.xs
   },
@@ -3861,5 +4052,35 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.35
+  }
+})
+
+const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
+  plain: {
+    color: colors.textPrimary
+  },
+  comment: {
+    color: colors.syntaxComment
+  },
+  keyword: {
+    color: colors.syntaxKeyword
+  },
+  string: {
+    color: colors.syntaxString
+  },
+  number: {
+    color: colors.syntaxNumber
+  },
+  type: {
+    color: colors.syntaxType
+  },
+  function: {
+    color: colors.syntaxFunction
+  },
+  variable: {
+    color: colors.syntaxVariable
+  },
+  meta: {
+    color: colors.syntaxMeta
   }
 })

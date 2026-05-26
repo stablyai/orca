@@ -1167,7 +1167,8 @@ export function registerPtyHandlers(
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
-        env
+        env,
+        ...(isDaemonHostSpawn ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
         claudeAuth?.stripAuthEnv
@@ -1586,7 +1587,8 @@ export function registerPtyHandlers(
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
-        env: spawnEnv
+        env: spawnEnv,
+        ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete

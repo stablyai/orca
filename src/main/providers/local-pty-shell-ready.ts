@@ -12,7 +12,7 @@
  */
 import { tmpdir } from 'os'
 import { basename, win32 as pathWin32 } from 'path'
-import { mkdirSync, writeFileSync, chmodSync } from 'fs'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
 import {
@@ -21,12 +21,9 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getZshEnvTemplate } from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
-
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready'
@@ -86,6 +83,20 @@ function getShellReadyWrapperRoot(): string {
   return `${userDataPath}/shell-ready`
 }
 
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
+  return [
+    `${root}/zsh/.zshenv`,
+    `${root}/zsh/.zprofile`,
+    `${root}/zsh/.zshrc`,
+    `${root}/zsh/.zlogin`,
+    `${root}/bash/rcfile`
+  ]
+}
+
+function shellReadyWrappersExist(): boolean {
+  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+}
+
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
 // itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
 // a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
@@ -121,6 +132,10 @@ function resolveOriginalZdotdir(): string {
     process.env.HOME ||
     ''
   )
+}
+
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
 }
 
 export function getBashShellReadyRcfileContent(): string {
@@ -288,7 +303,10 @@ preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
 }
 
 function ensureShellReadyWrappers(): void {
-  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    return
+  }
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
     return
   }
   didEnsureShellReadyWrappers = true
@@ -297,42 +315,7 @@ function ensureShellReadyWrappers(): void {
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
-  const zshEnv = `# Orca zsh shell-ready wrapper
-_orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
-# Why: clearing ZDOTDIR lets user .zshenv use the canonical XDG idiom
-# \`export ZDOTDIR="\${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\` to compute its
-# preferred dir; pre-setting it (even to HOME) defeats that default.
-unset ZDOTDIR
-# Why: function isolates user .zshenv \`return\` so it doesn't abort our wrapper.
-# Trade-off: top-level \`setopt LOCAL_OPTIONS\`/\`LOCAL_TRAPS\`, \`TRAPEXIT\`, and
-# bare \`local\`/\`typeset\` in user .zshenv become function-scoped; use \`typeset -g\`
-# or \`export\` to escape.
-__orca_source_user_zshenv() {
-  # Why: honor an externally-set ZDOTDIR (login manager, /etc/zshenv, parent
-  # shell) so users whose real .zshenv lives at $ZDOTDIR (not $HOME) still
-  # get PATH/aliases/exports loaded. Falls back to $HOME when no spawn-env
-  # ZDOTDIR was inherited.
-  local _orca_user_zdotdir="\${_orca_spawn_orig_zdotdir:-$HOME}"
-  [[ -f "$_orca_user_zdotdir/.zshenv" ]] && source "$_orca_user_zdotdir/.zshenv"
-}
-__orca_source_user_zshenv
-unfunction __orca_source_user_zshenv
-# Why: prefer the ZDOTDIR user .zshenv resolved (XDG case); else preserve
-# the spawn-env value (an inherited resolution from a parent Orca PTY);
-# else HOME.
-export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-\${_orca_spawn_orig_zdotdir:-$HOME}}"
-unset _orca_spawn_orig_zdotdir
-# Why: strip trailing slashes (matches Node-side normalizer) before the
-# self-loop check, so a wrapper-shaped ZDOTDIR with one or more trailing
-# slashes still gets normalized away from .zprofile/.zshrc/.zlogin.
-while [[ "\${ORCA_ORIG_ZDOTDIR}" == */ ]]; do
-  ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR%/}"
-done
-case "\${ORCA_ORIG_ZDOTDIR}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in
@@ -386,11 +369,26 @@ fi
     [`${bashDir}/rcfile`, bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    const dir = path.slice(0, path.lastIndexOf('/'))
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(path, content, 'utf8')
-    chmodSync(path, 0o644)
+  try {
+    for (const [path, content] of files) {
+      const dir = path.slice(0, path.lastIndexOf('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path, content, 'utf8')
+      chmodSync(path, 0o644)
+    }
+  } catch (error) {
+    // Why: wrapper file creation can fail due to read-only filesystems, permission
+    // issues, or disk space. Rather than crashing, log the error and continue.
+    // The shell will launch without the wrapper, which means no shell-ready marker
+    // but at least the PTY is usable.
+    const errorMessage =
+      error instanceof Error
+        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
+        : String(error)
+    console.error(`[shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
+    console.error('[shell-ready] Shell will launch without wrapper (no shell-ready marker)')
+    // Reset the flag so next attempt will try again
+    didEnsureShellReadyWrappers = false
   }
 }
 
@@ -414,6 +412,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

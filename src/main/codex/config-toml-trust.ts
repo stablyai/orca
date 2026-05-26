@@ -11,6 +11,7 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import { createHash, randomUUID } from 'crypto'
+import { escapeRegex } from '../../shared/string-utils'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -365,11 +366,6 @@ function buildProjectHeaderPattern(projectPath: string): RegExp {
     `(^|\\r?\\n)[ \\t]*\\[projects\\."${escapedPath}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
   )
 }
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 // Why: quoted keys can contain `]` (e.g. `[hooks.state."a]b"]`) and `[` lines
 // inside multi-line strings aren't headers, so we need a stateful scanner —
 // a flat regex misclassifies both cases.

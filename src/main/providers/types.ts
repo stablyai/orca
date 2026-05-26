@@ -28,9 +28,14 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
-  /** Daemon session ID for reattach. When provided, the daemon reconnects
-   *  to an existing session instead of creating a new one. */
+  /** Daemon session ID. A caller-provided ID is treated as an attach request;
+   *  daemon hosts also pass minted IDs for fresh sessions that need stable
+   *  per-PTY state before provider.spawn returns. */
   sessionId?: string
+  /** True when the caller minted this daemon session for a fresh terminal.
+   *  Existing-session attach paths must stay false so recovery checks do not
+   *  replace the daemon out from under a still-live PTY. */
+  isNewSession?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on

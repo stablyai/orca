@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
@@ -13,6 +13,7 @@ import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { OnboardingTourStep } from './OnboardingTourStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import logo from '../../../../../resources/logo.svg'
 
 const stepCopy = {
@@ -81,12 +82,32 @@ export default function OnboardingFlow({
   const shouldShowFooterBusy = Boolean(busyLabel) && currentStep.id !== 'agentSetup'
   const footerPrimaryLabel =
     currentStep.id === 'agentSetup' ? 'Continue' : (busyLabel ?? 'Continue')
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
+  const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const {
     next: flowNext,
     openFolder: flowOpenFolder,
     continueWithExistingProject: flowContinueWithExistingProject,
-    skipTourToRepo: flowSkipTourToRepo
+    skipTourToRepo: flowSkipTourToRepo,
+    dismissOnboarding: flowDismissOnboarding
   } = flow
+
+  const requestSkipConfirmation = useCallback(
+    (advancedVia: 'button' | 'keyboard') => {
+      if (busyLabel || skipConfirmOpen) {
+        return
+      }
+      skipConfirmAdvancedViaRef.current = advancedVia
+      setSkipConfirmOpen(true)
+    },
+    [busyLabel, skipConfirmOpen]
+  )
+
+  const confirmSkipOnboarding = useCallback(() => {
+    const advancedVia = skipConfirmAdvancedViaRef.current
+    setSkipConfirmOpen(false)
+    void flowDismissOnboarding(advancedVia)
+  }, [flowDismissOnboarding])
 
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
@@ -134,10 +155,32 @@ export default function OnboardingFlow({
     tourStarted
   ])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || skipConfirmOpen) {
+        return
+      }
+      event.preventDefault()
+      requestSkipConfirmation('keyboard')
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [requestSkipConfirmation, skipConfirmOpen])
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
       data-onboarding-overlay
+      onPointerDown={(event) => {
+        if (event.button !== 0) {
+          return
+        }
+        const target = event.target
+        if (!(target instanceof Element) || target.closest('[data-onboarding-modal]')) {
+          return
+        }
+        requestSkipConfirmation('button')
+      }}
     >
       <div
         className="absolute inset-x-0 top-0 h-8"
@@ -362,6 +405,11 @@ export default function OnboardingFlow({
           )}
         </div>
       </section>
+      <OnboardingSkipConfirmationDialog
+        open={skipConfirmOpen}
+        onOpenChange={setSkipConfirmOpen}
+        onSkip={confirmSkipOnboarding}
+      />
     </div>
   )
 }

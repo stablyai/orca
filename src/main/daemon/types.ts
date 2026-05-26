@@ -1,10 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bumped from 7 -> 8 so existing daemons restart with envToDelete support;
-// older daemons re-merge process.env and can leak host CODEX_HOME into WSL PTYs.
-export const PROTOCOL_VERSION = 8
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7] as const
+// Why: bumped from 8 -> 9 so new app launches do not reuse daemon processes
+// that cannot report their own macOS system resolver health.
+export const PROTOCOL_VERSION = 9
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -166,6 +166,11 @@ export type PingRequest = {
   type: 'ping'
 }
 
+export type SystemResolverHealthRequest = {
+  id: string
+  type: 'systemResolverHealth'
+}
+
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
@@ -187,6 +192,7 @@ export type DaemonRequest =
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
+  | SystemResolverHealthRequest
   | GetSnapshotRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
@@ -218,6 +224,12 @@ export type GetSnapshotResult = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+}
+
+export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
+
+export type SystemResolverHealthResult = {
+  health: SystemResolverHealth
 }
 
 export type SessionInfo = {
