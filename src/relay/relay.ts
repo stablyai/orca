@@ -36,7 +36,7 @@ import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
-import { PluginOverlayManager } from './plugin-overlay'
+import { PluginOverlayManager, getRelayPiStatusExtensionPath } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -380,23 +380,38 @@ async function main(): Promise<void> {
       // only signal - disk-presence guessing silently shadows the other
       // agent's extensions when both `~/.pi/agent` and `~/.omp/agent` exist.
       const kind = detectPiAgentKindFromCommand(ctx.command)
-      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, kind)
-      const dir = pluginOverlay.materializePi(overlayId, sourceDir, kind)
-      if (dir) {
-        env.PI_CODING_AGENT_DIR = dir
-        // Why: shadow var is agent-scoped so the remote shell-ready wrappers
-        // can OR-restore either kind without cross-contamination. PI_CODING_AGENT_DIR
-        // is the binary-facing var both Pi and OMP read; OMP's changelog
-        // documents the OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename.
-        if (kind === 'omp') {
-          env.ORCA_OMP_CODING_AGENT_DIR = dir
-          if (sourceDir) {
-            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
-          }
-        } else {
+      const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
+      const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
+      if (kind === 'pi') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
+        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
+        if (dir) {
+          env.PI_CODING_AGENT_DIR = dir
+          // Why: shadow var is agent-scoped so remote shell-ready wrappers can
+          // restore Pi by default while the `omp` wrapper switches on demand.
           env.ORCA_PI_CODING_AGENT_DIR = dir
           if (sourceDir) {
             env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+          }
+        }
+      }
+      if (shouldPrepareOmpShadow) {
+        // Why: in a bare shell, PI_CODING_AGENT_DIR is historically Pi's
+        // default. Do not mirror it into OMP; use OMP's own default unless an
+        // OMP-scoped source shadow is already present from a nested Orca shell.
+        const sourceDir =
+          kind === 'omp'
+            ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
+            : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
+        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
+        if (dir) {
+          if (kind === 'omp') {
+            env.PI_CODING_AGENT_DIR = dir
+          }
+          env.ORCA_OMP_CODING_AGENT_DIR = dir
+          env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
+          if (sourceDir) {
+            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
           }
         }
       }

@@ -71,6 +71,10 @@ export type PluginSources = {
   ompExtensionSource?: string
 }
 
+export function getRelayPiStatusExtensionPath(agentDir: string): string {
+  return join(agentDir, 'extensions', PI_EXTENSION_FILE)
+}
+
 export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {

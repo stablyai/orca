@@ -190,6 +190,7 @@ describe('registerPtyHandlers', () => {
   const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
   const savedOrcaOmpAgentDir = process.env.ORCA_OMP_CODING_AGENT_DIR
   const savedOrcaOmpSourceAgentDir = process.env.ORCA_OMP_SOURCE_AGENT_DIR
+  const savedOrcaOmpStatusExtension = process.env.ORCA_OMP_STATUS_EXTENSION
   const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
 
   beforeEach(() => {
@@ -204,6 +205,7 @@ describe('registerPtyHandlers', () => {
     delete process.env.ORCA_CODEX_HOME
     delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
     delete process.env.ORCA_OMP_CODING_AGENT_DIR
+    delete process.env.ORCA_OMP_STATUS_EXTENSION
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -322,6 +324,11 @@ describe('registerPtyHandlers', () => {
       process.env.ORCA_OMP_SOURCE_AGENT_DIR = savedOrcaOmpSourceAgentDir
     } else {
       delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
+    }
+    if (savedOrcaOmpStatusExtension !== undefined) {
+      process.env.ORCA_OMP_STATUS_EXTENSION = savedOrcaOmpStatusExtension
+    } else {
+      delete process.env.ORCA_OMP_STATUS_EXTENSION
     }
     if (savedOrcaClaudeAgentStatusSettings === undefined) {
       delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
@@ -604,9 +611,14 @@ describe('registerPtyHandlers', () => {
     it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+      )
     })
 
     it('threads command: "omp" through to piBuildPtyEnv and emits ORCA_OMP_* shadow vars', async () => {
@@ -629,6 +641,9 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+      )
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
       // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
@@ -666,18 +681,25 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
-    it('does not use an inherited OMP overlay source for a Pi launch', async () => {
-      const env = await spawnAndGetEnv({
-        PI_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
-        ORCA_OMP_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
-        ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/user-omp-agent'
-      })
+    it('does not use an inherited OMP overlay source for an explicit Pi launch', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+          ORCA_OMP_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+          ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/user-omp-agent'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'pi'
+      )
 
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
     })
 
     it('restores user Pi config when agent status hooks are disabled in a nested Orca shell', async () => {
@@ -973,9 +995,14 @@ describe('registerPtyHandlers', () => {
         // daemon-assigned sessionId minted in pty.ts, and the mock returns
         // the fixed overlay path from the shared setup.
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent', 'pi')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
+        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+        )
       })
 
       it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP shadow vars', async () => {
@@ -996,6 +1023,9 @@ describe('registerPtyHandlers', () => {
         )
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+        )
         expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
