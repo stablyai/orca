@@ -4198,6 +4198,10 @@ function BrowserPagePane({
             ? 'pointer-events-none z-0 opacity-0'
             : 'pointer-events-none hidden'
       )}
+      // Why: automation-visible webviews must remain mounted and paintable, but
+      // their hidden toolbar and guest content cannot stay keyboard-focusable.
+      inert={!isActive}
+      aria-hidden={!isActive}
     >
       {/* IPC-driven context menu — rendered in a Portal so position: fixed is
           relative to the viewport, not affected by ancestor backdrop-filter or

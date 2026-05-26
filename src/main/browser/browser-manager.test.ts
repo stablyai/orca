@@ -301,6 +301,53 @@ describe('browserManager', () => {
     expect(releaseScript).toContain('bridge.release("lease-1")')
   })
 
+  it('returns a no-op automation visibility restore when renderer acquire hangs', async () => {
+    vi.useFakeTimers()
+
+    const rendererExecuteJavaScriptMock = vi.fn().mockReturnValueOnce(new Promise(() => {}))
+    const guest = {
+      id: 1708,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-hung-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+  })
+
   it('restores the previously focused browser workspace after screenshot prep changes tabs', async () => {
     const rendererExecuteJavaScriptMock = vi
       .fn()

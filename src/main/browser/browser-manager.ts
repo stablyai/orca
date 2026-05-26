@@ -44,6 +44,24 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
+const AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS = 2_000
+
+function resolveWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallbackValue), timeoutMs)
+  })
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+  })
+}
+
 // Why: mobile presets need a touch-capable UA or responsive sites serve the
 // desktop variant based on UA sniffing. This is the Chrome DevTools default
 // iPhone UA template; we splice in the guest session's real Chrome major so
@@ -449,15 +467,17 @@ export class BrowserManager {
 
     // Why: agent browser commands need a paintable webview for lazy-loading
     // sites, but must not steal the user's visible Orca tab/worktree.
-    const token = await renderer
-      .executeJavaScript(
+    const token = await resolveWithTimeout(
+      renderer.executeJavaScript(
         `(async function() {
           var bridge = window.__orcaBrowserAutomationVisibility;
           if (!bridge || typeof bridge.acquire !== 'function') return null;
           return await bridge.acquire(${JSON.stringify(browserPageId)});
         })()`
-      )
-      .catch(() => null)
+      ),
+      AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS,
+      null
+    ).catch(() => null)
 
     if (typeof token !== 'string' || token.length === 0) {
       return () => {}

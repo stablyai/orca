@@ -1809,6 +1809,9 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
+      // Why: automation-visible panes must stay paintable for webviews, but
+      // invisible controls cannot remain reachable by Tab or assistive tech.
+      inert={!isVisible}
       aria-hidden={!isVisible}
     >
       <CodexRestartChip worktreeId={worktreeId} />
