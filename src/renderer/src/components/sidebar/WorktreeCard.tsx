@@ -544,7 +544,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     comment: metaComment
   })
   const hasPorts = showPorts && workspacePorts.length > 0
-  const cacheTimerVisible = usePromptCacheCountdownStartedAt(worktree.id) != null
+  const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id)
+  const cacheTtlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
   // Why: render the branch/badge sub-line only when it carries something, so an
   // un-renamed single-line worktree collapses to one row instead of an empty band.
   const hasMetaRow =
@@ -552,7 +553,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     isFolder ||
     showBranch ||
     (!!conflictOperation && conflictOperation !== 'unknown') ||
-    cacheTimerVisible
+    cacheStartedAt != null
 
   const cardBody = (
     <div
@@ -585,13 +586,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         </div>
       )}
 
-      {/* Why: the status dot sits alone on the left so the card height tracks
-           its content; the unread toggle moved inline next to the title (right
-           cluster below) rather than stacking under the dot and padding the card. */}
+      {/* Why: keep this column to just the dot — stacking anything else here
+           (e.g. the unread toggle, which now lives in the title-row cluster)
+           sets a height floor that pads single-line cards. */}
       {cardProps.includes('status') && (
-        <div className="flex flex-col items-center justify-start pt-[2px] shrink-0">
-          <WorktreeActivityStatusIndicator worktreeId={worktree.id} />
-        </div>
+        <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mt-[2px] shrink-0" />
       )}
 
       {/* Content area */}
@@ -817,7 +816,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </Badge>
               )}
 
-              <CacheTimer worktreeId={worktree.id} />
+              {cacheStartedAt != null && (
+                <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />
+              )}
             </div>
           </div>
         )}
