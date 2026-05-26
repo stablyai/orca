@@ -19,7 +19,7 @@ import {
 } from './pty-dispatcher'
 import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
-import { createAgentStatusOscProcessor } from './agent-status-osc'
+import { createAgentStatusOscProcessor, type ProcessedAgentStatusChunk } from './agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // Re-export public API so existing consumers keep working.
@@ -61,6 +61,14 @@ type ProcessPtyOutputOptions = {
   suppressAttentionEvents?: boolean
 }
 
+type PendingPtySideEffect = {
+  payloads: ProcessedAgentStatusChunk['payloads']
+  titles: string[]
+  scannedForTitles: boolean
+  containsBell: boolean
+  suppressAttentionEvents: boolean
+}
+
 export function createPtyOutputProcessor({
   onTitleChange,
   onBell,
@@ -84,11 +92,7 @@ export function createPtyOutputProcessor({
   let lastEmittedTitle: string | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   let sideEffectDrainTimer: ReturnType<typeof setTimeout> | null = null
-  const pendingSideEffects: {
-    data: string
-    payloads: ReturnType<typeof processAgentStatusChunk>['payloads']
-    suppressAttentionEvents: boolean
-  }[] = []
+  let pendingSideEffects: PendingPtySideEffect[] = []
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -135,7 +139,41 @@ export function createPtyOutputProcessor({
     payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
     suppressAttentionEvents: boolean
   ): void {
-    pendingSideEffects.push({ data, payloads, suppressAttentionEvents })
+    const scannedForTitles = Boolean(onTitleChange && data.length > 0)
+    const titles = scannedForTitles ? extractAllOscTitles(data) : []
+    const deliveredPayloads =
+      onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
+    const containsBell = Boolean(
+      onBell && !suppressAttentionEvents && bellDetector.chunkContainsBell(data)
+    )
+    if (!scannedForTitles && deliveredPayloads.length === 0 && !containsBell) {
+      return
+    }
+
+    const prior = pendingSideEffects.at(-1)
+    if (
+      prior &&
+      prior.titles.length === 0 &&
+      prior.payloads.length === 0 &&
+      !prior.containsBell &&
+      prior.suppressAttentionEvents === suppressAttentionEvents &&
+      titles.length === 0 &&
+      deliveredPayloads.length === 0 &&
+      !containsBell
+    ) {
+      prior.scannedForTitles ||= scannedForTitles
+    } else {
+      // Why: keep only compact derived side-effect facts here. Retaining raw
+      // PTY chunks duplicates the terminal scheduler backlog while timers are
+      // throttled in a backgrounded Electron window.
+      pendingSideEffects.push({
+        titles,
+        payloads: deliveredPayloads,
+        scannedForTitles,
+        containsBell,
+        suppressAttentionEvents
+      })
+    }
     if (sideEffectDrainTimer !== null) {
       return
     }
@@ -153,18 +191,16 @@ export function createPtyOutputProcessor({
 
   function drainPtySideEffects(): void {
     sideEffectDrainTimer = null
-    while (pendingSideEffects.length > 0) {
-      const next = pendingSideEffects.shift()
-      if (!next) {
-        continue
-      }
-      if (onAgentStatus && !next.suppressAttentionEvents) {
+    const effects = pendingSideEffects
+    pendingSideEffects = []
+    for (const next of effects) {
+      if (onAgentStatus) {
         for (const payload of next.payloads) {
           onAgentStatus(payload)
         }
       }
-      processObservedTitles(next.data, next.suppressAttentionEvents)
-      if (onBell && bellDetector.chunkContainsBell(next.data) && !next.suppressAttentionEvents) {
+      processObservedTitles(next.titles, next.scannedForTitles, next.suppressAttentionEvents)
+      if (onBell && next.containsBell) {
         onBell()
       }
     }
@@ -175,7 +211,11 @@ export function createPtyOutputProcessor({
     drainPtySideEffects()
   }
 
-  function processObservedTitles(data: string, suppressAgentTracker: boolean): void {
+  function processObservedTitles(
+    titles: string[],
+    scannedForTitles: boolean,
+    suppressAgentTracker: boolean
+  ): void {
     if (!onTitleChange) {
       return
     }
@@ -183,13 +223,13 @@ export function createPtyOutputProcessor({
     // the last one. node-pty + the main-process 8ms batch window commonly
     // coalesce multiple title updates into a single IPC payload; processing
     // titles in order preserves working-to-idle transitions.
-    const titles = extractAllOscTitles(data)
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (
+      scannedForTitles &&
       !suppressAgentTracker &&
       lastEmittedTitle &&
       detectAgentStatusFromTitle(lastEmittedTitle) === 'working'

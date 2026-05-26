@@ -201,6 +201,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'restore:terminal-a',
       'restore:terminal-b'
     ])
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
+      maxChars: 256 * 1024
+    })
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(2, terminalB, {
+      maxChars: 256 * 1024
+    })
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)

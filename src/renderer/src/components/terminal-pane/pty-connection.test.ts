@@ -346,6 +346,7 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
 describe('connectPanePty', () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+  const originalDocument = globalThis.document
 
   beforeEach(() => {
     vi.resetModules()
@@ -435,6 +436,11 @@ describe('connectPanePty', () => {
     } else {
       delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
         .cancelAnimationFrame
+    }
+    if (originalDocument) {
+      globalThis.document = originalDocument
+    } else {
+      delete (globalThis as { document?: Document }).document
     }
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as Record<string, unknown>).__ptyConnectDiag
@@ -2501,6 +2507,42 @@ describe('connectPanePty', () => {
       'visible split output\r\n',
       expect.any(Function)
     )
+  })
+
+  it('routes visible pane PTY bytes through the background scheduler when the document is hidden', async () => {
+    ;(globalThis as { document?: Pick<Document, 'visibilityState'> }).document = {
+      visibilityState: 'hidden'
+    }
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isActiveRef: { current: true },
+      isVisibleRef: { current: true }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    vi.useFakeTimers()
+    capturedDataCallback.current?.('backgrounded document output\r\n')
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'backgrounded document output\r\n',
+      expect.any(Function)
+    )
+
+    vi.advanceTimersByTime(50)
+    expect(pane.terminal.write).toHaveBeenCalledWith('backgrounded document output\r\n')
   })
 
   it('marks panes that receive Arabic output for DOM rendering', async () => {

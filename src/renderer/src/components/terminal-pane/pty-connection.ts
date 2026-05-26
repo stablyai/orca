@@ -202,6 +202,19 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
   return sessionId.slice(0, separatorIdx) === worktreeId
 }
 
+function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
+  if (!isPaneVisible) {
+    return false
+  }
+  if (typeof document === 'undefined') {
+    return true
+  }
+  // Why: Electron can keep visible panes mounted while the whole app is
+  // backgrounded. Treat hidden documents like background tabs so Chromium
+  // timer throttling cannot pin terminal writes on the renderer foreground path.
+  return document.visibilityState === 'visible'
+}
+
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -1283,11 +1296,11 @@ export function connectPanePty(
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       commandCodeOutputStatusDetector.observe(data)
       commandLifecycle.handlePtyData(data)
-      // Why: visibility is the right gate — split-pane layouts have multiple
-      // visible-but-inactive panes whose output the user is watching. Only
-      // hidden panes (background tabs) should be throttled.
+      // Why: split-pane layouts have multiple visible-but-inactive panes whose
+      // output the user is watching. Throttle only when the pane or whole
+      // Electron document is hidden.
       writeTerminalOutput(pane.terminal, data, {
-        foreground: deps.isVisibleRef.current,
+        foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current),
         beforeWrite: (chunk) => {
           // Why: hidden tab output is coalesced by the scheduler. Run per-byte
           // renderer checks at the xterm write boundary so background PTY bursts
