@@ -100,6 +100,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     React.createElement(React.Fragment, null, children),
   DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
+  DropdownMenuSeparator: () => React.createElement('hr'),
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children)
 }))
@@ -155,7 +156,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
-function setLineageFixtureState(): void {
+function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
   const repo = makeRepo()
   const parent = makeWorktree({
     id: 'parent',
@@ -188,7 +189,7 @@ function setLineageFixtureState(): void {
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
     filterRepoIds: [],
-    groupBy: 'none',
+    groupBy,
     hideDefaultBranchWorkspace: false,
     issueCache: {},
     migrationUnsupportedByPtyId: {},
@@ -229,17 +230,21 @@ function setLineageFixtureState(): void {
   }
 }
 
+async function renderWorktreeListMarkup(): Promise<string> {
+  const { default: WorktreeList } = await import('./WorktreeList')
+
+  return renderToStaticMarkup(
+    React.createElement(WorktreeList, {
+      scrollOffsetRef: { current: 0 },
+      scrollAnchorRef: { current: null }
+    })
+  )
+}
+
 describe('WorktreeList lineage child card renderer', () => {
   it('renders nested inline agent rows before the nested child-count toggle', async () => {
     setLineageFixtureState()
-    const { default: WorktreeList } = await import('./WorktreeList')
-
-    const markup = renderToStaticMarkup(
-      React.createElement(WorktreeList, {
-        scrollOffsetRef: { current: 0 },
-        scrollAnchorRef: { current: null }
-      })
-    )
+    const markup = await renderWorktreeListMarkup()
 
     const childStart = markup.indexOf('lineage child with agent')
     const agentRowIndex = markup.indexOf('Review fixture prompt', childStart)
@@ -249,5 +254,24 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeGreaterThan(childStart)
     expect(childToggleIndex).toBeGreaterThan(childStart)
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
+  })
+
+  it('does not add group indentation when grouping is disabled', async () => {
+    setLineageFixtureState('none')
+    const markup = await renderWorktreeListMarkup()
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('id="worktree-list-option-parent"')
+    expect(parentRow).not.toContain('padding-left')
+  })
+
+  it('adds one group indentation step when grouped by project', async () => {
+    setLineageFixtureState('repo')
+    const markup = await renderWorktreeListMarkup()
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('style="padding-left:18px"')
   })
 })

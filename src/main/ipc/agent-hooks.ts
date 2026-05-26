@@ -16,6 +16,7 @@ import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
@@ -37,6 +38,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:antigravityStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
+  ipcMain.removeHandler('agentHooks:commandCodeStatus')
   ipcMain.removeHandler('agentHooks:grokStatus')
   ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
@@ -155,6 +157,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'droid',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:commandCodeStatus', (): AgentHookInstallStatus => {
+    try {
+      return commandCodeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'command-code',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

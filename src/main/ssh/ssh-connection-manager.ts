@@ -60,6 +60,14 @@ export class SshConnectionManager {
     this.connections.delete(targetId)
   }
 
+  async reconnect(targetId: string): Promise<void> {
+    const conn = this.connections.get(targetId)
+    if (!conn) {
+      return
+    }
+    await conn.reconnect()
+  }
+
   getConnection(targetId: string): SshConnection | undefined {
     return this.connections.get(targetId)
   }

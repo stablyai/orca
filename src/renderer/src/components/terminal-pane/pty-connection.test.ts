@@ -517,6 +517,255 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('seeds a working status for Command Code startup prompts after spawn', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-command-code')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: "command-code --trust 'Fix the status'",
+        initialAgentStatus: { agent: 'command-code', prompt: 'Fix the status' }
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-command-code')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      {
+        state: 'working',
+        prompt: 'Fix the status',
+        agentType: 'command-code'
+      },
+      undefined
+    )
+  })
+
+  it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-command-code'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'command-code --trust'
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
+    capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      {
+        state: 'working',
+        prompt: 'Fix the spinner',
+        agentType: 'command-code'
+      },
+      undefined
+    )
+  })
+
+  it('marks a Command Code no-tool turn done after the idle prompt settles', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-command-code'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'command-code --trust'
+      }
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    vi.runOnlyPendingTimers()
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('❯ say hi\r\n✻ Thinking...')
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      prompt: 'say hi',
+      agentType: 'command-code'
+    })
+
+    capturedDataCallback.current?.(
+      '\r\n✻ Thought for 1 second\r\n:: Hi! How can I help you today?\r\n❯ Ask your question...'
+    )
+    vi.advanceTimersByTime(1499)
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      prompt: 'say hi',
+      agentType: 'command-code'
+    })
+
+    vi.advanceTimersByTime(1)
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'done',
+      prompt: 'say hi',
+      agentType: 'command-code'
+    })
+  })
+
+  it('keeps Command Code working when an active repaint follows the idle prompt before settle', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-command-code'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'command-code --trust'
+      }
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    vi.runOnlyPendingTimers()
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('❯ Run a slow command\r\n✻ Thinking...')
+    capturedDataCallback.current?.('\r\n❯ Ask your question...')
+    vi.advanceTimersByTime(1000)
+    capturedDataCallback.current?.('\r\n✧ Investigating... esc to interrupt')
+    vi.advanceTimersByTime(500)
+
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      prompt: 'Run a slow command',
+      agentType: 'command-code'
+    })
+  })
+
+  it('does not downgrade a completed Command Code turn back to working from stale TUI output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-command-code'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'command-code --trust'
+      }
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'done',
+      prompt: 'Fix the spinner',
+      agentType: 'command-code',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      stateHistory: []
+    }
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
+    capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Threading...\x1b[0m')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    expect((mockStoreState.agentStatusByPaneKey[paneKey] as { state?: unknown })?.state).toBe(
+      'done'
+    )
+  })
+
+  it('starts a new Command Code turn after done when TUI output carries a different prompt', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-command-code'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'command-code --trust'
+      }
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'done',
+      prompt: 'Fix the spinner',
+      agentType: 'command-code',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      stateHistory: []
+    }
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
+    capturedDataCallback.current?.('❯ Fix the green done state\r\n\x1b[35m✻ Threading...\x1b[0m')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Fix the green done state',
+        agentType: 'command-code'
+      },
+      undefined
+    )
+  })
+
   it('delivers terminal-paste startup commands through xterm before submitting', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout

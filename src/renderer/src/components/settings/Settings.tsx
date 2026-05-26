@@ -705,7 +705,7 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
+              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
               isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
             )}
           >

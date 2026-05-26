@@ -6,6 +6,7 @@ import type {
   Tab,
   TerminalLayoutSnapshot,
   TerminalTab,
+  TuiAgent,
   Worktree,
   WorkspaceSessionState
 } from '../../../../shared/types'
@@ -197,6 +198,8 @@ export type TerminalSlice = {
        *  xterm can use bracketed paste before the submit Enter is sent. */
       delivery?: 'terminal-paste'
       env?: Record<string, string>
+      /** Initial prompt-start status for agents that lack native prompt hooks. */
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
        *  after spawn confirms — never on click-intent. */
@@ -313,6 +316,7 @@ export type TerminalSlice = {
       command: string
       delivery?: 'terminal-paste'
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void

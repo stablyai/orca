@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates SSH IPC handlers, port-forward
 broadcasting, and session lifecycle in one file to keep the data flow obvious. */
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
@@ -44,6 +44,7 @@ let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionStat
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 let persistedStore: Store | null = null
 let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
+let powerMonitorUnsubscribe: (() => void) | null = null
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
@@ -308,6 +309,37 @@ function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null)
   })
 }
 
+function registerPowerMonitorReconnect(): void {
+  powerMonitorUnsubscribe?.()
+  const onSuspend = (): void => {
+    for (const session of activeSessions.values()) {
+      session.prepareForHostSleep()
+    }
+  }
+  const onResume = (): void => {
+    for (const targetId of activeSessions.keys()) {
+      const conn = connectionManager?.getConnection(targetId)
+      if (!conn) {
+        continue
+      }
+      const reconnect = connectionManager?.reconnect(targetId)
+      void reconnect?.catch((err) => {
+        console.warn(
+          `[ssh] Failed to reconnect ${targetId} after system resume: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+      })
+    }
+  }
+  powerMonitor.on('suspend', onSuspend)
+  powerMonitor.on('resume', onResume)
+  powerMonitorUnsubscribe = () => {
+    powerMonitor.off('suspend', onSuspend)
+    powerMonitor.off('resume', onResume)
+  }
+}
+
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
@@ -405,6 +437,7 @@ export function registerSshHandlers(
 
   connectionManager = new SshConnectionManager(callbacks)
   portForwardManager = new SshPortForwardManager()
+  registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
 
   // ── Target CRUD ────────────────────────────────────────────────────

@@ -52,6 +52,7 @@ import {
   observeTerminalBracketedPasteModeOutput,
   pasteTerminalText
 } from './terminal-bracketed-paste'
+import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -60,6 +61,7 @@ const PTY_CONNECT_DIAG_LIMIT = 200
 const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
+const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 let codexRestartNoticePresenceSource: Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
@@ -561,11 +563,102 @@ export function connectPanePty(
     }
   }
 
+  const applyInitialAgentStatus = (terminalTitle?: string): void => {
+    const initialStatus = paneStartup?.initialAgentStatus
+    if (!initialStatus) {
+      return
+    }
+    useAppStore.getState().setAgentStatus(
+      cacheKey,
+      {
+        state: 'working',
+        prompt: initialStatus.prompt,
+        agentType: initialStatus.agent
+      },
+      terminalTitle
+    )
+  }
+
+  const seedCommandCodeOutputWorkingStatus = (prompt: string): void => {
+    clearCommandCodeOutputDoneTimer()
+    const currentState = useAppStore.getState()
+    const currentEntry = currentState.agentStatusByPaneKey[cacheKey]
+    const currentTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    const normalizedPrompt = prompt.trim()
+    if (
+      currentEntry?.agentType === 'command-code' &&
+      currentEntry.state === 'done' &&
+      (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
+    ) {
+      return
+    }
+    currentState.setAgentStatus(
+      cacheKey,
+      {
+        state: 'working',
+        prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
+        agentType: 'command-code'
+      },
+      currentTitle
+    )
+  }
+
+  let commandCodeOutputDoneTimer: ReturnType<typeof setTimeout> | null = null
+  const clearCommandCodeOutputDoneTimer = (): void => {
+    if (commandCodeOutputDoneTimer !== null) {
+      clearTimeout(commandCodeOutputDoneTimer)
+      commandCodeOutputDoneTimer = null
+    }
+  }
+  const scheduleCommandCodeOutputDoneStatus = (prompt: string): void => {
+    clearCommandCodeOutputDoneTimer()
+    const normalizedPrompt = prompt.trim()
+    if (!normalizedPrompt) {
+      return
+    }
+    // Why: Command Code keeps rendering the composer while tools run. Only
+    // complete the row if no active status repaint arrives during this window.
+    commandCodeOutputDoneTimer = setTimeout(() => {
+      commandCodeOutputDoneTimer = null
+      if (disposed) {
+        return
+      }
+      const currentState = useAppStore.getState()
+      const currentEntry = currentState.agentStatusByPaneKey[cacheKey]
+      if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+        return
+      }
+      const currentPrompt = currentEntry.prompt.trim()
+      if (currentPrompt && currentPrompt !== normalizedPrompt) {
+        return
+      }
+      const currentTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+      currentState.setAgentStatus(
+        cacheKey,
+        {
+          state: 'done',
+          prompt: currentPrompt || normalizedPrompt,
+          agentType: 'command-code'
+        },
+        currentTitle
+      )
+    }, COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
+  }
+
+  const commandCodeOutputStatusDetector = createCommandCodeOutputStatusDetector({
+    startupCommand: paneStartup?.command,
+    onWorking: seedCommandCodeOutputWorkingStatus,
+    onDone: scheduleCommandCodeOutputDoneStatus
+  })
+
   const onPtySpawn = (ptyId: string): void => {
     bindPanePtyId(pane.id, ptyId, deps.tabId)
     pane.container.dataset.ptyId = ptyId
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     deps.updateTabPtyId(deps.tabId, ptyId)
+    // Why: Command Code has no prompt-start hook. Seed the visible working row
+    // once the PTY exists, then let real hook events refine or complete it.
+    applyInitialAgentStatus()
     // Spawn completion is when a pane gains a concrete PTY ID. The initial
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
@@ -1188,6 +1281,7 @@ export function connectPanePty(
 
     const dataCallback = (data: string): void => {
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
+      commandCodeOutputStatusDetector.observe(data)
       commandLifecycle.handlePtyData(data)
       // Why: visibility is the right gate — split-pane layouts have multiple
       // visible-but-inactive panes whose output the user is watching. Only
@@ -1825,6 +1919,7 @@ export function connectPanePty(
       pendingTerminalInputWrite = null
       interruptInference.dispose()
       clearTitleOnlyInterruptTimer()
+      clearCommandCodeOutputDoneTimer()
       // Why: actively resolve any in-flight passphrase-gate waits so their
       // zustand subscribers + async IIFEs don't hang for the rest of the
       // session when the pane is torn down before SSH state changes.

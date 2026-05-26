@@ -146,6 +146,18 @@ describe('PtyHandler', () => {
     expect(onExpire).not.toHaveBeenCalled()
   })
 
+  it('uses the configured grace time for future disconnect timers', () => {
+    const onExpire = vi.fn()
+
+    handler.setGraceTimeMs(250)
+    handler.startGraceTimer(onExpire)
+
+    vi.advanceTimersByTime(249)
+    expect(onExpire).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onExpire).toHaveBeenCalledTimes(1)
+  })
+
   it('spawns a PTY and returns an id', async () => {
     const result = await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
     expect(result).toEqual({ id: 'pty-1' })

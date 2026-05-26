@@ -1327,6 +1327,8 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:droidStatus'),
+    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
     grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
     copilotStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),

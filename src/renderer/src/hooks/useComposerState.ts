@@ -1849,6 +1849,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? {
               startup: {
                 command: startupPlan.launchCommand,
+                ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+                  ? {
+                      initialAgentStatus: {
+                        agent: tuiAgent,
+                        prompt: submitStartupPrompt.trim()
+                      }
+                    }
+                  : {}),
                 telemetry: composerTelemetry
               }
             }
@@ -2102,6 +2111,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 startup: {
                   command: startupPlan.launchCommand,
                   ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                  ...(agent === 'command-code' && quickPrompt.trim().length > 0
+                    ? {
+                        initialAgentStatus: {
+                          agent,
+                          prompt: quickPrompt.trim()
+                        }
+                      }
+                    : {}),
                   ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
                 }
               }

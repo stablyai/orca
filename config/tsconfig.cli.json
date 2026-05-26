@@ -14,6 +14,7 @@
     "../src/main/codex/config-toml-trust.ts",
     "../src/main/codex/hook-service.ts",
     "../src/main/codex-accounts/fs-utils.ts",
+    "../src/main/command-code/hook-service.ts",
     "../src/main/copilot/hook-service.ts",
     "../src/main/cursor/hook-service.ts",
     "../src/main/droid/hook-service.ts",

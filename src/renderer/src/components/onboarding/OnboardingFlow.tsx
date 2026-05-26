@@ -40,7 +40,7 @@ const stepCopy = {
   },
   tour: {
     title: 'Explore Orca',
-    subtitle: ''
+    subtitle: "Take a 60-second tour of Orca's advanced features."
   },
   repo: {
     title: 'Point Orca at some code',
