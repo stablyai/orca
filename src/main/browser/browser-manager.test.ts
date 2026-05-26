@@ -348,6 +348,67 @@ describe('browserManager', () => {
     expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
   })
 
+  it('releases a delayed automation visibility token after acquire timeout', async () => {
+    vi.useFakeTimers()
+
+    let resolveAcquire: (token: string) => void = () => {}
+    const acquirePromise = new Promise<string>((resolve) => {
+      resolveAcquire = resolve
+    })
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockReturnValueOnce(acquirePromise)
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1709,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-delayed-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+
+    resolveAcquire('late-lease-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(2)
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("late-lease-1")')
+  })
+
   it('restores the previously focused browser workspace after screenshot prep changes tabs', async () => {
     const rendererExecuteJavaScriptMock = vi
       .fn()
