@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import {
   hasSelectedOnboardingFeatureSetup,
@@ -34,8 +35,30 @@ type CloseWithDeps = {
 }
 
 export type DismissedExtras = {
-  advancedVia: 'button' | 'keyboard'
+  advancedVia: NonNullable<EventProps<'onboarding_dismissed'>['advanced_via']>
   durationMs: number
+}
+
+export function buildOnboardingDismissedPayload(
+  lastStepReached: StepNumber,
+  dismissedExtras?: DismissedExtras
+): EventProps<'onboarding_dismissed'> {
+  return {
+    last_step: lastStepReached,
+    ...(dismissedExtras
+      ? {
+          duration_ms: dismissedExtras.durationMs,
+          advanced_via: dismissedExtras.advancedVia
+        }
+      : {})
+  }
+}
+
+export function trackOnboardingDismissed(
+  lastStepReached: StepNumber,
+  dismissedExtras?: DismissedExtras
+): void {
+  track('onboarding_dismissed', buildOnboardingDismissedPayload(lastStepReached, dismissedExtras))
 }
 
 export function useCloseWith({
@@ -95,15 +118,7 @@ export function useCloseWith({
           })
         }
       } else if (outcome === 'dismissed') {
-        track('onboarding_dismissed', {
-          last_step: lastStepReached,
-          ...(dismissedExtras
-            ? {
-                duration_ms: dismissedExtras.durationMs,
-                advanced_via: dismissedExtras.advancedVia
-              }
-            : {})
-        })
+        trackOnboardingDismissed(lastStepReached, dismissedExtras)
       }
       return true
     },

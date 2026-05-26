@@ -770,6 +770,24 @@ export function useOnboardingFlow(
     updateSettings
   ])
 
+  const dismissOnboarding = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
+      if (busyLabel) {
+        return false
+      }
+      setError(null)
+      const closed = await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
+        durationMs: consumeStepDurationMs(),
+        advancedVia
+      })
+      if (closed) {
+        emitPendingTourOutcome()
+      }
+      return closed
+    },
+    [busyLabel, closeWith, consumeStepDurationMs, currentStep.stepNumber, emitPendingTourOutcome]
+  )
+
   const startTour = useCallback(() => {
     if (busyLabel) {
       return
@@ -983,6 +1001,7 @@ export function useOnboardingFlow(
     startFeatureSetup,
     skipAgentSetup,
     skipToRepo,
+    dismissOnboarding,
     startTour,
     completeTour,
     skipTourToRepo,
