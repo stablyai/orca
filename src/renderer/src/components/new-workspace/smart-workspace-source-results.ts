@@ -43,11 +43,12 @@ export function getBranchSearchRequest({
   query: string
   limit: number
 }): { repoId: string; query: string; limit: number } | null {
-  const branchModeCanSearch = !textOnly && (mode === 'smart' || mode === 'branches')
-  if (disabled || !selectedRepoId || !branchModeCanSearch) {
+  const trimmedQuery = query.trim()
+  const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
+  if (disabled || textOnly || !selectedRepoId || !shouldSearchBranches) {
     return null
   }
-  return { repoId: selectedRepoId, query: query.trim(), limit }
+  return { repoId: selectedRepoId, query: trimmedQuery, limit }
 }
 
 export function buildSmartWorkspaceSourceRows({

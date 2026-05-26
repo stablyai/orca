@@ -19,6 +19,19 @@ describe('Branch source results', () => {
     ).toEqual({ repoId: 'repo-1', query: '', limit: 12 })
   })
 
+  it('keeps Smart mode in its start-typing state for an empty query', () => {
+    expect(
+      getBranchSearchRequest({
+        disabled: false,
+        textOnly: false,
+        mode: 'smart',
+        selectedRepoId: 'repo-1',
+        query: '',
+        limit: 12
+      })
+    ).toBeNull()
+  })
+
   it('keeps returned branch rows visible before the user types', () => {
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'branches',
