@@ -6,6 +6,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -112,6 +113,14 @@ type Props = {
   hideExpand?: boolean
   /** Reuse the row's hover tint to show the focused terminal pane's agent. */
   isFocusedPane?: boolean
+  // Why: inline-card orchestration rows fold children under a leading chevron.
+  childAgentCount?: number
+  childAgentsExpanded?: boolean
+  onToggleChildAgents?: () => void
+  // Why: leaf siblings reserve the chevron gutter so state dots align.
+  reserveDisclosureGutter?: boolean
+  // Why: chevron indentation replaces fixed-offset lineage connector art.
+  hideLineageConnectors?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -123,8 +132,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   stateDotSize = 'md',
   hideIdentityIcon = false,
   hideExpand = false,
-  isFocusedPane = false
+  isFocusedPane = false,
+  childAgentCount,
+  childAgentsExpanded = false,
+  onToggleChildAgents,
+  reserveDisclosureGutter = false,
+  hideLineageConnectors = false
 }: Props) {
+  const hasChildDisclosure =
+    typeof childAgentCount === 'number' &&
+    childAgentCount > 0 &&
+    typeof onToggleChildAgents === 'function'
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
   // card's click handler (which navigates away from the dashboard).
@@ -243,14 +261,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
     >
-      {lineageChildCount > 0 ? (
+      {lineageChildCount > 0 && !hideLineageConnectors ? (
         <span
           aria-hidden
           data-agent-lineage-parent-connector
           className="pointer-events-none absolute bottom-[-0.75rem] left-[13px] top-[1.05rem] border-l-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35"
         />
       ) : null}
-      {isLineageChild ? (
+      {isLineageChild && !hideLineageConnectors ? (
         <span
           aria-hidden
           data-agent-lineage-connector={lineage?.isLastSibling === false ? 'branch' : 'last'}
@@ -271,6 +289,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         </span>
       ) : null}
       <div className="flex items-center gap-1.5">
+        <DashboardAgentChildDisclosure
+          childAgentCount={childAgentCount}
+          childAgentsExpanded={childAgentsExpanded}
+          onToggleChildAgents={onToggleChildAgents}
+          reserveDisclosureGutter={reserveDisclosureGutter}
+        />
         {/* Why: state indicator lives in the leading gutter so the user's
             eye can sweep one column and know which rows are working,
             waiting, or done at a glance — the list-view convention (Linear,
@@ -330,6 +354,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
+        {/* Why: "+N" badge mirrors the leading chevron — without it the
+            parent row reads identical to a leaf row when collapsed, and the
+            child count is invisible. Hidden when expanded because the
+            children are visible directly below. */}
+        {hasChildDisclosure && !childAgentsExpanded && (
+          <span
+            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
+            aria-hidden
+          >
+            +{childAgentCount}
+          </span>
+        )}
         {/* Why: right cluster keeps passive time and dismiss affordance in one
             place. State belongs in the leading gutter; repeating it here as
             text makes interrupted rows look like the old badge treatment. */}
