@@ -73,7 +73,8 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelFocused
+  isFloatingWorkspacePanelFocused,
+  switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   keybindingMatchesAction,
@@ -1105,6 +1106,7 @@ function Terminal(): React.JSX.Element | null {
         : 'linux'
     const onKeyDown = (e: KeyboardEvent): void => {
       const context = getKeybindingContext(e.target)
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, e, shortcutPlatform, keybindings, {
           context,
@@ -1127,7 +1129,7 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newTerminal')
-        if (isFloatingWorkspacePanelFocused()) {
+        if (floatingWorkspaceFocused) {
           void createFloatingWorkspaceTerminalTab(useAppStore.getState())
           return
         }
@@ -1261,7 +1263,13 @@ function Terminal(): React.JSX.Element | null {
               ? 'tab.nextSameType'
               : 'tab.previousSameType'
         )
-        if (switchAllTypesDirection !== null) {
+        if (floatingWorkspaceFocused) {
+          switchFloatingWorkspaceTab(
+            useAppStore.getState(),
+            switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
+            switchAllTypesDirection !== null ? 'all-types' : 'same-type'
+          )
+        } else if (switchAllTypesDirection !== null) {
           handleSwitchTabAcrossAllTypes(switchAllTypesDirection)
         } else {
           handleSwitchTab(switchSameTypeDirection ?? 1)
@@ -1295,7 +1303,11 @@ function Terminal(): React.JSX.Element | null {
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
-        handleSwitchTerminalTab(terminalTabDirection)
+        if (floatingWorkspaceFocused) {
+          switchFloatingWorkspaceTab(useAppStore.getState(), terminalTabDirection, 'terminal')
+        } else {
+          handleSwitchTerminalTab(terminalTabDirection)
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })

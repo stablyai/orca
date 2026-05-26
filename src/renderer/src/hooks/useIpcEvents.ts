@@ -72,7 +72,8 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelFocused
+  isFloatingWorkspacePanelFocused,
+  switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   observeAgentHookCompletionForNotification,
@@ -1613,10 +1614,37 @@ export function useIpcEvents(): void {
       })
     )
 
-    unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
-    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
+    unsubs.push(
+      window.api.ui.onSwitchTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'same-type')
+          return
+        }
+        handleSwitchTab(direction)
+      })
+    )
+    unsubs.push(
+      window.api.ui.onSwitchTabAcrossAllTypes((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'all-types')
+          return
+        }
+        handleSwitchTabAcrossAllTypes(direction)
+      })
+    )
     unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
-    unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
+    unsubs.push(
+      window.api.ui.onSwitchTerminalTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'terminal')
+          return
+        }
+        handleSwitchTerminalTab(direction)
+      })
+    )
 
     // Hydrate initial rate limit state then subscribe to push updates
     window.api.rateLimits.get().then((state) => {

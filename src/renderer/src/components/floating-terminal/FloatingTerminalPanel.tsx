@@ -29,7 +29,8 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import {
   isFloatingWorkspacePanelShortcut,
-  isFloatingWorkspaceTerminalInputTarget
+  isFloatingWorkspaceTerminalInputTarget,
+  switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -839,6 +840,37 @@ export function FloatingTerminalPanel({
         } else {
           onOpenChange(false)
         }
+        return
+      }
+
+      const switchSameTypeDirection = matches('tab.nextSameType')
+        ? 1
+        : matches('tab.previousSameType')
+          ? -1
+          : null
+      const switchAllTypesDirection = matches('tab.nextAllTypes')
+        ? 1
+        : matches('tab.previousAllTypes')
+          ? -1
+          : null
+      if (switchSameTypeDirection !== null || switchAllTypesDirection !== null) {
+        consume()
+        switchFloatingWorkspaceTab(
+          useAppStore.getState(),
+          switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
+          switchAllTypesDirection !== null ? 'all-types' : 'same-type'
+        )
+        return
+      }
+
+      const terminalTabDirection = matches('tab.nextTerminal')
+        ? 1
+        : matches('tab.previousTerminal')
+          ? -1
+          : null
+      if (terminalTabDirection !== null) {
+        consume()
+        switchFloatingWorkspaceTab(useAppStore.getState(), terminalTabDirection, 'terminal')
       }
     }
 

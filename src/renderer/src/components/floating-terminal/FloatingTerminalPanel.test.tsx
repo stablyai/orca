@@ -21,6 +21,7 @@ type FloatingPanelStoreState = {
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
   openFiles: OpenFile[]
+  activeGroupIdByWorktree: Record<string, string | null>
   activeTabIdByWorktree: Record<string, string | null>
   expandedPaneByTabId: Record<string, boolean>
   createTab: (
@@ -349,6 +350,7 @@ function setFloatingTabs(tabs: TerminalTab[]): void {
       }
     ]
   }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
   state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null }
   state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) }
 }
@@ -381,6 +383,7 @@ function setFloatingEditorTabs(files: OpenFile[]): void {
       }
     ]
   }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
 }
 
 function resetStore(tabs: TerminalTab[] = []): void {
@@ -391,6 +394,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     groupsByWorktree: {},
     unifiedTabsByWorktree: {},
     openFiles: [],
+    activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     expandedPaneByTabId: {},
     activateTab: mocks.activateTab,
@@ -660,6 +664,62 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(preventDefault).toHaveBeenCalledWith()
     expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
+  })
+
+  it('routes focused floating tab switch shortcuts to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener({
+      altKey: false,
+      code: 'BracketRight',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: ']',
+      metaKey: true,
+      preventDefault,
+      repeat: false,
+      shiftKey: true,
+      stopImmediatePropagation,
+      stopPropagation,
+      target
+    })
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.activateTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-2')
   })
 
   it('keeps the empty floating workspace focused after Cmd+W closes the last tab', async () => {

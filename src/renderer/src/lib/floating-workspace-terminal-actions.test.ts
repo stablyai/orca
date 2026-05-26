@@ -1,6 +1,8 @@
+/* eslint-disable max-lines -- Focus, shortcut, creation, and switching cases share
+ * the same floating-workspace DOM/store fixtures. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/types'
+import type { Tab, TerminalTab } from '../../../shared/types'
 import {
   createFloatingWorkspaceTerminalTab,
   isFloatingWorkspacePanelFocused,
@@ -8,14 +10,19 @@ import {
   isFloatingWorkspacePanelShortcutTarget,
   isFloatingWorkspaceTerminalInputTarget,
   isFloatingWorkspacePanelVisible,
-  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
+  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
+  switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
 
+const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
+const isWebRuntimeSessionActiveMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+  activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 
 vi.mock('./focus-terminal-tab-surface', () => ({
@@ -73,6 +80,21 @@ function makeTab(id: string): TerminalTab {
     worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
     title: 'Terminal',
     customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
+
+function makeUnifiedTerminalTab(id: string, groupId = 'floating-group'): Tab {
+  return {
+    id,
+    entityId: id,
+    groupId,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    contentType: 'terminal',
+    label: 'Terminal',
+    customLabel: null,
     color: null,
     sortOrder: 0,
     createdAt: 0
@@ -234,8 +256,10 @@ describe('isFloatingWorkspacePanelShortcut', () => {
 
 describe('createFloatingWorkspaceTerminalTab', () => {
   beforeEach(() => {
+    activateWebRuntimeSessionTabMock.mockReset()
     createWebRuntimeSessionTerminalMock.mockReset()
     focusTerminalTabSurfaceMock.mockReset()
+    isWebRuntimeSessionActiveMock.mockReset()
   })
 
   it('creates and focuses a local floating workspace terminal in the active floating group', async () => {
@@ -290,6 +314,54 @@ describe('createFloatingWorkspaceTerminalTab', () => {
     expect(store.createTab).not.toHaveBeenCalled()
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('switchFloatingWorkspaceTab', () => {
+  beforeEach(() => {
+    activateWebRuntimeSessionTabMock.mockReset()
+    focusTerminalTabSurfaceMock.mockReset()
+    isWebRuntimeSessionActiveMock.mockReset()
+    isWebRuntimeSessionActiveMock.mockReturnValue(false)
+  })
+
+  it('cycles terminal tabs inside the floating workspace active group', () => {
+    const store = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      activateTab: vi.fn(),
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: {},
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1', 'tab-2'],
+            recentTabIds: ['tab-1']
+          }
+        ]
+      },
+      openFiles: [],
+      setActiveTab: vi.fn(),
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [makeTab('tab-1'), makeTab('tab-2')]
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeUnifiedTerminalTab('tab-1'),
+          makeUnifiedTerminalTab('tab-2')
+        ]
+      }
+    }
+
+    expect(switchFloatingWorkspaceTab(store as never, 1, 'same-type')).toBe(true)
+
+    expect(store.activateTab).toHaveBeenCalledWith('tab-2')
+    expect(store.setActiveTab).toHaveBeenCalledWith('tab-2')
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-2')
+    expect(activateWebRuntimeSessionTabMock).not.toHaveBeenCalled()
   })
 })
 
