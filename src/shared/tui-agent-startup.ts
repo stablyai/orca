@@ -44,6 +44,21 @@ function commandSeparator(shell: AgentStartupShell): string {
   return shell === 'cmd' ? ' & ' : '; '
 }
 
+function resolveBaseCommand(args: {
+  agent: TuiAgent
+  cmdOverrides: Partial<Record<TuiAgent, string>>
+  shell: AgentStartupShell
+}): string {
+  const override = args.cmdOverrides[args.agent]
+  if (override) {
+    return override
+  }
+  const command = TUI_AGENT_CONFIG[args.agent].launchCmd
+  // Why: Codex status hooks live in Orca's runtime CODEX_HOME; adding
+  // --profile-v2 makes Codex load a second hook representation and warn.
+  return command
+}
+
 export function buildAgentStartupPlan(args: {
   agent: TuiAgent
   prompt: string
@@ -56,7 +71,11 @@ export function buildAgentStartupPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
-  const baseCommand = cmdOverrides[agent] ?? config.launchCmd
+  const baseCommand = resolveBaseCommand({
+    agent,
+    cmdOverrides,
+    shell
+  })
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -137,7 +156,11 @@ export function buildAgentDraftLaunchPlan(args: {
   if (!trimmed) {
     return null
   }
-  const baseCommand = cmdOverrides[agent] ?? config.launchCmd
+  const baseCommand = resolveBaseCommand({
+    agent,
+    cmdOverrides,
+    shell
+  })
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
     return {

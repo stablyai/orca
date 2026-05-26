@@ -14,7 +14,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
-import RepoDotLabel from './RepoDotLabel'
+import RepoBadgeLabel from './RepoBadgeLabel'
 
 type RepoComboboxProps = {
   repos: Repo[]
@@ -174,10 +174,10 @@ export default function RepoCombobox({
           >
             {selectedRepo ? (
               <span className="inline-flex min-w-0 items-center gap-1.5">
-                <RepoDotLabel
+                <RepoBadgeLabel
                   name={selectedRepo.displayName}
                   color={selectedRepo.badgeColor}
-                  dotClassName="size-1.5"
+                  badgeClassName="size-1.5"
                 />
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
@@ -200,12 +200,12 @@ export default function RepoCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              placeholder="Search repos/folders..."
+              placeholder="Search projects/folders..."
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
-              <CommandEmpty>No repos/folders match your search.</CommandEmpty>
+              <CommandEmpty>No projects/folders match your search.</CommandEmpty>
               {filteredRepos.map((repo) => (
                 <CommandItem
                   key={repo.id}
@@ -221,7 +221,7 @@ export default function RepoCombobox({
                   />
                   <div className="min-w-0 flex-1">
                     <span className="inline-flex items-center gap-1.5">
-                      <RepoDotLabel
+                      <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
                         className="max-w-full"
@@ -252,7 +252,7 @@ export default function RepoCombobox({
                 className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal"
               >
                 <FolderPlus className="size-3.5 text-muted-foreground" />
-                <span>{isAdding ? 'Adding folder/repo…' : 'Add folder/repo'}</span>
+                <span>{isAdding ? 'Adding project…' : 'Add project'}</span>
               </Button>
             </div>
           </Command>
@@ -260,7 +260,7 @@ export default function RepoCombobox({
       </Popover>
 
       {showStandaloneAddButton ? (
-        /* Why: keep the add-repo action visible even when the repo selector is
+        /* Why: keep the add-project action visible even when the project selector is
             collapsed so adding a new source stays one click away in the compact composer header. */
         <Button
           type="button"
@@ -269,7 +269,7 @@ export default function RepoCombobox({
           disabled={isAdding}
           onClick={() => void handleAddFolder()}
           className="size-9 shrink-0 p-0"
-          aria-label={isAdding ? 'Adding folder or repository' : 'Add folder or repository'}
+          aria-label={isAdding ? 'Adding project' : 'Add project'}
         >
           <FolderPlus className="size-3.5" />
         </Button>

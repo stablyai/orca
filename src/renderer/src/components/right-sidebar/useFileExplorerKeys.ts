@@ -58,8 +58,10 @@ export function useFileExplorerKeys(opts: {
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
+  selectedNodes: TreeNode[]
   startRename: (node: TreeNode) => void
   requestDelete: (node: TreeNode) => void
+  requestDeleteAll: (nodes: TreeNode[]) => void
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -73,10 +75,14 @@ export function useFileExplorerKeys(opts: {
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
+  const selectedNodesRef = useRef(opts.selectedNodes)
+  selectedNodesRef.current = opts.selectedNodes
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
   requestDeleteRef.current = opts.requestDelete
+  const requestDeleteAllRef = useRef(opts.requestDeleteAll)
+  requestDeleteAllRef.current = opts.requestDeleteAll
 
   useEffect(() => {
     // Find the node that the focused button represents (for bare-key shortcuts).
@@ -151,7 +157,9 @@ export function useFileExplorerKeys(opts: {
             : matchesLegacyFileDeleteShortcut(e)
           if (wantsDelete) {
             e.preventDefault()
-            requestDeleteRef.current(node)
+            requestDeleteAllRef.current(
+              selectedNodesRef.current.length > 1 ? selectedNodesRef.current : [node]
+            )
             return
           }
         }

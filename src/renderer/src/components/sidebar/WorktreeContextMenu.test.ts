@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasSleepableWorkspaceActivity,
+  isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
+  shouldRemoveFolderProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick
 } from './WorktreeContextMenu'
 
@@ -111,5 +113,21 @@ describe('hasSleepableWorkspaceActivity', () => {
     expect(hasSleepableWorkspaceActivity('wt-1', {}, {}, { 'wt-1': [{ id: 'browser-1' }] })).toBe(
       true
     )
+  })
+})
+
+describe('folder workspace context deletes', () => {
+  it('routes only the folder root row to project removal', () => {
+    expect(shouldRemoveFolderProjectFromContextMenu(true, { isMainWorktree: true })).toBe(true)
+    expect(shouldRemoveFolderProjectFromContextMenu(true, { isMainWorktree: false })).toBe(false)
+    expect(shouldRemoveFolderProjectFromContextMenu(false, { isMainWorktree: true })).toBe(false)
+  })
+
+  it('treats additional folder workspace rows as deletable workspace rows', () => {
+    const folderRepo = { kind: 'folder' as const }
+
+    expect(isContextWorktreeDeletable({ isMainWorktree: false }, folderRepo)).toBe(true)
+    expect(isContextWorktreeDeletable({ isMainWorktree: true }, folderRepo)).toBe(false)
+    expect(isContextWorktreeDeletable({ isMainWorktree: false }, null)).toBe(false)
   })
 })

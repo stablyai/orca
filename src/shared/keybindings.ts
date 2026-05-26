@@ -50,6 +50,7 @@ export type KeybindingActionId =
   | 'tab.newTerminal'
   | 'tab.newBrowser'
   | 'tab.newMarkdown'
+  | 'tab.openMarkdown'
   | 'tab.close'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -71,7 +72,6 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
-  | 'composer.addAttachment'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.paste'
@@ -79,6 +79,7 @@ export type KeybindingActionId =
   | 'terminal.clear'
   | 'terminal.focusNextPane'
   | 'terminal.focusPreviousPane'
+  | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
   | 'terminal.closePane'
   | 'terminal.splitRight'
@@ -316,7 +317,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'floating terminal', 'terminal'],
-    defaultBindings: platformBindings(['Mod+Alt+T']),
+    defaultBindings: platformBindings(['Mod+Alt+A']),
     allowInTerminal: true
   },
   {
@@ -384,6 +385,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'new'],
     defaultBindings: platformBindings(['Mod+Shift+M'])
+  },
+  {
+    id: 'tab.openMarkdown',
+    title: 'Open markdown tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'open'],
+    defaultBindings: platformBindings(['Mod+Shift+O'])
   },
   {
     id: 'tab.close',
@@ -566,14 +575,6 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     allowBareKeybindings: true
   },
   {
-    id: 'composer.addAttachment',
-    title: 'Add Attachment',
-    group: 'Composer',
-    scope: 'composer',
-    searchKeywords: ['shortcut', 'composer', 'attachment', 'upload'],
-    defaultBindings: platformBindings(['Mod+U'])
-  },
-  {
     id: 'settings.search',
     title: 'Search Settings',
     group: 'Settings',
@@ -632,6 +633,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
     defaultBindings: platformBindings(['Mod+BracketLeft'])
+  },
+  {
+    id: 'terminal.equalizePaneSizes',
+    title: 'Equalize pane sizes',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.expandPane',

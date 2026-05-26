@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSubsectionHeader } from './SettingsFormControls'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -62,14 +63,11 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
   return (
     <div className="space-y-6">
-      <section className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Task Sources</h3>
-          <p className="text-xs text-muted-foreground">
-            Choose which task providers appear in the Tasks page source picker and sidebar
-            shortcuts. At least one provider must stay visible.
-          </p>
-        </div>
+      <section className="space-y-3">
+        <SettingsSubsectionHeader
+          title="Task Sources"
+          description="Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible."
+        />
 
         <SearchableSetting
           title="Task Providers"
@@ -84,7 +82,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'display',
             'hide'
           ]}
-          className="grid gap-2"
+          className="grid gap-2 py-2"
         >
           {TASK_PROVIDER_OPTIONS.map((option) => {
             const enabled = visibleProviders.includes(option.id)

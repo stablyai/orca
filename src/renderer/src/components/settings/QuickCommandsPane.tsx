@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import type {
   GlobalSettings,
@@ -17,13 +17,14 @@ import { Button } from '../ui/button'
 import { Command, CommandItem, CommandList } from '../ui/command'
 import { Label } from '../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import RepoDotLabel from '../repo/RepoDotLabel'
+import RepoBadgeLabel, { RepoBadgeMark } from '../repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  addCommandIntentSignal?: number
 }
 
 const GLOBAL_SCOPE_KEY = '__global__'
@@ -43,6 +44,13 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
   return repo.displayName || repo.path
 }
 
+export function shouldOpenQuickCommandAddIntent(
+  addCommandIntentSignal: number | undefined,
+  consumedAddIntentSignal: number
+): boolean {
+  return Boolean(addCommandIntentSignal && consumedAddIntentSignal !== addCommandIntentSignal)
+}
+
 function getScopeLabel(
   scope: TerminalQuickCommandScope,
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
@@ -56,7 +64,8 @@ function getScopeLabel(
 
 export function QuickCommandsPane({
   settings,
-  updateSettings
+  updateSettings,
+  addCommandIntentSignal
 }: QuickCommandsPaneProps): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -64,6 +73,7 @@ export function QuickCommandsPane({
   const confirm = useConfirmationDialog()
 
   const [editor, setEditor] = useState<EditorState>(null)
+  const consumedAddIntentSignalRef = useRef(0)
   // Why: `null` means "show all" (sticky-all), independent of the current repo
   // list — mirrors the tasks-page repo combobox so newly added repos appear
   // automatically rather than being silently excluded.
@@ -90,7 +100,7 @@ export function QuickCommandsPane({
     return effectiveSelection.has(scope.repoId)
   })
 
-  const createDraftForCurrentFilter = (): TerminalQuickCommand => {
+  const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
     // Why: when the user has narrowed to a single repo scope, the natural
     // intent for "Add Command" is to create one in that repo. When the filter
     // is narrowed to Global-only, honor that. Otherwise prefer the active
@@ -108,7 +118,19 @@ export function QuickCommandsPane({
       return createTerminalQuickCommandDraft({ type: 'repo', repoId: activeRepoId })
     }
     return createTerminalQuickCommandDraft({ type: 'global' })
-  }
+  }, [activeRepoId, effectiveSelection, repoById, showAll])
+
+  useEffect(() => {
+    const intentSignal = addCommandIntentSignal
+    if (
+      typeof intentSignal !== 'number' ||
+      !shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+    ) {
+      return
+    }
+    consumedAddIntentSignalRef.current = intentSignal
+    setEditor({ mode: 'add', command: createDraftForCurrentFilter() })
+  }, [addCommandIntentSignal, createDraftForCurrentFilter])
 
   const toggleScope = (key: string): void => {
     const current = new Set(effectiveSelection)
@@ -184,7 +206,7 @@ export function QuickCommandsPane({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 py-2">
         <div className="space-y-1">
           <Label>Saved Commands</Label>
           <p className="text-xs text-muted-foreground">
@@ -270,7 +292,7 @@ export function QuickCommandsPane({
                           isSelected ? 'opacity-70' : 'opacity-0'
                         )}
                       />
-                      <RepoDotLabel
+                      <RepoBadgeLabel
                         name={getRepoLabel(repo)}
                         color={repo.badgeColor}
                         className="max-w-full"
@@ -284,7 +306,7 @@ export function QuickCommandsPane({
         </Popover>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
         {visibleCommands.length === 0 ? (
           <div className="px-3 py-6 text-sm text-muted-foreground">
             {commands.length === 0
@@ -292,11 +314,14 @@ export function QuickCommandsPane({
               : 'No commands in the selected scopes.'}
           </div>
         ) : (
-          <div className="max-h-[60vh] divide-y divide-border/50 overflow-y-auto scrollbar-sleek">
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
             {visibleCommands.map((command) => {
               const scope = getTerminalQuickCommandScope(command)
               return (
-                <div key={command.id} className="flex items-center gap-3 px-3 py-2">
+                <div
+                  key={command.id}
+                  className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="truncate text-sm font-medium">
@@ -305,13 +330,7 @@ export function QuickCommandsPane({
                       <Badge variant="outline" className="max-w-44 gap-1.5">
                         {scope.type === 'repo' ? (
                           <>
-                            <span
-                              aria-hidden
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={{
-                                backgroundColor: repoById.get(scope.repoId)?.badgeColor
-                              }}
-                            />
+                            <RepoBadgeMark color={repoById.get(scope.repoId)?.badgeColor} />
                             <span className="truncate">{getScopeLabel(scope, repoById)}</span>
                           </>
                         ) : (
@@ -319,11 +338,11 @@ export function QuickCommandsPane({
                         )}
                       </Badge>
                     </div>
-                    <div className="truncate font-mono text-xs text-muted-foreground">
+                    <div className="truncate font-mono text-xs text-foreground/80">
                       {command.command || 'No command text'}
                     </div>
                   </div>
-                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                  <div className="shrink-0 text-[11px] font-medium text-foreground/75">
                     {command.appendEnter ? 'Enter' : 'Insert'}
                   </div>
                   <Button

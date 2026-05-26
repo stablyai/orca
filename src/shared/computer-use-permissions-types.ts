@@ -23,3 +23,7 @@ export type ComputerUsePermissionSetupResult = {
   permissions?: ComputerUsePermissionState[]
   nextStep?: string | null
 }
+
+export type ComputerUsePermissionResetResult = ComputerUsePermissionStatusResult & {
+  bundleId: string | null
+}

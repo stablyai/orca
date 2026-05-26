@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react'
-import type { CtrlTabOrderMode } from '../../../../shared/types'
 import {
   KEYBINDING_DEFINITIONS,
   findKeybindingConflicts,
@@ -18,12 +17,22 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { useAppStore } from '../../store'
-import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
-import { SearchableSetting } from './SearchableSetting'
-import { ShortcutBindingRow, type ShortcutTerminalStatus } from './ShortcutBindingRow'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { SettingsSubsectionHeader } from './SettingsFormControls'
+import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import {
+  getShortcutSearchEntry,
+  matchesShortcutFilter,
+  matchesShortcutLocalSearch,
+  ShortcutFilterRail,
+  type ShortcutFilter,
+  type ShortcutGroupSummary,
+  type ShortcutRowsByGroup
+} from './ShortcutFilterRail'
+import { ShortcutRowsList } from './ShortcutRowsList'
+import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
+import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 
 type ShortcutGroup = {
   title: string
@@ -36,38 +45,6 @@ const platform: NodeJS.Platform = isMac
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
-
-const CTRL_TAB_BEHAVIOR_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Recent Tab Order',
-  description: 'Choose recent or sequential tab switching.',
-  keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
-}
-
-const TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY: SettingsSearchEntry = {
-  title: 'Shortcuts in Terminal',
-  description: 'Choose whether Orca or the focused terminal wins when shortcuts overlap.',
-  keywords: [
-    'shortcut',
-    'keyboard',
-    'terminal',
-    'tui',
-    'shell',
-    'agent',
-    'conflict',
-    'orca first',
-    'terminal first'
-  ]
-}
-
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...KEYBINDING_DEFINITIONS.map((item) => ({
-    title: item.title,
-    description: `${item.group} shortcut`,
-    keywords: [...item.searchKeywords]
-  })),
-  TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY,
-  CTRL_TAB_BEHAVIOR_SEARCH_ENTRY
-]
 
 function groupDefinitions(): ShortcutGroup[] {
   const groups = new Map<string, KeybindingDefinition[]>()
@@ -144,7 +121,6 @@ function getShortcutTerminalStatus(
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const ctrlTabOrderMode = useAppStore((state) => state.settings?.ctrlTabOrderMode ?? 'mru')
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
@@ -156,22 +132,11 @@ export function ShortcutsPane(): React.JSX.Element {
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
+  const [shortcutQuery, setShortcutQuery] = useState('')
+  const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
+  const [activeShortcutGroup, setActiveShortcutGroup] = useState<string>('all')
 
   const groups = useMemo(groupDefinitions, [])
-  const groupEntries = useMemo<Record<string, SettingsSearchEntry[]>>(
-    () =>
-      Object.fromEntries(
-        groups.map((group) => [
-          group.title,
-          group.items.map((item) => ({
-            title: item.title,
-            description: `${group.title} shortcut`,
-            keywords: [...item.searchKeywords]
-          }))
-        ])
-      ),
-    [groups]
-  )
   const conflictByAction = useMemo(() => {
     const result = new Map<KeybindingActionId, string[]>()
     for (const conflict of findKeybindingConflicts(platform, keybindings)) {
@@ -187,6 +152,76 @@ export function ShortcutsPane(): React.JSX.Element {
     }
     return result
   }, [keybindings])
+  const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
+    () =>
+      groups.map((group) => ({
+        title: group.title,
+        rows: group.items.map((item) => {
+          const effective = getEffectiveKeybindingsForAction(item.id, platform, keybindings)
+          const modified = hasOwnBindingOverride(keybindings, item.id)
+          const warnings = conflictByAction.get(item.id) ?? []
+          return {
+            item,
+            groupTitle: group.title,
+            effective,
+            modified,
+            warnings,
+            terminalStatus: getShortcutTerminalStatus(
+              item,
+              terminalShortcutPolicy,
+              effective.length > 0
+            )
+          }
+        })
+      })),
+    [conflictByAction, groups, keybindings, terminalShortcutPolicy]
+  )
+  const shortcutSearchQuery = normalizeSettingsSearchQuery(shortcutQuery)
+  const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
+  const baseVisibleRows = shortcutRows.filter(
+    (row) =>
+      matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+      matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
+  )
+  const filterCounts: Record<ShortcutFilter, number> = {
+    all: baseVisibleRows.length,
+    modified: baseVisibleRows.filter((row) => row.modified).length,
+    unassigned: baseVisibleRows.filter((row) => row.effective.length === 0).length,
+    conflicts: baseVisibleRows.filter((row) => row.warnings.length > 0).length
+  }
+  const groupSummaries: ShortcutGroupSummary[] = [
+    {
+      id: 'all',
+      label: 'All shortcuts',
+      count: baseVisibleRows.filter((row) => matchesShortcutFilter(row, shortcutFilter)).length
+    },
+    ...shortcutGroups.map((group) => ({
+      id: group.title,
+      label: group.title,
+      count: group.rows.filter(
+        (row) =>
+          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
+          matchesShortcutFilter(row, shortcutFilter)
+      ).length
+    }))
+  ]
+  const visibleShortcutGroups = shortcutGroups
+    .map((group) => ({
+      title: group.title,
+      rows: group.rows.filter(
+        (row) =>
+          (activeShortcutGroup === 'all' || row.groupTitle === activeShortcutGroup) &&
+          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
+          matchesShortcutFilter(row, shortcutFilter)
+      )
+    }))
+    .filter((group) => group.rows.length > 0)
+  const visibleShortcutCount = visibleShortcutGroups.reduce(
+    (sum, group) => sum + group.rows.length,
+    0
+  )
 
   const saveBindings = async (
     actionId: KeybindingActionId,
@@ -287,132 +322,58 @@ export function ShortcutsPane(): React.JSX.Element {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
   }
 
+  const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
+
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
-          <p className="text-xs text-muted-foreground">
-            Customize shortcuts visually or edit the file directly.
-          </p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
+      <section className="flex min-h-0 flex-1 flex-col space-y-3">
+        <SettingsSubsectionHeader
+          title="Keyboard Shortcuts"
+          description="Customize shortcuts visually or edit the file directly."
+        />
 
-        {matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY) ? (
-          <SearchableSetting
-            id="terminal-shortcut-policy"
-            title="Shortcuts in Terminal"
-            description="Choose whether Orca or the focused terminal wins when shortcuts overlap."
-            keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
-            className="flex items-center justify-between gap-4 px-1 py-2"
-          >
-            <div className="space-y-0.5">
-              <Label>Shortcuts in Terminal</Label>
-              <p className="text-xs text-muted-foreground">
-                Orca first keeps app shortcuts active in TUIs. Terminal first lets shell shortcuts
-                win unless a shortcut is marked terminal-active.
-              </p>
-            </div>
-            <Select
-              value={terminalShortcutPolicy}
-              onValueChange={(value) =>
-                void updateSettings({
-                  terminalShortcutPolicy: value as TerminalShortcutPolicy
-                })
-              }
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="orca-first">Orca first</SelectItem>
-                <SelectItem value="terminal-first">Terminal first</SelectItem>
-              </SelectContent>
-            </Select>
-          </SearchableSetting>
-        ) : null}
+        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+          <ShortcutFilterRail
+            query={shortcutQuery}
+            onQueryChange={setShortcutQuery}
+            filter={shortcutFilter}
+            onFilterChange={setShortcutFilter}
+            activeGroup={activeShortcutGroup}
+            onActiveGroupChange={setActiveShortcutGroup}
+            filterCounts={filterCounts}
+            groupSummaries={groupSummaries}
+            visibleCount={visibleShortcutCount}
+            totalCount={shortcutRows.length}
+          />
 
-        {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRY) ? (
-          <SearchableSetting
-            title="Recent Tab Order"
-            description="Choose recent or sequential tab switching."
-            keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRY.keywords}
-            className="flex items-center justify-between gap-4 px-1 py-2"
-          >
-            <div className="space-y-0.5">
-              <Label>Recent Tab Order</Label>
-              <p className="text-xs text-muted-foreground">
-                Choose whether recent tab switching follows recent use or the tab strip order.
-              </p>
-            </div>
-            <Select
-              value={ctrlTabOrderMode}
-              onValueChange={(value) =>
-                void updateSettings({ ctrlTabOrderMode: value as CtrlTabOrderMode })
-              }
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mru">Most recent</SelectItem>
-                <SelectItem value="sequential">Tab strip order</SelectItem>
-              </SelectContent>
-            </Select>
-          </SearchableSetting>
-        ) : null}
+          <div className="flex min-h-0 min-w-0 flex-col gap-5">
+            {showPolicy ? (
+              <ShortcutTerminalPolicyControl
+                terminalShortcutPolicy={terminalShortcutPolicy}
+                keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+                updateSettings={updateSettings}
+              />
+            ) : null}
 
-        <KeybindingsFileActions />
+            <KeybindingsFileActions />
 
-        <div className="grid gap-8">
-          {groups
-            .filter((group) => matchesSettingsSearch(searchQuery, groupEntries[group.title] ?? []))
-            .map((group) => (
-              <div key={group.title} className="space-y-3">
-                <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-                  {group.title}
-                </h3>
-                <div className="grid gap-2">
-                  {group.items.map((item) => {
-                    const effective = getEffectiveKeybindingsForAction(
-                      item.id,
-                      platform,
-                      keybindings
-                    )
-                    const modified = hasOwnBindingOverride(keybindings, item.id)
-                    const warnings = conflictByAction.get(item.id) ?? []
-                    const terminalStatus = getShortcutTerminalStatus(
-                      item,
-                      terminalShortcutPolicy,
-                      effective.length > 0
-                    )
-
-                    return (
-                      <ShortcutBindingRow
-                        key={item.id}
-                        item={item}
-                        groupTitle={group.title}
-                        platform={platform}
-                        effective={effective}
-                        modified={modified}
-                        error={errors[item.id]}
-                        warnings={warnings}
-                        recording={recordingActionId === item.id}
-                        terminalStatus={terminalStatus}
-                        onStartRecording={(actionId) => {
-                          setRecordingActionId(actionId)
-                          clearError(actionId)
-                        }}
-                        onCancelRecording={() => setRecordingActionId(null)}
-                        onCapture={(actionId, input) => void captureBinding(actionId, input)}
-                        onClearError={clearError}
-                        onDisable={(actionId) => void disableBinding(actionId)}
-                        onReset={(actionId) => void resetBinding(actionId)}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
+            <ShortcutRowsList
+              className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+              groups={visibleShortcutGroups}
+              platform={platform}
+              errors={errors}
+              recordingActionId={recordingActionId}
+              onStartRecording={(actionId) => {
+                setRecordingActionId(actionId)
+                clearError(actionId)
+              }}
+              onCancelRecording={() => setRecordingActionId(null)}
+              onCapture={(actionId, input) => void captureBinding(actionId, input)}
+              onClearError={clearError}
+              onDisable={(actionId) => void disableBinding(actionId)}
+              onReset={(actionId) => void resetBinding(actionId)}
+            />
+          </div>
         </div>
       </section>
     </div>

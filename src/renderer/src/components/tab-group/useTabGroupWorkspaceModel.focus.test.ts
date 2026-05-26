@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 
 const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
+  dispatchEvent: vi.fn(),
   dropUnifiedTab: vi.fn(),
   focusGroup: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
@@ -155,6 +157,17 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetStore()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('window', {
+      dispatchEvent: mocks.dispatchEvent
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('returns keyboard focus to xterm after a terminal tab is activated', async () => {
@@ -168,5 +181,20 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('toggles pane expansion from the split-group tab bar collapse button', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.toggleTerminalPaneExpand('terminal-1')
+
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
+    expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    const event = mocks.dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{ tabId: string }>
+    expect(event.type).toBe(TOGGLE_TERMINAL_PANE_EXPAND_EVENT)
+    expect(event.detail).toEqual({ tabId: 'terminal-1' })
   })
 })

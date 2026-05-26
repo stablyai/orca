@@ -39,6 +39,44 @@ function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
+async function persistWorktreeCreationBase(
+  worktreePath: string,
+  branch: string,
+  effectiveBase: string
+): Promise<void> {
+  const configKey = `branch.${branch}.base`
+  try {
+    await gitExecFileAsync(['config', '--local', '--replace-all', configKey, effectiveBase], {
+      cwd: worktreePath
+    })
+  } catch (error) {
+    console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
+    try {
+      // Why: reused branch names may carry stale base metadata; if replacement
+      // fails, remove the old value so consumers do not trust outdated lineage.
+      await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
+        cwd: worktreePath
+      })
+    } catch (unsetError) {
+      console.warn(
+        `addWorktree: failed to unset stale ${configKey} for ${worktreePath}`,
+        unsetError
+      )
+    }
+  }
+}
+
+async function unsetWorktreeCreationBase(worktreePath: string, branch: string): Promise<void> {
+  try {
+    await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
+      cwd: worktreePath
+    })
+  } catch {
+    // Best-effort cleanup; missing keys and locked config both leave the
+    // original sparse setup error as the actionable failure.
+  }
+}
+
 function areWorktreePathsEqual(
   leftPath: string,
   rightPath: string,
@@ -160,9 +198,10 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
  * @param worktreePath - Absolute path where the worktree will be created
  * @param branch - Branch name for the new worktree
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
- * @remarks Side effect: passes `--no-track` and may write `push.autoSetupRemote=true`
- * to the repo's shared config (best-effort, warn-only on failure; preserves any
- * user-set value at any scope). See body comment below for the full rationale.
+ * @remarks Side effect: passes `--no-track`, writes `branch.<branch>.base`
+ * for new-branch worktrees with a base ref, and may write
+ * `push.autoSetupRemote=true` to the repo's shared config. Config writes are
+ * best-effort and warn-only. See body comments below for the full rationale.
  */
 export async function addWorktree(
   repoPath: string,
@@ -228,6 +267,7 @@ export async function addWorktree(
   }
 
   const args = ['worktree', 'add']
+  let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
   }
@@ -242,7 +282,7 @@ export async function addWorktree(
     // below for the terminal ergonomics.
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
-      const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+      effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
         hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
       )
       args.push(effectiveBase)
@@ -254,7 +294,11 @@ export async function addWorktree(
     return
   }
 
-  // SSH parity: src/relay/git-handler.ts addWorktree mirrors this exact
+  if (effectiveBase) {
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase)
+  }
+
+  // SSH parity: src/relay/git-handler-worktree-ops.ts addWorktreeOp mirrors this exact
   // probe-and-write state machine. If you change the logic here, update
   // the relay handler in lockstep so local and SSH paths stay aligned.
   //
@@ -340,6 +384,9 @@ export async function addSparseWorktree(
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
     if (created) {
+      if (!options.checkoutExistingBranch) {
+        await unsetWorktreeCreationBase(worktreePath, branch)
+      }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch

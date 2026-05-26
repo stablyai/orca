@@ -39,3 +39,18 @@ export function useShortcutKeys(actionId: KeybindingActionId): string[] {
   const keybindings = useAppStore((state) => state.keybindings)
   return formatShortcutKeys(actionId, keybindings)
 }
+
+export function formatShortcutKeyCombos(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string[][] {
+  const platform = getShortcutPlatform()
+  return getEffectiveKeybindingsForAction(actionId, platform, overrides).map((binding) =>
+    formatKeybinding(binding, platform)
+  )
+}
+
+export function useShortcutKeyCombos(actionId: KeybindingActionId): string[][] {
+  const keybindings = useAppStore((state) => state.keybindings)
+  return formatShortcutKeyCombos(actionId, keybindings)
+}

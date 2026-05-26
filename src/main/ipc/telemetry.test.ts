@@ -221,9 +221,10 @@ describe('telemetry IPC handlers', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
     const handler = handlers.get('telemetry:track')!
-    handler({}, 'onboarding_step_viewed', { step: 1 })
+    handler({}, 'onboarding_step_viewed', { step: 1, value_kind: 'agent' })
     expect(trackMock).toHaveBeenCalledWith('onboarding_step_viewed', {
       step: 1,
+      value_kind: 'agent',
       cohort: 'fresh_install'
     })
   })

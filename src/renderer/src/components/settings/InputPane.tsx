@@ -1,29 +1,8 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
-import type { SettingsSearchEntry } from './settings-search'
 import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
-
-export const INPUT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Middle-click Paste from Selection',
-    description:
-      'Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.',
-    keywords: [
-      'input',
-      'editing',
-      'selection',
-      'primary selection',
-      'middle click',
-      'middle mouse',
-      'paste',
-      'clipboard',
-      'x11',
-      'linux',
-      'macos'
-    ]
-  }
-]
+export { INPUT_PANE_SEARCH_ENTRIES } from './input-search'
 
 type InputPaneProps = {
   settings: GlobalSettings
@@ -53,7 +32,7 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
           'linux',
           'macos'
         ]}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Middle-click Paste from Selection</Label>

@@ -18,6 +18,10 @@ import {
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
+import {
+  WorktreeCardDetailSection,
+  WorktreeCardDetailSectionContent
+} from './WorktreeCardDetailSection'
 
 type WorktreeCardPortsProps = {
   ports: WorkspacePort[]
@@ -213,7 +217,7 @@ export function WorktreeCardPortsDetails({
   }
 
   return (
-    <section className="space-y-1.5">
+    <WorktreeCardDetailSection>
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
         <span>Live Ports</span>
@@ -224,12 +228,12 @@ export function WorktreeCardPortsDetails({
           <span className="font-normal tabular-nums text-muted-foreground/70">{ports.length}</span>
         </div>
       </div>
-      <div className="space-y-0.5">
+      <WorktreeCardDetailSectionContent className="space-y-0.5">
         {ports.map((port) => (
           <WorktreePortRow key={port.id} port={port} />
         ))}
-      </div>
-    </section>
+      </WorktreeCardDetailSectionContent>
+    </WorktreeCardDetailSection>
   )
 }
 

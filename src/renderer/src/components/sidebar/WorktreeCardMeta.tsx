@@ -14,6 +14,10 @@ import CommentMarkdown from './CommentMarkdown'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
+  WorktreeCardDetailSection,
+  WorktreeCardDetailSectionContent
+} from './WorktreeCardDetailSection'
+import {
   IssueStateBadge,
   LinearStateBadge,
   ReviewChecksBadge,
@@ -300,7 +304,7 @@ export function WorktreeCardDetailsHover({
       >
         <SelectedTextCopyMenu className="space-y-3">
           {issue && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<CircleDot className="size-3 text-muted-foreground" />}
                 label={`Issue #${issue.number}`}
@@ -325,7 +329,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {issue.title}
                 </div>
@@ -339,12 +343,12 @@ export function WorktreeCardDetailsHover({
                     ))}
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {linearIssue && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<LinearIcon className="size-3 text-muted-foreground" />}
                 label={`Linear ${linearIssue.identifier}`}
@@ -366,7 +370,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {linearIssue.title}
                 </div>
@@ -383,12 +387,12 @@ export function WorktreeCardDetailsHover({
                     ))}
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {review && reviewLabel && reviewProvider && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<ReviewIcon review={review} className="size-3" />}
                 label={`${reviewLabel} #${review.number}`}
@@ -410,7 +414,7 @@ export function WorktreeCardDetailsHover({
                   </>
                 }
               />
-              <div className="space-y-1.5">
+              <WorktreeCardDetailSectionContent className="space-y-1.5">
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {review.title}
                 </div>
@@ -420,12 +424,12 @@ export function WorktreeCardDetailsHover({
                     <ReviewChecksBadge status={review.status} />
                   </div>
                 )}
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {hasComment(comment) && (
-            <section className="space-y-1.5">
+            <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
                 label="Notes"
@@ -435,13 +439,13 @@ export function WorktreeCardDetailsHover({
                   </MetadataActionIcon>
                 }
               />
-              <div className="space-y-2">
+              <WorktreeCardDetailSectionContent className="space-y-2">
                 <CommentMarkdown
                   content={comment ?? ''}
                   className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
                 />
-              </div>
-            </section>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
           )}
 
           {detailsAfter}

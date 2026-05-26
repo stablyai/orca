@@ -9,6 +9,9 @@ export default defineConfig({
   // /orca/web-index.html, so built assets must resolve relative to the page.
   base: './',
   plugins: [react(), tailwindcss()],
+  define: {
+    ORCA_FEATURE_WALL_ENABLED: 'true'
+  },
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),

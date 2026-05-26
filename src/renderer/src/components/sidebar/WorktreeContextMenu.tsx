@@ -29,7 +29,7 @@ import {
 import { useAppStore } from '@/store'
 import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Worktree } from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
@@ -99,6 +99,20 @@ function hasSleepableWorkspaceActivity(
   const hasLiveTerminal = tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
   const hasBrowser = (browserTabsByWorktree[worktreeId] ?? []).length > 0
   return hasLiveTerminal || hasBrowser
+}
+
+function shouldRemoveFolderProjectFromContextMenu(
+  isFolder: boolean,
+  worktree: Pick<Worktree, 'isMainWorktree'>
+): boolean {
+  return isFolder && worktree.isMainWorktree
+}
+
+function isContextWorktreeDeletable(
+  worktree: Pick<Worktree, 'isMainWorktree'>,
+  repo: Pick<Repo, 'kind'> | null | undefined
+): boolean {
+  return repo != null && !worktree.isMainWorktree
 }
 
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
@@ -218,10 +232,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     () =>
       activeContextWorktrees.filter((item) => {
         const itemRepo = repoMap.get(item.repoId)
-        return !item.isMainWorktree && itemRepo != null && !isFolderRepo(itemRepo)
+        return isContextWorktreeDeletable(item, itemRepo)
       }),
     [activeContextWorktrees, repoMap]
   )
+  const removesFolderProject = shouldRemoveFolderProjectFromContextMenu(isFolder, worktree)
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -325,10 +340,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         restoreSidebarPosition()
         return
       }
-      if (isFolder) {
-        // Why: folder mode reuses the worktree row UI for a synthetic root entry,
+      if (removesFolderProject) {
+        // Why: folder mode reuses the worktree row UI for the root entry,
         // but users still expect "remove" to disconnect the folder from Orca,
-        // not to run git-style delete semantics against the real folder on disk.
+        // not to delete the selected logical workspace metadata.
         openModal('confirm-remove-folder', {
           repoId: worktree.repoId,
           displayName: worktree.displayName
@@ -345,9 +360,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     }, 50)
   }, [
     batchDeleteWorktrees,
-    isFolder,
     isMultiContext,
     openModal,
+    removesFolderProject,
     setMenuOpenState,
     worktree.displayName,
     worktree.id,
@@ -565,7 +580,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ? 'Deleting…'
               : isMultiContext
                 ? deleteLabel
-                : isFolder
+                : removesFolderProject
                   ? 'Remove Folder from Orca'
                   : 'Delete'}
           </DropdownMenuItem>
@@ -581,6 +596,8 @@ export {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
+  isContextWorktreeDeletable,
+  shouldRemoveFolderProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

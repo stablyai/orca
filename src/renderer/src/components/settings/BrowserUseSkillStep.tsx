@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { StepBadge } from './BrowserUseStepBadge'
 
@@ -7,6 +8,8 @@ type Props = {
   skillLoading: boolean
   skillError: string | null
   disabled?: boolean
+  preInstallNotice?: ReactNode
+  onBeforeOpenTerminal?: () => void | Promise<void>
   onRecheck: () => void | Promise<void>
 }
 
@@ -16,24 +19,26 @@ export function BrowserUseSkillStep({
   skillLoading,
   skillError,
   disabled = false,
+  preInstallNotice,
+  onBeforeOpenTerminal,
   onRecheck
 }: Props): React.JSX.Element {
   return (
     <AgentSkillSetupPanel
       variant="inline"
       title="Browser Use skill"
-      detectedDescription="Detected on this machine. Agents can drive Orca's browser."
-      missingDescription="Agents need this skill before they can drive Orca's browser. If you already installed it, click Re-check instead of running the installer again."
+      description="Enables agents to navigate and verify pages in Orca's browser."
       command={command}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="settings-browser-use-skill-terminal"
       installed={skillDetected}
-      detected={skillDetected}
       loading={skillLoading}
       error={skillError}
       installDisabled={disabled}
       leading={<StepBadge index={2} state={skillDetected ? 'done' : 'pending'} />}
+      preInstallNotice={preInstallNotice}
+      onBeforeOpenTerminal={onBeforeOpenTerminal}
       onRecheck={onRecheck}
     />
   )

@@ -189,6 +189,22 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('resolves equalize pane sizes only when users assign it', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: '=', code: 'Equal', metaKey: true }), true)
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: '=', code: 'Equal', metaKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.equalizePaneSizes': ['Mod+Equal'] }
+      )
+    ).toEqual({ type: 'equalizePaneSizes' })
+  })
+
   it('lets Ctrl+D pass through as EOF on non-Mac, requires Shift for split (#586)', () => {
     // Ctrl+D without Shift on Windows/Linux must NOT trigger split — it's EOF
     expect(

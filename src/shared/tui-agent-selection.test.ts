@@ -9,6 +9,7 @@ describe('pickTuiAgent', () => {
   it('falls back in desktop catalog order when the preference is absent or stale', () => {
     expect(pickTuiAgent(null, ['cursor', 'codex'])).toBe('codex')
     expect(pickTuiAgent('gemini', ['cursor', 'codex'])).toBe('codex')
+    expect(pickTuiAgent(null, ['continue', 'command-code'])).toBe('command-code')
   })
 
   it('respects the explicit blank terminal preference', () => {

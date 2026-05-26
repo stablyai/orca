@@ -24,13 +24,13 @@ describe('repo header create state', () => {
       })
     ).toEqual({
       disabled: false,
-      tooltip: 'Create workspace for orca',
-      ariaLabel: 'Create workspace for orca',
+      tooltip: 'Create new worktree for orca',
+      ariaLabel: 'Create new worktree for orca',
       requiresSshReconnect: false
     })
   })
 
-  it('disables folder repos', () => {
+  it('allows folder repos as workspace creates', () => {
     expect(
       getRepoHeaderCreateState({
         repo: makeRepo({ kind: 'folder' }),
@@ -38,8 +38,8 @@ describe('repo header create state', () => {
         sshStatus: null
       })
     ).toMatchObject({
-      disabled: true,
-      tooltip: 'docs is opened as a folder',
+      disabled: false,
+      tooltip: 'Create workspace for docs',
       requiresSshReconnect: false
     })
   })
@@ -53,7 +53,7 @@ describe('repo header create state', () => {
       })
     ).toMatchObject({
       disabled: false,
-      tooltip: 'Create workspace for remote',
+      tooltip: 'Create new worktree for remote',
       requiresSshReconnect: false
     })
   })

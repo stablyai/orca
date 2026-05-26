@@ -48,7 +48,12 @@ export default defineConfig({
           index: resolve('src/main/index.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
-          'stt-worker': resolve('src/main/speech/stt-worker.ts')
+          'stt-worker': resolve('src/main/speech/stt-worker.ts'),
+          // Why: electron-vite cleans out/main in dev. The dev CLI imports
+          // this path for `orca agent hooks ...`, so it must survive rebuilds.
+          'agent-hooks/managed-agent-hook-controls': resolve(
+            'src/main/agent-hooks/managed-agent-hook-controls.ts'
+          )
         }
       }
     },

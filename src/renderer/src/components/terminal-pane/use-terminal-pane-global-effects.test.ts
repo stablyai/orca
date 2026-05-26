@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
+  requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
 }))
@@ -52,7 +53,8 @@ vi.mock('./pane-helpers', () => ({
 }))
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
-  flushTerminalOutput: mocks.flushTerminalOutput
+  flushTerminalOutput: mocks.flushTerminalOutput,
+  requestTerminalBacklogRecovery: mocks.requestTerminalBacklogRecovery
 }))
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
@@ -165,6 +167,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     mocks.flushTerminalOutput.mockImplementation((terminal: { name: string }) => {
       order.push(`flush:${terminal.name}`)
     })
+    mocks.requestTerminalBacklogRecovery.mockImplementation((terminal: { name: string }) => {
+      order.push(`recover:${terminal.name}`)
+    })
     mocks.captureScrollState.mockImplementation((terminal: { name: string }) => {
       order.push(`capture:${terminal.name}`)
       return { terminalName: terminal.name }
@@ -194,13 +199,21 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(order).toEqual([
       'capture:terminal-a',
       'capture:terminal-b',
+      'recover:terminal-a',
       'flush:terminal-a',
+      'recover:terminal-b',
       'flush:terminal-b',
       'resume',
       'fit-focus',
       'restore:terminal-a',
       'restore:terminal-b'
     ])
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
+      maxChars: 256 * 1024
+    })
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(2, terminalB, {
+      maxChars: 256 * 1024
+    })
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)

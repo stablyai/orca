@@ -13,6 +13,7 @@ import type {
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
@@ -116,7 +117,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         displayName: getRepoName(args.path),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
-        kind: repoKind
+        kind: repoKind,
+        ...(repoKind === 'git'
+          ? {
+              externalWorktreeVisibility: 'hide' as const,
+              externalWorktreeVisibilityLegacy: false
+            }
+          : {})
       }
 
       store.addRepo(repo)
@@ -216,7 +223,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind,
-        connectionId: args.connectionId
+        connectionId: args.connectionId,
+        ...(repoKind === 'git'
+          ? {
+              externalWorktreeVisibility: 'hide' as const,
+              externalWorktreeVisibilityLegacy: false
+            }
+          : {})
       }
 
       store.addRepo(repo)
@@ -414,7 +427,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
-        kind: repoKind
+        kind: repoKind,
+        ...(repoKind === 'git'
+          ? {
+              externalWorktreeVisibility: 'hide' as const,
+              externalWorktreeVisibilityLegacy: false
+            }
+          : {})
       }
 
       store.addRepo(repo)
@@ -458,11 +477,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             Repo,
             | 'displayName'
             | 'badgeColor'
+            | 'repoIcon'
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
+            | 'externalWorktreeVisibility'
+            | 'externalWorktreeVisibilityPromptDismissedAt'
           >
         >
       }
@@ -494,6 +516,30 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
         }
+      }
+      if ('repoIcon' in updates) {
+        const repoIcon = sanitizeRepoIcon(updates.repoIcon)
+        if (repoIcon === undefined) {
+          delete updates.repoIcon
+        } else {
+          updates.repoIcon = repoIcon
+        }
+      }
+      if (
+        'externalWorktreeVisibility' in updates &&
+        updates.externalWorktreeVisibility !== undefined &&
+        updates.externalWorktreeVisibility !== 'hide' &&
+        updates.externalWorktreeVisibility !== 'show'
+      ) {
+        delete updates.externalWorktreeVisibility
+      }
+      if (
+        'externalWorktreeVisibilityPromptDismissedAt' in updates &&
+        updates.externalWorktreeVisibilityPromptDismissedAt !== undefined &&
+        (typeof updates.externalWorktreeVisibilityPromptDismissedAt !== 'number' ||
+          !Number.isFinite(updates.externalWorktreeVisibilityPromptDismissedAt))
+      ) {
+        delete updates.externalWorktreeVisibilityPromptDismissedAt
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
@@ -695,7 +741,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         displayName: getRepoName(clonePath),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
-        kind: 'git'
+        kind: 'git',
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
       }
 
       store.addRepo(repo)

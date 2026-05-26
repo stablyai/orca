@@ -106,7 +106,9 @@ test.describe('Settings skill detection', () => {
     await section.getByRole('switch').click()
 
     await expect(section.getByText('Not installed', { exact: true })).toBeVisible()
-    await expect(section.getByText('Agents need this skill', { exact: false })).toBeVisible()
+    await expect(
+      section.getByText('Enables agents to hand off context and coordinate work through Orca.')
+    ).toBeVisible()
 
     await setMockSkillDiscovery(
       electronApp,
@@ -115,6 +117,8 @@ test.describe('Settings skill detection', () => {
     await section.getByRole('button', { name: 'Re-check' }).click()
 
     await expect(section.getByText('Installed', { exact: true })).toBeVisible()
-    await expect(section.getByText('Detected on this machine', { exact: false })).toBeVisible()
+    await expect(
+      section.getByText('Enables agents to hand off context and coordinate work through Orca.')
+    ).toBeVisible()
   })
 })

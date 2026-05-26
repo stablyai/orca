@@ -13,8 +13,11 @@ const PTY_TEXT_FALLBACK_MS = 750
 type OnboardingInlineCommandTerminalProps = {
   command: string
   title: string
-  description: string
+  description?: string
   ariaLabel: string
+  terminalHeightPx?: number
+  terminalTopMarginPx?: number
+  autoScrollIntoView?: boolean
   worktreeId?: string
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
@@ -25,6 +28,9 @@ export function OnboardingInlineCommandTerminal({
   title,
   description,
   ariaLabel,
+  terminalHeightPx = 280,
+  terminalTopMarginPx = 20,
+  autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
   onInteracted
@@ -72,6 +78,9 @@ export function OnboardingInlineCommandTerminal({
   }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
 
   useEffect(() => {
+    if (!autoScrollIntoView) {
+      return
+    }
     if (prefersReducedMotion) {
       const scrollFrame = window.requestAnimationFrame(() => {
         terminalSectionRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' })
@@ -85,7 +94,17 @@ export function OnboardingInlineCommandTerminal({
       window.requestAnimationFrame(() => setEntered(true))
     })
     return () => window.cancelAnimationFrame(enterFrame)
-  }, [prefersReducedMotion])
+  }, [autoScrollIntoView, prefersReducedMotion])
+
+  useEffect(() => {
+    if (autoScrollIntoView) {
+      return
+    }
+    const enterFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setEntered(true))
+    })
+    return () => window.cancelAnimationFrame(enterFrame)
+  }, [autoScrollIntoView])
 
   // Why: tracking scroll *during* the height transition is unavoidably
   // jumpy — ResizeObserver / rAF ticks land in pixel-sized chunks, and each
@@ -93,7 +112,7 @@ export function OnboardingInlineCommandTerminal({
   // the height has nearly settled fire a single native smooth scroll. The
   // browser eases that scroll itself, which is the smoothest path available.
   useEffect(() => {
-    if (!entered || prefersReducedMotion) {
+    if (!autoScrollIntoView || !entered || prefersReducedMotion) {
       return
     }
     const section = terminalSectionRef.current
@@ -104,16 +123,18 @@ export function OnboardingInlineCommandTerminal({
       section.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 500)
     return () => window.clearTimeout(scrollTimer)
-  }, [entered, prefersReducedMotion])
+  }, [autoScrollIntoView, entered, prefersReducedMotion])
 
   const insertCommand = useCallback(() => {
     if (!tabId) {
       return
     }
-    terminalSectionRef.current?.scrollIntoView({
-      behavior: 'auto',
-      block: 'nearest'
-    })
+    if (autoScrollIntoView) {
+      terminalSectionRef.current?.scrollIntoView({
+        behavior: 'auto',
+        block: 'nearest'
+      })
+    }
     window.dispatchEvent(
       new CustomEvent<PasteTerminalTextDetail>(PASTE_TERMINAL_TEXT_EVENT, {
         detail: {
@@ -123,7 +144,7 @@ export function OnboardingInlineCommandTerminal({
       })
     )
     focusTerminalTabSurface(tabId)
-  }, [command, tabId])
+  }, [autoScrollIntoView, command, tabId])
 
   useEffect(() => {
     if (!tabId || !cwd || autoInsertedRef.current === command) {
@@ -194,7 +215,7 @@ export function OnboardingInlineCommandTerminal({
       style={{
         gridTemplateRows: entered ? '1fr' : '0fr',
         opacity: entered ? 1 : 0,
-        marginTop: entered ? 20 : 0
+        marginTop: entered ? terminalTopMarginPx : 0
       }}
     >
       <section
@@ -202,11 +223,14 @@ export function OnboardingInlineCommandTerminal({
         aria-label={ariaLabel}
         className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
-        <div className="border-b border-border px-4 py-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
-        </div>
+        {description ? (
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+          </div>
+        ) : null}
         <div
-          className="relative h-[280px] min-h-0 bg-background"
+          className="relative min-h-0 bg-background"
+          style={{ height: terminalHeightPx }}
           onKeyDownCapture={(event) => onInteracted?.('keyboard', event)}
           onPointerDownCapture={() => onInteracted?.('pointer')}
         >

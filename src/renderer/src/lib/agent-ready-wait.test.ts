@@ -35,7 +35,7 @@ describe('waitForAgentReady', () => {
       hasChildProcesses: false
     })
 
-    await expect(waitForAgentReady('tab-1', 'claude', { timeoutMs: 1 })).resolves.toEqual({
+    await expect(waitForAgentReady('tab-1', 'claude', { timeoutMs: 100 })).resolves.toEqual({
       ready: true,
       reason: 'foreground-match'
     })

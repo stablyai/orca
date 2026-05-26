@@ -63,6 +63,22 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
 
+async function unsetRemoteWorktreeCreationBase(
+  provider: SshGitProvider,
+  worktreePath: string,
+  branchName: string
+): Promise<void> {
+  try {
+    await provider.exec(
+      ['config', '--local', '--unset-all', `branch.${branchName}.base`],
+      worktreePath
+    )
+  } catch {
+    // Best-effort SSH sparse cleanup; keep the sparse setup error as the
+    // actionable failure and let removeWorktree handle the partial checkout.
+  }
+}
+
 async function findRemoteForUrl(repoPath: string, remoteUrl: string): Promise<string | null> {
   const target = parseGitHubOwnerRepo(remoteUrl)
   try {
@@ -846,6 +862,9 @@ export async function createRemoteWorktree(
       await provider.exec(['sparse-checkout', 'set', '--', ...sparseDirectories], remotePath)
       await provider.exec(['checkout', branchName], remotePath)
     } catch (err) {
+      if (!checkoutExistingBranch) {
+        await unsetRemoteWorktreeCreationBase(provider, remotePath, branchName)
+      }
       await provider.removeWorktree(remotePath, true).catch(() => undefined)
       throw err
     }
@@ -884,6 +903,12 @@ export async function createRemoteWorktree(
     // max(lastActivityAt, createdAt + GRACE_MS) to keep it on top until the
     // window elapses. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: 'ssh',
+    orcaCreationWorkspaceLayout: {
+      path: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -1267,6 +1292,12 @@ export async function createLocalWorktree(
     // See createRemoteWorktree above: createdAt protects the newly-created
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,
+    orcaCreatedAt: now,
+    orcaCreationSource: 'desktop',
+    orcaCreationWorkspaceLayout: {
+      path: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),

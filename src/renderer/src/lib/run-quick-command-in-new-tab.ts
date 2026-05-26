@@ -2,6 +2,8 @@ import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import type { TerminalQuickCommand } from '../../../shared/types'
 
+const LINE_BREAK_RE = /[\r\n]/
+
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
   worktreeId: string
@@ -34,7 +36,8 @@ export function runQuickCommandInNewTab({
   const tab = store.createTab(worktreeId, groupId)
 
   store.queueTabStartupCommand(tab.id, {
-    command: command.command
+    command: command.command,
+    ...(LINE_BREAK_RE.test(command.command) ? { delivery: 'terminal-paste' as const } : {})
   })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree

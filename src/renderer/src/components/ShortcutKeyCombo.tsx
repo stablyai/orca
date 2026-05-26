@@ -23,7 +23,7 @@ export function ShortcutKeyCombo({
   const isMac = navigator.userAgent.includes('Mac')
 
   return (
-    <div className={cn('flex items-center gap-1', className)}>
+    <span className={cn('inline-flex items-center gap-1', className)}>
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
           <KeyCap label={key} />
@@ -34,6 +34,6 @@ export function ShortcutKeyCombo({
           ) : null}
         </React.Fragment>
       ))}
-    </div>
+    </span>
   )
 }

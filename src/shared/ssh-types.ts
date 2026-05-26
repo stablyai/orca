@@ -3,6 +3,7 @@
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 export type SshTarget = {
   id: string
@@ -14,6 +15,10 @@ export type SshTarget = {
   username: string
   /** Path to private key file, if using key-based auth. */
   identityFile?: string
+  /** SSH agent socket path from IdentityAgent, if configured. */
+  identityAgent?: string
+  /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
+  identitiesOnly?: boolean
   /** ProxyCommand from SSH config, if any. */
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */

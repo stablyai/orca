@@ -40,6 +40,7 @@ import {
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR
 } from '../win32-utils'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -197,8 +198,15 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
   return trimmed.length > 240 ? `${trimmed.slice(0, 240).trimEnd()}...` : trimmed
 }
 
-function userFacingAgentFailure(label: string): string {
-  return `${label} failed. Check the agent CLI configuration and try again.`
+function userFacingAgentFailure(
+  label: string,
+  detail?: string | null,
+  options?: { includeLocalMacDnsHint?: boolean }
+): string {
+  const message = `${label} failed. Check the agent CLI configuration and try again.`
+  return options?.includeLocalMacDnsHint === false
+    ? message
+    : withMacTailscaleDnsHint(message, detail)
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
@@ -241,7 +249,10 @@ function finalizeModelDiscoveryOutput(
     })
     return {
       success: false,
-      error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`
+      error: withMacTailscaleDnsHint(
+        `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`,
+        safeDetail
+      )
     }
   }
   let models = spec.modelDiscovery?.parse(stdout) ?? []
@@ -619,8 +630,9 @@ function finalizeFromAgentOutput(args: {
   label: string
   emptyResultName: string
   finalize: (result: InternalTextGenerationResult) => void
+  includeLocalMacDnsHint?: boolean
 }): void {
-  const { code, stdout, stderr, label, emptyResultName, finalize } = args
+  const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
   if (code !== 0) {
     const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Generator failed:', {
@@ -630,7 +642,10 @@ function finalizeFromAgentOutput(args: {
       stdout,
       stderr
     })
-    finalize({ success: false, error: userFacingAgentFailure(label) })
+    finalize({
+      success: false,
+      error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+    })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
@@ -644,7 +659,10 @@ function finalizeFromAgentOutput(args: {
         stdout,
         stderr
       })
-      finalize({ success: false, error: userFacingAgentFailure(label) })
+      finalize({
+        success: false,
+        error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+      })
       return
     }
     finalize({ success: false, error: `${label} returned an empty ${emptyResultName}.` })
@@ -709,7 +727,9 @@ async function runRemotePlan(
       stderr: result.stderr,
       label,
       emptyResultName,
-      finalize: resolve
+      finalize: resolve,
+      // Why: remote agent output reflects the SSH target, not this Mac's DNS.
+      includeLocalMacDnsHint: false
     })
   })
 }

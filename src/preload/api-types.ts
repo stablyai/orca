@@ -23,6 +23,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
+  DetectedWorktreeListResult,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -204,6 +205,7 @@ import type {
 } from '../shared/developer-permissions-types'
 import type {
   ComputerUsePermissionId,
+  ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../shared/computer-use-permissions-types'
@@ -620,10 +622,13 @@ export type PreloadApi = {
           Repo,
           | 'displayName'
           | 'badgeColor'
+          | 'repoIcon'
           | 'hookSettings'
           | 'worktreeBaseRef'
           | 'kind'
           | 'issueSourcePreference'
+          | 'externalWorktreeVisibility'
+          | 'externalWorktreeVisibilityPromptDismissedAt'
         >
       >
     }) => Promise<Repo>
@@ -668,6 +673,7 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
+    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
@@ -766,7 +772,13 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-    onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
@@ -1297,6 +1309,7 @@ export type PreloadApi = {
     antigravityStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
+    commandCodeStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
@@ -1336,6 +1349,7 @@ export type PreloadApi = {
     openSetup: (args?: {
       id?: ComputerUsePermissionId
     }) => Promise<ComputerUsePermissionSetupResult>
+    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>
@@ -1347,6 +1361,7 @@ export type PreloadApi = {
     pathExists: (path: string) => Promise<boolean>
     pickAttachment: () => Promise<string | null>
     pickImage: () => Promise<string | null>
+    pickRepoIconImage: () => Promise<{ dataUrl: string; fileName: string } | null>
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
@@ -1707,7 +1722,6 @@ export type PreloadApi = {
     onOpenSettings: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
-    onShowFeatureTourNudge: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void

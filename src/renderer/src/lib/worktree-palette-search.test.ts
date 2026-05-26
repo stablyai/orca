@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchWorktrees } from './worktree-palette-search'
+import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
 import type { Repo, Worktree } from '../../../shared/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -39,6 +39,33 @@ const repoMap = new Map<string, Repo>([
 ])
 
 describe('worktree-palette-search', () => {
+  it('uses the filtered recent list for empty queries', () => {
+    const visible = makeWorktree({ id: 'visible' })
+    const hidden = makeWorktree({ id: 'hidden-by-filter' })
+
+    const scope = getWorktreePaletteSearchScope({
+      hasQuery: false,
+      allWorktrees: [visible, hidden],
+      emptyQueryWorktrees: [visible]
+    })
+
+    expect(scope.map((worktree) => worktree.id)).toEqual(['visible'])
+  })
+
+  it('uses all non-archived worktrees for typed queries', () => {
+    const visible = makeWorktree({ id: 'visible' })
+    const hiddenByFilter = makeWorktree({ id: 'hidden-by-filter' })
+    const archived = makeWorktree({ id: 'archived', isArchived: true })
+
+    const scope = getWorktreePaletteSearchScope({
+      hasQuery: true,
+      allWorktrees: [visible, hiddenByFilter, archived],
+      emptyQueryWorktrees: [visible]
+    })
+
+    expect(scope.map((worktree) => worktree.id)).toEqual(['visible', 'hidden-by-filter'])
+  })
+
   it('returns every worktree with no match metadata for an empty query', () => {
     const results = searchWorktrees([makeWorktree()], '', repoMap, null, null)
 

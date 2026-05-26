@@ -5,6 +5,7 @@ import { writeFileSync, chmodSync, unlinkSync } from 'fs'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
 import {
   PROTOCOL_VERSION,
@@ -212,6 +213,7 @@ export class DaemonServer {
           rows: p.rows,
           cwd: p.cwd,
           env: p.env,
+          envToDelete: p.envToDelete,
           command: p.command,
           shellOverride: p.shellOverride,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
@@ -307,6 +309,9 @@ export class DaemonServer {
 
       case 'ping':
         return { pong: true }
+
+      case 'systemResolverHealth':
+        return { health: readCurrentProcessMacSystemResolverHealth() }
 
       case 'shutdown':
         if (request.payload.killSessions) {

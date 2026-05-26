@@ -6,6 +6,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -110,6 +111,16 @@ type Props = {
    */
   hideIdentityIcon?: boolean
   hideExpand?: boolean
+  /** Reuse the row's hover tint to show the focused terminal pane's agent. */
+  isFocusedPane?: boolean
+  // Why: inline-card orchestration rows fold children under a leading chevron.
+  childAgentCount?: number
+  childAgentsExpanded?: boolean
+  onToggleChildAgents?: () => void
+  // Why: leaf siblings reserve the chevron gutter so state dots align.
+  reserveDisclosureGutter?: boolean
+  // Why: chevron indentation replaces fixed-offset lineage connector art.
+  hideLineageConnectors?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -120,8 +131,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isUnvisited = false,
   stateDotSize = 'md',
   hideIdentityIcon = false,
-  hideExpand = false
+  hideExpand = false,
+  isFocusedPane = false,
+  childAgentCount,
+  childAgentsExpanded = false,
+  onToggleChildAgents,
+  reserveDisclosureGutter = false,
+  hideLineageConnectors = false
 }: Props) {
+  const hasChildDisclosure =
+    typeof childAgentCount === 'number' &&
+    childAgentCount > 0 &&
+    typeof onToggleChildAgents === 'function'
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
   // card's click handler (which navigates away from the dashboard).
@@ -185,6 +206,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
+  const lineage = agent.lineage
+  const isLineageChild = lineage?.depth === 1
+  const lineageChildCount = lineage?.childCount ?? 0
+  const participatesInLineage = isLineageChild || lineageChildCount > 0
+  const identityTitle =
+    lineageChildCount > 0
+      ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
+          lineageChildCount === 1 ? 'agent' : 'agents'
+        }`
+      : formatAgentTypeLabel(agent.agentType)
   // Why: interrupted is a terminal outcome the user needs to scan in the
   // leading state column; the secondary-line text below provides the
   // explanation without competing with the prompt or timestamp.
@@ -218,18 +249,52 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       className={cn(
         // Why: this row owns the timestamp/X hover boundary; anonymous
         // ancestor groups from workspace cards must not reveal every row's X.
-        'group/agent-row relative flex flex-col -ml-2 px-2 py-1',
-        // Why: hover tints have to go in opposite directions per theme —
-        // dark mode adds light on dark (bg-accent/30), light mode needs to
-        // add *dark* on white. Alpha-on-accent in light mode collapses to
-        // near-nothing because accent (#f5f5f5) is already ~white. Use a
-        // black alpha overlay in light mode (mirrors WorktreeCard.tsx's
-        // active-state pattern) so the lift is symmetric across themes.
-        'cursor-pointer rounded-sm hover:bg-black/[0.06] dark:hover:bg-accent/30'
+        'group/agent-row relative flex flex-col -ml-2 py-1',
+        isLineageChild ? 'pl-5 pr-2' : 'px-2',
+        // Why: inline agent rows sit inside a hoverable workspace card, so
+        // their hover wash must stay softer than the parent card highlight.
+        // The focused-pane state reuses the same class via data attribute.
+        'cursor-pointer rounded-sm worktree-agent-row-hover'
       )}
+      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}
+      role={participatesInLineage ? 'treeitem' : undefined}
+      aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
     >
+      {lineageChildCount > 0 && !hideLineageConnectors ? (
+        <span
+          aria-hidden
+          data-agent-lineage-parent-connector
+          className="pointer-events-none absolute bottom-[-0.75rem] left-[13px] top-[1.05rem] border-l-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35"
+        />
+      ) : null}
+      {isLineageChild && !hideLineageConnectors ? (
+        <span
+          aria-hidden
+          data-agent-lineage-connector={lineage?.isLastSibling === false ? 'branch' : 'last'}
+          className="pointer-events-none absolute bottom-[-1px] left-[13px] top-[-1px] w-3"
+        >
+          <span
+            className={cn(
+              'absolute left-0 border-l-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35',
+              lineage?.isFirstSibling ? 'top-[-0.9rem]' : 'top-[-1px]',
+              lineage?.isLastSibling
+                ? lineage?.isFirstSibling
+                  ? 'h-[1.6rem]'
+                  : 'h-[calc(0.7rem+1px)]'
+                : 'bottom-[-1px]'
+            )}
+          />
+          <span className="absolute left-0 top-[0.7rem] w-1.5 border-t-[1.5px] border-muted-foreground/45 dark:border-muted-foreground/35" />
+        </span>
+      ) : null}
       <div className="flex items-center gap-1.5">
+        <DashboardAgentChildDisclosure
+          childAgentCount={childAgentCount}
+          childAgentsExpanded={childAgentsExpanded}
+          onToggleChildAgents={onToggleChildAgents}
+          reserveDisclosureGutter={reserveDisclosureGutter}
+        />
         {/* Why: state indicator lives in the leading gutter so the user's
             eye can sweep one column and know which rows are working,
             waiting, or done at a glance — the list-view convention (Linear,
@@ -257,7 +322,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
         {!hideIdentityIcon && (
-          <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+          <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
           </span>
         )}
@@ -289,6 +354,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
+        {/* Why: "+N" badge mirrors the leading chevron — without it the
+            parent row reads identical to a leaf row when collapsed, and the
+            child count is invisible. Hidden when expanded because the
+            children are visible directly below. */}
+        {hasChildDisclosure && !childAgentsExpanded && (
+          <span
+            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
+            aria-hidden
+          >
+            +{childAgentCount}
+          </span>
+        )}
         {/* Why: right cluster keeps passive time and dismiss affordance in one
             place. State belongs in the leading gutter; repeating it here as
             text makes interrupted rows look like the old badge treatment. */}

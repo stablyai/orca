@@ -80,7 +80,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 px-1 py-2">
+      <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
@@ -126,7 +126,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
 function BlockedHelper({ blocked, id }: { blocked: BlockedReason; id: string }): React.JSX.Element {
   return (
-    <div id={id} className="px-1 pb-2 text-xs text-muted-foreground">
+    <div id={id} className="pb-2 text-xs text-muted-foreground">
       {blocked.reason === 'ci' ? (
         <p>Telemetry is disabled because a CI environment variable is set. Unset it and restart.</p>
       ) : (

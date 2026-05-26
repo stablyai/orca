@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowRight, Copy, RefreshCw, Smartphone, Trash2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -26,7 +27,7 @@ function getDeviceLabel(): string {
 
 export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Element {
   return (
-    <div>
+    <div className="mp-intro-shell">
       <div className="mp-eyebrow-row">
         <span className="mp-eyebrow">Orca Mobile</span>
       </div>
@@ -35,10 +36,25 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
         Control Orca from your phone. Check on agents, review changes, and kick off tasks while
         you&apos;re away from your desk.
       </p>
+      <div className="mp-platform-badges" aria-label="Supported mobile platforms">
+        <span className="mp-platform-label">Available on</span>
+        <span className="mp-platform-badge">
+          <IosBrandIcon />
+          iOS
+        </span>
+        <span className="mp-platform-badge">
+          <AndroidLogo />
+          Android
+        </span>
+      </div>
       <div className="mp-cta-row">
-        <button type="button" className="mp-primary-action" onClick={onStart}>
+        <button
+          type="button"
+          className="mp-primary-action mp-flow-primary-action"
+          onClick={onStart}
+        >
           Get started
-          <ArrowRightIcon />
+          <ArrowRight className="size-3.5" />
         </button>
       </div>
     </div>
@@ -75,7 +91,7 @@ export function HeroPaired({
           return (
             <li key={device.deviceId} className="mp-paired-row">
               <div className="mp-paired-icon">
-                <PhoneSmallIcon />
+                <Smartphone className="size-4" />
               </div>
               <div className="mp-paired-main">
                 <div className="mp-paired-name">{device.name}</div>
@@ -91,15 +107,15 @@ export function HeroPaired({
                 aria-label={`Revoke ${device.name}`}
                 title="Revoke device"
               >
-                <TrashIcon />
+                <Trash2 className="size-3.5" />
               </button>
             </li>
           )
         })}
       </ul>
       <div className="mp-flow-actions">
-        <button type="button" className="mp-flow-back" onClick={onPairAnother}>
-          <ArrowLeftIcon />
+        <button type="button" className="mp-secondary-action" onClick={onPairAnother}>
+          <Smartphone className="size-3.5" />
           Pair another device
         </button>
         <span />
@@ -156,7 +172,7 @@ export function HeroFlow({
   const isLast = stepIdx === 1
 
   return (
-    <div>
+    <div className="mp-flow-card">
       <div className="mp-flow-viewport">
         <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
           <div className="mp-step2-layout">
@@ -176,6 +192,7 @@ export function HeroFlow({
                   aria-pressed={platform === 'ios'}
                   onClick={() => onPlatformChange('ios')}
                 >
+                  <IosBrandIcon />
                   iOS
                 </button>
                 <button
@@ -184,6 +201,7 @@ export function HeroFlow({
                   aria-pressed={platform === 'android'}
                   onClick={() => onPlatformChange('android')}
                 >
+                  <AndroidLogo />
                   Android
                 </button>
               </div>
@@ -192,7 +210,7 @@ export function HeroFlow({
                   {installCopy.ctaLabel}
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
-                  <CopyIcon />
+                  <Copy className="size-3.5" />
                   Copy install link
                 </button>
               </div>
@@ -245,7 +263,7 @@ export function HeroFlow({
                   aria-label="Refresh network interfaces"
                   title="Refresh network interfaces"
                 >
-                  <RefreshIcon />
+                  <RefreshCw className="size-3.5" />
                 </button>
               </div>
 
@@ -257,7 +275,7 @@ export function HeroFlow({
                   onClick={onCopyPairingCode}
                   disabled={!pairingUrl || pairLoading}
                 >
-                  <CopyIcon />
+                  <Copy className="size-3.5" />
                   Copy pairing code
                 </button>
               </div>
@@ -289,22 +307,30 @@ export function HeroFlow({
 
       <div className="mp-flow-actions">
         <button type="button" className="mp-flow-back" onClick={onBack}>
-          <ArrowLeftIcon />
+          <ArrowLeft className="size-3" />
           Back
         </button>
         {isLast ? (
           onDone ? (
-            <button type="button" className="mp-primary-action" onClick={onDone}>
+            <button
+              type="button"
+              className="mp-primary-action mp-flow-primary-action"
+              onClick={onDone}
+            >
               Done
-              <ArrowRightIcon />
+              <ArrowRight className="size-3.5" />
             </button>
           ) : (
             <span />
           )
         ) : (
-          <button type="button" className="mp-flow-continue" onClick={onContinue}>
+          <button
+            type="button"
+            className="mp-flow-continue mp-flow-primary-action"
+            onClick={onContinue}
+          >
             Continue
-            <ArrowRightIcon />
+            <ArrowRight className="size-3.5" />
           </button>
         )}
       </div>
@@ -312,58 +338,19 @@ export function HeroFlow({
   )
 }
 
-function ArrowRightIcon(): React.JSX.Element {
+// Why: these are exact filled brand paths, not generic line approximations.
+function IosBrandIcon(): React.JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-      <path d="M5 12h14" />
-      <path d="m13 6 6 6-6 6" />
+    <svg className="mp-platform-brand-icon" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
     </svg>
   )
 }
 
-function ArrowLeftIcon(): React.JSX.Element {
+function AndroidLogo(): React.JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  )
-}
-
-function CopyIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  )
-}
-
-function PhoneSmallIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <rect x="6" y="3" width="12" height="18" rx="2.5" />
-      <line x1="11" y1="18" x2="13" y2="18" />
-    </svg>
-  )
-}
-
-function TrashIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <path d="M3 6h18" />
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    </svg>
-  )
-}
-
-function RefreshIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 12a9 9 0 1 1-3-6.7" />
-      <path d="M21 4v5h-5" />
-      <path d="M3 12a9 9 0 0 0 15 6.7" />
-      <path d="M3 20v-5h5" />
+    <svg className="mp-platform-brand-icon" viewBox="0 0 24 24" aria-hidden>
+      <path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z" />
     </svg>
   )
 }

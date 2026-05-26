@@ -1,8 +1,6 @@
+/* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const mockSpawn = vi.fn()
@@ -74,11 +72,8 @@ describe('launchAgentBackgroundSession', () => {
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
     mockRuntimeEnvironmentTransportCall.mockImplementation(
-      (args: RuntimeEnvironmentCallRequest) => {
-        return (
-          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
-        )
-      }
+      (args) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
     )
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
     state.repos = [{ id: 'repo-1', connectionId: null }]
@@ -196,6 +191,23 @@ describe('launchAgentBackgroundSession', () => {
     expect(onAgentStatus).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
     )
+  })
+
+  it('seeds a working status for Command Code prompt launches', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'check the status spinner'
+    })
+
+    const paneKey = expectStablePaneSpawn()
+    expect(state.setAgentStatus).toHaveBeenCalledWith(paneKey, {
+      state: 'working',
+      prompt: 'check the status spinner',
+      agentType: 'command-code'
+    })
   })
 
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {

@@ -65,7 +65,9 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
     return false
   }
   if (
-    ['automations', 'repo', 'worktree', 'terminal', 'computer', 'note'].includes(commandPath[0])
+    ['automations', 'repo', 'worktree', 'terminal', 'file', 'computer', 'note'].includes(
+      commandPath[0]
+    )
   ) {
     return false
   }
@@ -87,6 +89,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'repo',
         'worktree',
         'terminal',
+        'file',
         'tab',
         'cookie',
         'intercept',
@@ -98,8 +101,10 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'agent',
         'environment'
       ].includes(commandPath[0])) ||
+    (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))

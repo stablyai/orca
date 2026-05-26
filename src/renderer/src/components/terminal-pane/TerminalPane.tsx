@@ -13,7 +13,7 @@ import {
   normalizeColor,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
@@ -80,6 +80,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 // that otherwise leaves createTerminalSlice undefined at store-init time.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { pasteTerminalText } from './terminal-bracketed-paste'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1065,12 +1066,12 @@ export default function TerminalPane({
     // Shared helper: try text first (fast path, single IPC call for the
     // common case), then check for a clipboard image only when text is empty
     // — which is the image-only clipboard scenario this fix targets.
-    const pasteFromClipboard = (pane: { terminal: { paste: (data: string) => void } }): void => {
+    const pasteFromClipboard = (pane: ManagedPane): void => {
       void window.api.ui
         .readClipboardText()
         .then((text) => {
           if (text) {
-            pane.terminal.paste(text)
+            pasteTerminalText(pane.terminal, text)
             return
           }
           // Why: clipboard has no text — check for an image. This is the
@@ -1082,7 +1083,7 @@ export default function TerminalPane({
             .saveClipboardImageAsTempFile({ connectionId })
             .then((filePath) => {
               if (filePath) {
-                pane.terminal.paste(filePath)
+                pasteTerminalText(pane.terminal, filePath)
               }
             })
             .catch((error: unknown) => {
@@ -1528,7 +1529,7 @@ export default function TerminalPane({
       clickedPane.terminal.focus()
       void readPrimarySelectionText().then((text) => {
         if (text) {
-          clickedPane.terminal.paste(text)
+          pasteTerminalText(clickedPane.terminal, text)
         }
       })
     },

@@ -6,6 +6,7 @@ import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { pasteTerminalText } from './terminal-bracketed-paste'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -108,7 +109,7 @@ export function useTerminalPaneContextMenu({
     }
     const text = await window.api.ui.readClipboardText()
     if (text) {
-      pane.terminal.paste(text)
+      pasteTerminalText(pane.terminal, text)
       pane.terminal.focus()
       return
     }
@@ -118,7 +119,7 @@ export function useTerminalPaneContextMenu({
       const connectionId = getConnectionId(worktreeId) ?? null
       const filePath = await window.api.ui.saveClipboardImageAsTempFile({ connectionId })
       if (filePath) {
-        pane.terminal.paste(filePath)
+        pasteTerminalText(pane.terminal, filePath)
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)

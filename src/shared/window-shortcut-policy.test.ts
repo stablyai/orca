@@ -347,8 +347,8 @@ describe('resolveWindowShortcutAction', () => {
     expect(
       resolveWindowShortcutAction(
         {
-          code: 'KeyT',
-          key: 't',
+          code: 'KeyA',
+          key: 'a',
           meta: true,
           control: false,
           alt: true,
@@ -361,8 +361,8 @@ describe('resolveWindowShortcutAction', () => {
     expect(
       resolveWindowShortcutAction(
         {
-          code: 'KeyT',
-          key: 't',
+          code: 'KeyA',
+          key: 'a',
           meta: false,
           control: true,
           alt: true,
@@ -377,8 +377,8 @@ describe('resolveWindowShortcutAction', () => {
     expect(
       resolveWindowShortcutAction(
         {
-          code: 'KeyT',
-          key: 't',
+          code: 'KeyA',
+          key: 'a',
           meta: true,
           control: false,
           alt: true,
@@ -391,8 +391,8 @@ describe('resolveWindowShortcutAction', () => {
     expect(
       resolveWindowShortcutAction(
         {
-          code: 'KeyT',
-          key: 't',
+          code: 'KeyA',
+          key: 'a',
           meta: true,
           control: true,
           alt: true,

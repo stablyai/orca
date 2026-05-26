@@ -6,6 +6,7 @@ import type {
   Tab,
   TerminalLayoutSnapshot,
   TerminalTab,
+  TuiAgent,
   Worktree,
   WorkspaceSessionState
 } from '../../../../shared/types'
@@ -37,6 +38,7 @@ import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -192,7 +194,12 @@ export type TerminalSlice = {
     string,
     {
       command: string
+      /** Renderer-delivered startup input. Used by multiline quick commands so
+       *  xterm can use bracketed paste before the submit Enter is sent. */
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
+      /** Initial prompt-start status for agents that lack native prompt hooks. */
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
        *  after spawn confirms — never on click-intent. */
@@ -264,6 +271,7 @@ export type TerminalSlice = {
       id?: string
     }
   ) => TerminalTab
+  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -306,7 +314,9 @@ export type TerminalSlice = {
     tabId: string,
     startup: {
       command: string
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -617,6 +627,52 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
     return tab
+  },
+
+  openNewTerminalTabInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const pairedWebRuntimeEnvironmentId = (globalThis as { __ORCA_WEB_CLIENT__?: boolean })
+      .__ORCA_WEB_CLIENT__
+      ? state.settings?.activeRuntimeEnvironmentId?.trim()
+      : null
+    if (pairedWebRuntimeEnvironmentId) {
+      const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
+      await createWebRuntimeSessionTerminal({
+        worktreeId,
+        environmentId: pairedWebRuntimeEnvironmentId,
+        targetGroupId: groupId,
+        activate: true
+      })
+      return
+    }
+    const terminal = get().createTab(worktreeId, groupId)
+    get().setActiveTab(terminal.id)
+    get().setActiveTabType('terminal')
+    const latest = get()
+    const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
+    const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
+    const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
+    const stored = latest.tabBarOrderByWorktree[worktreeId]
+    const validIds = new Set([
+      ...currentTerminals.map((tab) => tab.id),
+      ...currentEditors.map((file) => file.id),
+      ...currentBrowsers.map((tab) => tab.id)
+    ])
+    const base = (stored ?? []).filter((id) => validIds.has(id))
+    const inBase = new Set(base)
+    for (const id of validIds) {
+      if (!inBase.has(id)) {
+        base.push(id)
+      }
+    }
+    // Why: Cmd+J uses the same creation path as the titlebar button, so a new
+    // terminal should append after mixed editor/browser tabs rather than jump first.
+    get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
+    focusTerminalTabSurface(terminal.id)
   },
 
   closeTab: (tabId) => {

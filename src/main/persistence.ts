@@ -37,6 +37,7 @@ import type {
   WorktreeMeta,
   WorktreeLineage,
   GlobalSettings,
+  OrcaWorkspaceLayout,
   NotificationSettings,
   OnboardingChecklistState,
   OnboardingOutcome,
@@ -78,6 +79,7 @@ import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
+import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
@@ -90,6 +92,8 @@ import {
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
+import { sanitizeRepoIcon } from '../shared/repo-icon'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -165,6 +169,40 @@ function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
 }
 
+function buildWorkspaceDirHistoryForUpdate(
+  current: GlobalSettings,
+  updates: Partial<GlobalSettings>
+): OrcaWorkspaceLayout[] | null {
+  if (!('workspaceDir' in updates) && !('nestWorkspaces' in updates)) {
+    return null
+  }
+  const nextPath = updates.workspaceDir ?? current.workspaceDir
+  const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
+  if (
+    normalizeRuntimePathForComparison(nextPath) ===
+      normalizeRuntimePathForComparison(current.workspaceDir) &&
+    nextNestWorkspaces === current.nestWorkspaces
+  ) {
+    return null
+  }
+
+  const previousLayout = {
+    path: current.workspaceDir,
+    nestWorkspaces: current.nestWorkspaces
+  }
+  const existing = current.workspaceDirHistory ?? []
+  const next = [...existing]
+  const previousKey = getWorkspaceLayoutHistoryKey(previousLayout)
+  if (!next.some((layout) => getWorkspaceLayoutHistoryKey(layout) === previousKey)) {
+    next.push(previousLayout)
+  }
+  return next
+}
+
+function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
+  return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
+}
+
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
     groupBy === 'none' ||
@@ -193,10 +231,44 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   return getDefaultUIState().sortBy
 }
 
+function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+  if (
+    tab === 'explorer' ||
+    tab === 'search' ||
+    tab === 'source-control' ||
+    tab === 'checks' ||
+    tab === 'ports'
+  ) {
+    return tab
+  }
+  return getDefaultUIState().rightSidebarTab
+}
+
 function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const defaults = getDefaultNotificationSettings()
   const candidate =
     value && typeof value === 'object' ? (value as Partial<NotificationSettings>) : {}
+  const rawSoundId = (candidate as { customSoundId?: unknown }).customSoundId
+  const customSoundId =
+    rawSoundId === 'system' ||
+    rawSoundId === 'two-tone' ||
+    rawSoundId === 'bong' ||
+    rawSoundId === 'thump' ||
+    rawSoundId === 'blip' ||
+    rawSoundId === 'sonar' ||
+    rawSoundId === 'blop' ||
+    rawSoundId === 'ding' ||
+    rawSoundId === 'clack' ||
+    rawSoundId === 'beep' ||
+    rawSoundId === 'custom'
+      ? rawSoundId
+      : rawSoundId === 'orca' || rawSoundId === 'chime'
+        ? 'two-tone'
+        : rawSoundId === 'pop'
+          ? 'blop'
+          : typeof candidate.customSoundPath === 'string'
+            ? 'custom'
+            : defaults.customSoundId
   const rawVolume = candidate.customSoundVolume
   const customSoundVolume =
     typeof rawVolume === 'number' && Number.isFinite(rawVolume)
@@ -205,6 +277,7 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   return {
     ...defaults,
     ...candidate,
+    customSoundId,
     customSoundVolume
   }
 }
@@ -354,6 +427,21 @@ function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boole
 
 function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | undefined {
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
+}
+
+function sanitizeRepoUpdatesForPersistence<T extends Partial<Pick<Repo, 'repoIcon'>>>(
+  updates: T
+): T {
+  const sanitized = { ...updates }
+  if ('repoIcon' in sanitized) {
+    const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
+    if (repoIcon === undefined) {
+      delete sanitized.repoIcon
+    } else {
+      sanitized.repoIcon = repoIcon
+    }
+  }
+  return sanitized
 }
 
 function expandFloatingWorkspaceHomePath(input: string, home: string): string {
@@ -1471,6 +1559,15 @@ export class Store {
             const rawSort = parsed.ui?.sortBy
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
+            const rightSidebarOpen =
+              typeof parsed.ui?.rightSidebarOpen === 'boolean'
+                ? parsed.ui.rightSidebarOpen
+                : typeof parsed.settings?.rightSidebarOpenByDefault === 'boolean'
+                  ? parsed.settings.rightSidebarOpenByDefault
+                  : defaults.ui.rightSidebarOpen
+            if (typeof parsed.ui?.rightSidebarOpen !== 'boolean') {
+              this.loadNeedsSave = true
+            }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
             // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
@@ -1526,6 +1623,8 @@ export class Store {
             // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const expandedCardPropsMigrated =
+              parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
             const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
             const deliberateUncheck =
               hadExperimentOn &&
@@ -1543,21 +1642,42 @@ export class Store {
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
                 : rawCardProps
-              // Why: only Agent activity remains configurable; older hidden
-              // card fields must be restored because users can no longer
-              // toggle them back on from the sidebar menu.
-              const normalized = normalizeWorktreeCardProperties(candidate)
+              const expandedCandidate = (() => {
+                if (expandedCardPropsMigrated) {
+                  return candidate
+                }
+                const next = [...candidate]
+                // Why: Linear used to be controlled by the generic issue
+                // property and Ports were always visible. Add the split-out
+                // properties once so existing cards keep their prior surface.
+                if (candidate.includes('issue') && !candidate.includes('linear-issue')) {
+                  next.push('linear-issue' as const)
+                }
+                if (!candidate.includes('ports')) {
+                  next.push('ports' as const)
+                }
+                return next
+              })()
+              const normalized = normalizeWorktreeCardProperties(expandedCandidate)
               const changed =
                 normalized.length !== rawCardProps.length ||
                 normalized.some((property, index) => property !== rawCardProps[index])
               return changed ? normalized : undefined
             })()
-            if (migratedCardProps !== undefined || !inlineAgentsMigrated) {
+            if (
+              migratedCardProps !== undefined ||
+              !inlineAgentsMigrated ||
+              !expandedCardPropsMigrated
+            ) {
               this.loadNeedsSave = true
             }
             return {
               ...defaults.ui,
               ...parsed.ui,
+              // Why: migrate once from the retired Appearance setting only
+              // when no explicit persisted chrome preference exists yet.
+              rightSidebarOpen,
+              rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               sortBy: migrate ? ('smart' as const) : sort,
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
@@ -1571,7 +1691,8 @@ export class Store {
               // a rollback to a pre-default-on build that still reads it.
               // The new flag is the one that actually gates the migration.
               _inlineAgentsDefaultedForExperiment: true,
-              _inlineAgentsDefaultedForAllUsers: true
+              _inlineAgentsDefaultedForAllUsers: true,
+              _expandedWorktreeCardPropertiesDefaulted: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
@@ -1964,10 +2085,13 @@ export class Store {
         Repo,
         | 'displayName'
         | 'badgeColor'
+        | 'repoIcon'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'kind'
         | 'issueSourcePreference'
+        | 'externalWorktreeVisibility'
+        | 'externalWorktreeVisibilityPromptDismissedAt'
       >
     >
   ): Repo | null {
@@ -1975,23 +2099,42 @@ export class Store {
     if (!repo) {
       return null
     }
+    const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    const externalWorktreeVisibilityLegacy =
+      'externalWorktreeVisibility' in sanitizedUpdates &&
+      repo.externalWorktreeVisibilityLegacy === undefined
+        ? isLegacyRepoForExternalWorktreeVisibility(repo)
+        : undefined
     // Why: `issueSourcePreference === undefined` in the patch means "reset to
     // auto" (and the persisted record should drop the key, not preserve a
     // stale explicit value via Object.assign's skip-on-undefined behavior).
     // Without this delete branch, toggling explicit → auto would silently
     // leave the old preference in place on disk.
-    if ('issueSourcePreference' in updates && updates.issueSourcePreference === undefined) {
+    if (
+      'issueSourcePreference' in sanitizedUpdates &&
+      sanitizedUpdates.issueSourcePreference === undefined
+    ) {
       delete repo.issueSourcePreference
-      const { issueSourcePreference: _drop, ...rest } = updates
+      const { issueSourcePreference: _drop, ...rest } = sanitizedUpdates
       Object.assign(repo, rest)
     } else {
-      Object.assign(repo, updates)
+      Object.assign(repo, sanitizedUpdates)
+    }
+    if (
+      'externalWorktreeVisibility' in sanitizedUpdates &&
+      repo.externalWorktreeVisibilityLegacy === undefined
+    ) {
+      // Why: old persisted repos have no explicit marker. Stamp it the first
+      // time visibility changes so later hide/show choices keep legacy safety.
+      repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
     this.scheduleSave()
     return this.hydrateRepo(repo)
   }
 
   private hydrateRepo(repo: Repo): Repo {
+    const { repoIcon: rawRepoIcon, ...repoWithoutIcon } = repo
+    const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2002,7 +2145,8 @@ export class Store {
         })())
 
     return {
-      ...repo,
+      ...repoWithoutIcon,
+      ...(repoIcon !== undefined ? { repoIcon } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -2353,6 +2497,13 @@ export class Store {
         updates.terminalShortcutPolicy
       )
     }
+    const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
+      this.state.settings,
+      sanitizedUpdates
+    )
+    if (historyWithPreviousLayout) {
+      sanitizedUpdates.workspaceDirHistory = historyWithPreviousLayout
+    }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
     // only `optedIn`) must not clobber sibling fields like `installId` or
@@ -2384,6 +2535,7 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
@@ -2406,6 +2558,10 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      rightSidebarTab:
+        updates.rightSidebarTab !== undefined
+          ? normalizeRightSidebarTab(updates.rightSidebarTab)
+          : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties:
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)

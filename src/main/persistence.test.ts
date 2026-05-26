@@ -257,6 +257,8 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
+    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarTab).toBe('explorer')
     expect(ui.groupBy).toBe('repo')
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
@@ -732,6 +734,8 @@ describe('Store', () => {
     // ui should have defaults
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
+    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarTab).toBe('explorer')
     // settings should preserve the overridden value
     expect(store.getSettings().theme).toBe('dark')
     // new fields get defaults when missing from persisted data
@@ -1263,7 +1267,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSave).toBe(true)
   })
 
-  it('preserves rightSidebarOpenByDefault when set to true in persisted data', async () => {
+  it('keeps legacy rightSidebarOpenByDefault readable from persisted data', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -1376,6 +1380,39 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('updateRepo drops repo icons that fail shared sanitization', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      repoIcon: {
+        type: 'image',
+        source: 'upload',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+      } as never
+    })
+
+    expect(updated).not.toBeNull()
+    expect(updated!.repoIcon).toBeUndefined()
+    expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+  })
+
+  it('getRepo does not expose invalid persisted repo icons', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        repoIcon: {
+          type: 'image',
+          source: 'upload',
+          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+        } as never
+      })
+    )
+
+    expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+    expect(store.getRepos()[0]!.repoIcon).toBeUndefined()
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
@@ -1407,6 +1444,22 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBeUndefined()
+  })
+
+  it('updateRepo stamps legacy external-worktree visibility before changing old repos', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        addedAt: Date.UTC(2026, 4, 24),
+        externalWorktreeVisibility: undefined,
+        externalWorktreeVisibilityLegacy: undefined
+      })
+    )
+
+    const updated = store.updateRepo('r1', { externalWorktreeVisibility: 'hide' })
+
+    expect(updated!.externalWorktreeVisibility).toBe('hide')
+    expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
   })
 
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
@@ -1495,7 +1548,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSave).toBe(false)
   })
 
-  it('updateSettings toggles rightSidebarOpenByDefault', async () => {
+  it('keeps legacy rightSidebarOpenByDefault writable for backward compatibility', async () => {
     const store = await createStore()
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
 
@@ -1654,18 +1707,86 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
-  it('updateUI restores retired card properties from direct UI writes', async () => {
+  it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(false)
+  })
+
+  it('migrates missing rightSidebarOpen to open when the legacy default was open', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(true)
+  })
+
+  it('keeps explicit rightSidebarOpen authoritative over the legacy default setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { rightSidebarOpenByDefault: true },
+      ui: { rightSidebarOpen: false },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarOpen).toBe(false)
+  })
+
+  it('preserves explicit rightSidebarTab in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'checks' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('checks')
+  })
+
+  it('normalizes invalid rightSidebarTab in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'bogus' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('explorer')
+  })
+
+  it('updateUI restores fixed card properties from direct UI writes', async () => {
     const store = await createStore()
     store.updateUI({ worktreeCardProperties: ['inline-agents'] })
 
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment',
-      'inline-agents'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
   it('persists updater reminder metadata in UI state', async () => {
@@ -2067,8 +2188,11 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
   it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
@@ -2092,7 +2216,10 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
   it('respects a deliberate post-migration uncheck', async () => {
@@ -2113,9 +2240,11 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
   })
 
-  it('leaves cardProps alone when inline-agents is already present', async () => {
+  it('adds split-out default card properties without duplicating inline-agents', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2138,10 +2267,12 @@ describe('Store', () => {
     const store = await createStore()
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
+    expect(props.filter((p) => p === 'linear-issue')).toHaveLength(1)
+    expect(props.filter((p) => p === 'ports')).toHaveLength(1)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('restores retired card properties when loading old user choices', async () => {
+  it('adds split-out default card properties when loading old user choices', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2158,14 +2289,12 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).toEqual([
       'status',
       'unread',
-      'issue',
-      'pr',
-      'comment',
+      'ports',
       'inline-agents'
     ])
   })
 
-  it('keeps Agent activity opt-out while restoring retired card properties', async () => {
+  it('keeps Agent activity opt-out while adding split-out default card properties', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -2179,13 +2308,26 @@ describe('Store', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'ports'])
+  })
+
+  it('preserves deliberate Linear and Ports opt-outs after split-out migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'issue', 'pr', 'comment'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).not.toContain('ports')
   })
 
   it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
@@ -2210,6 +2352,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
@@ -2233,6 +2377,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
   })
 
   it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
@@ -2256,6 +2402,8 @@ describe('Store', () => {
     })
     const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
+    expect(store.getUI().worktreeCardProperties).toContain('ports')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 

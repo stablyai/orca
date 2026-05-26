@@ -6,6 +6,11 @@ import type {
   EnrichedDetectedPort,
   SshTarget
 } from '../../../../shared/ssh-types'
+import {
+  buildRemovedSshTargetCleanupPatch,
+  sshConnectionStatesEqual,
+  sshTargetLabelsEqual
+} from './ssh-target-cleanup'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -46,6 +51,7 @@ export type SshSlice = {
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
+  clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
@@ -70,6 +76,9 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
+      if (sshConnectionStatesEqual(previous, state)) {
+        return s
+      }
       next.set(targetId, state)
       return {
         sshConnectionStates: next,
@@ -82,9 +91,16 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setSshTargetsMetadata: (targets) =>
-    set({
-      sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
+    set((s) => {
+      if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
+        return s
+      }
+      return {
+        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
+      }
     }),
+  clearRemovedSshTargetState: (targetId) =>
+    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
   markRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)

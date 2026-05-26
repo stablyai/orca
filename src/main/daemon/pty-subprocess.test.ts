@@ -38,7 +38,9 @@ import { createPtySubprocess } from './pty-subprocess'
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
   'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_PI_CODING_AGENT_DIR'
+  'ORCA_PI_CODING_AGENT_DIR',
+  'ORCA_OMP_CODING_AGENT_DIR',
+  'ORCA_CODEX_HOME'
 ] as const
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
@@ -269,6 +271,40 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
   })
 
+  it('preserves explicit development agent hook endpoint files', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousEndpoint = process.env.ORCA_AGENT_HOOK_ENDPOINT
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          ORCA_AGENT_HOOK_ENV: 'development',
+          ORCA_AGENT_HOOK_PORT: '1234',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_AGENT_HOOK_VERSION: '1',
+          ORCA_AGENT_HOOK_ENDPOINT: '/tmp/fresh-endpoint.env'
+        }
+      })
+    } finally {
+      if (previousEndpoint === undefined) {
+        delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+      } else {
+        process.env.ORCA_AGENT_HOOK_ENDPOINT = previousEndpoint
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe('/tmp/fresh-endpoint.env')
+    expect(env.ORCA_AGENT_HOOK_ENV).toBe('development')
+    expect(env.ORCA_AGENT_HOOK_PORT).toBe('1234')
+    expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
+  })
+
   it('forwards write calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -483,6 +519,61 @@ describe('createPtySubprocess', () => {
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
+  it('uses shell wrapper when Codex home must survive shell startup', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          CODEX_HOME: '/tmp/orca-codex-home',
+          ORCA_CODEX_HOME: '/tmp/orca-codex-home'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
+  it('deletes requested env keys after merging daemon process env', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousCodexHome = process.env.CODEX_HOME
+    process.env.CODEX_HOME = '/host/codex-home'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' },
+        envToDelete: ['CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[2].env.CODEX_HOME).toBeUndefined()
   })
 
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {

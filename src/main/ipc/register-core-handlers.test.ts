@@ -331,6 +331,7 @@ describe('registerCoreHandlers', () => {
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
+    const onBeforeRelaunch = vi.fn()
 
     registerCoreHandlers(
       store as never,
@@ -345,13 +346,16 @@ describe('registerCoreHandlers', () => {
       null,
       undefined,
       undefined,
-      agentAwakeService as never
+      agentAwakeService as never,
+      undefined,
+      undefined,
+      { onBeforeRelaunch }
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
-    expect(registerAppHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
     expect(registerPetHandlersMock).toHaveBeenCalled()

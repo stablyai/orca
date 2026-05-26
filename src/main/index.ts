@@ -24,6 +24,11 @@ import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
 import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
+import {
+  isAgentStatusHooksEnabled,
+  MANAGED_AGENT_HOOK_INSTALLERS,
+  removeManagedAgentHooks
+} from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
@@ -32,7 +37,11 @@ import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
-import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
+import {
+  getNextDefaultOnAppearanceSettingValue,
+  registerAppMenu,
+  rebuildAppMenu
+} from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
@@ -40,7 +49,8 @@ import {
   installDevParentDisconnectQuit,
   installDevParentWatchdog,
   installUncaughtPipeErrorGuard,
-  patchPackagedProcessPath
+  patchPackagedProcessPath,
+  shouldInstallManagedHooks
 } from './startup/configure-process'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
@@ -51,20 +61,12 @@ import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
-import { claudeHookService } from './claude/hook-service'
-import { codexHookService } from './codex/hook-service'
-import { geminiHookService } from './gemini/hook-service'
-import { antigravityHookService } from './antigravity/hook-service'
-import { cursorHookService } from './cursor/hook-service'
-import { droidHookService } from './droid/hook-service'
-import { grokHookService } from './grok/hook-service'
-import { copilotHookService } from './copilot/hook-service'
-import { hermesHookService } from './hermes/hook-service'
 import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
@@ -74,7 +76,6 @@ import {
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
-import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
 import {
@@ -116,7 +117,6 @@ let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
-let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
@@ -151,6 +151,9 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
+// Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
+// app userData path once Electron has applied dev/e2e overrides.
+process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
 
 function focusExistingWindow(): void {
   // Why: the second-instance event fires on the *primary* Electron process
@@ -258,6 +261,36 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
+function prepareCodexRuntimeHomeForLaunch(): string {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch()
+  const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
+  try {
+    // Why: launch prep is reachable after startup via PTY/runtime paths; honor
+    // the persisted off switch so those launches cannot reinstall removed hooks.
+    const status = hooksEnabled
+      ? codexHookService.install()
+      : codexHookService.refreshRuntimeUserHooks()
+    if (status.state === 'error') {
+      console.warn(
+        `[codex-hook-service] failed to ${
+          hooksEnabled ? 'refresh' : 'refresh user'
+        } runtime hooks before launch`,
+        status.detail
+      )
+    }
+  } catch (error) {
+    // Why: hook install/removal is best-effort launch prep. A malformed hooks file
+    // should not block the Codex process from starting with its prepared auth.
+    console.warn(
+      `[codex-hook-service] failed to ${
+        hooksEnabled ? 'refresh' : 'refresh user'
+      } runtime hooks before launch`,
+      error
+    )
+  }
+  return runtimeHomePath
+}
+
 function openMainWindow(): BrowserWindow {
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -335,6 +368,7 @@ function openMainWindow(): BrowserWindow {
     shouldRecordRendererCrash: (details, webContentsId) =>
       shouldRecordProcessGoneCrash({
         source: 'renderer',
+        processType: 'renderer',
         reason: details.reason,
         exitCode: details.exitCode ?? null,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
@@ -388,15 +422,17 @@ function openMainWindow(): BrowserWindow {
     rendererWebContentsId,
     automations,
     {
-      prepareForCodexLaunch: () =>
-        store!.getSettings().activeCodexManagedAccountId
-          ? codexRuntimeHome!.prepareForCodexLaunch()
-          : null,
+      prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
       prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
-    keybindings
+    keybindings,
+    {
+      onBeforeRelaunch: () => {
+        isQuitting = true
+      }
+    }
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -404,10 +440,7 @@ function openMainWindow(): BrowserWindow {
     window,
     store,
     runtime,
-    () =>
-      store!.getSettings().activeCodexManagedAccountId
-        ? codexRuntimeHome!.prepareForCodexLaunch()
-        : null,
+    prepareCodexRuntimeHomeForLaunch,
     () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -449,6 +482,7 @@ function openMainWindow(): BrowserWindow {
       if (mainWindow?.isDestroyed()) {
         return
       }
+      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
@@ -456,7 +490,8 @@ function openMainWindow(): BrowserWindow {
         worktreeId,
         connectionId,
         receivedAt,
-        stateStartedAt
+        stateStartedAt,
+        ...(orchestration ? { orchestration } : {})
       })
       recordCrashBreadcrumb('agent_state_changed', {
         agentType: payload.agentType ?? 'unknown',
@@ -520,6 +555,8 @@ function recordProcessGoneCrash(
   if (
     !shouldRecordProcessGoneCrash({
       source,
+      processType,
+      serviceName: typeof details.serviceName === 'string' ? details.serviceName : undefined,
       reason,
       exitCode,
       expectedTeardown: getExpectedTeardownScope(webContentsId)
@@ -988,15 +1025,11 @@ app.whenReady().then(async () => {
   runtimeService.setAutomationService(automations)
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
-    prepareForCodexLaunch: () =>
-      store!.getSettings().activeCodexManagedAccountId
-        ? codexRuntimeHome!.prepareForCodexLaunch()
-        : null,
+    // Why: local Codex hooks and auth now live in Orca's managed runtime home
+    // even for the system-default path, so every Orca-launched Codex process
+    // must resolve CODEX_HOME through the runtime-home service.
+    prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
-  })
-  disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
-    stats,
-    getWindow: () => mainWindow
   })
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -1007,23 +1040,15 @@ app.whenReady().then(async () => {
     })
   )
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why: managed hook installation mutates user-global agent config. Each
-  // installer runs inside its own try/catch so a malformed local config
-  // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
-  // The agent label travels with each installer so the catch can attribute
-  // the failure in the `agent_hook_install_failed` telemetry event.
-  const managedHookInstallers = [
-    ['claude', () => claudeHookService.install()],
-    ['codex', () => codexHookService.install()],
-    ['gemini', () => geminiHookService.install()],
-    ['antigravity', () => antigravityHookService.install()],
-    ['cursor', () => cursorHookService.install()],
-    ['droid', () => droidHookService.install()],
-    ['grok', () => grokHookService.install()],
-    ['copilot', () => copilotHookService.install()],
-    ['hermes', () => hermesHookService.install()]
-  ] as const
-  runManagedHookInstallers(managedHookInstallers)
+  if (shouldInstallManagedHooks(is.dev)) {
+    // Why: the persisted off switch must run before any auto-install path so
+    // users who removed Orca-managed hooks do not see them silently reappear on launch.
+    if (isAgentStatusHooksEnabled(store.getSettings())) {
+      runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
+    } else {
+      removeManagedAgentHooks()
+    }
+  }
 
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
@@ -1086,11 +1111,14 @@ app.whenReady().then(async () => {
         return
       }
       const current = store.getSettings()
-      store.updateSettings({ [key]: !current[key] })
+      // Why: these appearance settings are default-on for older profiles, so
+      // a missing persisted value must toggle from visible -> hidden.
+      const next = getNextDefaultOnAppearanceSettingValue(current[key])
+      store.updateSettings({ [key]: next })
       // Why: settings:get returns the current snapshot; renderer tracks
       // settings through window.api.settings.get(). Push the new value so
       // the sidebar/titlebar re-render without waiting for a round-trip.
-      mainWindow?.webContents.send('settings:changed', { [key]: !current[key] })
+      mainWindow?.webContents.send('settings:changed', { [key]: next })
       rebuildAppMenu()
     },
     getAppearanceState: () => {
@@ -1098,6 +1126,7 @@ app.whenReady().then(async () => {
       const ui = store?.getUI()
       return {
         showTasksButton: settings?.showTasksButton !== false,
+        showMobileButton: settings?.showMobileButton !== false,
         showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }
@@ -1166,7 +1195,7 @@ app.whenReady().then(async () => {
   if (serveOptions) {
     registerHeadlessPtyRuntime(
       runtime,
-      () => codexRuntimeHome!.prepareForCodexLaunch(),
+      prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
       () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
       store
@@ -1225,8 +1254,6 @@ app.on('before-quit', () => {
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
   agentAwakeService = null
-  disposeFeatureWallFirstAgentTour?.()
-  disposeFeatureWallFirstAgentTour = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to
   // capture terminal scrollback buffers before PTY exit events race in and
   // unmount TerminalPane components (removing their capture callbacks).

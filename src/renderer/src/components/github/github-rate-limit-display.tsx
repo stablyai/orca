@@ -112,7 +112,7 @@ function GitHubRateLimitRows({
   snapshot: GitHubRateLimitSnapshot
 }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1 font-mono">
+    <div className="flex flex-col gap-1 text-xs">
       {BUCKETS.map((b) => {
         const v = snapshot[b.key]
         const tone = toneForGitHubBucket(v.remaining, v.limit)
@@ -121,7 +121,7 @@ function GitHubRateLimitRows({
             <span className="text-muted-foreground">{b.description}</span>
             <span
               className={cn(
-                'text-foreground',
+                'tabular-nums text-foreground',
                 tone === 'crit' && 'text-red-600 dark:text-red-300',
                 tone === 'warn' && 'text-amber-700 dark:text-amber-300'
               )}

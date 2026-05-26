@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 
 // Why: stable empty-array references so narrow selectors return the same
 // reference when there's nothing for this worktree. Without stable empties,
@@ -324,12 +325,14 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
             })
           ]
         : liveEntries
-    return buildWorktreeAgentRows({
-      tabs: tabs ?? [],
-      entries,
-      retained,
-      now
-    })
+    return applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: tabs ?? [],
+        entries,
+        retained,
+        now
+      })
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, liveEntries, migrationUnsupported, retained, agentStatusEpoch])
 }

@@ -36,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -1496,10 +1496,10 @@ export default function AutomationsPage(): React.JSX.Element {
                         </span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                           {automationRepo ? (
-                            <RepoDotLabel
+                            <RepoBadgeLabel
                               name={automationRepo.displayName}
                               color={automationRepo.badgeColor}
-                              dotClassName="size-1.5"
+                              badgeClassName="size-1.5"
                             />
                           ) : (
                             <span>Unknown project</span>

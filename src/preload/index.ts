@@ -481,6 +481,9 @@ const api = {
     list: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('worktrees:list', args),
 
+    listDetected: (args: { repoId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('worktrees:listDetected', args),
+
     listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args: CreateWorktreeArgs): Promise<unknown> =>
@@ -660,6 +663,12 @@ const api = {
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
 
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> =>
+      ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+
     /** Check if a PTY's shell has child processes (e.g. a running command).
      *  Returns false for an idle shell prompt. */
     hasChildProcesses: (id: string): Promise<boolean> =>
@@ -673,9 +682,13 @@ const api = {
      *  Returns `''` when the id is unknown or the platform cannot resolve one. */
     getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
 
-    onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
-        callback(data)
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { id: string; data: string; seq?: number; rawLength?: number }
+      ) => callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
     },
@@ -1324,6 +1337,8 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:droidStatus'),
+    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
     grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
     copilotStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),
@@ -1465,7 +1480,8 @@ const api = {
   computerUsePermissions: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
     openSetup: (args?: { id?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('computerUsePermissions:openSetup', args)
+      ipcRenderer.invoke('computerUsePermissions:openSetup', args),
+    reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
   shell: {
@@ -1488,6 +1504,9 @@ const api = {
     pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 
     pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+
+    pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
+      ipcRenderer.invoke('shell:pickRepoIconImage'),
 
     pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
@@ -2251,11 +2270,6 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openCrashReport', listener)
       return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
-    },
-    onShowFeatureTourNudge: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('ui:showFeatureTourNudge', listener)
-      return () => ipcRenderer.removeListener('ui:showFeatureTourNudge', listener)
     },
     onToggleLeftSidebar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

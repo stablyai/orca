@@ -12,6 +12,7 @@ export type DaemonSpawnOptions = {
   sessionId: string
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
 }
 
@@ -44,6 +45,7 @@ export class DaemonPtyProvider {
       rows: opts.rows,
       cwd: opts.cwd,
       env: opts.env,
+      envToDelete: opts.envToDelete,
       command: opts.command
     })
 

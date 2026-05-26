@@ -63,6 +63,10 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 
 let registered = false
 
+type CoreHandlerLifecycleOptions = {
+  onBeforeRelaunch?: () => void
+}
+
 export function registerCoreHandlers(
   store: Store,
   runtime: OrcaRuntimeService,
@@ -78,7 +82,8 @@ export function registerCoreHandlers(
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
   agentAwakeService?: AgentAwakeService,
   crashReports?: CrashReportStore,
-  keybindings?: KeybindingService
+  keybindings?: KeybindingService,
+  lifecycleOptions: CoreHandlerLifecycleOptions = {}
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -91,7 +96,7 @@ export function registerCoreHandlers(
   }
   registered = true
 
-  registerAppHandlers(store)
+  registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)

@@ -10,10 +10,17 @@ function readDismissed(): boolean {
   }
 }
 
+export function shouldLoadMobileSidebarOnboardingBadge(
+  enabled: boolean,
+  dismissed: boolean
+): boolean {
+  return enabled && !dismissed
+}
+
 // Why: surface a one-time "Try it" badge on the Orca Mobile sidebar entry
 // for users who haven't paired any device. Clicking the row dismisses it
 // permanently, mirroring the once-and-done feel of an inbox unread dot.
-export function useMobileSidebarOnboardingBadge(): {
+export function useMobileSidebarOnboardingBadge(enabled = true): {
   visible: boolean
   dismiss: () => void
 } {
@@ -21,7 +28,7 @@ export function useMobileSidebarOnboardingBadge(): {
   const [hasPairedDevice, setHasPairedDevice] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (dismissed) {
+    if (!shouldLoadMobileSidebarOnboardingBadge(enabled, dismissed)) {
       return
     }
     let cancelled = false
@@ -40,7 +47,7 @@ export function useMobileSidebarOnboardingBadge(): {
     return () => {
       cancelled = true
     }
-  }, [dismissed])
+  }, [dismissed, enabled])
 
   const dismiss = useCallback(() => {
     if (dismissed) {
@@ -55,7 +62,7 @@ export function useMobileSidebarOnboardingBadge(): {
   }, [dismissed])
 
   return {
-    visible: !dismissed && hasPairedDevice === false,
+    visible: enabled && !dismissed && hasPairedDevice === false,
     dismiss
   }
 }

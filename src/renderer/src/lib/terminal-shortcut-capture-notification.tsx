@@ -11,6 +11,7 @@ import {
 import { useAppStore } from '../store'
 
 const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
+const NOTICE_DURATION_MS = 20_000
 
 function hasShownNotice(actionId: KeybindingActionId): boolean {
   try {
@@ -60,8 +61,21 @@ export function showTerminalShortcutCaptureNotification({
     getEffectiveKeybindingsForAction(actionId, platform, keybindings),
     platform
   )
-  toast.message('Orca handled a terminal shortcut', {
-    description: `${definition.title} (${bindingLabel}) can be changed in Keyboard Shortcuts.`,
+  // Why: this toast stays up longer than normal, so keep it compact while still
+  // exposing the captured shortcut and the edit path.
+  toast.message('Terminal shortcut handled', {
+    description: `${definition.title} (${bindingLabel})`,
+    // Why: this is the user's one-time rebind path for a captured shortcut; it
+    // needs enough reading time without becoming persistent chrome.
+    duration: NOTICE_DURATION_MS,
+    dismissible: true,
+    className: '!w-[420px] !max-w-[calc(100vw-2rem)] !gap-2 !py-2 !pl-3 !pr-2',
+    classNames: {
+      content: 'min-w-0 flex-1 !gap-0.5',
+      title: 'truncate !leading-5',
+      description: 'truncate !leading-4',
+      actionButton: '!h-7 !shrink-0 !rounded-md !px-2.5'
+    },
     icon: <Keyboard className="size-4 text-muted-foreground" />,
     action: {
       label: 'Open Shortcuts',

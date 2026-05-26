@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Workflow } from 'lucide-react'
 import { Label } from '../ui/label'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -53,10 +57,6 @@ export function OrchestrationPane(): React.JSX.Element {
     notifyOrchestrationSetupStateChanged()
   }
 
-  const handleRecheckOrchestrationSkill = async (): Promise<void> => {
-    await refreshOrchestrationSkill()
-  }
-
   if (!showOrchestration) {
     return <div />
   }
@@ -66,7 +66,7 @@ export function OrchestrationPane(): React.JSX.Element {
       title="Agent Orchestration"
       description="Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates."
       keywords={ORCHESTRATION_PANE_SEARCH_ENTRIES[0].keywords}
-      className="space-y-3 px-1 py-2"
+      className="space-y-3 py-2"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
@@ -95,18 +95,20 @@ export function OrchestrationPane(): React.JSX.Element {
       {orchestrationEnabled ? (
         <AgentSkillSetupPanel
           title="Orchestration skill"
-          detectedDescription="Detected on this machine. Agents can use inter-agent orchestration."
-          missingDescription="Agents need this skill before they can use inter-agent orchestration. If you already installed it, click Re-check instead of running the installer again."
+          description="Enables agents to hand off context and coordinate work through Orca."
           command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
           terminalTitle="Orchestration setup"
           terminalAriaLabel="Orchestration skill install terminal"
           terminalWorktreeId="settings-orchestration-skill-terminal"
           installed={orchestrationSkillDetected}
-          detected={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={orchestrationSkillError}
           icon={<Workflow className="size-5" />}
-          onRecheck={handleRecheckOrchestrationSkill}
+          preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+          onBeforeOpenTerminal={async () => {
+            await ensureOrcaCliAvailableForAgentSkillTerminal()
+          }}
+          onRecheck={refreshOrchestrationSkill}
         />
       ) : null}
     </SearchableSetting>

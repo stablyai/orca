@@ -40,7 +40,7 @@ describe('plugin overlay env source resolution', () => {
       expect(resolveOpenCodeSourceConfigDir(env, '/bin/zsh')).toBe(
         join(homeDir, 'company-opencode')
       )
-      expect(resolvePiSourceAgentDir(env, '/bin/zsh')).toBe(join(homeDir, 'company-pi'))
+      expect(resolvePiSourceAgentDir(env, '/bin/zsh', 'pi')).toBe(join(homeDir, 'company-pi'))
     }
   )
 

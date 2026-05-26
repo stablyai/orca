@@ -306,6 +306,20 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'equalizePaneSizes') {
+        // Consume the chord first so a user-assigned terminal shortcut can't fall
+        // through to app-level zoom when an expanded pane blocks the equalize.
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (expandedPaneIdRef.current !== null) {
+          return
+        }
+        manager.equalizePaneSizes()
+        const paneToFocus = manager.getActivePane() ?? manager.getPanes()[0]
+        paneToFocus?.terminal.focus()
+        return
+      }
+
       // Cmd+Shift+Enter expands/collapses the active pane to full terminal area.
       if (action.type === 'toggleExpandActivePane') {
         const panes = manager.getPanes()

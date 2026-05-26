@@ -1,72 +1,26 @@
-import { homedir } from 'os'
-import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
-  getSharedManagedScriptPath,
   readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   writeHooksJson,
-  writeManagedScript,
-  type HookDefinition
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-
-const CLAUDE_EVENTS = [
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
-  // (name + input preview) before it completes. Without it, a long-running
-  // Bash/Task step looks like a silent gap between prompt and Stop.
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUseFailure',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PermissionRequest',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  }
-] as const
-
-function getConfigPath(): string {
-  return join(homedir(), '.claude', 'settings.json')
-}
-
-function getManagedScriptFileName(): string {
-  return process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
-}
-
-function getManagedScriptPath(): string {
-  return getSharedManagedScriptPath(getManagedScriptFileName())
-}
-
-function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: on Windows, Claude Code runs hooks through Git Bash (`/usr/bin/bash`).
-    // A path with single backslashes (e.g. `C:\Users\…\claude-hook.cmd`) is
-    // interpreted by bash as a string with escape sequences, so `\U`, `\A`, etc.
-    // collapse and the launcher fails with `command not found`. Emit forward
-    // slashes — Windows accepts them in path arguments and bash leaves them
-    // intact, so the same JSON value works through every shell layer.
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapPosixHookCommand(scriptPath)
-}
+import {
+  applyManagedHooks,
+  CLAUDE_EVENTS,
+  getConfigPath,
+  getManagedCommand,
+  getManagedScriptPath,
+  getRemoteConfigPath,
+  getRemoteManagedCommand,
+  removeManagedHooks
+} from './hook-settings'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -198,41 +152,21 @@ export class ClaudeHookService {
     }
 
     const command = getManagedCommand(scriptPath)
-    const nextHooks = { ...config.hooks }
-
-    // Why: match by script filename (not exact command string) so a fresh
-    // install sweeps stale entries left by older builds or a different
-    // Electron userData path (dev vs. prod). Without this, repeated installs
-    // accumulate duplicate hook entries pointing at defunct scripts.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-
-    for (const event of CLAUDE_EVENTS) {
-      const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-      const cleaned = removeManagedCommands(current, isManagedCommand)
-      const definition: HookDefinition = {
-        ...event.definition,
-        hooks: [{ type: 'command', command }]
-      }
-      nextHooks[event.eventName] = [...cleaned, definition]
-    }
-
-    config.hooks = nextHooks
+    const nextConfig = applyManagedHooks(config, command)
     writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, config)
+    writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
 
-  // Why: install Orca's managed Claude hooks on the remote box rather than
-  // the local Mac/Linux machine. Caller passes the user's SFTP handle from
-  // the SshConnection plus the resolved remote `$HOME` (used to compute
-  // ~/.claude/settings.json on the target). POSIX-only by design — see
-  // docs/design/agent-status-over-ssh.md §3 / §6 (Windows-remote deferred).
+  // Why: install Orca's Claude hook settings on the remote box rather than the
+  // local machine. Caller passes the user's SFTP handle plus the resolved
+  // remote `$HOME`; POSIX-only by design (Windows-remote deferred).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     // Why: remote-Windows is out of scope for v1 — we ship POSIX-shaped paths
-    // (`~/.claude/settings.json`) and a `.sh` managed script body. The remote
-    // platform is gated by the relay's capability RPC at a higher layer; we
-    // cannot detect it from `process.platform` here (that's the local box).
-    const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.claude/settings.json`
+    // and a `.sh` managed script body. The remote platform is gated by the
+    // relay's capability RPC at a higher layer; we cannot detect it from
+    // `process.platform` here (that's the local box).
+    const remoteConfigPath = getRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/claude-hook.sh`
     // Why: SFTP reads/writes fail far more often than local fs (network drops,
     // EACCES on remote dirs, disk full, channel closed). Wrap the entire
@@ -255,20 +189,8 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script
       // lands; only the path differs. Reuse the same wrapper helper.
-      const command = wrapPosixHookCommand(remoteScriptPath)
-      const nextHooks = { ...config.hooks }
-      const isManagedCommand = createManagedCommandMatcher('claude-hook.sh')
-
-      for (const event of CLAUDE_EVENTS) {
-        const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-        const cleaned = removeManagedCommands(current, isManagedCommand)
-        const definition: HookDefinition = {
-          ...event.definition,
-          hooks: [{ type: 'command', command }]
-        }
-        nextHooks[event.eventName] = [...cleaned, definition]
-      }
-      config.hooks = nextHooks
+      const command = getRemoteManagedCommand(remoteScriptPath)
+      const nextConfig = applyManagedHooks(config, command, 'claude-hook.sh')
 
       // Why: write the script first, then the settings — settings.json
       // referencing a missing script body would fire `command not found` on
@@ -279,7 +201,7 @@ export class ClaudeHookService {
       // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
       // running on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
         agent: 'claude',
@@ -311,28 +233,10 @@ export class ClaudeHookService {
         detail: 'Could not parse Claude settings.json'
       }
     }
-
-    const nextHooks = { ...config.hooks }
-    // Why: same broad matcher as install(), so remove() also cleans up stale
-    // entries from older builds even if the current scriptPath has moved.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      // Why: a malformed settings.json entry (non-array value for an event
-      // name) would make removeManagedCommands throw via definitions.flatMap.
-      // Skip — we cannot sweep something we cannot parse, and remove() must
-      // fail open so a broken user config never blocks uninstall.
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
+    const { config: nextConfig, changed } = removeManagedHooks(config)
+    if (changed) {
+      writeHooksJson(configPath, nextConfig)
     }
-    config.hooks = nextHooks
-    writeHooksJson(configPath, config)
     return this.getStatus()
   }
 }

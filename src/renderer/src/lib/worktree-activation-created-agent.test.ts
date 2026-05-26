@@ -37,6 +37,7 @@ function makeWorktree(): Worktree {
 describe('activateAndRevealWorktree created agent reopen', () => {
   it('reopens an empty worktree with the agent selected at creation time', () => {
     const worktree = makeWorktree()
+    const revealWorktreeInSidebar = vi.fn()
 
     useAppStore.setState({
       repos: [
@@ -71,7 +72,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn(),
-      revealWorktreeInSidebar: vi.fn()
+      revealWorktreeInSidebar
     })
 
     const result = activateAndRevealWorktree(worktree.id)
@@ -88,6 +89,53 @@ describe('activateAndRevealWorktree created agent reopen', () => {
         request_kind: 'resume'
       }
     })
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
+  it('forwards an explicit sidebar reveal behavior', () => {
+    const worktree = makeWorktree()
+    const revealWorktreeInSidebar = vi.fn()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        agentCmdOverrides: {},
+        setupScriptLaunchMode: 'new-tab'
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar
+    })
+
+    const result = activateAndRevealWorktree(worktree.id, { sidebarRevealBehavior: 'auto' })
+
+    expect(result).toEqual({ primaryTabId: expect.any(String) })
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id, { behavior: 'auto' })
   })
 
   it('asks the host runtime to activate the worktree in the paired web client', async () => {

@@ -8,8 +8,8 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  Play,
   Plus,
-  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -81,9 +81,11 @@ export default function TerminalContextMenu({
   const pasteShortcut = useShortcutLabel('terminal.paste')
   const splitRightShortcut = useShortcutLabel('terminal.splitRight')
   const splitDownShortcut = useShortcutLabel('terminal.splitDown')
+  const equalizeShortcut = useShortcutLabel('terminal.equalizePaneSizes')
   const expandShortcut = useShortcutLabel('terminal.expandPane')
   const closeShortcut = useShortcutLabel('terminal.closePane')
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
+  const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
 
   return (
     <DropdownMenu
@@ -141,7 +143,7 @@ export default function TerminalContextMenu({
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <SquareTerminal />
+            <Play fill="currentColor" strokeWidth={0} />
             Quick Commands
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-60">
@@ -213,6 +215,9 @@ export default function TerminalContextMenu({
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
             Equalize Pane Sizes
+            {showEqualizeShortcut ? (
+              <DropdownMenuShortcut>{equalizeShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         )}
         {canExpandPane && (

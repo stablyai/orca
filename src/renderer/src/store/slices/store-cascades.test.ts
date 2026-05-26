@@ -471,7 +471,7 @@ describe('setActiveWorktree', () => {
     expect(worktrees.map((worktree) => worktree.id)).toEqual([backgroundId, focusedId])
   })
 
-  it('restores the remembered right sidebar tab per worktree', () => {
+  it('keeps the current right sidebar tab when switching worktrees', () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
     const wt2 = 'repo1::/path/wt2'
@@ -483,20 +483,21 @@ describe('setActiveWorktree', () => {
           makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
         ]
       },
-      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'checks' }
+      rightSidebarTab: 'checks',
+      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'explorer' }
     })
 
     store.getState().setActiveWorktree(wt1)
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
 
     store.getState().setActiveWorktree(wt2)
     expect(store.getState().rightSidebarTab).toBe('checks')
 
     store.getState().setActiveWorktree(wt1)
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
-  it('defaults new worktrees without remembered right sidebar state to explorer', () => {
+  it('does not reset the right sidebar tab for worktrees without remembered sidebar state', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -509,7 +510,7 @@ describe('setActiveWorktree', () => {
 
     store.getState().setActiveWorktree(wt)
 
-    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
   it('does not clobber the current right sidebar tab when clearing the active worktree', () => {

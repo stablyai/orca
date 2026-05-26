@@ -92,6 +92,25 @@ function tokenCount(markup: string, token: string): number {
 }
 
 describe('DashboardAgentRow', () => {
+  it('uses the hover background as the focused-pane row highlight', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={makeAgent()}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          hideIdentityIcon
+          hideExpand
+          isFocusedPane
+        />
+      </TooltipProvider>
+    )
+
+    expect(markup).toContain('data-focused-agent-pane="true"')
+    expect(classTokens(markup)).toContain('worktree-agent-row-hover')
+  })
+
   it('scopes the timestamp and dismiss hover swap to the row-owned group', () => {
     const markup = renderRow(makeAgent())
     const classes = hoverSwapClasses(markup)
@@ -172,5 +191,55 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('data-slot="badge"')
     expect(interruptedIndex).toBeGreaterThan(promptIndex)
     expect(markup).not.toContain('lucide-circle-check')
+  })
+
+  it('renders orchestration child rows with a connector and tree level', () => {
+    const markup = renderRow(
+      makeAgent({
+        lineage: {
+          depth: 1,
+          isFirstSibling: true,
+          isLastSibling: true,
+          childCount: 0
+        }
+      })
+    )
+
+    expect(markup).toContain('data-agent-lineage-connector="last"')
+    expect(markup).toContain('role="treeitem"')
+    expect(markup).toContain('aria-level="2"')
+    expect(classTokens(markup)).toContain('pl-5')
+    expect(classTokens(markup)).toContain('left-[13px]')
+    expect(classTokens(markup)).toContain('top-[0.7rem]')
+    expect(classTokens(markup)).toContain('w-1.5')
+    expect(classTokens(markup)).toContain('border-l-[1.5px]')
+    expect(classTokens(markup)).toContain('border-t-[1.5px]')
+    expect(classTokens(markup)).toContain('border-muted-foreground/45')
+  })
+
+  it('annotates parent identity icon when it dispatched children', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={makeAgent({
+            lineage: {
+              depth: 0,
+              isFirstSibling: true,
+              isLastSibling: true,
+              childCount: 2
+            }
+          })}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          hideExpand
+        />
+      </TooltipProvider>
+    )
+
+    expect(markup).toContain('title="Codex - dispatched 2 agents"')
+    expect(markup).toContain('data-agent-lineage-parent-connector="true"')
+    expect(classTokens(markup)).toContain('left-[13px]')
+    expect(markup).toContain('aria-level="1"')
   })
 })

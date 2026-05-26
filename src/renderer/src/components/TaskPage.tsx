@@ -72,7 +72,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
@@ -4305,14 +4305,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4447,7 +4447,7 @@ export default function TaskPage(): React.JSX.Element {
                       // Why: unify feature 1 (indicator) and feature 2 (selector)
                       // into a single chip per repo. Rendering both separately
                       // produced visually redundant output — two local-repo
-                      // dot-labels, duplicate slugs. The selector's active pill
+                      // badge labels, duplicate slugs. The selector's active pill
                       // + tooltip already announce the source, so the "Issues
                       // from {slug}" chip is only shown when the selector does
                       // not render (no upstream remote — nothing to toggle).
@@ -4461,7 +4461,7 @@ export default function TaskPage(): React.JSX.Element {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {rows.map((s) => {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
-                            const showDotLabel = selectedRepos.length > 1 && repo
+                            const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             // Why: the static indicator has its own wrapping
                             // chip styles, so we render it standalone and don't
@@ -4474,7 +4474,7 @@ export default function TaskPage(): React.JSX.Element {
                                   issues={s.sources.issues}
                                   prs={s.sources.prs}
                                   localRepo={
-                                    showDotLabel && repo
+                                    showRepoBadgeLabel && repo
                                       ? { displayName: repo.displayName, color: repo.badgeColor }
                                       : undefined
                                   }
@@ -4492,11 +4492,11 @@ export default function TaskPage(): React.JSX.Element {
                             // uses `inline-flex`, so the visual rendering is identical.
                             return (
                               <div key={s.repoId} className={issueSourceChipClass}>
-                                {showDotLabel ? (
-                                  <RepoDotLabel
+                                {showRepoBadgeLabel ? (
+                                  <RepoBadgeLabel
                                     name={repo.displayName}
                                     color={repo.badgeColor}
-                                    dotClassName="size-1.5"
+                                    badgeClassName="size-1.5"
                                     className="text-[10px] text-muted-foreground"
                                   />
                                 ) : null}
@@ -4667,14 +4667,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4823,7 +4823,7 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} of {selectedRepos.length} repos failed to load
+                    {failedCount} of {selectedRepos.length} projects failed to load
                   </div>
                 ) : null}
 
@@ -5008,10 +5008,10 @@ export default function TaskPage(): React.JSX.Element {
                               {selectedRepos.length > 1 && itemRepo ? (
                                 // Why: disambiguate rows when multiple repos are in
                                 // the merged list — a single-repo view doesn't need it.
-                                <RepoDotLabel
+                                <RepoBadgeLabel
                                   name={itemRepo.displayName}
                                   color={itemRepo.badgeColor}
-                                  dotClassName="size-1.5"
+                                  badgeClassName="size-1.5"
                                   className="shrink-0 text-[11px] text-muted-foreground"
                                 />
                               ) : null}
@@ -5177,7 +5177,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
                       ? 'No pending todos. You’re all caught up!'
-                      : 'Select a repo so we can authenticate to GitLab.'}
+                      : 'Select a project so we can authenticate to GitLab.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5271,7 +5271,7 @@ export default function TaskPage(): React.JSX.Element {
                         : gitlabView === 'mrs'
                           ? 'No GitLab MRs match this filter.'
                           : 'No GitLab work matches this filter.'
-                      : 'Select a repo to see GitLab work items.'}
+                      : 'Select a project to see GitLab work items.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5990,7 +5990,7 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => setNewIssueRepoId(v)}
@@ -6002,7 +6002,7 @@ export default function TaskPage(): React.JSX.Element {
                   <SelectContent>
                     {selectedRepos.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
-                        <RepoDotLabel name={r.displayName} color={r.badgeColor} />
+                        <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
                       </SelectItem>
                     ))}
                   </SelectContent>

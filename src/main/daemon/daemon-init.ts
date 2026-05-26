@@ -28,6 +28,7 @@ import {
   type ListSessionsResult
 } from './types'
 import {
+  getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
@@ -103,22 +104,28 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     const entryPath = getDaemonEntryPath()
     const healthy = await healthCheckDaemon(socketPath, tokenPath)
     if (healthy) {
-      // Why: dev worktrees share the same orca-dev userData, so a daemon from
-      // a deleted sibling checkout can pass protocol health checks while still
-      // pointing at missing native modules. Packaged app paths are stable and
-      // should preserve existing warm daemon reuse semantics.
-      const identity = app.isPackaged
-        ? 'match'
-        : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
-      if (identity === 'mismatch') {
-        console.warn('[daemon] Replacing daemon launched from a different app path')
+      const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+      if (resolverHealth === 'unhealthy') {
+        console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
-        // Why: daemon is already running from a previous app session and
-        // responded to a protocol-level ping. Safe to reuse.
-        return {
-          shutdown: async () => {
-            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        // Why: dev worktrees share the same orca-dev userData, so a daemon from
+        // a deleted sibling checkout can pass protocol health checks while still
+        // pointing at missing native modules. Packaged app paths are stable and
+        // should preserve existing warm daemon reuse semantics.
+        const identity = app.isPackaged
+          ? 'match'
+          : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+        if (identity === 'mismatch') {
+          console.warn('[daemon] Replacing daemon launched from a different app path')
+          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        } else {
+          // Why: daemon is already running from a previous app session and
+          // responded to a protocol-level ping. Safe to reuse.
+          return {
+            shutdown: async () => {
+              await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+            }
           }
         }
       }

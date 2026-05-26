@@ -35,6 +35,7 @@ import {
 } from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
@@ -1056,7 +1057,7 @@ export type GitHubSlice = {
    * Why: fan out a single work-item query across multiple repos. Partial
    * failures don't reject — a repo that both fails to fetch *and* has no
    * cached fallback contributes nothing and increments `failedCount`, which
-   * the caller surfaces as a "N of M repos failed to load" banner. A repo
+   * the caller surfaces as a "N of M projects failed to load" banner. A repo
    * served from stale cache on rejection is NOT counted as failed — matching
    * the single-repo behavior of quietly serving stale data.
    */
@@ -2503,9 +2504,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const cardProps = state.worktreeCardProperties ?? []
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
     const isPRStatusGrouping = state.groupBy === 'pr-status'
-    const rightSidebarShowsPR =
-      state.rightSidebarOpen &&
-      (state.rightSidebarTab === 'checks' || state.rightSidebarTab === 'source-control')
+    const rightSidebarShowsPR = rightSidebarShowsPullRequestData(state)
     const shouldRefreshPRs =
       isPRStatusGrouping ||
       rightSidebarShowsPR ||
@@ -2780,8 +2779,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       state.groupBy === 'pr-status' ||
       cardProps.includes('pr') ||
       cardProps.includes('ci') ||
-      (state.rightSidebarOpen &&
-        (state.rightSidebarTab === 'checks' || state.rightSidebarTab === 'source-control'))
+      rightSidebarShowsPullRequestData(state)
 
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)

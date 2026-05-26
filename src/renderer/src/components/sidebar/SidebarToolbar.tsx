@@ -9,7 +9,8 @@ import {
   HardDrive,
   MessageSquareText,
   School,
-  Settings
+  Settings,
+  Smartphone
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { GitHubViewer } from '../../../../shared/types'
 import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
+import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -254,6 +256,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
+  const openMobilePage = useAppStore((s) => s.openMobilePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
 
@@ -286,6 +289,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
+          <ScrollToCurrentWorkspaceToolbarButton />
           <DropdownMenu modal={false}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -313,6 +317,10 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               <DropdownMenuItem onSelect={openSpacePage}>
                 <HardDrive className="size-3.5" />
                 Space Analyzer
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={openMobilePage}>
+                <Smartphone className="size-3.5" />
+                Orca Mobile
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

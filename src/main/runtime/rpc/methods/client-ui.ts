@@ -12,8 +12,10 @@ const WorktreeCardProperty = z.enum([
   'unread',
   'ci',
   'issue',
+  'linear-issue',
   'pr',
   'comment',
+  'ports',
   'inline-agents'
 ])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
@@ -78,6 +80,7 @@ const SettingsUpdate = z
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
+    agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     githubProjects: GitHubProjectSettings.optional()
@@ -90,6 +93,8 @@ const UiUpdate = z
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
+    rightSidebarOpen: z.boolean().optional(),
+    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),

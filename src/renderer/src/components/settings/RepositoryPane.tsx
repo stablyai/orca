@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -13,9 +12,12 @@ import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
-import { getRepositoryBadgeColorSectionId } from './repository-settings-targets'
+import { getRepositoryIconSectionId } from './repository-settings-targets'
+import { RepositoryIconPicker } from './RepositoryIconPicker'
+import { getRepositoryPaneSearchEntries } from './repository-search'
+export { getRepositoryPaneSearchEntries }
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -25,149 +27,6 @@ type RepositoryPaneProps = {
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeRepo: (repoId: string) => void
-}
-
-export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
-  const isFolder = isFolderRepo(repo)
-  return [
-    {
-      title: 'Display Name',
-      description: 'Repo-specific display details for the sidebar and tabs.',
-      keywords: [repo.displayName, repo.path, 'repository name']
-    },
-    {
-      title: 'Badge Color',
-      description: 'Repo color used in the sidebar and tabs.',
-      keywords: [repo.displayName, 'color', 'badge']
-    },
-    ...(isFolder
-      ? []
-      : [
-          {
-            title: 'Default Worktree Base',
-            description: 'Default base branch or ref when creating worktrees.',
-            keywords: [repo.displayName, 'base ref', 'branch']
-          },
-          {
-            title: 'Sparse Checkout Presets',
-            description: 'Saved directory sets for sparse worktree creation.',
-            keywords: [
-              repo.displayName,
-              'sparse',
-              'checkout',
-              'preset',
-              'presets',
-              'directory',
-              'directories',
-              'monorepo'
-            ]
-          }
-        ]),
-    {
-      title: 'Remove Repo',
-      description: 'Remove this repository from Orca.',
-      keywords: [repo.displayName, 'delete', 'repository']
-    },
-    ...(isFolder
-      ? []
-      : [
-          {
-            title: 'Worktree Symlinks',
-            description: 'Paths to symlink from the primary checkout into newly created worktrees.',
-            keywords: [
-              repo.displayName,
-              'symlink',
-              'symlinks',
-              'worktree',
-              'link',
-              'shared',
-              'env',
-              'node_modules'
-            ]
-          },
-          {
-            title: 'MCP Configs',
-            description: 'Inspect repo-level MCP server config files.',
-            keywords: [
-              repo.displayName,
-              'mcp',
-              'model context protocol',
-              '.mcp.json',
-              '.cursor/mcp.json',
-              '.claude.json',
-              '.claude/mcp.json'
-            ]
-          },
-          {
-            title: 'Setup Script',
-            description: 'Local and shared scripts that run after a new worktree is created.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'setup',
-              'setup script',
-              'setup command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Archive Script',
-            description: 'Local and shared scripts that run before a worktree is archived.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'archive',
-              'archive script',
-              'archive command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Advanced',
-            description: 'Command source and orca.yaml details.',
-            keywords: [
-              repo.displayName,
-              'advanced',
-              'command source',
-              'local',
-              'orca.yaml',
-              'shared',
-              'both',
-              'source',
-              'authoritative'
-            ]
-          },
-          {
-            title: 'When to Run Setup',
-            description: 'Choose the default behavior when a setup script is available.',
-            keywords: [
-              repo.displayName,
-              'setup run policy',
-              'ask',
-              'run by default',
-              'skip by default'
-            ]
-          },
-          {
-            title: 'Custom GitHub Issue Command',
-            description:
-              'File-based linked-issue command configured via orca.yaml and optional local override.',
-            keywords: [
-              repo.displayName,
-              'github issue command',
-              'issue command',
-              'workflow',
-              'github',
-              'orca.yaml',
-              '.orca/issue-command'
-            ]
-          }
-        ])
-  ]
 }
 
 export function RepositoryPane({
@@ -215,7 +74,9 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
+    ['Display Name', 'Project Icon', 'Default Worktree Base', 'Remove Project'].includes(
+      entry.title
+    )
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -247,7 +108,7 @@ export function RepositoryPane({
       />
     ) : null
 
-  // Why: Identity (name, color, base ref) stays at the top so it's the first
+  // Why: Identity (name, icon, base ref) stays at the top so it's the first
   // thing a user sees. Setup commands follow immediately because they're the
   // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
@@ -257,7 +118,7 @@ export function RepositoryPane({
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
-              Repo-specific display details for the sidebar and tabs.
+              Project-specific display details for the sidebar and tabs.
             </p>
             <p className="text-xs text-muted-foreground">
               Type: <span className="text-foreground">{getRepoKindLabel(repo)}</span>
@@ -269,9 +130,9 @@ export function RepositoryPane({
             ) : null}
           </div>
           <SearchableSetting
-            title="Remove Repo"
-            description="Remove this repository from Orca."
-            keywords={[repo.displayName, 'delete', 'repository']}
+            title="Remove Project"
+            description="Remove this project from Orca."
+            keywords={[repo.displayName, 'delete', 'project', 'repository']}
           >
             <Button
               variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
@@ -281,45 +142,46 @@ export function RepositoryPane({
               className="gap-2"
             >
               <Trash2 className="size-3.5" />
-              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Repo'}
+              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Project'}
             </Button>
           </SearchableSetting>
         </div>
 
         <SearchableSetting
           title="Display Name"
-          description="Repo-specific display details for the sidebar and tabs."
-          keywords={[repo.displayName, repo.path, 'repository name', 'color', 'badge']}
+          description="Project-specific display details for the sidebar and tabs."
+          keywords={[repo.displayName, repo.path, 'project name', 'repository name']}
           className="space-y-2"
-          id={getRepositoryBadgeColorSectionId(repo.id)}
         >
           <Label className="text-sm font-semibold">Display Name</Label>
-          <div className="flex items-center gap-3">
-            <Input
-              value={repo.displayName}
-              onChange={(e) =>
-                updateRepo(repo.id, {
-                  displayName: e.target.value
-                })
-              }
-              className="h-9 flex-1 text-sm"
-            />
-            <div className="flex flex-wrap gap-2">
-              {REPO_COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => updateRepo(repo.id, { badgeColor: color })}
-                  className={`size-7 rounded-full transition-all ${
-                    repo.badgeColor === color
-                      ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                      : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
-                  }`}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
+          <Input
+            value={repo.displayName}
+            onChange={(e) =>
+              updateRepo(repo.id, {
+                displayName: e.target.value
+              })
+            }
+            className="h-9 text-sm"
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Project Icon"
+          description="Project icon and color used in the sidebar and tabs."
+          keywords={[
+            repo.displayName,
+            repo.path,
+            'project icon',
+            'repository icon',
+            'color',
+            'badge',
+            'emoji',
+            'favicon'
+          ]}
+          className="space-y-2"
+          id={getRepositoryIconSectionId(repo.id)}
+        >
+          <RepositoryIconPicker repo={repo} updateRepo={updateRepo} />
         </SearchableSetting>
 
         {!isFolder ? (

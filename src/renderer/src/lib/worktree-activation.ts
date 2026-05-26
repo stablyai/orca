@@ -1,4 +1,9 @@
-import type { SetupSplitDirection, Worktree, WorktreeSetupLaunch } from '../../../shared/types'
+import type {
+  SetupSplitDirection,
+  TuiAgent,
+  Worktree,
+  WorktreeSetupLaunch
+} from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
@@ -6,11 +11,11 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { useAppStore } from '@/store'
+import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import {
   activateWebRuntimeSessionWorktree,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
@@ -47,6 +52,7 @@ type WorktreeActivationStore = {
     startup: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -120,14 +126,16 @@ export function activateAndRevealWorktree(
     startup?: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
     setup?: WorktreeSetupLaunch
     issueCommand?: IssueCommandLaunch
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = findWorktreeById(state.worktreesByRepo, worktreeId)
+  const wt = state.getKnownWorktreeById(worktreeId)
   if (!wt) {
     return false
   }
@@ -187,7 +195,11 @@ export function activateAndRevealWorktree(
   }
 
   // 6. Reveal in sidebar
-  state.revealWorktreeInSidebar(worktreeId)
+  if (opts?.sidebarRevealBehavior) {
+    state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
+  } else {
+    state.revealWorktreeInSidebar(worktreeId)
+  }
 
   return { primaryTabId }
 }
@@ -195,7 +207,12 @@ export function activateAndRevealWorktree(
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
-  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry },
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    telemetry?: AgentStartedTelemetry
+  },
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch
 ): string | null {

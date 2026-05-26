@@ -22,6 +22,10 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 
 const execFileAsync = promisify(execFile)
 
+type RegisterAppHandlersOptions = {
+  onBeforeRelaunch?: () => void
+}
+
 async function pickFloatingMarkdownDocument(
   event: IpcMainInvokeEvent
 ): Promise<MarkdownDocument | null> {
@@ -96,7 +100,7 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-export function registerAppHandlers(store: Store): void {
+export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
@@ -166,6 +170,8 @@ export function registerAppHandlers(store: Store): void {
     // UI state before the window tears down. `app.relaunch()` schedules a
     // spawn; `app.exit(0)` triggers the actual quit without invoking
     // before-quit handlers that could block on confirmation dialogs.
+    // Mark shutdown first because app.exit() can bypass the usual quit latch.
+    options.onBeforeRelaunch?.()
     setTimeout(() => {
       app.relaunch()
       app.exit(0)

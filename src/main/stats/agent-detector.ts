@@ -24,6 +24,18 @@ type PtyRecord = {
  * orca-runtime.ts normalizeTerminalChunk but avoids importing the runtime.
  */
 function hasMeaningfulContent(chunk: string): boolean {
+  // Why: large plain-text PTY bursts should not pay the full ANSI stripping
+  // chain just to prove they contain visible output.
+  for (let index = 0; index < chunk.length; index++) {
+    const code = chunk.charCodeAt(index)
+    if (code === 0x1b || code < 0x09 || (code > 0x0d && code < 0x20) || code > 0x7e) {
+      break
+    }
+    if (code > 0x20) {
+      return true
+    }
+  }
+
   const stripped = chunk
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
