@@ -93,6 +93,16 @@ export default defineConfig({
     plugins: [react(), tailwindcss()],
     worker: {
       format: 'es'
+    },
+    build: {
+      // Why: the renderer only ever runs in Electron's bundled Chromium, not
+      // legacy browsers. Without this, Vite's default target ('modules')
+      // includes old Safari, so esbuild "lowers" backdrop-filter to a
+      // -webkit-backdrop-filter-only declaration — which modern Chromium
+      // (Electron 41) ignores, silently killing every frosted-glass surface
+      // in packaged builds (dev is unminified so it never hit this). Target
+      // the actual Chromium so the standard property survives.
+      cssTarget: 'chrome120'
     }
   }
 })

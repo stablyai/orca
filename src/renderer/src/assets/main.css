@@ -259,10 +259,12 @@
   --editor-surface: rgba(15, 18, 32, 0.4);
   --card: rgba(15, 18, 32, 0.15);
   --card-foreground: rgba(235, 240, 255, 1);
-  /* Why: panels must read brighter than the dark blurred backdrop so they
-     pop as frosted glass (not blend into the dim). Lighter cool-grey fill,
-     distinct from the chrome's rgb(15,18,32). */
-  --popover: rgba(34, 40, 60, 0.82);
+  /* Why: panels read brighter than the dark blurred backdrop so they pop as
+     frosted glass (distinct from the chrome's rgb(15,18,32)). Fill is held at
+     0.90 because Electron's backdrop-filter is unreliable over app content in
+     packaged builds — the fill alone must hide content behind ("can't read
+     through"), with blur as enhancement where it renders. */
+  --popover: rgba(34, 40, 60, 0.9);
   --popover-foreground: rgba(235, 240, 255, 1);
   --primary: rgba(235, 240, 255, 1);
   --primary-foreground: rgba(18, 22, 38, 0.98);
@@ -499,7 +501,6 @@
 :root.glass-dark .dialog-overlay-dim {
   background-color: rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 :root.glass-light .xterm-viewport {
@@ -513,7 +514,6 @@
 
 .glass-surface {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* Why: floating panels (floating workspace, command palettes, sheet-like
@@ -523,7 +523,6 @@
    --glass-blur is enough separation. */
 .glass-surface-strong {
   backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 3)) saturate(var(--glass-saturate));
 }
 
 /* Why: respect the user's system-level reduce-transparency setting. macOS
@@ -754,7 +753,6 @@
   align-items: center;
   background: var(--bg-titlebar, var(--card));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -775,7 +773,6 @@
   flex-shrink: 0;
   background: var(--bg-titlebar, var(--card));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   /* Why: draw the divider via inset shadow instead of border-bottom so the
      flex content area spans the full 36px. With border-bottom + border-box,
      the content area shrinks to 35px and flex-centered controls land at
