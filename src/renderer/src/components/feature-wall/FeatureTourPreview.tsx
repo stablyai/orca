@@ -181,9 +181,10 @@ function TasksFrame(): JSX.Element {
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
               GH #1799
             </span>
-            <span className="truncate text-[15px] leading-none text-muted-foreground">
-              Bulk archive in source control
-            </span>
+            {/* Why: surrounding rows show only the issue number + a skeleton
+                so the user's eye is drawn to the row that has real text — the
+                one the cursor clicks on. */}
+            <span className="h-2 w-[60%] rounded-full bg-foreground/12" />
           </div>
           <div className="feature-tour-tasks-row relative flex h-9 items-center gap-2.5 rounded-md border border-border bg-background px-3">
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
@@ -209,9 +210,7 @@ function TasksFrame(): JSX.Element {
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
               LIN-329
             </span>
-            <span className="truncate text-[15px] leading-none text-muted-foreground">
-              Quote search empty state
-            </span>
+            <span className="h-2 w-[45%] rounded-full bg-foreground/12" />
           </div>
         </div>
 
