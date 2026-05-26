@@ -53,6 +53,12 @@ import {
   getQuickComposerCreateDisabled
 } from '@/lib/new-workspace-create-gates'
 import {
+  lookupSmartGitHubSubmitItem,
+  getSmartGitHubSubmitIntent,
+  getSmartGitHubSubmitResolution,
+  type SmartGitHubSubmitResolution
+} from '@/lib/smart-github-submit'
+import {
   canUseRepoBackedComposerSources,
   getSelectedRepoSshGate,
   isSshConnectInProgress
@@ -608,8 +614,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [selectedRepo, selectedRepoIsGit, yamlHooks]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  const hasIssueAutomationConfig = enableIssueAutomation && issueCommandTemplate.length > 0
-  const canOfferIssueAutomation = parsedLinkedIssueNumber !== null && hasIssueAutomationConfig
   // Why: the "no prompt + linked item" path below rehydrates the issueCommand
   // template into the main startup prompt. When that happens we suppress the
   // separate split pane that would otherwise run the same command twice.
@@ -619,7 +623,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     enableIssueAutomation &&
     (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
     !hasLoadedIssueCommand
-  const shouldRunIssueAutomation = canOfferIssueAutomation && !willApplyIssueCommandAsPrompt
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
   const resolvedSetupDecision =
     setupDecision ??
@@ -668,22 +671,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       artifactUrl: linkedWorkItem.url
     })
   }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
-  const startupPrompt = useMemo(() => {
-    if (shouldApplyLinkedOnlyTemplate) {
-      return buildAgentPromptWithContext(linkedOnlyTemplatePrompt, attachmentPaths, [])
-    }
-    return buildAgentPromptWithContext(
-      agentPrompt,
-      attachmentPaths,
-      linkedWorkItem?.url ? [linkedWorkItem.url] : []
-    )
-  }, [
-    agentPrompt,
-    attachmentPaths,
-    linkedOnlyTemplatePrompt,
-    linkedWorkItem?.url,
-    shouldApplyLinkedOnlyTemplate
-  ])
   const normalizedLinkQuery = useMemo(
     () => normalizeGitHubLinkQuery(linkDebouncedQuery),
     [linkDebouncedQuery]
@@ -1069,6 +1056,48 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [name]
   )
+
+  const resolvePendingSmartGitHubSubmit =
+    useCallback(async (): Promise<SmartGitHubSubmitResolution | null> => {
+      if (linkedWorkItem || !selectedRepo || !selectedRepoIsGit) {
+        return null
+      }
+
+      const intent = getSmartGitHubSubmitIntent(name)
+      if (!intent) {
+        return null
+      }
+
+      const item = await lookupSmartGitHubSubmitItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        intent,
+        workItem: (args) => window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>,
+        workItemByOwnerRepo: (args) =>
+          window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>
+      })
+      if (!item) {
+        throw new Error('Could not resolve the GitHub item before creating the workspace.')
+      }
+
+      const resolution = getSmartGitHubSubmitResolution(item)
+      // Why: Create can be clicked before the debounced smart field commits
+      // its selected source. Commit the resolved item here so failures leave
+      // the form showing the title instead of the raw URL.
+      setLinkedIssue(
+        resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
+      )
+      setLinkedPR(resolution.linkedPR)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setLinkedWorkItem(resolution.linkedWorkItem)
+      setName(resolution.workspaceName)
+      lastAutoNameRef.current = resolution.workspaceName
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
+      setStartFromResetHint(null)
+      return resolution
+    }, [linkedWorkItem, name, selectedRepo, selectedRepoIsGit])
 
   // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
   // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
@@ -1480,9 +1509,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      applyLinkedWorkItem(item)
       if (item.type !== 'pr' || !repoForItem) {
         setPushTarget(undefined)
-        applyLinkedWorkItem(item)
         return
       }
       setPushTarget(undefined)
@@ -1678,10 +1707,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const submit = useCallback(async (): Promise<void> => {
-    const workspaceName = workspaceSeedName
     if (
       !repoId ||
-      !workspaceName ||
+      !workspaceSeedName ||
       !selectedRepo ||
       selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
@@ -1695,6 +1723,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreateError(null)
     setCreating(true)
     try {
+      const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+      const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
+      const submitLinkedIssueNumber =
+        smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
+      const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
+      const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceSeedName
+      if (!workspaceName) {
+        return
+      }
+      const submitShouldApplyLinkedOnlyTemplate =
+        enableIssueAutomation &&
+        !agentPrompt.trim() &&
+        Boolean(submitLinkedWorkItem) &&
+        hasLoadedIssueCommand
+      const submitLinkedOnlyTemplatePrompt =
+        submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
+          ? renderIssueCommandTemplate(
+              issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE,
+              {
+                issueNumber:
+                  submitLinkedWorkItem.type === 'issue' ? submitLinkedWorkItem.number : null,
+                artifactUrl: submitLinkedWorkItem.url
+              }
+            )
+          : ''
+      const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
+        ? buildAgentPromptWithContext(submitLinkedOnlyTemplatePrompt, attachmentPaths, [])
+        : buildAgentPromptWithContext(
+            agentPrompt,
+            attachmentPaths,
+            submitLinkedWorkItem?.url ? [submitLinkedWorkItem.url] : []
+          )
+      const submitShouldRunIssueAutomation =
+        enableIssueAutomation &&
+        submitLinkedIssueNumber !== null &&
+        issueCommandTemplate.length > 0 &&
+        !submitShouldApplyLinkedOnlyTemplate
+
       const setupTrustDecision = selectedRepoIsGit
         ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
         : 'skip'
@@ -1704,14 +1770,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
       let issueCommandTrustDecision: 'run' | 'skip' = 'run'
-      if (selectedRepoIsGit && shouldRunIssueAutomation) {
+      if (selectedRepoIsGit && submitShouldRunIssueAutomation) {
         issueCommandTrustDecision =
           setupTrustDecision === 'skip'
             ? 'skip'
             : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
       }
 
-      const linkedLinearIssue = linkedWorkItem?.linearIdentifier
+      const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
       const effectiveBranchNameOverride =
         branchNameOverride && workspaceName === branchAutoNameRef.current
           ? branchNameOverride
@@ -1728,38 +1794,36 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : undefined,
         telemetrySource,
-        linkedWorkItem?.title,
-        parsedLinkedIssueNumber ?? undefined,
-        effectiveLinkedPR ?? undefined,
+        smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+        submitLinkedIssueNumber ?? undefined,
+        submitLinkedPR ?? undefined,
         pushTarget,
         tuiAgent,
         linkedLinearIssue,
         effectiveBranchNameOverride,
-        resolvedInitialWorkspaceStatus
+        resolvedInitialWorkspaceStatus,
+        linkedGitLabMR ?? undefined,
+        linkedGitLabIssue ?? undefined
       )
       const worktree = result.worktree
 
       const trimmedNote = note.trim()
-      await applyWorktreeMeta(worktree.id, {
-        ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
-        ...(linkedGitLabIssue !== null ? { linkedGitLabIssue } : {}),
-        ...(linkedGitLabMR !== null ? { linkedGitLabMR } : {}),
-        ...(trimmedNote ? { comment: trimmedNote } : {})
-      })
+      // Why: linked source metadata is already included in createWorktree.
+      // Re-saving it here can trigger slow post-create PR push-target lookups.
+      await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
 
       const issueCommand =
-        shouldRunIssueAutomation && issueCommandTrustDecision === 'run'
+        submitShouldRunIssueAutomation && issueCommandTrustDecision === 'run'
           ? {
               command: renderIssueCommandTemplate(issueCommandTemplate, {
-                issueNumber: parsedLinkedIssueNumber,
-                artifactUrl: linkedWorkItem?.url ?? null
+                issueNumber: submitLinkedIssueNumber,
+                artifactUrl: submitLinkedWorkItem?.url ?? null
               })
             }
           : undefined
       const startupPlan = buildAgentStartupPlan({
         agent: tuiAgent,
-        prompt: startupPrompt,
+        prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         platform: CLIENT_PLATFORM
       })
@@ -1809,18 +1873,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreating(false)
     }
   }, [
+    agentPrompt,
+    attachmentPaths,
     baseBranch,
     branchNameOverride,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
+    enableIssueAutomation,
     issueCommandTemplate,
     effectiveLinkedPR,
+    hasLoadedIssueCommand,
     linkedGitLabIssue,
     linkedGitLabMR,
-    linkedWorkItem?.linearIdentifier,
-    linkedWorkItem?.title,
-    linkedWorkItem?.url,
+    linkedWorkItem,
     normalizedSparseDirectories,
     note,
     onCreated,
@@ -1829,6 +1895,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     pushTarget,
     repoId,
     requiresExplicitSetupChoice,
+    resolvePendingSmartGitHubSubmit,
     resolvedSetupDecision,
     resolvedInitialWorkspaceStatus,
     selectedRepo,
@@ -1842,16 +1909,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     effectivePresetId,
     telemetrySource,
     tuiAgent,
-    shouldRunIssueAutomation,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
-    startupPrompt,
     workspaceSeedName
   ])
 
   const submitQuick = useCallback(
     async (agent: TuiAgent | null): Promise<void> => {
-      const workspaceName = getWorkspaceSeedName({
+      const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,
         prompt: '',
         linkedIssueNumber: parsedLinkedIssueNumber,
@@ -1860,7 +1925,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       })
       if (
         !repoId ||
-        !workspaceName ||
+        !workspaceNameSeed ||
         !selectedRepo ||
         selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
@@ -1872,6 +1937,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
       setCreating(true)
       try {
+        const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+        const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
+        const submitLinkedIssueNumber =
+          smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
+        const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
+        const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceNameSeed
+        if (!workspaceName) {
+          return
+        }
+
         let submitSetupConfig = setupConfig
         let submitResolvedSetupDecision = resolvedSetupDecision
         if (selectedRepoIsGit && checkedHooksRepoId !== repoId) {
@@ -1906,7 +1981,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? 'skip'
             : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
-        const linkedLinearIssue = linkedWorkItem?.linearIdentifier
+        const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
         const effectiveBranchNameOverride =
           branchNameOverride && workspaceName === branchAutoNameRef.current
             ? branchNameOverride
@@ -1923,14 +1998,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             : undefined,
           telemetrySource,
-          linkedWorkItem?.title,
-          parsedLinkedIssueNumber ?? undefined,
-          effectiveLinkedPR ?? undefined,
+          smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+          submitLinkedIssueNumber ?? undefined,
+          submitLinkedPR ?? undefined,
           pushTarget,
           agent ?? undefined,
           linkedLinearIssue,
           effectiveBranchNameOverride,
-          resolvedInitialWorkspaceStatus
+          resolvedInitialWorkspaceStatus,
+          linkedGitLabMR ?? undefined,
+          linkedGitLabIssue ?? undefined
         )
         const worktree = result.worktree
 
@@ -1943,9 +2020,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // sending instead of auto-executing a "Complete <url>" template.
         // Falls back to the trimmed note when the linked item carries no
         // number/URL (Linear typed-only entries).
-        const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote)
+        const isLinearTypedOnly = submitLinkedWorkItem?.number === 0 && Boolean(trimmedNote)
         const quickPrompt = isLinearTypedOnly && trimmedNote ? trimmedNote : ''
-        const quickDraftPrompt = linkedWorkItem && !isLinearTypedOnly ? linkedWorkItem.url : null
+        const quickDraftPrompt =
+          submitLinkedWorkItem && !isLinearTypedOnly ? submitLinkedWorkItem.url : null
 
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
@@ -2056,6 +2134,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       createWorktree,
       fallbackCreatureName,
       effectiveLinkedPR,
+      linkedGitLabIssue,
+      linkedGitLabMR,
       linkedPR,
       linkedWorkItem,
       name,
@@ -2067,6 +2147,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       pushTarget,
       repoId,
       requiresExplicitSetupChoice,
+      resolvePendingSmartGitHubSubmit,
       resolvedSetupDecision,
       resolvedInitialWorkspaceStatus,
       selectedRepo,
