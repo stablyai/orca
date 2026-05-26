@@ -309,13 +309,18 @@ export function useVirtualizedScrollAnchor<
       return
     }
 
-    if (!itemElementSelector && restoreFromMeasuredItem()) {
+    // Why: right after a delete the virtualizer can briefly render the wrong
+    // window, so the anchor row's DOM node isn't mounted yet even though the
+    // virtualizer still has its measured slot. Pin from that measured start
+    // (preserving the within-row offset) before falling back to scrollToIndex,
+    // whose align:'start' snaps the row to the viewport top and visibly jumps.
+    if (restoreFromMeasuredItem()) {
       return
     }
 
-    // Why: after add/delete the virtualizer can initially render the wrong
-    // window. Move to the anchored row, then apply the within-row offset once
-    // TanStack Virtual has mounted and measured that row.
+    // Why: the anchored row is outside the virtualizer's current window — no
+    // DOM node and no measured slot. Bring it in, then apply the within-row
+    // offset once TanStack Virtual has mounted and measured that row.
     virtualizer.scrollToIndex(index, { align: 'start' })
     const frameId = window.requestAnimationFrame(() => {
       if (!restoreFromDomElement()) {

@@ -1233,6 +1233,35 @@ describe('removeWorktree state cleanup', () => {
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
   })
 
+  it('records the sidebar scroll anchor in the same tick it removes the worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+
+    const sidebar = new EventTarget()
+    let worktreePresentWhenRecorded: boolean | null = null
+    sidebar.addEventListener('orca-record-virtualized-scroll-anchor', () => {
+      worktreePresentWhenRecorded =
+        store.getState().worktreesByRepo.repo1?.some((w) => w.id === wt.id) ?? false
+    })
+    const globalWithDocument = globalThis as { document?: unknown }
+    const originalDocument = globalWithDocument.document
+    globalWithDocument.document = {
+      querySelector: (selector: string) => (selector === '[data-worktree-sidebar]' ? sidebar : null)
+    }
+
+    try {
+      await store.getState().removeWorktree(wt.id)
+    } finally {
+      globalWithDocument.document = originalDocument
+    }
+
+    // The anchor must be captured while the row still exists so the post-delete
+    // restore pins the pre-removal position instead of the already-shifted list.
+    expect(worktreePresentWhenRecorded).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
   it('cleans up expandedDirs for the removed worktree', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

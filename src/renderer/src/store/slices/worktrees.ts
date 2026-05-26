@@ -26,6 +26,7 @@ import {
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
+import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
@@ -1020,6 +1021,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await get().shutdownWorktreeTerminals(worktreeId)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
+
+      // Why: deletion is async (backend + terminal/browser teardown awaited
+      // above), so snapshot the sidebar's current top-row anchor in the same
+      // tick we remove the row. Recording at click time goes stale across the
+      // await, and this covers every delete entry point (modal, card, SSH,
+      // batch) rather than only the context menu.
+      requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
       set((s) => {
         const next = { ...s.worktreesByRepo }
