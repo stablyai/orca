@@ -1,7 +1,12 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
-import { ClaudeIcon } from '../status-bar/icons'
-import { CursorIcon, MailGlyph, WorkingSpinner } from './feature-tour-preview-glyphs'
+import { ClaudeIcon, OpenCodeGoIcon } from '../status-bar/icons'
+import {
+  CodexInlineIcon,
+  CursorIcon,
+  MailGlyph,
+  WorkingSpinner
+} from './feature-tour-preview-glyphs'
 import { FeatureTourWorkspaceCard } from './FeatureTourWorkspaceCard'
 
 type FrameId = 1 | 2 | 3 | 4
@@ -73,11 +78,21 @@ function WorkspaceFrame(): JSX.Element {
   )
 }
 
-const ORCH_CHILDREN = [
-  { key: 'top', position: 'top-[8%]', label: 'PR 1/3' },
-  { key: 'mid', position: 'top-1/2 -translate-y-1/2', label: 'PR 2/3' },
-  { key: 'bot', position: 'bottom-[8%]', label: 'PR 3/3' }
-] as const
+type OrchChildAgent = 'claude' | 'codex' | 'opencode-go'
+
+const ORCH_CHILDREN: readonly {
+  key: 'top' | 'mid' | 'bot'
+  position: string
+  label: string
+  agent: OrchChildAgent
+}[] = [
+  // Why: card vertical centers anchor to 18% / 50% / 82% — the same Y
+  // endpoints the dashed SVG paths terminate at — so the connectors land on
+  // each card's center regardless of card height.
+  { key: 'top', position: 'top-[18%] -translate-y-1/2', label: 'PR 1/3', agent: 'claude' },
+  { key: 'mid', position: 'top-1/2 -translate-y-1/2', label: 'PR 2/3', agent: 'codex' },
+  { key: 'bot', position: 'top-[82%] -translate-y-1/2', label: 'PR 3/3', agent: 'opencode-go' }
+]
 
 function OrchestrationFrame(): JSX.Element {
   // Why: a horizontal fan (root → 3 children L→R) reads naturally as
@@ -106,17 +121,34 @@ function OrchestrationFrame(): JSX.Element {
           height="100%"
           aria-hidden
         >
-          <g
+          {/* Why: vectorEffect is NOT inheritable in SVG, so the
+              non-scaling-stroke attribute must live on each path. Hoisting
+              it onto <g> let preserveAspectRatio="none" stretch the dashes
+              into trapezoids on the diagonal connectors. */}
+          <path
+            d="M 34 50 C 49 50, 49 18, 64 18"
             fill="none"
             stroke="currentColor"
             strokeWidth="1"
             strokeDasharray="2 3"
             vectorEffect="non-scaling-stroke"
-          >
-            <path d="M 34 50 C 49 50, 49 18, 64 18" />
-            <path d="M 34 50 L 64 50" />
-            <path d="M 34 50 C 49 50, 49 82, 64 82" />
-          </g>
+          />
+          <path
+            d="M 34 50 L 64 50"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeDasharray="2 3"
+            vectorEffect="non-scaling-stroke"
+          />
+          <path
+            d="M 34 50 C 49 50, 49 82, 64 82"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeDasharray="2 3"
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
 
         {/* Why: parent matches WorkspaceCard composition — spinner + title row,
@@ -139,19 +171,35 @@ function OrchestrationFrame(): JSX.Element {
           </div>
         </div>
 
-        {ORCH_CHILDREN.map(({ key, position, label }) => (
+        {/* Why: children mirror the parent's WorkspaceCard composition so the
+            fan reads as "coordinator workspace dispatches to 3 child
+            workspaces, each running its own agent." */}
+        {ORCH_CHILDREN.map(({ key, position, label, agent }) => (
           <div
             key={key}
             className={cn(
-              'feature-tour-orch-child absolute right-0 flex h-9 w-[36%] items-center gap-2 rounded-md border border-border bg-background px-3',
+              'feature-tour-orch-child absolute right-0 flex w-[36%] flex-col rounded-md border border-border bg-background px-3 py-2',
               key,
               position
             )}
           >
-            <span className="font-mono text-[14.5px] leading-none text-muted-foreground">
-              {label}
-            </span>
-            <span className="h-2 flex-1 rounded-full bg-foreground/12" />
+            <div className="flex items-center gap-2">
+              <WorkingSpinner />
+              <span className="truncate font-mono text-[14px] font-medium leading-none text-foreground">
+                {label}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5 pl-3.5">
+              <WorkingSpinner size="xs" />
+              {agent === 'claude' ? (
+                <ClaudeIcon size={12} />
+              ) : agent === 'codex' ? (
+                <CodexInlineIcon />
+              ) : (
+                <OpenCodeGoIcon size={12} />
+              )}
+              <span className="h-2 flex-1 rounded-full bg-foreground/15" />
+            </div>
           </div>
         ))}
 
