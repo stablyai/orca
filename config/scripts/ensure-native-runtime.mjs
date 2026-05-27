@@ -93,14 +93,6 @@ function ensureElectronRuntime() {
   }
 }
 
-function runCurrentProcessCheck() {
-  const failures = collectNativeModuleFailures()
-  if (failures.length === 0) {
-    return { ok: true, failures }
-  }
-  return { ok: false, failures }
-}
-
 function runNodeCheck() {
   // Why: a failed native addon load can poison the current process, so the
   // post-rebuild verification must happen in a fresh Node process.
