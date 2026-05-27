@@ -838,7 +838,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         changed = true
-        return { ...worktree, head: nextHead, branch: nextBranch }
+        // Why: when the user hasn't set a custom name, mergeWorktree derives the
+        // title from the branch. A terminal branch switch only patches branch/head
+        // here, so re-derive the title too when it was auto-derived (matches the
+        // branch) — otherwise the card title stays frozen on the old branch name.
+        const branchShort = (b: string): string => b.replace(/^refs\/heads\//, '')
+        const wasAutoDerived = worktree.displayName === branchShort(worktree.branch)
+        const nextDisplayName = wasAutoDerived ? branchShort(nextBranch) : worktree.displayName
+        return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
       if (!changed) {
