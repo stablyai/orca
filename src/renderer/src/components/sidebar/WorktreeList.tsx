@@ -294,6 +294,7 @@ const LINEAGE_INDENT = 18
 // Why: top-level worktrees are children of their project header; indent the
 // group one step so the status dots nest under the folder icon for hierarchy.
 const WORKTREE_GROUP_INDENT = 18
+const PROJECT_GROUP_HEADER_INDENT = 10
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
 type VirtualizedWorktreeViewportProps = {
@@ -2055,7 +2056,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
                       row.repo && 'overflow-hidden'
                     )}
-                    style={{ paddingLeft: 12 + Math.min(projectGroupDepth, 6) * 14 }}
+                    style={{
+                      paddingLeft: 12 + Math.min(projectGroupDepth, 6) * PROJECT_GROUP_HEADER_INDENT
+                    }}
                     onDragOver={
                       isPinnedHeader
                         ? handleWorkspacePinDragOver
