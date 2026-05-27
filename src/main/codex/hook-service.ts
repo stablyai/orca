@@ -82,6 +82,13 @@ const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   PostCompact: 'post_compact'
 }
 
+const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
+  '${CLAUDE_PLUGIN_ROOT}',
+  '${CLAUDE_PLUGIN_DATA}',
+  '${PLUGIN_ROOT}',
+  '${PLUGIN_DATA}'
+] as const
+
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
 const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
@@ -223,6 +230,20 @@ function getTrustSignature(entry: CodexTrustEntry): string {
   })
 }
 
+function commandUsesCodexPluginOnlyPlaceholder(command: string | undefined): boolean {
+  return (
+    typeof command === 'string' &&
+    CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS.some((placeholder) => command.includes(placeholder))
+  )
+}
+
+function removeCodexPluginEnvironmentCommands(definitions: HookDefinition[]): HookDefinition[] {
+  // Why: Orca mirrors system hooks into a plain runtime hooks.json. Plugin
+  // placeholders only work for Codex plugin hook sources, so copying those
+  // commands here strips the environment they require and turns them into 127s.
+  return removeManagedCommands(definitions, commandUsesCodexPluginOnlyPlaceholder)
+}
+
 function getRuntimeHooksWithSystemUserHooks(
   runtimeHooks: Record<string, HookDefinition[]> | undefined,
   isManagedCommand: (command: string | undefined) => boolean
@@ -252,7 +273,9 @@ function getRuntimeHooksWithSystemUserHooks(
       continue
     }
 
-    const systemUserDefinitions = removeManagedCommands(systemDefinitions, isManagedCommand)
+    const systemUserDefinitions = removeCodexPluginEnvironmentCommands(
+      removeManagedCommands(systemDefinitions, isManagedCommand)
+    )
     if (systemUserDefinitions.length === 0) {
       continue
     }

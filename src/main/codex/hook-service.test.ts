@@ -252,6 +252,89 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
   })
 
+  it('skips plugin-placeholder system hooks when mirroring into runtime CODEX_HOME', () => {
+    const pluginCommands = [
+      'node "${CLAUDE_PLUGIN_ROOT}/scripts/on-stop.mjs"',
+      'node "${CLAUDE_PLUGIN_DATA}/scripts/on-stop.mjs"',
+      'node "${PLUGIN_ROOT}/scripts/on-stop.mjs"',
+      'node "${PLUGIN_DATA}/scripts/on-stop.mjs"'
+    ]
+    const userCommand = 'user-stop-hook'
+    const stopEventLabel = 'stop' as const
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  ...pluginCommands.map((command) => ({ type: 'command', command })),
+                  { type: 'command', command: userCommand }
+                ]
+              }
+            ],
+            PreCompact: pluginCommands.map((command) => ({
+              hooks: [{ type: 'command', command }]
+            }))
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [
+        ...pluginCommands.map((command, handlerIndex) => ({
+          sourcePath: systemHooksPath,
+          eventLabel: stopEventLabel,
+          groupIndex: 0,
+          handlerIndex,
+          command
+        })),
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: stopEventLabel,
+          groupIndex: 0,
+          handlerIndex: pluginCommands.length,
+          command: userCommand
+        }
+      ]),
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeHooksText = readFileSync(managedHooksPath, 'utf-8')
+    const runtimeHooks = JSON.parse(runtimeHooksText) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    const stopCommands =
+      runtimeHooks.hooks.Stop?.flatMap(
+        (definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? []
+      ) ?? []
+
+    expect(stopCommands).toContain(userCommand)
+    expect(stopCommands.some((command) => command.includes('codex-hook'))).toBe(true)
+    expect(runtimeHooks.hooks.PreCompact).toBeUndefined()
+    for (const command of pluginCommands) {
+      expect(runtimeHooksText).not.toContain(command)
+    }
+
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    for (const command of pluginCommands) {
+      expect(runtimeToml).not.toContain(command)
+    }
+  })
+
   it('mirrors compact-event user hook approvals and disabled trust entries', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
