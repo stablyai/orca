@@ -20,6 +20,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 
 type LaunchedOrca = {
@@ -73,7 +74,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
 
   const launch = async (): Promise<LaunchedOrca> => {
     const app = await electron.launch({
-      args: [mainPath],
+      args: getOrcaElectronLaunchArgs(mainPath, headful),
       env: launchEnv(userDataDir, headful)
     })
     const page = await app.firstWindow({ timeout: 120_000 })
@@ -118,16 +119,24 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     await store.getState().fetchRepos()
   })
 
-  await page.evaluate(async () => {
+  const repoId = await page.evaluate(async (repoPath) => {
     const store = window.__store
     if (!store) {
-      return
+      return null
     }
-    const repos = store.getState().repos
-    for (const repo of repos) {
-      await store.getState().fetchWorktrees(repo.id)
+    const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+    if (!repo) {
+      return null
     }
-  })
+    // Why: this restart fixture uses the global e2e repo, whose seeded Git
+    // worktree is external to Orca's workspace root after the visibility rollout.
+    await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+    return repo.id
+  }, repoPath)
+
+  if (!repoId) {
+    throw new Error(`attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`)
+  }
 
   await page.waitForFunction(
     () => window.__store?.getState().workspaceSessionReady === true,
@@ -145,13 +154,14 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
   await expect
     .poll(
       async () =>
-        page.evaluate(() => {
+        page.evaluate(async (repoId) => {
           const store = window.__store
           if (!store) {
             return false
           }
-          return Object.values(store.getState().worktreesByRepo).flat().length > 0
-        }),
+          await store.getState().fetchWorktrees(repoId)
+          return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
+        }, repoId),
       {
         timeout: 15_000,
         message: 'attachRepoAndOpenTerminal: seeded worktree never surfaced in the store'

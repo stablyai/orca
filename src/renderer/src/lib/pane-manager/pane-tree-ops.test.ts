@@ -42,6 +42,7 @@ function createPane({
   const terminal = {
     cols: terminalCols,
     rows: terminalRows,
+    element: {} as HTMLElement,
     resize: vi.fn((cols: number, rows: number) => {
       terminal.cols = cols
       terminal.rows = rows

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitExec } from './git-handler-ops'
-import { removeWorktreeOp } from './git-handler-worktree-ops'
+import { addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -13,6 +13,114 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
     )
     .join('\n\n')
 }
+
+describe('addWorktreeOp', () => {
+  it('writes durable branch base config after creating an SSH new-branch worktree', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+    await addWorktreeOp(git, {
+      repoPath: '/repo',
+      branchName: 'feature/test',
+      targetDir: '/repo-feature',
+      base: 'origin/main'
+    })
+
+    expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      [
+        'worktree',
+        'add',
+        '--no-track',
+        '-b',
+        'feature/test',
+        '/repo-feature',
+        'refs/remotes/origin/main'
+      ],
+      [
+        'config',
+        '--local',
+        '--replace-all',
+        'branch.feature/test.base',
+        'refs/remotes/origin/main'
+      ],
+      ['config', '--get', 'push.autoSetupRemote']
+    ])
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'config',
+      '--local',
+      'branch.feature/test.remote',
+      'origin'
+    ])
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'config',
+      '--local',
+      'branch.feature/test.merge',
+      'refs/heads/main'
+    ])
+  })
+
+  it('does not write branch base config when checking out an existing SSH branch', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+    await addWorktreeOp(git, {
+      repoPath: '/repo',
+      branchName: 'feature/test',
+      targetDir: '/repo-feature',
+      base: 'origin/main',
+      checkoutExistingBranch: true
+    })
+
+    expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'add', '/repo-feature', 'feature/test']
+    ])
+  })
+
+  it('does not write branch base config when SSH creation has no base', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+    await addWorktreeOp(git, {
+      repoPath: '/repo',
+      branchName: 'feature/no-base',
+      targetDir: '/repo-feature'
+    })
+
+    expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
+      ['config', '--get', 'push.autoSetupRemote']
+    ])
+  })
+
+  it('warns and unsets stale branch base config when SSH base persistence fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'config' && args[2] === '--replace-all') {
+        throw new Error('config locked')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main'
+      })
+    ).resolves.toBeUndefined()
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'relay addWorktree: failed to set branch.feature/test.base for /repo-feature',
+      expect.any(Error)
+    )
+    expect(git.mock.calls.map((call) => call[0])).toContainEqual([
+      'config',
+      '--local',
+      '--unset-all',
+      'branch.feature/test.base'
+    ])
+    warnSpy.mockRestore()
+  })
+})
 
 describe('removeWorktreeOp', () => {
   it('deletes the now-unused branch after removing an SSH worktree', async () => {

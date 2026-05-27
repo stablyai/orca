@@ -3,7 +3,6 @@ import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
   getEditorToggleModes,
-  getMarkdownPreviewShortcutLabel,
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
@@ -93,7 +92,7 @@ describe('markdown preview helpers', () => {
           shiftKey: true,
           altKey: false
         } as KeyboardEvent,
-        true
+        'darwin'
       )
     ).toBe(true)
     expect(
@@ -105,7 +104,7 @@ describe('markdown preview helpers', () => {
           shiftKey: true,
           altKey: false
         } as KeyboardEvent,
-        false
+        'linux'
       )
     ).toBe(true)
     expect(
@@ -117,13 +116,8 @@ describe('markdown preview helpers', () => {
           shiftKey: false,
           altKey: false
         } as KeyboardEvent,
-        false
+        'linux'
       )
     ).toBe(false)
-  })
-
-  it('formats the shortcut label per platform', () => {
-    expect(getMarkdownPreviewShortcutLabel(true)).toBe('⌘⇧V')
-    expect(getMarkdownPreviewShortcutLabel(false)).toBe('Ctrl+Shift+V')
   })
 })

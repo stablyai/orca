@@ -12,36 +12,43 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
-import { SetupStep } from './AddRepoSetupStep'
+import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
 import { getDefaultCloneParent } from './clone-defaults'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type {
   AddRepoExistingWorkspaceSource,
   AddRepoSetupStepAction
 } from '../../../../shared/telemetry-events'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/types'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
+import {
+  effectiveExternalWorktreeVisibility,
+  isLegacyRepoForExternalWorktreeVisibility
+} from '../../../../shared/worktree-ownership'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const addRepo = useAppStore((s) => s.addRepo)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const updateRepo = useAppStore((s) => s.updateRepo)
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
 
   const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
@@ -129,6 +136,19 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const worktrees = useMemo(() => {
     return worktreesByRepo[repoId] ?? []
   }, [worktreesByRepo, repoId])
+  const detectedResult = repoId ? detectedWorktreesByRepo[repoId] : undefined
+  const hiddenWorktreeCount =
+    detectedResult?.authoritative === true
+      ? detectedResult.worktrees.filter(
+          (worktree) => !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
+        ).length
+      : 0
+  const otherWorktreesVisible = addedRepo
+    ? effectiveExternalWorktreeVisibility(
+        addedRepo,
+        isLegacyRepoForExternalWorktreeVisibility(addedRepo)
+      ) === 'show'
+    : false
 
   // Why: sort by recent activity with alphabetical fallback.
   const sortedWorktrees = useMemo(() => {
@@ -139,6 +159,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       return a.displayName.localeCompare(b.displayName)
     })
   }, [worktrees])
+  const primaryWorktree = useMemo(
+    () => sortedWorktrees.find((worktree) => worktree.isMainWorktree) ?? null,
+    [sortedWorktrees]
+  )
+  const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
   const resetState = useCallback(() => {
     cloneGenRef.current++
@@ -179,7 +204,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         await fetchWorktrees(repo.id)
         setStep('setup')
       } else if (repo) {
-        // Why: non-git folders have no worktrees — close immediately.
+        // Why: folder repos skip the Git worktree setup step and activate
+        // their synthetic root workspace in the folder add flow.
         closeModal()
       }
     } finally {
@@ -202,6 +228,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           await fetchWorktrees(repo.id)
           setStep('setup')
         } else if (repo) {
+          // Why: folder repos skip the Git worktree setup step; their synthetic
+          // root workspace is opened by the folder add flow.
           closeModal()
         }
       } finally {
@@ -323,26 +351,36 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     [existingWorkspaceTelemetry]
   )
 
-  const handleOpenWorktree = useCallback(
-    (worktree: Worktree) => {
-      trackSetupAction('open_existing')
-      activateAndRevealWorktree(worktree.id)
+  const handleCreateWorktree = useCallback(
+    (name?: string) => {
+      // Why: Setup-step "Create" affordance — fires on click intent, not on IPC arrival, mirroring the other 4 actions in this dialog.
+      trackSetupAction('create_worktree')
+      // Why: small delay so the Add Project dialog close animation finishes before
+      // the composer modal takes focus; otherwise the dialog teardown can steal
+      // the first focus frame from the composer's prompt textarea.
       closeModal()
+      setTimeout(() => {
+        openModal('new-workspace-composer', {
+          initialRepoId: repoId,
+          ...(name ? { prefilledName: name } : {}),
+          telemetrySource: 'sidebar'
+        })
+      }, 150)
     },
-    [closeModal, trackSetupAction]
+    [closeModal, openModal, repoId, trackSetupAction]
   )
 
-  const handleCreateWorktree = useCallback(() => {
-    // Why: Setup-step "Create" affordance — fires on click intent, not on IPC arrival, mirroring the other 4 actions in this dialog.
-    trackSetupAction('create_worktree')
-    // Why: small delay so the Add Project dialog close animation finishes before
-    // the composer modal takes focus; otherwise the dialog teardown can steal
-    // the first focus frame from the composer's prompt textarea.
+  const handleStartPrimaryWorktree = useCallback(() => {
+    if (!primaryWorktree) {
+      return
+    }
+    trackSetupAction('open_primary')
     closeModal()
-    setTimeout(() => {
-      openModal('new-workspace-composer', { initialRepoId: repoId, telemetrySource: 'sidebar' })
-    }, 150)
-  }, [closeModal, openModal, repoId, trackSetupAction])
+    if (useAppStore.getState().hideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+    activateAndRevealWorktree(primaryWorktree.id)
+  }, [closeModal, primaryWorktree, setHideDefaultBranchWorkspace, trackSetupAction])
 
   const handleConfigureRepo = useCallback(() => {
     trackSetupAction('configure')
@@ -364,13 +402,31 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     finalizeImportedRepoAfterSkip(state, importedRepoId)
   }, [closeModal, fetchWorktrees, repoId, resetState])
 
+  const handleUseExistingWorktrees = useCallback(async () => {
+    if (!repoId) {
+      return
+    }
+    trackSetupAction('open_existing')
+    if (!otherWorktreesVisible) {
+      const updated = await updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+      if (updated && addedRepo) {
+        setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
+      }
+      await fetchWorktrees(repoId)
+    }
+    await finishImportedRepoWithoutOpening()
+  }, [
+    addedRepo,
+    fetchWorktrees,
+    finishImportedRepoWithoutOpening,
+    otherWorktreesVisible,
+    repoId,
+    trackSetupAction,
+    updateRepo
+  ])
+
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = resetState
-
-  const handleSkip = useCallback(() => {
-    trackSetupAction('skip')
-    void finishImportedRepoWithoutOpening()
-  }, [finishImportedRepoWithoutOpening, trackSetupAction])
 
   // Why: only the Setup step's "Add another project" back arrow counts as a
   // funnel event — the in-flight Back arrows on clone/remote/create are not
@@ -639,11 +695,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         ) : (
           <SetupStep
             repoName={addedRepo?.displayName ?? ''}
-            sortedWorktrees={sortedWorktrees}
-            onOpenWorktree={handleOpenWorktree}
+            hiddenWorktreeCount={hiddenWorktreeCount}
+            primaryBranchName={primaryBranchName}
+            onStartPrimaryWorktree={handleStartPrimaryWorktree}
+            onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
             onCreateWorktree={handleCreateWorktree}
             onConfigureRepo={handleConfigureRepo}
-            onSkip={handleSkip}
           />
         )}
       </DialogContent>

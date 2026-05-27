@@ -8,8 +8,8 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  Play,
   Plus,
-  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -76,10 +77,15 @@ export default function TerminalContextMenu({
   onToggleExpand,
   onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
-  const isMac = navigator.userAgent.includes('Mac')
-  const mod = isMac ? '⌘' : 'Ctrl+'
-  const shift = isMac ? '⇧' : 'Shift+'
+  const copyShortcut = useShortcutLabel('terminal.copySelection')
+  const pasteShortcut = useShortcutLabel('terminal.paste')
+  const splitRightShortcut = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcut = useShortcutLabel('terminal.splitDown')
+  const equalizeShortcut = useShortcutLabel('terminal.equalizePaneSizes')
+  const expandShortcut = useShortcutLabel('terminal.expandPane')
+  const closeShortcut = useShortcutLabel('terminal.closePane')
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
+  const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
 
   return (
     <DropdownMenu
@@ -128,16 +134,16 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           Copy
-          <DropdownMenuShortcut>{mod}C</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
           Paste
-          <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{pasteShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <SquareTerminal />
+            <Play fill="currentColor" strokeWidth={0} />
             Quick Commands
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-60">
@@ -198,28 +204,27 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
           Split Terminal Right
-          {/* Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
-              so split-right requires Shift on non-Mac platforms. */}
-          <DropdownMenuShortcut>{isMac ? `${mod}D` : `${mod}${shift}D`}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomClose />
           Split Terminal Down
-          {/* Why: on Windows/Linux, Alt+Shift+D is used for split-down because
-              Ctrl+Shift+D is taken by split-right (#586). */}
-          <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
             Equalize Pane Sizes
+            {showEqualizeShortcut ? (
+              <DropdownMenuShortcut>{equalizeShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         )}
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
             {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>{`${mod}${shift}↩`}</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{expandShortcut}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -233,7 +238,7 @@ export default function TerminalContextMenu({
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
               Close Pane
-              <DropdownMenuShortcut>{mod}W</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}

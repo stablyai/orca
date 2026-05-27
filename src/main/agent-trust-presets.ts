@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
 /**
@@ -109,6 +110,9 @@ export function markCodexProjectTrusted(workspacePath: string): void {
   const absPath = canonicalize(workspacePath)
   const configPath = join(homedir(), '.codex', 'config.toml')
   upsertProjectTrustLevel(configPath, absPath, 'trusted')
+  // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
+  // preset must also update the runtime config Codex will actually read.
+  upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
 }
 
 function canonicalize(p: string): string {

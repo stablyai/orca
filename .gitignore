@@ -81,8 +81,6 @@ docs/**
 !docs/reference/
 !docs/reference/**
 !docs/STYLEGUIDE.md
-!docs/configurable-open-in-menu.md
-!docs/task-provider-availability.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

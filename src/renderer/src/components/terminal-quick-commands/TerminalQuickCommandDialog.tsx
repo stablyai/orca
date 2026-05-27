@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import type {
   Repo,
   TerminalQuickCommand,
@@ -7,6 +8,13 @@ import type {
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { Button } from '@/components/ui/button'
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
 import {
   Dialog,
   DialogContent,
@@ -24,10 +32,21 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { useAppStore } from '@/store'
+import {
+  buildTerminalAgentQuickCommandPreset,
+  type TerminalAgentQuickCommandPreset
+} from './terminal-agent-quick-command-presets'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
+
+const EMPTY_AGENT_CMD_OVERRIDES = {}
 
 type TerminalQuickCommandDialogProps = {
   open: boolean
@@ -54,6 +73,19 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
   return repo.displayName || repo.path
 }
 
+function filterAgentPresets(
+  presets: TerminalAgentQuickCommandPreset[],
+  rawQuery: string
+): TerminalAgentQuickCommandPreset[] {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) {
+    return presets
+  }
+  return presets.filter((preset) => {
+    return preset.label.toLowerCase().includes(query) || preset.agent.toLowerCase().includes(query)
+  })
+}
+
 export function TerminalQuickCommandDialog({
   open,
   mode,
@@ -63,6 +95,11 @@ export function TerminalQuickCommandDialog({
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
+  const [agentPresetOpen, setAgentPresetOpen] = useState(false)
+  const [agentPresetQuery, setAgentPresetQuery] = useState('')
+  const agentCmdOverrides = useAppStore(
+    (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
+  )
   const selectedScope = getTerminalQuickCommandScope(draft)
   // Why: repo-scoped commands can outlive the current repo list; only an
   // explicit selection should replace the saved repo id.
@@ -76,8 +113,41 @@ export function TerminalQuickCommandDialog({
   useEffect(() => {
     if (open) {
       setDraft({ ...command })
+      setAgentPresetOpen(false)
+      setAgentPresetQuery('')
     }
   }, [command, open])
+
+  const agentPresets = useMemo(() => {
+    return AGENT_CATALOG.map((entry, index) => {
+      const preset = buildTerminalAgentQuickCommandPreset({
+        agent: entry.id,
+        label: entry.label,
+        cmdOverrides: agentCmdOverrides,
+        platform: CLIENT_PLATFORM
+      })
+      return preset ? { preset, index } : null
+    })
+      .filter((item): item is { preset: TerminalAgentQuickCommandPreset; index: number } =>
+        Boolean(item)
+      )
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.preset)
+  }, [agentCmdOverrides])
+
+  const visibleAgentPresets = useMemo(
+    () => filterAgentPresets(agentPresets, agentPresetQuery),
+    [agentPresetQuery, agentPresets]
+  )
+
+  const selectAgentPreset = (preset: TerminalAgentQuickCommandPreset): void => {
+    setDraft((current) => ({
+      ...current,
+      command: preset.command
+    }))
+    setAgentPresetOpen(false)
+    setAgentPresetQuery('')
+  }
 
   const saveDraft = (): void => {
     const next = {
@@ -94,6 +164,7 @@ export function TerminalQuickCommandDialog({
   }
 
   const canSave = draft.label.trim().length > 0 && draft.command.trimEnd().length > 0
+  const submitShortcutLabel = isMacUserAgent() ? '⌘↵' : 'Ctrl+Enter'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,7 +178,18 @@ export function TerminalQuickCommandDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          onKeyDown={(event) => {
+            // Why: cross-platform submit shortcut — Cmd+Enter on Mac, Ctrl+Enter
+            // elsewhere. Falls through to native textarea/Input newline insertion
+            // when the modifier isn't held.
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && canSave) {
+              event.preventDefault()
+              saveDraft()
+            }
+          }}
+        >
           <div className="space-y-2">
             <Label>Label</Label>
             <Input
@@ -115,12 +197,68 @@ export function TerminalQuickCommandDialog({
               onChange={(event) =>
                 setDraft((current) => ({ ...current, label: event.target.value }))
               }
-              placeholder="Restart server"
+              placeholder="Start dev server"
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Command Text</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Command Text</Label>
+              <Popover open={agentPresetOpen} onOpenChange={setAgentPresetOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="h-7 shrink-0 gap-1 px-2 text-xs font-normal"
+                    aria-label="Insert an agent command"
+                  >
+                    Insert agent command
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[min(17rem,calc(100vw-2rem))] p-0">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      autoFocus
+                      placeholder="Search agents"
+                      value={agentPresetQuery}
+                      onValueChange={setAgentPresetQuery}
+                      className="h-9 text-xs"
+                      wrapperClassName="px-3"
+                    />
+                    <CommandList className="max-h-64">
+                      <CommandEmpty>No agents match your search.</CommandEmpty>
+                      {visibleAgentPresets.map((preset) => (
+                        <CommandItem
+                          key={preset.agent}
+                          value={`${preset.agent} ${preset.label}`}
+                          disabled={!preset.startsWithPrompt}
+                          onSelect={() => {
+                            if (preset.startsWithPrompt) {
+                              selectAgentPreset(preset)
+                            }
+                          }}
+                          className="min-h-11 items-start gap-2 px-3 py-2"
+                        >
+                          <span className="mt-0.5">
+                            <AgentIcon agent={preset.agent} size={16} />
+                          </span>
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate text-sm font-medium">{preset.label}</span>
+                            {!preset.startsWithPrompt ? (
+                              <span className="truncate text-xs text-muted-foreground">
+                                Does not support prompt commands
+                              </span>
+                            ) : null}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
             <textarea
               value={draft.command}
               onChange={(event) =>
@@ -155,7 +293,7 @@ export function TerminalQuickCommandDialog({
               >
                 <ToggleGroupItem value="global">Global</ToggleGroupItem>
                 <ToggleGroupItem value="repo" disabled={repos.length === 0}>
-                  Repository
+                  Project
                 </ToggleGroupItem>
               </ToggleGroup>
               {selectedScope.type === 'repo' && repos.length > 0 ? (
@@ -168,15 +306,13 @@ export function TerminalQuickCommandDialog({
                   >
                     <SelectTrigger size="sm" className="min-w-48">
                       <SelectValue
-                        placeholder={
-                          selectedRepoMissing ? 'Repository not in list' : 'Choose repository'
-                        }
+                        placeholder={selectedRepoMissing ? 'Project not in list' : 'Choose project'}
                       />
                     </SelectTrigger>
                     <SelectContent>
                       {repos.map((repo) => (
                         <SelectItem key={repo.id} value={repo.id}>
-                          <RepoDotLabel
+                          <RepoBadgeLabel
                             name={getRepoLabel(repo)}
                             color={repo.badgeColor}
                             className="max-w-full"
@@ -187,7 +323,7 @@ export function TerminalQuickCommandDialog({
                   </Select>
                   {selectedRepoMissing ? (
                     <p className="max-w-48 text-xs text-muted-foreground">
-                      Saving keeps the existing repo scope unless you choose another.
+                      Saving keeps the existing project scope unless you choose another.
                     </p>
                   ) : null}
                 </div>
@@ -227,8 +363,14 @@ export function TerminalQuickCommandDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" onClick={saveDraft} disabled={!canSave}>
+          <Button
+            type="button"
+            onClick={saveDraft}
+            disabled={!canSave}
+            title={`Save (${submitShortcutLabel})`}
+          >
             Save
+            <span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
           </Button>
         </DialogFooter>
       </DialogContent>

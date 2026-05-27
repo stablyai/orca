@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { GlobalSettings, NotificationDispatchRequest } from '../../../../shared/types'
-import { sendNotificationSettingsTestNotification } from './NotificationsPane'
+import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { NotificationsPane, sendNotificationSettingsTestNotification } from './NotificationsPane'
 
 const { toastError, toastMessage, toastSuccess } = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -23,6 +25,7 @@ function createSettings(): GlobalSettings {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: true,
+      customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50
     }
@@ -38,6 +41,17 @@ describe('NotificationsPane', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('renders built-in notification sound choices in settings', () => {
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('Notification Sound')
+    expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
+      expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
+    )
   })
 
   it('uses native main-process delivery even when renderer permission is stale denied on macOS', async () => {

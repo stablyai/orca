@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.18-rc.2",
+  "version": "1.4.30",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -41,8 +41,8 @@
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/install-dev-cli.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build:web": "vite build --config vite.web.config.ts && node config/scripts/verify-web-build.mjs",
-    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
-    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
+    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:cli && pnpm run build:electron-vite && pnpm run build:web",
+    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite && pnpm run build:web",
     "postinstall": "pnpm rebuild electron && node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "rebuild:node": "pnpm rebuild better-sqlite3 node-pty",
@@ -81,15 +81,15 @@
     "@tiptap/pm": "^3.22.5",
     "@tiptap/react": "^3.22.5",
     "@tiptap/starter-kit": "^3.22.5",
-    "@xterm/addon-fit": "0.12.0-beta.216",
-    "@xterm/addon-ligatures": "0.11.0-beta.216",
-    "@xterm/addon-search": "0.17.0-beta.216",
-    "@xterm/addon-serialize": "0.15.0-beta.216",
-    "@xterm/addon-unicode11": "0.10.0-beta.216",
-    "@xterm/addon-web-links": "0.13.0-beta.216",
-    "@xterm/addon-webgl": "0.20.0-beta.215",
-    "@xterm/headless": "6.1.0-beta.216",
-    "@xterm/xterm": "6.1.0-beta.216",
+    "@xterm/addon-fit": "0.12.0-beta.220",
+    "@xterm/addon-ligatures": "0.11.0-beta.220",
+    "@xterm/addon-search": "0.17.0-beta.220",
+    "@xterm/addon-serialize": "0.15.0-beta.220",
+    "@xterm/addon-unicode11": "0.10.0-beta.220",
+    "@xterm/addon-web-links": "0.13.0-beta.220",
+    "@xterm/addon-webgl": "0.20.0-beta.219",
+    "@xterm/headless": "6.1.0-beta.220",
+    "@xterm/xterm": "6.1.0-beta.220",
     "agent-browser": "~0.24.1",
     "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
@@ -209,8 +209,8 @@
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
-      "@xterm/addon-ligatures@0.11.0-beta.216": "config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch",
-      "@xterm/addon-webgl@0.20.0-beta.215": "config/patches/@xterm__addon-webgl@0.20.0-beta.215.patch"
+      "@xterm/addon-ligatures@0.11.0-beta.220": "config/patches/@xterm__addon-ligatures@0.11.0-beta.220.patch",
+      "@xterm/addon-webgl@0.20.0-beta.219": "config/patches/@xterm__addon-webgl@0.20.0-beta.219.patch"
     }
   }
 }

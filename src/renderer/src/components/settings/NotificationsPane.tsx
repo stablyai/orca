@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: notification settings keeps delivery toggles, system test feedback, and sound selection on one settings merge path. */
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -5,52 +6,33 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Slider } from '../ui/slider'
-import { BellRing, Bot, FileAudio, Siren, Volume2, X } from 'lucide-react'
-import type { SettingsSearchEntry } from './settings-search'
-import { basename } from '@/lib/path'
-
-export const NOTIFICATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Enable Notifications',
-    description: 'Master switch for Orca desktop notifications.',
-    keywords: ['notifications', 'desktop', 'system', 'native']
-  },
-  {
-    title: 'Agent Task Complete',
-    description: 'Notify when a coding agent transitions from working to idle.',
-    keywords: ['notifications', 'agent', 'complete', 'idle', 'task']
-  },
-  {
-    title: 'Terminal Bell',
-    description: 'Notify when a background terminal emits a bell character.',
-    keywords: ['notifications', 'terminal', 'bell', 'attention']
-  },
-  {
-    title: 'Suppress While Focused',
-    description: 'Avoid notifying when Orca is focused on the active worktree.',
-    keywords: ['notifications', 'focused', 'suppress', 'filtering']
-  },
-  {
-    title: 'Custom Sound',
-    description:
-      'Choose one local audio file (MP3, WAV, OGG, M4A, AAC, or FLAC) for all delivered desktop notifications.',
-    keywords: ['notifications', 'sound', 'audio', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']
-  },
-  {
-    title: 'Notification Volume',
-    description: 'Playback volume for the custom notification sound.',
-    keywords: ['notifications', 'sound', 'volume', 'loudness']
-  },
-  {
-    title: 'Send Test Notification',
-    description: 'Trigger a sample desktop notification using the native delivery path.',
-    keywords: ['notifications', 'test']
-  }
-]
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue
+} from '../ui/select'
+import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
+import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
 type NotificationsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+}
+
+const CHOOSE_CUSTOM_SOUND_VALUE = 'choose-custom-file'
+
+type NotificationSoundSelectValue =
+  | GlobalSettings['notifications']['customSoundId']
+  | typeof CHOOSE_CUSTOM_SOUND_VALUE
+
+function isNotificationSoundId(
+  value: NotificationSoundSelectValue
+): value is GlobalSettings['notifications']['customSoundId'] {
+  return value !== CHOOSE_CUSTOM_SOUND_VALUE
 }
 
 type SystemNotificationSettingsCopy = {
@@ -96,13 +78,14 @@ export async function sendNotificationSettingsTestNotification(
     // Why: the Test button must always play through, even if the user clicks
     // it twice in quick succession — the in-flight dedupe is for incidental
     // bursts of real notifications, not for an explicit user action.
-    const soundResult = notificationSettings.customSoundPath
-      ? await window.api.notifications.playSound({
-          force: true,
-          volume: volumeDraft
-        })
-      : null
-    if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
+    const soundResult =
+      notificationSettings.customSoundId !== 'system'
+        ? await window.api.notifications.playSound({
+            force: true,
+            volume: volumeDraft
+          })
+        : null
+    if (notificationSettings.customSoundId !== 'system' && soundResult && !soundResult.played) {
       toast.error('Custom notification sound could not be played')
       return
     }
@@ -160,11 +143,17 @@ export function NotificationsPane({
   const notificationSettingsRef = useRef(notificationSettings)
   const [isPickingSound, setIsPickingSound] = useState(false)
 
-  const updateNotificationSettings = (updates: Partial<GlobalSettings['notifications']>): void => {
-    updateSettings({
+  const updateNotificationSettings = async (
+    updates: Partial<GlobalSettings['notifications']>
+  ): Promise<void> => {
+    const nextNotifications = {
+      ...notificationSettingsRef.current,
+      ...updates
+    }
+    notificationSettingsRef.current = nextNotifications
+    await updateSettings({
       notifications: {
-        ...notificationSettingsRef.current,
-        ...updates
+        ...nextNotifications
       }
     })
   }
@@ -180,7 +169,7 @@ export function NotificationsPane({
 
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {
-      updateNotificationSettings({ customSoundVolume: value })
+      void updateNotificationSettings({ customSoundVolume: value })
     }
   }
 
@@ -188,19 +177,45 @@ export function NotificationsPane({
     await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
   }
 
-  const handleChooseSound = async (): Promise<void> => {
+  const previewSound = async (
+    customSoundId: GlobalSettings['notifications']['customSoundId']
+  ): Promise<void> => {
+    if (customSoundId === 'system') {
+      return
+    }
+    const result = await window.api.notifications.playSound({
+      force: true,
+      volume: volumeDraft
+    })
+    if (!result.played) {
+      toast.error('Notification sound could not be played')
+    }
+  }
+
+  const handleChooseCustomSound = async (): Promise<void> => {
     setIsPickingSound(true)
     try {
       const soundPath = await window.api.shell.pickAudio()
       if (soundPath) {
-        updateNotificationSettings({ customSoundPath: soundPath })
+        await updateNotificationSettings({ customSoundId: 'custom', customSoundPath: soundPath })
+        await previewSound('custom')
       }
     } finally {
       setIsPickingSound(false)
     }
   }
 
-  const selectedSoundPath = notificationSettings.customSoundPath
+  const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
+    if (!isNotificationSoundId(value)) {
+      await handleChooseCustomSound()
+      return
+    }
+    await updateNotificationSettings({ customSoundId: value })
+    await previewSound(value)
+  }
+
+  const selectedSoundId = notificationSettings.customSoundId
+  const soundOptions = getNotificationSoundOptions(notificationSettings.customSoundPath)
 
   return (
     <div className="space-y-1">
@@ -208,7 +223,7 @@ export function NotificationsPane({
         label="Enable Notifications"
         description="Native system notifications for background events."
         checked={notificationSettings.enabled}
-        onToggle={() => updateNotificationSettings({ enabled: !notificationSettings.enabled })}
+        onToggle={() => void updateNotificationSettings({ enabled: !notificationSettings.enabled })}
       />
 
       <Separator />
@@ -220,7 +235,7 @@ export function NotificationsPane({
         checked={notificationSettings.agentTaskComplete}
         disabled={!notificationSettings.enabled}
         onToggle={() =>
-          updateNotificationSettings({
+          void updateNotificationSettings({
             agentTaskComplete: !notificationSettings.agentTaskComplete
           })
         }
@@ -233,7 +248,7 @@ export function NotificationsPane({
         checked={notificationSettings.terminalBell}
         disabled={!notificationSettings.enabled}
         onToggle={() =>
-          updateNotificationSettings({
+          void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
           })
         }
@@ -241,61 +256,52 @@ export function NotificationsPane({
 
       <Separator />
 
-      <div className="space-y-2 px-1 py-2">
+      <div className="space-y-2 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <FileAudio className="size-4" />
-            <Label>Custom Sound</Label>
+            <Label>Notification Sound</Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            One local audio file for all delivered desktop notifications.
-          </p>
-          <p className="text-[11px] text-muted-foreground/80">
-            Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC.
+            Choose the alert Orca plays when a desktop notification is delivered.
           </p>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div
-            className="min-h-8 min-w-0 flex-1 rounded-md border border-border/50 bg-muted/35 px-2.5 py-1.5"
-            title={selectedSoundPath ?? undefined}
+        <Select
+          value={selectedSoundId}
+          disabled={!notificationSettings.enabled || isPickingSound}
+          onValueChange={(value) => void handleSoundSelect(value as NotificationSoundSelectValue)}
+        >
+          <SelectTrigger className="w-full max-w-[360px]" size="sm">
+            <SelectValue placeholder="Choose notification sound" />
+          </SelectTrigger>
+          <SelectContent align="start" className="w-[--radix-select-trigger-width]">
+            {soundOptions.map((option) => {
+              const OptionIcon = option.icon
+              return (
+                <SelectItem key={option.id} value={option.id}>
+                  <OptionIcon className="size-4" />
+                  <span className="truncate">{option.title}</span>
+                </SelectItem>
+              )
+            })}
+            <SelectSeparator />
+            <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
+              <Upload className="size-4" />
+              <span>
+                {notificationSettings.customSoundPath ? 'Change Custom File' : 'Choose Custom File'}
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        {notificationSettings.customSoundPath ? (
+          <p
+            className="truncate font-mono text-[11px] text-muted-foreground"
+            title={notificationSettings.customSoundPath}
           >
-            {selectedSoundPath ? (
-              <div className="min-w-0">
-                <div className="truncate text-xs font-medium">{basename(selectedSoundPath)}</div>
-                <div className="truncate font-mono text-[11px] text-muted-foreground">
-                  {selectedSoundPath}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">System notification sound</div>
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!notificationSettings.enabled || isPickingSound}
-            onClick={() => void handleChooseSound()}
-            className="gap-2"
-          >
-            <FileAudio className="size-3.5" />
-            {selectedSoundPath ? 'Change' : 'Choose'}
-          </Button>
-          {selectedSoundPath ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={!notificationSettings.enabled}
-              onClick={() => updateNotificationSettings({ customSoundPath: null })}
-              className="gap-2"
-            >
-              <X className="size-3.5" />
-              Clear
-            </Button>
-          ) : null}
-        </div>
-        {selectedSoundPath ? (
+            Custom: {notificationSettings.customSoundPath}
+          </p>
+        ) : null}
+        {selectedSoundId !== 'system' ? (
           <div className="flex items-center gap-3 pt-1">
             <Volume2 className="size-4 text-muted-foreground" />
             <Slider
@@ -324,13 +330,13 @@ export function NotificationsPane({
         checked={notificationSettings.suppressWhenFocused}
         disabled={!notificationSettings.enabled}
         onToggle={() =>
-          updateNotificationSettings({
+          void updateNotificationSettings({
             suppressWhenFocused: !notificationSettings.suppressWhenFocused
           })
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 px-1 pt-3">
+      <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button
           variant="outline"
           size="sm"
@@ -346,7 +352,7 @@ export function NotificationsPane({
   )
 }
 
-type SettingToggleProps = {
+export type SettingToggleProps = {
   label: string
   description: string
   checked: boolean
@@ -355,7 +361,7 @@ type SettingToggleProps = {
   icon?: ReactNode
 }
 
-function SettingToggle({
+export function SettingToggle({
   label,
   description,
   checked,
@@ -364,7 +370,7 @@ function SettingToggle({
   icon
 }: SettingToggleProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 px-1 py-2">
+    <div className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           {icon}

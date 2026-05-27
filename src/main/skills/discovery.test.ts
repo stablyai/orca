@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -54,5 +54,44 @@ describe('skill discovery', () => {
 
     expect(roots.map((root) => root.path)).not.toContain('/remote/repo/.claude/skills')
     expect(roots.map((root) => root.path)).toContain('/workspace/current/.claude/skills')
+  })
+
+  it('discovers skill packages through symlinked skill directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const realSkill = join(root, 'central-skills', 'orca-cli')
+    const linkedSkill = join(home, '.agents', 'skills', 'orca-cli')
+    await mkdir(realSkill, { recursive: true })
+    await mkdir(join(home, '.agents', 'skills'), { recursive: true })
+    await writeFile(join(realSkill, 'SKILL.md'), '# Orca CLI\n\nUse the Orca CLI.')
+    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    const skill = result.skills.find((entry) => entry.name === 'Orca CLI')
+    expect(skill?.sourceKind).toBe('home')
+    expect(skill?.directoryPath).toBe(linkedSkill)
+  })
+
+  it('does not loop through recursive symlinked skill directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillRoot = join(home, '.agents', 'skills')
+    await mkdir(skillRoot, { recursive: true })
+    await symlink(
+      skillRoot,
+      join(skillRoot, 'loop'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills).toEqual([])
   })
 })

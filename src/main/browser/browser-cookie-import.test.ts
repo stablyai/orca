@@ -11,7 +11,12 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
-import { importCookiesFromFile, detectInstalledBrowsers } from './browser-cookie-import'
+import {
+  buildChromiumCookieInsertParams,
+  importCookiesFromFile,
+  detectInstalledBrowsers,
+  type ChromiumCookieColumnInfo
+} from './browser-cookie-import'
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -231,5 +236,61 @@ describe('detectInstalledBrowsers', () => {
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
+  })
+})
+
+describe('buildChromiumCookieInsertParams', () => {
+  it('fills target-only NOT NULL Chromium cookie columns instead of inserting null', () => {
+    const decryptedValue = Buffer.from('decrypted-cookie-value')
+    const columns: ChromiumCookieColumnInfo[] = [
+      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'host_key', type: 'TEXT', notnull: 1 },
+      { name: 'top_frame_site_key', type: 'TEXT', notnull: 1 },
+      { name: 'name', type: 'TEXT', notnull: 1 },
+      { name: 'value', type: 'TEXT', notnull: 1 },
+      { name: 'encrypted_value', type: 'BLOB', notnull: 1 },
+      { name: 'source_port', type: 'INTEGER', notnull: 1 },
+      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'has_cross_site_ancestor', type: 'INTEGER', notnull: 1, dflt_value: '0' }
+    ]
+    const sourceRow = {
+      creation_utc: 133_000_000_000_000n,
+      host_key: '.example.com',
+      name: 'sid'
+    }
+
+    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
+
+    expect(params).toEqual([
+      133_000_000_000_000n,
+      '.example.com',
+      '',
+      'sid',
+      decryptedValue,
+      Buffer.alloc(0),
+      -1,
+      133_000_000_000_000n,
+      0
+    ])
+  })
+
+  it('preserves null for nullable columns without defaults', () => {
+    const decryptedValue = Buffer.from('decrypted-cookie-value')
+    const columns: ChromiumCookieColumnInfo[] = [
+      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'host_key', type: 'TEXT', notnull: 1 },
+      { name: 'nullable_metadata', type: 'TEXT', notnull: 0 },
+      { name: 'target_only_nullable_metadata', type: 'TEXT', notnull: 0 },
+      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 }
+    ]
+    const sourceRow = {
+      creation_utc: 133_000_000_000_000n,
+      host_key: '.example.com',
+      nullable_metadata: null
+    }
+
+    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
+
+    expect(params).toEqual([133_000_000_000_000n, '.example.com', null, null, 133_000_000_000_000n])
   })
 })

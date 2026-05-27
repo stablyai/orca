@@ -11,6 +11,7 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
+import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -65,6 +66,7 @@ export type OnboardingFeatureSetupResult = {
 
 export type OnboardingFeatureSetupDeps = {
   getCliStatus: () => Promise<CliInstallStatus>
+  showCliRegistrationPrompt?: () => Promise<void>
   installCli: () => Promise<CliInstallStatus>
   writeClipboardText: (text: string) => Promise<void>
   getComputerUsePermissionStatus: () => Promise<ComputerUsePermissionStatusResult>
@@ -143,6 +145,7 @@ export function createOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps {
 
   return {
     getCliStatus: () => window.api.cli.getInstallStatus(),
+    showCliRegistrationPrompt: showOrcaCliRegistrationPromptToast,
     installCli: () => window.api.cli.install(),
     writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
     getComputerUsePermissionStatus: () => window.api.computerUsePermissions.getStatus(),
@@ -199,7 +202,8 @@ export async function runOnboardingFeatureSetup(
         featureId: 'cli',
         message: status.detail ?? 'Orca CLI registration is not available on this platform.'
       })
-    } else if (status.state !== 'installed') {
+    } else if (status.state !== 'installed' || !status.pathConfigured) {
+      await deps.showCliRegistrationPrompt?.()
       const next = await deps.installCli()
       cliTouched = true
       if (next.state !== 'installed') {
@@ -210,8 +214,6 @@ export async function runOnboardingFeatureSetup(
       } else if (!next.pathConfigured && next.detail) {
         warnings.push({ featureId: 'cli', message: next.detail })
       }
-    } else if (!status.pathConfigured && status.detail) {
-      warnings.push({ featureId: 'cli', message: status.detail })
     }
   } catch (error) {
     warnings.push({ featureId: 'cli', message: formatFeatureSetupError(error) })

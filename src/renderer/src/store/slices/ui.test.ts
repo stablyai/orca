@@ -2,7 +2,12 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { GitHubWorkItem, PersistedUIState, Worktree } from '../../../../shared/types'
+import type {
+  GitHubWorkItem,
+  PersistedUIState,
+  Worktree,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
@@ -20,6 +25,7 @@ function createUIStore(): StoreApi<AppState> {
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     worktreesByRepo: {},
+    rightSidebarOpen: false,
     rightSidebarWidth: 280,
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
@@ -54,6 +60,10 @@ function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUI
 }
 
 describe('createUISlice hydratePersistedUI', () => {
+  it('defaults persisted right sidebar visibility to open', () => {
+    expect(getDefaultUIState().rightSidebarOpen).toBe(true)
+  })
+
   it('defaults to showing sleeping workspaces', () => {
     const store = createUIStore()
 
@@ -70,6 +80,42 @@ describe('createUISlice hydratePersistedUI', () => {
     })
 
     expect(store.getState().rightSidebarWidth).toBe(360)
+  })
+
+  it('hydrates a persisted closed right sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: false }))
+
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
+  it('hydrates a persisted open right sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: true }))
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+  })
+
+  it('hydrates a persisted right sidebar tab preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
+
+    expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('falls back to explorer for invalid persisted right sidebar tabs', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarTab: 'bogus' as PersistedUIState['rightSidebarTab'] })
+      )
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
   })
 
   it('clamps persisted sidebar widths into the supported range', () => {
@@ -180,7 +226,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
-  it('restores retired card properties during hydration', () => {
+  it('restores fixed card properties during hydration', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -189,14 +235,7 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'pr',
-      'comment',
-      'inline-agents'
-    ])
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
   it('adds the default-on Ports status item once for older persisted UI', () => {
@@ -537,7 +576,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
 
-  it('keeps retired card properties enabled when toggling Agent activity', () => {
+  it('keeps fixed card properties when toggling Agent activity', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -545,7 +584,7 @@ describe('createUISlice hydratePersistedUI', () => {
     store.setState({ worktreeCardProperties: ['inline-agents'] })
     store.getState().toggleWorktreeCardProperty('inline-agents')
 
-    const expected = ['status', 'unread', 'issue', 'pr', 'comment']
+    const expected: WorktreeCardProperty[] = ['status', 'unread']
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
@@ -727,33 +766,6 @@ describe('createUISlice page navigation history', () => {
     store.getState().closeAutomationsPage()
     expect(store.getState().activeView).toBe('terminal')
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
-  })
-})
-
-describe('createUISlice feature tour nudge', () => {
-  it('shows and dismisses the feature tour nudge', () => {
-    const store = createUIStore()
-
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
-
-    store.getState().dismissFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
-  })
-
-  it('keeps the nudge hidden while the full feature tour is open', () => {
-    const store = createUIStore()
-
-    store.getState().openModal('feature-wall')
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
-
-    store.getState().closeModal()
-    store.getState().showFeatureTourNudge()
-    expect(store.getState().featureTourNudgeVisible).toBe(true)
-
-    store.getState().openModal('feature-wall')
-    expect(store.getState().featureTourNudgeVisible).toBe(false)
   })
 })
 

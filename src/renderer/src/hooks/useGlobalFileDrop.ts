@@ -33,7 +33,7 @@ export function useGlobalFileDrop(): void {
         return
       }
 
-      const activeWorktree = store.allWorktrees().find((w) => w.id === activeWorktreeId)
+      const activeWorktree = store.getKnownWorktreeById(activeWorktreeId)
       const worktreePath = activeWorktree?.path
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       const dropSettings = store.settings

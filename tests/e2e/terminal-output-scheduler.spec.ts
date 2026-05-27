@@ -55,6 +55,10 @@ function nodeConsoleCommand(expression: string): string {
   return `node -e "console.log(${expression})"`
 }
 
+function nodeScriptCommand(script: string): string {
+  return `node -e "${script}"`
+}
+
 async function createTerminalTab(page: Page): Promise<string> {
   const tabsBefore = await countRenderedTabs(page)
   const activeBefore = await getActiveTabId(page)
@@ -146,6 +150,18 @@ async function sendPtyCommands(
       window.api.pty.write(item.ptyId, `${item.command}\r`)
     }
   }, commands)
+}
+
+async function mainSnapshotContains(page: Page, ptyId: string, text: string): Promise<boolean> {
+  return page.evaluate(
+    async ({ targetPtyId, expectedText }) => {
+      const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
+        scrollbackRows: 200
+      })
+      return snapshot?.data.includes(expectedText) ?? false
+    },
+    { targetPtyId: ptyId, expectedText: text }
+  )
 }
 
 test.describe('Terminal output scheduler', () => {
@@ -248,5 +264,61 @@ test.describe('Terminal output scheduler', () => {
         message: 'Background terminal output was not preserved after scheduler drain'
       })
       .toBe(true)
+  })
+
+  test('hidden overflow restores from main-owned terminal state when the tab becomes visible', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const foregroundTabId = await getActiveTabId(orcaPage)
+    if (!foregroundTabId) {
+      throw new Error('Expected an initial terminal tab')
+    }
+    const hiddenTabId = await createTerminalTab(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const hiddenPtyId = await waitForTabPtyId(orcaPage, hiddenTabId)
+
+    await tabLocator(orcaPage, foregroundTabId).click()
+    await expect
+      .poll(() => getDomActiveTabId(orcaPage), {
+        timeout: 5_000,
+        message: 'Foreground terminal tab did not become active before hidden flood'
+      })
+      .toBe(foregroundTabId)
+
+    const marker = `HIDDEN_RECOVERY_${Date.now()}`
+    const floodCommand = nodeScriptCommand(
+      `for (let i = 0; i < 55000; i++) console.log('RECOVER_FILL_' + i + '_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); console.log('${marker}')`
+    )
+
+    await sendPtyCommands(orcaPage, [{ ptyId: hiddenPtyId, command: floodCommand }])
+
+    await expect
+      .poll(async () => mainSnapshotContains(orcaPage, hiddenPtyId, marker), {
+        timeout: 30_000,
+        message: 'Main-owned terminal snapshot did not capture the hidden flood marker'
+      })
+      .toBe(true)
+
+    await tabLocator(orcaPage, hiddenTabId).click()
+    await expect
+      .poll(() => getDomActiveTabId(orcaPage), {
+        timeout: 5_000,
+        message: 'Hidden terminal tab did not become visible for recovery verification'
+      })
+      .toBe(hiddenTabId)
+
+    await expect
+      .poll(async () => (await getTerminalContent(orcaPage)).includes(marker), {
+        timeout: 10_000,
+        message: 'Hidden terminal did not restore the marker from main-owned state'
+      })
+      .toBe(true)
+
+    expect(await getTerminalContent(orcaPage)).not.toContain('Orca skipped hidden terminal output')
   })
 })

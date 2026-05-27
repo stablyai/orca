@@ -6,7 +6,6 @@ import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 
@@ -50,27 +49,42 @@ function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
-export function shouldShowLaunchWatchdogTimeout({
-  launchSource,
-  prompt,
-  pasteDraftAfterLaunch,
-  hasPty
-}: {
-  launchSource?: LaunchSource
-  prompt?: string
-  pasteDraftAfterLaunch: boolean
-  hasPty: boolean
-}): boolean {
-  return !(
-    (launchSource === 'notes_send' || launchSource === 'conflict_resolution') &&
-    (prompt?.trim().length ?? 0) > 0 &&
-    pasteDraftAfterLaunch &&
-    hasPty
-  )
+export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
+  return !hasPty
 }
 
 function getLaunchWatchdogTimeoutMessage(label: string): string {
-  return `Couldn't launch ${label} — the terminal is still open.`
+  return `Couldn't launch ${label} — the terminal did not start.`
+}
+
+function getTerminalLaunchState(tabId: string): { stillOpen: boolean; hasPty: boolean } {
+  const state = useAppStore.getState()
+  const hasPtyBinding = (state.ptyIdsByTabId[tabId]?.length ?? 0) > 0
+  let stillOpen = false
+  let tabPtyId: string | null = null
+
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    const tab = tabs.find((t) => t.id === tabId)
+    if (tab) {
+      stillOpen = true
+      tabPtyId = tab.ptyId
+      break
+    }
+  }
+
+  return { stillOpen, hasPty: hasPtyBinding || tabPtyId !== null }
+}
+
+async function waitForTerminalPty(tabId: string, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const launchState = getTerminalLaunchState(tabId)
+    if (launchState.hasPty) {
+      return true
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+  return getTerminalLaunchState(tabId).hasPty
 }
 
 function QuickLaunchAgentMenuItemsInner({
@@ -124,36 +138,21 @@ function QuickLaunchAgentMenuItemsInner({
       }
       onFocusTerminal(result.tabId)
 
-      // Why: the watchdog guards against "queued startup command never ran" —
-      // e.g. shell failed to spawn. Suppress the toast if the tab has been
-      // closed or the worktree has been navigated away from before the
-      // deadline (see §States: Launch failure handling). Bracketed-paste
-      // failures have their own toast in launch-agent-in-new-tab.ts.
-      void waitForAgentReady(result.tabId, result.startupPlan.expectedProcess, {
-        timeoutMs: 5000
-      }).then((ready) => {
-        if (ready.ready) {
+      // Why: launch success means the terminal session exists. Agent readiness
+      // can lag behind on slow machines, and prompt paste flows already own
+      // their own readiness timeout once a PTY exists.
+      void waitForTerminalPty(result.tabId, 5000).then((hasPty) => {
+        if (hasPty) {
           return
         }
-        const state = useAppStore.getState()
-        const stillOpen = Object.values(state.tabsByWorktree).some((tabs) =>
-          tabs.some((t) => t.id === result.tabId)
-        )
-        if (!stillOpen) {
+        const launchState = getTerminalLaunchState(result.tabId)
+        if (!launchState.stillOpen) {
           return
         }
-        if (state.activeWorktreeId !== worktreeId) {
+        if (useAppStore.getState().activeWorktreeId !== worktreeId) {
           return
         }
-        const hasPty = (state.ptyIdsByTabId[result.tabId]?.length ?? 0) > 0
-        if (
-          !shouldShowLaunchWatchdogTimeout({
-            launchSource,
-            prompt,
-            pasteDraftAfterLaunch: result.pasteDraftAfterLaunch,
-            hasPty
-          })
-        ) {
+        if (!shouldShowLaunchWatchdogTimeout({ hasPty: launchState.hasPty })) {
           return
         }
         toast.message(getLaunchWatchdogTimeoutMessage(label))

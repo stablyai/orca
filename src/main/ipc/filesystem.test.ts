@@ -907,9 +907,7 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  it('preserves the inherited Codex environment when no managed account is selected', async () => {
-    const previousCodexHome = process.env.CODEX_HOME
-    process.env.CODEX_HOME = '/system/codex-home'
+  it('prepares the Orca-managed Codex home for the default system selection', async () => {
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
@@ -923,26 +921,23 @@ describe('registerFilesystemHandlers', () => {
       message: 'Update README'
     })
 
-    try {
-      registerFilesystemHandlers(store as never, {
-        prepareForCodexLaunch: () => null
-      })
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => '/orca-managed/codex-home'
+    })
 
-      await handlers.get('git:generateCommitMessage')!(null, {
-        worktreePath: WORKTREE_FEATURE_PATH
-      })
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
 
-      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
         kind: 'local',
-        cwd: WORKTREE_FEATURE_PATH
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: '/orca-managed/codex-home' })
       })
-    } finally {
-      if (previousCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = previousCodexHome
-      }
-    }
+    )
   })
 
   it('returns a sanitized error when local agent account preparation fails', async () => {

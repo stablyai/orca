@@ -11,7 +11,6 @@ import {
   ChevronDown,
   GitMerge,
   LoaderCircle,
-  Moon,
   Server,
   ServerOff,
   Trash2,
@@ -44,15 +43,17 @@ import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCa
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
+import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { runWorktreeDelete } from './delete-worktree-flow'
-import { runSleepWorktree } from './sleep-worktree-flow'
-import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
+import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 
 type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isCurrentWorktree?: boolean
   isActiveSurface?: boolean
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
@@ -88,6 +89,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
+  isCurrentWorktree = isActive,
   isActiveSurface = isActive,
   isMultiSelected = false,
   selectedWorktrees,
@@ -160,26 +162,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const [isMacOptionPressed, setIsMacOptionPressed] = useState(false)
-
-  useEffect(() => {
-    const isMac = navigator.userAgent.includes('Mac')
-    if (!isMac) {
-      return
-    }
-    const handleKeyChange = (event: KeyboardEvent): void => {
-      setIsMacOptionPressed(event.altKey)
-    }
-    const handleWindowBlur = (): void => setIsMacOptionPressed(false)
-    window.addEventListener('keydown', handleKeyChange, true)
-    window.addEventListener('keyup', handleKeyChange, true)
-    window.addEventListener('blur', handleWindowBlur)
-    return () => {
-      window.removeEventListener('keydown', handleKeyChange, true)
-      window.removeEventListener('keyup', handleKeyChange, true)
-      window.removeEventListener('blur', handleWindowBlur)
-    }
-  }, [])
+  const [titleRenaming, setTitleRenaming] = useState(false)
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -271,7 +254,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const showPR = cardProps.includes('pr')
   const showIssue = cardProps.includes('issue')
+  const showLinearIssue = cardProps.includes('linear-issue')
   const showComment = cardProps.includes('comment')
+  const showPorts = cardProps.includes('ports')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
@@ -282,16 +267,29 @@ const WorktreeCard = React.memo(function WorktreeCard({
     if (isWebClient()) {
       return
     }
-    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && showPR) {
+    if (!repo || isFolder || worktree.isBare || !hostedReviewCacheKey || !showPR) {
+      return
+    }
+    const refreshHostedReviewIfVisible = (): void => {
+      if (!isWindowVisible()) {
+        return
+      }
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
       // number from metadata or the visible cache whenever we have one.
-      fetchHostedReviewForBranch(repo.path, branch, {
+      void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null,
         staleWhileRevalidate: true
       })
+    }
+    refreshHostedReviewIfVisible()
+    window.addEventListener('focus', refreshHostedReviewIfVisible)
+    document.addEventListener('visibilitychange', refreshHostedReviewIfVisible)
+    return () => {
+      window.removeEventListener('focus', refreshHostedReviewIfVisible)
+      document.removeEventListener('visibilitychange', refreshHostedReviewIfVisible)
     }
   }, [
     repo,
@@ -323,22 +321,36 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
 
-    fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+    const issueNumber = worktree.linkedIssue
 
-    // Background poll as fallback (activity triggers handle the fast path)
-    const interval = setInterval(() => {
-      fetchIssue(repo.path, worktree.linkedIssue!, { repoId: repo.id })
-    }, 5 * 60_000) // 5 minutes
-
-    return () => clearInterval(interval)
+    // Background poll as fallback (activity triggers handle the fast path).
+    // The interval itself is stopped while hidden so issue cards do not keep
+    // long-lived workspaces waking just to skip their fetch.
+    return installWindowVisibilityInterval({
+      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      intervalMs: 5 * 60_000
+    })
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
-    if (!worktree.linkedLinearIssue || !showIssue) {
+    if (!worktree.linkedLinearIssue || !showLinearIssue) {
       return
     }
-    void fetchLinearIssue(worktree.linkedLinearIssue)
-  }, [worktree.linkedLinearIssue, fetchLinearIssue, showIssue])
+    const linearIssueId = worktree.linkedLinearIssue
+    const refreshLinearIssueIfVisible = (): void => {
+      if (!isWindowVisible()) {
+        return
+      }
+      void fetchLinearIssue(linearIssueId)
+    }
+    refreshLinearIssueIfVisible()
+    window.addEventListener('focus', refreshLinearIssueIfVisible)
+    document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
+    return () => {
+      window.removeEventListener('focus', refreshLinearIssueIfVisible)
+      document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
+    }
+  }, [worktree.linkedLinearIssue, fetchLinearIssue, showLinearIssue])
 
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
@@ -379,6 +391,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [worktree.id, isSshDisconnected, onActivate, onSelectionGesture]
   )
 
+  const handleRenameTitle = useCallback(
+    (displayName: string) => updateWorktreeMeta(worktree.id, { displayName }),
+    [updateWorktreeMeta, worktree.id]
+  )
+
   const handleDoubleClick = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
@@ -388,12 +405,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       currentComment: worktree.comment
     })
   }, [
-    worktree.id,
-    worktree.displayName,
-    worktree.linkedIssue,
-    worktree.linkedPR,
+    openModal,
     worktree.comment,
-    openModal
+    worktree.displayName,
+    worktree.id,
+    worktree.linkedIssue,
+    worktree.linkedPR
   ])
 
   const handleToggleUnreadQuick = useCallback(
@@ -404,30 +421,19 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree.id, worktree.isUnread, updateWorktreeMeta]
   )
-  const quickActionKind = getWorkspaceQuickActionKind({
-    hasActiveActivity,
-    isDeletable: !worktree.isMainWorktree && !isFolder,
-    isInactive: !hasActiveActivity,
-    isMacOptionPressed
-  })
+  // Why: deleting the active/current workspace or one with live activity is a
+  // disruptive hover action; keep the quick action delete-only and passive.
+  const showDeleteQuickAction = !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
-      if (quickActionKind === 'sleep') {
-        void runSleepWorktree(worktree.id)
-      } else if (quickActionKind === 'delete') {
+      if (showDeleteQuickAction) {
         runWorktreeDelete(worktree.id)
       }
     },
-    [quickActionKind, worktree.id]
+    [showDeleteQuickAction, worktree.id]
   )
-  const quickActionLabel =
-    quickActionKind === 'sleep'
-      ? 'Sleep workspace'
-      : quickActionKind === 'delete'
-        ? 'Delete workspace'
-        : ''
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
   const childWorkspaceLabel = `${lineageChildCount} child ${
@@ -468,7 +474,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
   const showUnreadEmphasis = cardProps.includes('unread') && worktree.isUnread
   const metaIssue = showIssue ? issueDisplay : null
-  const metaLinearIssue = showIssue ? linearIssueDisplay : null
+  const metaLinearIssue = showLinearIssue ? linearIssueDisplay : null
   const metaReview = showPR ? prDisplay : null
   const metaComment = showComment ? worktree.comment : null
   const handleOpenGitHubIssueInOrca = useCallback(
@@ -533,7 +539,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     review: metaReview,
     comment: metaComment
   })
-  const hasPorts = workspacePorts.length > 0
+  const hasPorts = showPorts && workspacePorts.length > 0
 
   const cardBody = (
     <div
@@ -544,14 +550,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : isMultiSelected
             ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
-            : 'border border-transparent hover:bg-sidebar-accent/40',
+            : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
+        titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      draggable={nativeDragEnabled && !isDeleting}
+      draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={nativeDragEnabled ? handleDragStart : undefined}
       onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
       aria-busy={isDeleting}
@@ -619,7 +626,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
+                  {isSshDisconnected ? 'SSH disconnected' : 'Remote project via SSH'}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -629,18 +636,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
                  hierarchy against the muted branch row below (muting the
                  title as well flattened the card — same reasoning as the
                  repo chip comment below). */}
-            <div
-              className={cn(
-                'text-[12px] truncate leading-tight text-foreground',
-                showUnreadEmphasis ? 'font-semibold' : 'font-normal'
-              )}
-            >
-              {/* Why: the card root is a non-interactive <div>, so aria-label
-                   on it is announced inconsistently across screen readers.
-                   A visible-text prefix inside the accessible name is reliable. */}
-              {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
-              {worktree.displayName}
-            </div>
+            <WorktreeTitleInlineRename
+              displayName={worktree.displayName}
+              disabled={isDeleting}
+              showUnreadEmphasis={showUnreadEmphasis}
+              className="text-[12px]"
+              editingClassName="flex-1"
+              onEditingChange={setTitleRenaming}
+              onRename={handleRenameTitle}
+            />
 
             {/* Why: the primary worktree (the original clone directory) cannot be
                  deleted via `git worktree remove`. Placing this badge next to the
@@ -686,7 +690,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {quickActionKind && !isDeleting && (
+          {showDeleteQuickAction && !isDeleting && (
             <div className="ml-auto flex shrink-0 items-center justify-center pr-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -698,21 +702,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     className={cn(
                       'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
                       'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                      quickActionKind === 'delete'
-                        ? 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
-                        : 'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
+                      'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
                     )}
-                    aria-label={quickActionLabel}
+                    aria-label="Delete workspace"
                   >
-                    {quickActionKind === 'delete' ? (
-                      <Trash2 className="size-3.5" />
-                    ) : (
-                      <Moon className="size-3.5" />
-                    )}
+                    <Trash2 className="size-3.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {quickActionKind === 'delete' ? 'Delete workspace' : 'Sleep workspace'}
+                  Delete workspace
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -725,10 +723,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             {repo && !hideRepoBadge && (
               <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-                <div
-                  className="size-1.5 rounded-full"
-                  style={{ backgroundColor: repo.badgeColor }}
-                />
+                <RepoBadgeMark color={repo.badgeColor} />
                 <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
                   {repo.displayName}
                 </span>

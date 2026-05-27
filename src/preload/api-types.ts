@@ -23,6 +23,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
+  DetectedWorktreeListResult,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -204,6 +205,7 @@ import type {
 } from '../shared/developer-permissions-types'
 import type {
   ComputerUsePermissionId,
+  ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../shared/computer-use-permissions-types'
@@ -230,6 +232,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
 import type {
+  WorkspacePortAdvertisedUrlChangedEvent,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortScanRequest,
@@ -240,7 +243,7 @@ import type {
   SshConnectionState,
   SshTarget,
   PortForwardEntry,
-  DetectedPort
+  EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
@@ -291,6 +294,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
+import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -324,7 +328,7 @@ export type BrowserApi = {
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
-  onActivateView: (callback: (data: { worktreeId: string }) => void) => () => void
+  onActivateView: (callback: (data: { worktreeId?: string }) => void) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -618,10 +622,13 @@ export type PreloadApi = {
           Repo,
           | 'displayName'
           | 'badgeColor'
+          | 'repoIcon'
           | 'hookSettings'
           | 'worktreeBaseRef'
           | 'kind'
           | 'issueSourcePreference'
+          | 'externalWorktreeVisibility'
+          | 'externalWorktreeVisibilityPromptDismissedAt'
         >
       >
     }) => Promise<Repo>
@@ -666,6 +673,7 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
+    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
@@ -682,7 +690,7 @@ export type PreloadApi = {
       mrIid: number
       sourceBranch?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string } | { error: string }>
+    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     listLineage: () => Promise<Record<string, WorktreeLineage>>
@@ -714,6 +722,9 @@ export type PreloadApi = {
   workspacePorts: {
     scan: (args: WorkspacePortScanRequest) => Promise<WorkspacePortScanResult>
     kill: (args: WorkspacePortKillRequest) => Promise<WorkspacePortKillResult>
+    onAdvertisedUrlChanged: (
+      callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void
+    ) => () => void
   }
   pty: {
     spawn: (opts: {
@@ -761,7 +772,13 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-    onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
@@ -1251,6 +1268,18 @@ export type PreloadApi = {
      *  state without round-tripping through settings:get. */
     onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
   }
+  keybindings: {
+    get: () => Promise<KeybindingFileSnapshot>
+    ensureFile: () => Promise<KeybindingFileSnapshot>
+    setAction: (args: {
+      actionId: KeybindingActionId
+      bindings: string[] | null
+    }) => Promise<KeybindingFileSnapshot>
+    reload: () => Promise<KeybindingFileSnapshot>
+    openFile: () => Promise<KeybindingFileSnapshot>
+    revealFile: () => Promise<KeybindingFileSnapshot>
+    onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void) => () => void
+  }
   codexAccounts: {
     list: () => Promise<CodexRateLimitAccountsState>
     add: () => Promise<CodexRateLimitAccountsState>
@@ -1280,6 +1309,7 @@ export type PreloadApi = {
     antigravityStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
+    commandCodeStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
@@ -1319,6 +1349,7 @@ export type PreloadApi = {
     openSetup: (args?: {
       id?: ComputerUsePermissionId
     }) => Promise<ComputerUsePermissionSetupResult>
+    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>
@@ -1330,6 +1361,7 @@ export type PreloadApi = {
     pathExists: (path: string) => Promise<boolean>
     pickAttachment: () => Promise<string | null>
     pickImage: () => Promise<string | null>
+    pickRepoIconImage: () => Promise<{ dataUrl: string; fileName: string } | null>
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
@@ -1555,8 +1587,13 @@ export type PreloadApi = {
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
+      pushTarget?: GitPushTarget
     }) => Promise<GitUpstreamStatus>
-    fetch: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    fetch: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }) => Promise<void>
     push: (args: {
       worktreePath: string
       publish?: boolean
@@ -1564,7 +1601,16 @@ export type PreloadApi = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }) => Promise<void>
-    pull: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    pull: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }) => Promise<void>
+    rebaseFromBase: (args: {
+      worktreePath: string
+      baseRef: string
+      connectionId?: string
+    }) => Promise<void>
     branchDiff: (args: {
       worktreePath: string
       compare: {
@@ -1676,13 +1722,16 @@ export type PreloadApi = {
     onOpenSettings: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
-    onShowFeatureTourNudge: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
     onToggleFloatingTerminal: (callback: () => void) => () => void
+    onTerminalShortcutCaptured: (
+      callback: (data: { actionId: KeybindingActionId }) => void
+    ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
+    onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
@@ -1711,6 +1760,7 @@ export type PreloadApi = {
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
+    onSwitchRecentTab: (callback: () => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
     onCtrlTabKeyUp: (callback: () => void) => () => void
@@ -1827,6 +1877,9 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
+    setTerminalInputFocused: (focused: boolean) => void
+    setFloatingTerminalInputFocused: (focused: boolean) => void
+    setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void
     ) => () => void
@@ -1955,12 +2008,12 @@ export type PreloadApi = {
     }) => Promise<PortForwardEntry>
     removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
     listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
-    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<EnrichedDetectedPort[]>
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
     ) => () => void
     onDetectedPortsChanged: (
-      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+      callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void
     ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]

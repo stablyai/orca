@@ -19,6 +19,7 @@ import {
   getDropIndicatorClasses,
   type DropIndicator
 } from './drop-indicator'
+import { preventMiddleButtonDefault } from './middle-button-default-guard'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -231,6 +232,7 @@ export default function SortableTab({
               e.preventDefault()
             }
           }}
+          onMouseUp={preventMiddleButtonDefault}
           onAuxClick={(e) => {
             if (isEditing) {
               return

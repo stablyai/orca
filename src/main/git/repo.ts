@@ -4,7 +4,8 @@ import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
-import { buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { buildHostedRemoteFileUrl, parseHostedRemote } from './hosted-remote-url'
+import { normalizeGitUsername } from './git-username'
 
 const GH_LOGIN_TIMEOUT_MS = 2500
 
@@ -88,12 +89,55 @@ export function getRepoName(path: string): string {
  */
 export function getRemoteUrl(path: string): string | null {
   try {
-    return gitExecFileSync(['remote', 'get-url', 'origin'], {
-      cwd: path
-    }).trim()
+    return getRemoteUrlByName(path, 'origin')
   } catch {
     return null
   }
+}
+
+function getRemoteUrlByName(path: string, remote: string): string {
+  return gitExecFileSync(['remote', 'get-url', remote], {
+    cwd: path
+  }).trim()
+}
+
+function listRemoteNamesSync(path: string): string[] {
+  try {
+    return gitExecFileSync(['remote'], { cwd: path })
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function getConfiguredBranchRemote(path: string, branch: string | null): string {
+  if (!branch) {
+    return ''
+  }
+  const remote = getGitConfigValue(path, `branch.${branch}.remote`)
+  return remote === '.' ? '' : remote
+}
+
+function getCurrentBranchName(path: string): string {
+  try {
+    return gitExecFileSync(['branch', '--show-current'], { cwd: path }).trim()
+  } catch {
+    return ''
+  }
+}
+
+function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+  return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
+}
+
+function getDefaultBranchName(shortRef: string, remoteName: string): string {
+  if (!shortRef.includes('/')) {
+    return shortRef
+  }
+  return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
 }
 
 function getGitConfigValue(path: string, key: string): string {
@@ -104,16 +148,6 @@ function getGitConfigValue(path: string, key: string): string {
   } catch {
     return ''
   }
-}
-
-function normalizeUsername(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ''
-  }
-
-  const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
-  return localPart.replace(/^\d+\+/, '')
 }
 
 let cachedGhLogin: string | undefined
@@ -142,7 +176,7 @@ function getGhLogin(): string {
       timeout: GH_LOGIN_TIMEOUT_MS
     }).trim()
     if (apiLogin) {
-      cachedGhLogin = normalizeUsername(apiLogin)
+      cachedGhLogin = normalizeGitUsername(apiLogin)
       return cachedGhLogin
     }
   } catch (err) {
@@ -169,12 +203,12 @@ function getGhLogin(): string {
       /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
     )
     if (activeAccountMatch?.[1]) {
-      cachedGhLogin = normalizeUsername(activeAccountMatch[1])
+      cachedGhLogin = normalizeGitUsername(activeAccountMatch[1])
       return cachedGhLogin
     }
 
     const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    const login = normalizeUsername(accountMatch?.[1] ?? '')
+    const login = normalizeGitUsername(accountMatch?.[1] ?? '')
     if (login) {
       cachedGhLogin = login
     }
@@ -187,18 +221,60 @@ function getGhLogin(): string {
   }
 }
 
+function getGhLoginForGitHubRemote(path: string): string {
+  const remoteUrl = getGitHubRemoteUrlForGhLogin(path)
+  if (!remoteUrl) {
+    return ''
+  }
+  return getGhLogin()
+}
+
+function getGitHubRemoteUrlForGhLogin(path: string): string {
+  const remotes = listRemoteNamesSync(path)
+  const defaultBaseRef = getDefaultBaseRef(path)
+  const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
+  const defaultBranch = defaultBaseRef
+    ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
+    : null
+
+  const candidateRemotes = [
+    getConfiguredBranchRemote(path, getCurrentBranchName(path)),
+    getConfiguredBranchRemote(path, defaultBranch),
+    defaultBaseRemote,
+    'origin',
+    remotes.length === 1 ? remotes[0] : ''
+  ]
+
+  const seen = new Set<string>()
+  for (const remote of candidateRemotes) {
+    if (!remote || seen.has(remote)) {
+      continue
+    }
+    seen.add(remote)
+    try {
+      const remoteUrl = getRemoteUrlByName(path, remote)
+      if (parseHostedRemote(remoteUrl)?.provider === 'github') {
+        return remoteUrl
+      }
+    } catch {
+      // Missing candidate remotes are expected; try the next repo-level fallback.
+    }
+  }
+  // Why: `gh` reports a GitHub account. For GitLab/Bitbucket/self-hosted
+  // repos, using that identity would create the wrong provider prefix.
+  return ''
+}
+
 /**
- * Get the best username-style branch prefix for the repo.
+ * Get the GitHub/explicit username-style branch prefix for the repo.
  */
 export function getGitUsername(path: string): string {
-  return normalizeUsername(
+  // Why: this backs the "Git Username" branch-prefix setting. Commit author
+  // email/name are not hosted-account usernames, so keep them out of this path.
+  return normalizeGitUsername(
     getGitConfigValue(path, 'github.user') ||
       getGitConfigValue(path, 'user.username') ||
-      // Why: GitHub CLI login can touch network/keychain state. A repo-local
-      // email is already enough for the branch prefix and keeps repo add fast.
-      getGitConfigValue(path, 'user.email').split('@')[0] ||
-      getGhLogin() ||
-      getGitConfigValue(path, 'user.name')
+      getGhLoginForGitHubRemote(path)
   )
 }
 

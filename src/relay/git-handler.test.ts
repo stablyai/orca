@@ -54,6 +54,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetchRemoteTrackingRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
+    expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
@@ -631,6 +632,36 @@ describe('GitHandler', () => {
       }
     })
 
+    it('fetches the explicit publish target remote', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-fork-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        execFileSync('git', ['remote', 'add', 'fork', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', 'fork', 'HEAD:feature/fix'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        await expect(
+          dispatcher.callRequest('git.fetch', {
+            worktreePath: tmpDir,
+            pushTarget: { remoteName: 'fork', branchName: 'feature/fix' }
+          })
+        ).resolves.not.toThrow()
+
+        await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
     it('refreshes one remote-tracking ref from a configured remote', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-producer-'))
@@ -759,6 +790,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/remotes/origin/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
 
@@ -780,6 +812,13 @@ describe('GitHandler', () => {
           '/relay/wt',
           'refs/remotes/origin/main'
         ],
+        [
+          'config',
+          '--local',
+          '--replace-all',
+          'branch.feature/test.base',
+          'refs/remotes/origin/main'
+        ],
         ['config', '--get', 'push.autoSetupRemote'],
         ['config', '--local', 'push.autoSetupRemote', 'true']
       ])
@@ -788,6 +827,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[1]?.[1]).toBe('/relay/repo')
       expect(gitMock.mock.calls[2]?.[1]).toBe('/relay/wt')
       expect(gitMock.mock.calls[3]?.[1]).toBe('/relay/wt')
+      expect(gitMock.mock.calls[4]?.[1]).toBe('/relay/wt')
     })
 
     it('checks out a selected existing local branch without creating a new branch', async () => {
@@ -815,6 +855,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
 
@@ -828,6 +869,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
         ['worktree', 'add', '--no-track', '-b', 'feature/disambig', '/relay/wt', 'refs/heads/main'],
+        ['config', '--local', '--replace-all', 'branch.feature/disambig.base', 'refs/heads/main'],
         ['config', '--get', 'push.autoSetupRemote'],
         ['config', '--local', 'push.autoSetupRemote', 'true']
       ])
@@ -838,6 +880,7 @@ describe('GitHandler', () => {
       gitMock.mockRejectedValueOnce(new Error('no remote ref')) // rev-parse refs/remotes/release/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/heads/release/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
 
@@ -860,8 +903,43 @@ describe('GitHandler', () => {
           '/relay/wt',
           'refs/heads/release/main'
         ],
+        [
+          'config',
+          '--local',
+          '--replace-all',
+          'branch.feature/release.base',
+          'refs/heads/release/main'
+        ],
         ['config', '--get', 'push.autoSetupRemote'],
         ['config', '--local', 'push.autoSetupRemote', 'true']
+      ])
+    })
+
+    it('passes --no-checkout when sparse setup will checkout after configuration', async () => {
+      const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // rev-parse refs/remotes/origin/main
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
+      gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
+
+      await localDispatcher.callRequest('git.addWorktree', {
+        repoPath: '/relay/repo',
+        branchName: 'feature/sparse',
+        targetDir: '/relay/wt',
+        base: 'origin/main',
+        noCheckout: true
+      })
+
+      expect(gitMock.mock.calls[1]?.[0]).toEqual([
+        'worktree',
+        'add',
+        '--no-track',
+        '--no-checkout',
+        '-b',
+        'feature/sparse',
+        '/relay/wt',
+        'refs/remotes/origin/main'
       ])
     })
 
@@ -869,6 +947,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockResolvedValueOnce({ stdout: 'false\n', stderr: '' }) // --get returns value
 
       await localDispatcher.callRequest('git.addWorktree', {
@@ -882,6 +961,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
         ['worktree', 'add', '--no-track', '-b', 'feature/preserve', '/relay/wt', 'main'],
+        ['config', '--local', '--replace-all', 'branch.feature/preserve.base', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
     })
@@ -894,6 +974,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --get success, empty value
 
       await localDispatcher.callRequest('git.addWorktree', {
@@ -906,6 +987,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
         ['worktree', 'add', '--no-track', '-b', 'feature/empty', '/relay/wt', 'main'],
+        ['config', '--local', '--replace-all', 'branch.feature/empty.base', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
     })
@@ -918,6 +1000,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('parse error'), { code: 3 })) // --get non-unset
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -934,6 +1017,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
         ['worktree', 'add', '--no-track', '-b', 'feature/corrupt', '/relay/wt', 'main'],
+        ['config', '--local', '--replace-all', 'branch.feature/corrupt.base', 'main'],
         ['config', '--get', 'push.autoSetupRemote']
       ])
       expect(warnSpy).toHaveBeenCalledWith(
@@ -947,6 +1031,7 @@ describe('GitHandler', () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
+      gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get unset
       gitMock.mockRejectedValueOnce(new Error('config locked')) // --local set fails
 

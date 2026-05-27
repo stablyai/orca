@@ -17,6 +17,18 @@ vi.mock('os', async () => {
 
 import { AntigravityHookService } from './hook-service'
 
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return run()
+  } finally {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  }
+}
+
 describe('AntigravityHookService', () => {
   let homeDir: string
 
@@ -64,6 +76,85 @@ describe('AntigravityHookService', () => {
     expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
     expect(script).toContain('payload=$(cat)')
     expect(script).toContain('{"decision":""}')
+  })
+
+  it('installs Windows event wrappers without nested cmd quoting and removes stale PreToolUse hooks', () => {
+    withPlatform('win32', () => {
+      const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
+      const staleScriptPath = join(
+        homeDir,
+        '.orca',
+        'agent-hooks',
+        'antigravity-hook.cmd'
+      ).replaceAll('/', '\\')
+      mkdirSync(dirname(configPath), { recursive: true })
+      writeFileSync(
+        configPath,
+        `${JSON.stringify(
+          {
+            'orca-status': {
+              PreToolUse: [
+                {
+                  matcher: '*',
+                  hooks: [
+                    {
+                      type: 'command',
+                      command: `cmd /d /s /c "set "ORCA_ANTIGRAVITY_EVENT=PreToolUse" && call "${staleScriptPath}""`
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          null,
+          2
+        )}\n`
+      )
+
+      const service = new AntigravityHookService()
+      const staleStatus = service.getStatus()
+      expect(staleStatus.state).toBe('partial')
+      expect(staleStatus.managedHooksPresent).toBe(true)
+
+      const status = service.install()
+
+      expect(status.state).toBe('installed')
+
+      const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+        'orca-status': Record<
+          string,
+          { matcher?: string; command?: string; hooks?: { command: string }[] }[]
+        >
+      }
+      expect(config['orca-status'].PreToolUse).toBeUndefined()
+
+      const expectedWrappers = {
+        PreInvocation: 'antigravity-pre-invocation.cmd',
+        PostInvocation: 'antigravity-post-invocation.cmd',
+        Stop: 'antigravity-stop.cmd',
+        PostToolUse: 'antigravity-post-tool-use.cmd'
+      }
+      for (const [eventName, wrapperFileName] of Object.entries(expectedWrappers)) {
+        const definition = config['orca-status'][eventName][0]
+        const command =
+          eventName === 'PostToolUse' ? definition.hooks?.[0]?.command : definition.command
+        expect(command).toContain(wrapperFileName)
+        expect(command).not.toContain('cmd /d /s /c')
+        expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
+        expect(command).not.toContain('"')
+
+        const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
+        expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
+        expect(wrapper).toContain('call "%ORCA_ANTIGRAVITY_CORE%"')
+      }
+
+      const script = readFileSync(
+        join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.cmd'),
+        'utf8'
+      )
+      expect(script).toContain('/hook/antigravity')
+      expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
+    })
   })
 
   it('preserves user-authored hook bundles and entries in Orca bundle', () => {

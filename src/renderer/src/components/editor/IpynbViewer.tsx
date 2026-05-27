@@ -40,7 +40,9 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import { registerPendingEditorFlush } from './editor-pending-flush'
+import { editorShortcutMatches, installEditorSaveShortcut } from './editor-shortcuts'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
   deleteIpynbCell,
@@ -256,9 +258,13 @@ function CodeCell({
   )
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
-    editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
-      void onSaveRequestRef.current()
-    })
+    const cleanupSaveShortcut = installEditorSaveShortcut(
+      editorInstance.getContainerDomNode(),
+      () => {
+        void onSaveRequestRef.current()
+      }
+    )
+    editorInstance.onDidDispose(() => cleanupSaveShortcut())
     editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
       onDeactivateRef.current()
     })
@@ -607,12 +613,11 @@ export default function IpynbViewer({
     const latestContent = flushSourceDrafts()
     await onSave(latestContent)
   }, [flushSourceDrafts, onSave])
+  const saveShortcutKeys = useShortcutKeys('editor.save')
 
   const handleNotebookKeyDownCapture = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>): void => {
-      const isMac = navigator.userAgent.includes('Mac')
-      const hasSaveModifier = isMac ? event.metaKey : event.ctrlKey
-      if (!hasSaveModifier || event.shiftKey || event.repeat || event.key.toLowerCase() !== 's') {
+      if (event.repeat || !editorShortcutMatches('editor.save', event)) {
         return
       }
       event.preventDefault()
@@ -651,7 +656,6 @@ export default function IpynbViewer({
   }
 
   const { notebook } = parsed
-  const shortcutModifier = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
   const applyContent = (nextContent: string): void => {
     contentRef.current = nextContent
     onContentChange(nextContent)
@@ -758,7 +762,7 @@ export default function IpynbViewer({
         <div className="ml-auto flex items-center gap-2">
           <NotebookHeaderButton
             label="Save notebook"
-            shortcutKeys={[shortcutModifier, 'S']}
+            shortcutKeys={saveShortcutKeys}
             onClick={() => void saveNotebook()}
           >
             <Save className="size-3.5" />

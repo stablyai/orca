@@ -10,33 +10,11 @@ import {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
-import type { SettingsSearchEntry } from './settings-search'
+import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
-
-export const SSH_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'SSH Connections',
-    description: 'Manage remote SSH targets.',
-    keywords: ['ssh', 'remote', 'server', 'connection', 'host']
-  },
-  {
-    title: 'Add SSH Target',
-    description: 'Add a new remote SSH target.',
-    keywords: ['ssh', 'add', 'new', 'target', 'host', 'server']
-  },
-  {
-    title: 'Import from SSH Config',
-    description: 'Import hosts from ~/.ssh/config.',
-    keywords: ['ssh', 'import', 'config', 'hosts']
-  },
-  {
-    title: 'Test Connection',
-    description: 'Test connectivity to an SSH target.',
-    keywords: ['ssh', 'test', 'connection', 'ping']
-  }
-]
+export { SSH_PANE_SEARCH_ENTRIES } from './ssh-search'
 
 type SshPaneProps = Record<string, never>
 
@@ -52,6 +30,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
+  const clearRemovedSshTargetState = useAppStore((s) => s.clearRemovedSshTargetState)
 
   const loadTargets = useCallback(
     async (opts?: { signal?: AbortSignal }) => {
@@ -150,10 +129,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleRemove = async (id: string): Promise<void> => {
     try {
-      // Why: removing a target is destructive even after non-destructive
-      // disconnect, when remote PTYs can still be alive in the grace window.
-      await terminateSessionsWithReconnect(id)
-      await window.api.ssh.removeTarget({ id })
+      await removeSshTargetWithBestEffortCleanup(window.api.ssh, id)
+      // Why: a deleted passphrase-gated target may still have deferred
+      // reconnect metadata; clear it so focused SSH tabs stop retrying it.
+      clearRemovedSshTargetState(id)
       toast.success('Target removed')
       await loadTargets()
     } catch (err) {

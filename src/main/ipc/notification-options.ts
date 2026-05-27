@@ -13,6 +13,7 @@ const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
+  omp: 'OMP',
   droid: 'Droid',
   grok: 'Grok',
   hermes: 'Hermes'

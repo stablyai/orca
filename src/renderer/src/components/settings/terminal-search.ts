@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { TERMINAL_CLIPBOARD_SEARCH_ENTRIES } from './terminal-clipboard-search'
 import { TERMINAL_WINDOWS_SEARCH_ENTRIES } from './terminal-windows-search'
 
 export const TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES: SettingsSearchEntry[] = [
@@ -78,14 +79,6 @@ export const TERMINAL_CURSOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Quick Commands',
-    description: 'Saved terminal command snippets available from the terminal right-click menu.',
-    keywords: ['terminal', 'command', 'snippet', 'quick command', 'send', 'context menu']
-  }
-]
-
 export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Inactive Pane Opacity',
@@ -103,23 +96,7 @@ export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       "Hovering a terminal pane activates it without needing to click. Mirrors Ghostty's focus-follows-mouse setting. Selections and window switching stay safe.",
     keywords: ['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']
   },
-  {
-    title: 'Copy on Select',
-    description:
-      'Automatically copy terminal selections to the clipboard as soon as a selection is made.',
-    keywords: [
-      'clipboard',
-      'copy',
-      'select',
-      'selection',
-      'auto',
-      'automatic',
-      'x11',
-      'linux',
-      'gnome',
-      'paste'
-    ]
-  }
+  ...TERMINAL_CLIPBOARD_SEARCH_ENTRIES
 ]
 
 export const TERMINAL_DARK_THEME_SEARCH_ENTRIES: SettingsSearchEntry[] = [
@@ -185,6 +162,24 @@ export const TERMINAL_MAC_OPTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'international',
       'readline',
       'ghostty'
+    ]
+  }
+]
+
+export const TERMINAL_MAC_YEN_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'JIS Yen (¥) to Backslash (\\)',
+    description: 'Controls whether pressing the JIS Yen (¥) key sends a backslash (\\) instead.',
+    keywords: [
+      'terminal',
+      'yen',
+      'backslash',
+      'japanese',
+      'keyboard',
+      'mac',
+      'macos',
+      'jis',
+      'intl'
     ]
   }
 ]
@@ -283,7 +278,6 @@ export function getTerminalPaneSearchEntries(platform: {
   // users from landing on an option the UI intentionally hides.
   return [
     ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-    ...TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES,
     ...TERMINAL_RENDERING_SEARCH_ENTRIES,
     ...TERMINAL_CURSOR_SEARCH_ENTRIES,
     ...TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
@@ -295,6 +289,8 @@ export function getTerminalPaneSearchEntries(platform: {
     ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
     ...MANAGE_SESSIONS_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
-    ...(platform.isMac ? TERMINAL_MAC_OPTION_SEARCH_ENTRIES : [])
+    ...(platform.isMac
+      ? [...TERMINAL_MAC_OPTION_SEARCH_ENTRIES, ...TERMINAL_MAC_YEN_SEARCH_ENTRIES]
+      : [])
   ]
 }

@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+/* eslint-disable max-lines -- Why: GitLab remote parsing coverage needs many URL/host fixtures against the same mocked git/glab helpers. */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, glabExecFileAsyncMock } = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, glabExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  glabExecFileAsyncMock: vi.fn()
+  glabExecFileAsyncMock: vi.fn(),
+  sshExecMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -18,11 +20,13 @@ import {
   getIssueProjectRef,
   getGlabKnownHosts,
   getProjectRef,
+  getProjectRefForRemote,
   parseGitLabProjectRef,
   parseGlabApiResponse,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('gitlab project ref parsing', () => {
   it('parses HTTPS and SSH GitLab.com remotes', () => {
@@ -99,7 +103,13 @@ describe('gitlab project ref parsing', () => {
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    sshExecMock.mockReset()
+    unregisterSshGitProvider('conn-1')
     _resetProjectRefCache()
+  })
+
+  afterEach(() => {
+    unregisterSshGitProvider('conn-1')
   })
 
   it('keeps getProjectRef origin-based', async () => {
@@ -153,6 +163,47 @@ describe('gitlab project ref resolution', () => {
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'stablyai/orca'
+    })
+  })
+
+  it('resolves project refs through the SSH git provider for connected repos', async () => {
+    sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'remote/orca'
+    })
+
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not cache a missing SSH provider as a permanent null project ref', async () => {
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
+
+    sshExecMock.mockResolvedValueOnce({
+      stdout: 'git@gitlab.com:remote/orca.git\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'remote/orca'
+    })
+  })
+
+  it('does not cache transient SSH exec failures as permanent null project refs', async () => {
+    sshExecMock
+      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'remote/orca'
     })
   })
 })

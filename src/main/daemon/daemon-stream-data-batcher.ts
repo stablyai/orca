@@ -50,9 +50,10 @@ export class DaemonStreamDataBatcher {
 
     if (
       options.flushImmediately === true &&
-      batch.queuedChars <= (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
+      this.queuedCharsForSession(batch, sessionId) <=
+        (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
     ) {
-      this.flush(clientId)
+      this.flushSession(clientId, sessionId)
       return
     }
     if (!batch.timer) {
@@ -78,6 +79,64 @@ export class DaemonStreamDataBatcher {
     }
 
     for (const entry of batch.queue) {
+      client.streamSocket.write(
+        encodeNdjson({
+          type: 'event',
+          event: 'data',
+          sessionId: entry.sessionId,
+          payload: { data: entry.data }
+        })
+      )
+    }
+  }
+
+  private queuedCharsForSession(batch: PendingStreamDataBatch, sessionId: string): number {
+    let chars = 0
+    for (const entry of batch.queue) {
+      if (entry.sessionId === sessionId) {
+        chars += entry.data.length
+      }
+    }
+    return chars
+  }
+
+  private flushSession(clientId: string, sessionId: string): void {
+    const batch = this.pendingByClient.get(clientId)
+    if (!batch) {
+      return
+    }
+
+    const flushed: PendingStreamDataBatch['queue'] = []
+    const retained: PendingStreamDataBatch['queue'] = []
+    let flushedChars = 0
+    for (const entry of batch.queue) {
+      if (entry.sessionId === sessionId) {
+        flushed.push(entry)
+        flushedChars += entry.data.length
+      } else {
+        retained.push(entry)
+      }
+    }
+    if (flushed.length === 0) {
+      return
+    }
+
+    batch.queue = retained
+    batch.queuedChars -= flushedChars
+    if (batch.queue.length === 0) {
+      if (batch.timer) {
+        clearTimeout(batch.timer)
+        batch.timer = null
+      }
+      this.pendingByClient.delete(clientId)
+    }
+
+    const client = this.getClient(clientId)
+    if (!client?.streamSocket || client.streamSocket.destroyed) {
+      return
+    }
+
+    for (const entry of flushed) {
       client.streamSocket.write(
         encodeNdjson({
           type: 'event',

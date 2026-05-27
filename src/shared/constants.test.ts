@@ -28,8 +28,11 @@ describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
     expect(getDefaultPrimarySelectionMiddleClickPaste('linux')).toBe(true)
   })
 
-  it('leaves primary selection paste opt-in on macOS and Windows', () => {
-    expect(getDefaultPrimarySelectionMiddleClickPaste('darwin')).toBe(false)
+  it('enables primary selection paste on macOS by default', () => {
+    expect(getDefaultPrimarySelectionMiddleClickPaste('darwin')).toBe(true)
+  })
+
+  it('leaves primary selection paste opt-in on Windows', () => {
     expect(getDefaultPrimarySelectionMiddleClickPaste('win32')).toBe(false)
   })
 })

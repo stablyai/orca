@@ -114,7 +114,9 @@ export const useWorktreeById = (worktreeId: string | null) =>
   )
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
-  return useWorktreeById(activeWorktreeId)
+  return useAppStore((s) =>
+    activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
+  )
 }
 
 // ─── Terminals ──────────────────────────────────────────────────────

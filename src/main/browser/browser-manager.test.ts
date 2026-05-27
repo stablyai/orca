@@ -59,6 +59,7 @@ describe('browserManager', () => {
     webContentsFromIdMock.mockReset()
     browserManager.unregisterAll()
     browserManager.setDictationShortcutForwardingPredicate(null)
+    browserManager.setSettingsResolver(() => ({}))
   })
 
   afterEach(() => {
@@ -246,6 +247,166 @@ describe('browserManager', () => {
     expect(activationScript).toContain('var targetWorktreeId = "wt-1";')
 
     restore()
+  })
+
+  it('acquires renderer automation visibility without changing active browser state', async () => {
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockResolvedValueOnce('lease-1')
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1707,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-automation',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restore = await browserManager.acquireAutomationVisibility(guest.id)
+    const acquireScript = rendererExecuteJavaScriptMock.mock.calls[0]?.[0]
+    expect(acquireScript).toContain('__orcaBrowserAutomationVisibility')
+    expect(acquireScript).toContain('bridge.acquire("page-automation")')
+    expect(acquireScript).not.toContain('setActiveBrowserTab')
+    expect(acquireScript).not.toContain('setActiveTabType')
+
+    restore()
+
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("lease-1")')
+  })
+
+  it('returns a no-op automation visibility restore when renderer acquire hangs', async () => {
+    vi.useFakeTimers()
+
+    const rendererExecuteJavaScriptMock = vi.fn().mockReturnValueOnce(new Promise(() => {}))
+    const guest = {
+      id: 1708,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-hung-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a delayed automation visibility token after acquire timeout', async () => {
+    vi.useFakeTimers()
+
+    let resolveAcquire: (token: string) => void = () => {}
+    const acquirePromise = new Promise<string>((resolve) => {
+      resolveAcquire = resolve
+    })
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockReturnValueOnce(acquirePromise)
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1709,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-delayed-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+
+    resolveAcquire('late-lease-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(2)
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("late-lease-1")')
   })
 
   it('restores the previously focused browser workspace after screenshot prep changes tabs', async () => {
@@ -1110,6 +1271,112 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:hardReloadBrowserPage')
   })
 
+  it('uses customized keybindings when forwarding browser guest shortcuts', () => {
+    const isDarwin = process.platform === 'darwin'
+    const primary = { meta: isDarwin, control: !isDarwin }
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 407,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+    browserManager.setSettingsResolver(() => ({
+      keybindings: {
+        'tab.newBrowser': ['Mod+Alt+B'],
+        'worktree.quickOpen': ['Mod+Shift+O']
+      }
+    }))
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const beforeInputHandler = guestOnMock.mock.calls
+      .filter(([event]) => event === 'before-input-event')
+      .at(-1)?.[1] as
+      | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
+      | undefined
+
+    expect(beforeInputHandler).toBeTypeOf('function')
+
+    const defaultBrowserPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: defaultBrowserPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        ...primary,
+        alt: false,
+        shift: true
+      }
+    )
+    expect(defaultBrowserPreventDefault).not.toHaveBeenCalled()
+
+    const customBrowserPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: customBrowserPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        ...primary,
+        alt: true,
+        shift: false
+      }
+    )
+    expect(customBrowserPreventDefault).toHaveBeenCalledTimes(1)
+
+    const defaultQuickOpenPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: defaultQuickOpenPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'KeyP',
+        key: 'p',
+        ...primary,
+        alt: false,
+        shift: false
+      }
+    )
+    expect(defaultQuickOpenPreventDefault).not.toHaveBeenCalled()
+
+    const customQuickOpenPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: customQuickOpenPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'KeyO',
+        key: 'o',
+        ...primary,
+        alt: false,
+        shift: true
+      }
+    )
+    expect(customQuickOpenPreventDefault).toHaveBeenCalledTimes(1)
+
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
+  })
+
   it('forwards browser guest Ctrl+Tab keydown and Ctrl release', () => {
     const rendererSendMock = vi.fn()
     const guest = {
@@ -1177,6 +1444,83 @@ describe('browserManager', () => {
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
+  })
+
+  it('respects disabled browser guest tab-switch bindings', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 408,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+    browserManager.setSettingsResolver(() => ({
+      keybindings: {
+        'tab.previousRecent': [],
+        'tab.nextTerminal': [],
+        'tab.previousTerminal': []
+      }
+    }))
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const beforeInputHandler = guestOnMock.mock.calls
+      .filter(([event]) => event === 'before-input-event')
+      .at(-1)?.[1] as
+      | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
+      | undefined
+
+    const ctrlTabPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: ctrlTabPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'Tab',
+        key: 'Tab',
+        meta: false,
+        control: true,
+        alt: false,
+        shift: false
+      }
+    )
+
+    const terminalTabPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: terminalTabPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'PageDown',
+        key: 'PageDown',
+        meta: false,
+        control: true,
+        alt: false,
+        shift: false
+      }
+    )
+
+    expect(ctrlTabPreventDefault).not.toHaveBeenCalled()
+    expect(terminalTabPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalledWith('ui:ctrlTabKeyDown', expect.anything())
+    expect(rendererSendMock).not.toHaveBeenCalledWith('ui:switchTerminalTab', expect.anything())
   })
 
   it('cleans up prior guest listeners before re-registering the same tab', () => {

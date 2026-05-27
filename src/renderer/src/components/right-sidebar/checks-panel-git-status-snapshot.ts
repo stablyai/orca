@@ -1,0 +1,108 @@
+import type { GitPushTarget, GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+
+export type ChecksPanelGitStatusContextInput = {
+  repoId: string | null | undefined
+  worktreeId: string | null | undefined
+  worktreePath: string | null | undefined
+  branch: string
+  runtimeEnvironmentId: string | null
+  repoConnectionId: string | null
+  pushTarget: GitPushTarget | null | undefined
+}
+
+export type ChecksPanelGitStatusSnapshot = {
+  contextKey: string
+  hasUncommittedChanges: boolean
+  remoteStatus: GitUpstreamStatus | undefined
+}
+
+export type ChecksPanelGitStatusInputs = {
+  hasUncommittedChanges: boolean | undefined
+  remoteStatus: GitUpstreamStatus | undefined
+}
+
+export function buildChecksPanelGitStatusContextKey(
+  input: ChecksPanelGitStatusContextInput
+): string {
+  return JSON.stringify({
+    repoId: input.repoId ?? '',
+    worktreeId: input.worktreeId ?? '',
+    worktreePath: input.worktreePath ?? '',
+    branch: input.branch,
+    runtimeEnvironmentId: input.runtimeEnvironmentId ?? '',
+    repoConnectionId: input.repoConnectionId ?? '',
+    pushTarget: input.pushTarget
+      ? {
+          remoteName: input.pushTarget.remoteName,
+          branchName: input.pushTarget.branchName,
+          remoteUrl: input.pushTarget.remoteUrl ?? null,
+          remoteCreated: input.pushTarget.remoteCreated ?? false
+        }
+      : null
+  })
+}
+
+export function shouldPollChecksPanelRuntimeSshStatus(input: {
+  isPanelVisible: boolean
+  runtimeEnvironmentId: string | null
+  repoConnectionId: string | null
+}): boolean {
+  return (
+    input.isPanelVisible && input.runtimeEnvironmentId !== null && input.repoConnectionId !== null
+  )
+}
+
+export function shouldCommitChecksPanelGitStatusSnapshot(
+  currentContextKey: string,
+  requestContextKey: string
+): boolean {
+  return currentContextKey === requestContextKey
+}
+
+export function shouldCoalesceChecksPanelGitStatusSnapshotRefresh(
+  inFlightContextKey: string | null,
+  requestContextKey: string
+): boolean {
+  return inFlightContextKey === requestContextKey
+}
+
+export function shouldClearChecksPanelGitStatusSnapshot(
+  snapshot: ChecksPanelGitStatusSnapshot | null,
+  contextKey: string
+): boolean {
+  return snapshot?.contextKey !== contextKey
+}
+
+export function readChecksPanelGitStatusSnapshot(
+  snapshot: ChecksPanelGitStatusSnapshot | null,
+  contextKey: string
+): ChecksPanelGitStatusInputs {
+  if (!snapshot || snapshot.contextKey !== contextKey) {
+    return {
+      hasUncommittedChanges: undefined,
+      remoteStatus: undefined
+    }
+  }
+
+  return {
+    hasUncommittedChanges: snapshot.hasUncommittedChanges,
+    remoteStatus: snapshot.remoteStatus
+  }
+}
+
+export function readChecksPanelPublishActionGitStatus(input: {
+  snapshot: ChecksPanelGitStatusSnapshot | null
+  contextKey: string
+  fallbackEntries: GitStatusEntry[] | undefined
+  fallbackRemoteStatus: GitUpstreamStatus | undefined
+}): ChecksPanelGitStatusInputs {
+  const snapshotInputs = readChecksPanelGitStatusSnapshot(input.snapshot, input.contextKey)
+  if (snapshotInputs.hasUncommittedChanges !== undefined || !input.fallbackRemoteStatus) {
+    return snapshotInputs
+  }
+
+  return {
+    hasUncommittedChanges: (input.fallbackEntries?.length ?? 0) > 0,
+    remoteStatus: input.fallbackRemoteStatus
+  }
+}

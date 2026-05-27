@@ -12,12 +12,14 @@ import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
 import {
   acquire,
   getGlabKnownHosts,
-  getIssueProjectRef,
-  getProjectRef,
+  glabHostnameArgs,
+  glabRepoExecOptions,
   glabExecFileAsync,
   release,
+  resolveIssueSource,
   type ProjectRef
 } from './gl-utils'
+import type { IssueSourcePreference } from '../../shared/types'
 
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
@@ -79,16 +81,18 @@ async function fetchDiscussions(
   repoPath: string,
   projectRef: ProjectRef,
   type: 'issue' | 'mr',
-  iid: number
+  iid: number,
+  connectionId?: string | null
 ): Promise<GitLabRawDiscussion[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
   const { stdout } = await glabExecFileAsync(
     [
       'api',
+      ...glabHostnameArgs(projectRef, connectionId),
       '--paginate',
       `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
     ],
-    { cwd: repoPath }
+    glabRepoExecOptions(repoPath, connectionId)
   )
   return JSON.parse(stdout) as GitLabRawDiscussion[]
 }
@@ -118,15 +122,17 @@ function mapPipelineJob(raw: GitLabRawJob): GitLabPipelineJob {
 async function fetchPipelineJobs(
   repoPath: string,
   projectRef: ProjectRef,
-  pipelineId: number
+  pipelineId: number,
+  connectionId?: string | null
 ): Promise<GitLabPipelineJob[]> {
   const { stdout } = await glabExecFileAsync(
     [
       'api',
+      ...glabHostnameArgs(projectRef, connectionId),
       '--paginate',
       `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs?per_page=100`
     ],
-    { cwd: repoPath }
+    glabRepoExecOptions(repoPath, connectionId)
   )
   const data = JSON.parse(stdout) as GitLabRawJob[]
   return data.map(mapPipelineJob)
@@ -157,33 +163,26 @@ type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
 export async function getWorkItemDetails(
   repoPath: string,
   iid: number,
-  type: 'issue' | 'mr'
+  type: 'issue' | 'mr',
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRefOverride?: ProjectRef | null
 ): Promise<GitLabWorkItemDetails | null> {
-  const knownHosts = await getGlabKnownHosts()
-  // Why: issues honor the upstream/origin preference (issues live on
-  // upstream when a fork is checked out). MRs always target origin —
-  // the fork model puts MRs against the project the user pushes to.
+  // Why: detail fetches must use the same project source as the list row
+  // that opened them, otherwise forked repos can show a row from one remote
+  // and a detail sheet from another.
   const projectRef =
-    type === 'issue'
-      ? await getIssueProjectRef(repoPath, knownHosts)
-      : await getProjectRef(repoPath, knownHosts)
-
+    projectRefOverride ??
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+  if (!projectRef) {
+    return null
+  }
   await acquire()
   try {
-    if (projectRef) {
-      if (type === 'issue') {
-        return await fetchIssueDetails(repoPath, projectRef, iid)
-      }
-      return await fetchMRDetails(repoPath, projectRef, iid)
-    }
-    // Fallback — let glab infer project from cwd. This path is taken when
-    // the repo's remote host is not in getGlabKnownHosts() (e.g. a fresh
-    // self-hosted instance), but glab itself can still resolve it from the
-    // local git config.
     if (type === 'issue') {
-      return await fetchIssueDetailsFallback(repoPath, iid)
+      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId)
     }
-    return await fetchMRDetailsFallback(repoPath, iid)
+    return await fetchMRDetails(repoPath, projectRef, iid, connectionId)
   } catch {
     return null
   } finally {
@@ -194,19 +193,25 @@ export async function getWorkItemDetails(
 async function fetchIssueDetails(
   repoPath: string,
   projectRef: ProjectRef,
-  iid: number
+  iid: number,
+  connectionId?: string | null
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: fan out the two reads. Issues don't have a pipeline so this
   // pair covers everything the dialog renders.
   const [issueRes, discussions] = await Promise.all([
-    glabExecFileAsync(['api', `projects/${encodedProject(projectRef.path)}/issues/${iid}`], {
-      cwd: repoPath
-    }),
-    fetchDiscussions(repoPath, projectRef, 'issue', iid)
+    glabExecFileAsync(
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/issues/${iid}`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
+    ),
+    fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId)
   ])
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
-    const full = mapIssueToWorkItem(issueRaw, projectRef.path)
+    const full = mapIssueToWorkItem(issueRaw, projectRef.path, projectRef)
     // Why: omit repoId from the returned shape — the renderer stamps
     // it from the dialog's caller (TaskPage / picker) so the main
     // process doesn't need to know Orca's Repo.id.
@@ -223,54 +228,36 @@ async function fetchIssueDetails(
   }
 }
 
-async function fetchIssueDetailsFallback(
-  repoPath: string,
-  iid: number
-): Promise<GitLabWorkItemDetails | null> {
-  const { stdout } = await glabExecFileAsync(['issue', 'view', String(iid), '--output', 'json'], {
-    cwd: repoPath
-  })
-  const issueRaw = JSON.parse(stdout) as GitLabRawIssue
-  const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
-    const full = mapIssueToWorkItem(issueRaw, 'unknown')
-    const { repoId: _repoId, ...rest } = full
-    return rest
-  })()
-  return {
-    item,
-    body: issueRaw.description ?? '',
-    comments: [],
-    assignees: (issueRaw.assignees ?? [])
-      .map((a) => a?.username)
-      .filter((u): u is string => typeof u === 'string')
-  }
-}
-
 async function fetchMRDetails(
   repoPath: string,
   projectRef: ProjectRef,
-  iid: number
+  iid: number,
+  connectionId?: string | null
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: MR detail + discussions in parallel. The pipeline jobs fetch
   // depends on `head_pipeline.id` from the MR payload, so it has to
   // wait — but it's a single follow-up call rather than a serial chain.
   const [mrRes, discussions] = await Promise.all([
     glabExecFileAsync(
-      ['api', `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`],
-      { cwd: repoPath }
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
     ),
-    fetchDiscussions(repoPath, projectRef, 'mr', iid)
+    fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId)
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
-    const full = mapMRToWorkItem(mrRaw, projectRef.path)
+    const full = mapMRToWorkItem(mrRaw, projectRef.path, projectRef)
     const { repoId: _repoId, ...rest } = full
     return rest
   })()
   const pipelineId = mrRaw.head_pipeline?.id
   const pipelineJobs =
     typeof pipelineId === 'number'
-      ? await fetchPipelineJobs(repoPath, projectRef, pipelineId).catch(() => [])
+      ? await fetchPipelineJobs(repoPath, projectRef, pipelineId, connectionId).catch(() => [])
       : undefined
   return {
     item,
@@ -279,25 +266,5 @@ async function fetchMRDetails(
     headSha: mrRaw.sha,
     baseSha: mrRaw.diff_refs?.base_sha,
     ...(pipelineJobs !== undefined ? { pipelineJobs } : {})
-  }
-}
-
-async function fetchMRDetailsFallback(
-  repoPath: string,
-  iid: number
-): Promise<GitLabWorkItemDetails | null> {
-  const { stdout } = await glabExecFileAsync(['mr', 'view', String(iid), '--output', 'json'], {
-    cwd: repoPath
-  })
-  const mrRaw = JSON.parse(stdout) as GitLabRawMR
-  const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
-    const full = mapMRToWorkItem(mrRaw, 'unknown')
-    const { repoId: _repoId, ...rest } = full
-    return rest
-  })()
-  return {
-    item,
-    body: mrRaw.description ?? '',
-    comments: []
   }
 }

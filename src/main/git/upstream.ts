@@ -1,8 +1,10 @@
-import type { GitUpstreamStatus } from '../../shared/types'
+import type { GitPushTarget, GitUpstreamStatus } from '../../shared/types'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../../shared/git-upstream-status'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { getEffectiveGitUpstreamStatus } from '../../shared/git-effective-upstream'
+import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 import { gitExecFileAsync } from './runner'
+import { validateGitPushTarget } from './push-target-validation'
 
 async function getBehindCommitsArePatchEquivalent(
   worktreePath: string,
@@ -21,8 +23,19 @@ async function getBehindCommitsArePatchEquivalent(
   }
 }
 
-export async function getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
+export async function getUpstreamStatus(
+  worktreePath: string,
+  pushTarget?: GitPushTarget
+): Promise<GitUpstreamStatus> {
   try {
+    if (pushTarget) {
+      const target = await validateGitPushTarget(worktreePath, pushTarget)
+      return await getPublishTargetStatus(
+        (args) => gitExecFileAsync(args, { cwd: worktreePath }),
+        target,
+        (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+      )
+    }
     return await getEffectiveGitUpstreamStatus(
       (args) => gitExecFileAsync(args, { cwd: worktreePath }),
       (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)

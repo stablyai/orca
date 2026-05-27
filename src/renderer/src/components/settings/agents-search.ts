@@ -4,6 +4,11 @@ import {
   getAgentAwakeDescription,
   getAgentAwakeSearchKeywords
 } from './agent-awake-copy'
+import {
+  AGENT_STATUS_HOOKS_DESCRIPTION,
+  AGENT_STATUS_HOOKS_SEARCH_KEYWORDS,
+  AGENT_STATUS_HOOKS_TITLE
+} from './agent-status-hooks-copy'
 
 export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -16,6 +21,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'codex',
       'opencode',
       'pi',
+      'omp',
       'gemini',
       'aider',
       'goose',
@@ -26,6 +32,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'auggie',
       'cline',
       'codebuff',
+      'command code',
       'continue',
       'cursor',
       'droid',
@@ -44,6 +51,11 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'install',
       'detected'
     ]
+  },
+  {
+    title: AGENT_STATUS_HOOKS_TITLE,
+    description: AGENT_STATUS_HOOKS_DESCRIPTION,
+    keywords: AGENT_STATUS_HOOKS_SEARCH_KEYWORDS
   },
   {
     title: AGENT_AWAKE_TITLE,

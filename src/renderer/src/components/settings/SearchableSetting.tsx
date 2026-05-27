@@ -1,4 +1,5 @@
 import type React from 'react'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
@@ -24,7 +25,7 @@ export function SearchableSetting({
   }
 
   return (
-    <div className={className} id={id}>
+    <div className={cn('scroll-mt-6 w-full max-w-3xl', className)} id={id}>
       {children}
     </div>
   )

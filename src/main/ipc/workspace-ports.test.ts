@@ -9,6 +9,9 @@ const { handleMock, scanWorkspacePortsMock, processKillMock } = vi.hoisted(() =>
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    getAllWindows: vi.fn(() => [])
+  },
   ipcMain: {
     handle: handleMock
   }
@@ -217,6 +220,43 @@ describe('registerWorkspacePortHandlers', () => {
     expect(result).toEqual({ ok: false, reason: 'Invalid process or port.' })
     expect(scanWorkspacePortsMock).not.toHaveBeenCalled()
     expect(processKillMock).not.toHaveBeenCalled()
+  })
+
+  it('notifies renderers when a local worktree advertised URL changes', () => {
+    const store = makeStore()
+    type AdvertisedUrlListener = (event: { worktreeId: string; port: number }) => void
+    let advertisedUrlListener: AdvertisedUrlListener | undefined
+    const send = vi.fn()
+
+    registerWorkspacePortHandlers(store as never, {
+      advertisedUrlEvents: {
+        onDidChange: (listener) => {
+          advertisedUrlListener = listener
+          return () => {}
+        }
+      },
+      getWindows: () =>
+        [
+          {
+            isDestroyed: () => false,
+            webContents: {
+              isDestroyed: () => false,
+              send
+            }
+          }
+        ] as never
+    })
+
+    expect(advertisedUrlListener).toBeTypeOf('function')
+    const emitAdvertisedUrlChanged = advertisedUrlListener as AdvertisedUrlListener
+    emitAdvertisedUrlChanged({ worktreeId: 'local-repo::/workspace/repo', port: 3002 })
+    emitAdvertisedUrlChanged({ worktreeId: 'remote-repo::/remote/repo', port: 3003 })
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith('workspacePorts:advertised-url-changed', {
+      worktreeId: 'local-repo::/workspace/repo',
+      port: 3002
+    })
   })
 })
 

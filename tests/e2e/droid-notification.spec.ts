@@ -227,7 +227,20 @@ test.describe('Droid notifications', () => {
     await waitForTerminalOutput(orcaPage, marker)
 
     await emitOscTitle(orcaPage, ptyId, 'Codex working')
+    await expect
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes('Codex working'), {
+        timeout: 10_000,
+        message: 'Codex working title did not reach the renderer before completion'
+      })
+      .toBe(true)
+
     await emitOscTitle(orcaPage, ptyId, 'Codex done')
+    await expect
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes('Codex done'), {
+        timeout: 10_000,
+        message: 'Codex done title did not reach the renderer'
+      })
+      .toBe(true)
 
     await expect
       .poll(

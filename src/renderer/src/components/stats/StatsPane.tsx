@@ -6,7 +6,6 @@ import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
-import type { SettingsSearchEntry } from '../settings/settings-search'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -15,28 +14,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-
-export const STATS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Stats & Usage',
-    description:
-      'Orca stats plus combined Claude, Codex, and OpenCode usage analytics, tokens, cache, models, and sessions.',
-    keywords: [
-      'stats',
-      'usage',
-      'statistics',
-      'agents',
-      'prs',
-      'time',
-      'tracking',
-      'claude',
-      'codex',
-      'opencode',
-      'tokens',
-      'cache'
-    ]
-  }
-]
+export { STATS_PANE_SEARCH_ENTRIES } from './stats-search'
 
 function formatDuration(ms: number): string {
   if (ms <= 0) {

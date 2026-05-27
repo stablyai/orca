@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     removeWorktree: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
     allWorktrees: vi.fn<() => Worktree[]>(() => []),
+    repos: [] as Repo[],
     worktreeLineageById: {} as Record<string, WorktreeLineage>,
     updateSettings: vi.fn(),
     openSettingsTarget: vi.fn(),
@@ -104,6 +105,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     mocks.state.activeModal = 'delete-worktree'
     mocks.state.modalData = {}
     mocks.state.allWorktrees.mockReturnValue([])
+    mocks.state.repos = []
     mocks.state.worktreeLineageById = {}
     mocks.state.deleteStateByWorktreeId = {}
   })
@@ -126,5 +128,45 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Delete All 2')
     expect(markup).toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
+  })
+
+  it('keeps long child workspace paths constrained inside the lineage notice', async () => {
+    const child = makeWorktree(
+      'docs-file-upload-discovery-with-a-very-long-name',
+      '/Users/jinjingliang/Documents/projects/agent-slack/docs-file-upload-discovery-with-a-very-long-path-segment'
+    )
+    const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
+
+    const markup = renderToStaticMarkup(<DeleteWorktreeLineageNotice descendants={[child]} />)
+
+    expect(markup).toContain('min-w-0 max-w-full overflow-hidden rounded-md')
+    expect(markup).toContain('mt-2 min-w-0 max-w-full space-y-1 overflow-hidden')
+    expect(markup).toContain('min-w-0 overflow-hidden')
+    expect(markup).toContain('truncate text-muted-foreground')
+  })
+
+  it('uses non-destructive disk copy for folder workspace deletes', async () => {
+    const workspace = {
+      ...makeWorktree('Folder workspace', '/projects/folder'),
+      repoId: 'folder-repo'
+    }
+    mocks.state.modalData = { worktreeId: workspace.id }
+    mocks.state.allWorktrees.mockReturnValue([workspace])
+    mocks.state.repos = [
+      {
+        id: 'folder-repo',
+        path: '/projects/folder',
+        displayName: 'Folder',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'folder'
+      }
+    ]
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
+
+    expect(markup).toContain('from Orca. The project folder on disk will not be deleted.')
+    expect(markup).not.toContain('from git and delete its workspace folder.')
   })
 })

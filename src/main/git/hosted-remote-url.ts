@@ -9,22 +9,29 @@ type HostedRemote = {
   provider: HostedRemoteProvider
 }
 
+type HostedRemoteHost = {
+  host: string
+  provider: HostedRemoteProvider
+}
+
 const shorthandHosts: Record<string, { host: string; provider: HostedRemoteProvider }> = {
   bitbucket: { host: 'bitbucket.org', provider: 'bitbucket' },
   github: { host: 'github.com', provider: 'github' },
   gitlab: { host: 'gitlab.com', provider: 'gitlab' }
 }
 
-function providerForHost(host: string): HostedRemoteProvider | null {
+function providerForHost(host: string): HostedRemoteHost | null {
   const normalized = host.toLowerCase()
-  if (normalized === 'github.com') {
-    return 'github'
+  if (normalized === 'github.com' || normalized === 'ssh.github.com') {
+    // Why: GitHub documents ssh.github.com:443 as the SSH-over-HTTPS host,
+    // but browser links and account identity still belong to github.com.
+    return { host: 'github.com', provider: 'github' }
   }
   if (normalized === 'gitlab.com') {
-    return 'gitlab'
+    return { host: 'gitlab.com', provider: 'gitlab' }
   }
   if (normalized === 'bitbucket.org') {
-    return 'bitbucket'
+    return { host: 'bitbucket.org', provider: 'bitbucket' }
   }
   return null
 }
@@ -62,9 +69,9 @@ export function parseHostedRemote(remoteUrl: string): HostedRemote | null {
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+)$/)
     if (scpLike) {
-      const provider = providerForHost(scpLike[1])
+      const hosted = providerForHost(scpLike[1])
       const path = cleanRemotePath(scpLike[2])
-      return provider && path ? { host: scpLike[1].toLowerCase(), path, provider } : null
+      return hosted && path ? { host: hosted.host, path, provider: hosted.provider } : null
     }
   }
 
@@ -73,9 +80,9 @@ export function parseHostedRemote(remoteUrl: string): HostedRemote | null {
     if (!['git:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    const provider = providerForHost(url.hostname)
+    const hosted = providerForHost(url.hostname)
     const path = cleanRemotePath(url.pathname)
-    return provider && path ? { host: url.hostname.toLowerCase(), path, provider } : null
+    return hosted && path ? { host: hosted.host, path, provider: hosted.provider } : null
   } catch {
     return null
   }

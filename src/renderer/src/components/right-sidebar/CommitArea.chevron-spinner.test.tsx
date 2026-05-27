@@ -28,10 +28,13 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
   return {
     worktreeId: 'wt-1',
+    groupId: 'group-1',
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    commitFailureRecoveryPrompt: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    isFixingCommitFailureWithAI: false,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -45,6 +48,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
+    onFixCommitFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }

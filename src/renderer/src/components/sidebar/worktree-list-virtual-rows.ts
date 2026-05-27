@@ -1,3 +1,4 @@
+import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from './worktree-list-groups'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
@@ -68,4 +69,52 @@ export function getActiveStickyHeaderIndex(
     }
   }
   return null
+}
+
+export function getPreviousStickyHeaderIndex(
+  stickyHeaderIndexes: readonly number[],
+  headerIndex: number
+): number | null {
+  const currentPosition = stickyHeaderIndexes.indexOf(headerIndex)
+  if (currentPosition <= 0) {
+    return null
+  }
+  return stickyHeaderIndexes[currentPosition - 1] ?? null
+}
+
+export function getActiveStickyHeaderIndexForScroll(args: {
+  firstHeaderIndex: number
+  rangeStartIndex: number
+  rows: readonly RenderRow[]
+  scrollOffset: number
+  stickyHeaderIndexes: readonly number[]
+  virtualItems: readonly VirtualItem[]
+}): number | null {
+  const candidateIndex = getActiveStickyHeaderIndex(args.stickyHeaderIndexes, args.rangeStartIndex)
+  if (candidateIndex === null) {
+    return null
+  }
+
+  const candidate = args.virtualItems.find((item) => item.index === candidateIndex)
+  if (!candidate) {
+    return candidateIndex
+  }
+
+  const activationOffset =
+    candidate.start +
+    (shouldUseHeaderTopSpacing({
+      rows: args.rows,
+      index: candidateIndex,
+      firstHeaderIndex: args.firstHeaderIndex
+    })
+      ? SECONDARY_GROUP_HEADER_TOP_MARGIN
+      : 0)
+  if (args.scrollOffset >= activationOffset) {
+    return candidateIndex
+  }
+
+  // Why: secondary headers include their inter-group spacer in the measured
+  // row. Keeping the previous sticky header active until the painted header,
+  // not the spacer, reaches the top prevents an 8px snap on handoff.
+  return getPreviousStickyHeaderIndex(args.stickyHeaderIndexes, candidateIndex) ?? candidateIndex
 }

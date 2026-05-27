@@ -18,6 +18,11 @@ describe('hosted remote URLs', () => {
       path: 'Org/Repo',
       provider: 'github'
     })
+    expect(parseHostedRemote('ssh://git@ssh.github.com:443/Org/Repo.git')).toEqual({
+      host: 'github.com',
+      path: 'Org/Repo',
+      provider: 'github'
+    })
     expect(parseHostedRemote('github:Org/Repo')).toEqual({
       host: 'github.com',
       path: 'Org/Repo',
@@ -50,6 +55,15 @@ describe('hosted remote URLs', () => {
     expect(
       buildHostedRemoteFileUrl('git@bitbucket.org:team/repo.git', 'src/a.ts', 'feature/x', 7)
     ).toBe('https://bitbucket.org/team/repo/src/feature%2Fx/src/a.ts#L7')
+
+    expect(
+      buildHostedRemoteFileUrl(
+        'ssh://git@ssh.github.com:443/Org/Repo.git',
+        'src/a.ts',
+        'feature/x',
+        5
+      )
+    ).toBe('https://github.com/Org/Repo/blob/feature%2Fx/src/a.ts#L5')
   })
 
   it('rejects unsupported hosts and incomplete repo paths', () => {

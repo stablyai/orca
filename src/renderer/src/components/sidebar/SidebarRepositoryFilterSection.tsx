@@ -10,7 +10,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../shared/types'
 
@@ -169,7 +169,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
               className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
             >
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                <RepoDotLabel
+                <RepoBadgeLabel
                   name={repo.displayName}
                   color={repo.badgeColor}
                   className="max-w-full"
@@ -208,11 +208,11 @@ function SelectedProjectPills({
           variant="outline"
           className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
         >
-          <RepoDotLabel
+          <RepoBadgeLabel
             name={repo.displayName}
             color={repo.badgeColor}
             className="max-w-[8rem]"
-            dotClassName="size-1.5"
+            badgeClassName="size-1.5"
           />
           <Button
             type="button"

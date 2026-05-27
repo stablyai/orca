@@ -5,6 +5,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
   handleMock,
+  powerMonitorOffMock,
+  powerMonitorOnMock,
   mockSshStore,
   mockConnectionManager,
   mockDeployAndLaunchRelay,
@@ -16,6 +18,8 @@ const {
   mockPortForwardManager
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
+  powerMonitorOffMock: vi.fn(),
+  powerMonitorOnMock: vi.fn(),
   mockSshStore: {
     listTargets: vi.fn().mockReturnValue([]),
     getTarget: vi.fn(),
@@ -27,6 +31,7 @@ const {
   mockConnectionManager: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    reconnect: vi.fn(),
     getConnection: vi.fn(),
     getState: vi.fn(),
     disconnectAll: vi.fn()
@@ -66,6 +71,10 @@ vi.mock('electron', () => ({
     once: vi.fn(),
     removeHandler: vi.fn(),
     removeAllListeners: vi.fn()
+  },
+  powerMonitor: {
+    on: powerMonitorOnMock,
+    off: powerMonitorOffMock
   }
 }))
 
@@ -158,7 +167,7 @@ vi.mock('../ssh/ssh-port-forward', () => ({
 }))
 
 import { registerSshHandlers } from './ssh'
-import type { SshTarget } from '../../shared/ssh-types'
+import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, type SshTarget } from '../../shared/ssh-types'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -200,6 +209,7 @@ describe('SSH IPC handlers', () => {
 
     mockConnectionManager.connect.mockReset()
     mockConnectionManager.disconnect.mockReset()
+    mockConnectionManager.reconnect.mockReset()
     mockConnectionManager.getConnection.mockReset()
     mockConnectionManager.getState.mockReset()
     mockConnectionManager.disconnectAll.mockReset()
@@ -222,6 +232,8 @@ describe('SSH IPC handlers', () => {
     mockPortForwardManager.listForwards.mockReset().mockReturnValue([])
     mockPortForwardManager.removeAllForwards.mockReset()
     mockPortForwardManager.dispose.mockReset()
+    powerMonitorOnMock.mockReset()
+    powerMonitorOffMock.mockReset()
     vi.mocked(getSshPtyProvider).mockReset()
     vi.mocked(getPtyIdsForConnection).mockReset().mockReturnValue([])
     vi.mocked(clearProviderPtyState).mockReset()
@@ -273,6 +285,20 @@ describe('SSH IPC handlers', () => {
   it('ssh:removeTarget calls store.removeTarget', async () => {
     await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
     expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:removeTarget removes metadata when disconnect fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    mockConnectionManager.disconnect.mockRejectedValueOnce(new Error('host unreachable'))
+    try {
+      await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
+
+      expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+      expect(mockStore.removeSshRemotePtyLeases).toHaveBeenCalledWith('ssh-1')
+      expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('ssh:removeTarget tears down an active relay before deleting the target', async () => {
@@ -736,6 +762,69 @@ describe('SSH IPC handlers', () => {
     expect(maxConcurrentForceStops).toBe(1)
     expect(mockConnectionManager.disconnect).toHaveBeenCalledTimes(1)
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('forces active SSH sessions to reconnect when the system resumes from sleep', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    const resumeListener = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1]
+    expect(resumeListener).toBeTypeOf('function')
+
+    resumeListener()
+
+    expect(mockConnectionManager.reconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('extends active relay grace while the system is suspending', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    mockMux.notify.mockClear()
+
+    const suspendListener = powerMonitorOnMock.mock.calls.find(
+      ([event]) => event === 'suspend'
+    )?.[1]
+    expect(suspendListener).toBeTypeOf('function')
+
+    suspendListener()
+
+    expect(mockMux.notify).toHaveBeenCalledWith(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, {
+      graceTimeSeconds: 0
+    })
   })
 
   it('ssh:resetRelay expires active-session leases instead of marking them terminated', async () => {

@@ -58,9 +58,9 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   {
     id: 'tile-01',
     kind: 'media',
-    title: 'Parallel worktree orchestration',
+    title: 'Parallel workspace orchestration',
     caption:
-      'Every task runs in its own isolated git worktree - no stashing, no branch juggling. Fan one prompt across 5 agents, compare, merge the winner.',
+      'Give each task its own workspace - no stashing, no branch juggling. Fan work across agents, compare, and continue with the best result.',
     gifPath: 'tile-01.gif',
     posterPath: 'tile-01.poster.jpg',
     recordedAtPath: 'tile-01.recorded-at.json',
@@ -84,7 +84,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'GitHub & Linear, native',
     caption:
-      'Browse GitHub and Linear tasks in-app. Start worktrees, review PRs, and approve without switching context.',
+      'Find connected GitHub or Linear work in Tasks, open its context, and start workspaces without switching tools.',
     gifPath: 'tile-03.gif',
     posterPath: 'tile-03.poster.jpg',
     recordedAtPath: 'tile-03.recorded-at.json',
@@ -94,9 +94,8 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   {
     id: 'tile-04',
     kind: 'media',
-    title: 'Works with every CLI agent',
-    caption:
-      'Claude Code, Codex, Cursor CLI, Gemini, Copilot, OpenCode, Pi - preconfigured. Any other CLI agent drops right in.',
+    title: 'Supported CLI agents',
+    caption: 'Claude Code, Codex, Cursor CLI, Gemini, Copilot, OpenCode, and Pi are preconfigured.',
     gifPath: 'tile-04.gif',
     posterPath: 'tile-04.poster.jpg',
     recordedAtPath: 'tile-04.recorded-at.json',
@@ -108,7 +107,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'Embedded browser + Design Mode',
     caption:
-      'A real Chromium window per worktree. Click any UI element to send its HTML, CSS, and a cropped screenshot into your agent.',
+      'A real Chromium window per workspace. Click any UI element to send its HTML, CSS, and a cropped screenshot into your agent.',
     gifPath: 'tile-05.gif',
     posterPath: 'tile-05.poster.jpg',
     recordedAtPath: 'tile-05.recorded-at.json',
@@ -118,9 +117,9 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   {
     id: 'tile-06',
     kind: 'media',
-    title: 'Remote worktrees over SSH',
+    title: 'Remote workspaces',
     caption:
-      'Run agents on a beefy remote box with full file editing, git, and terminals. Auto-reconnect, port forwarding, passphrase caching.',
+      'Run agents on a remote machine with the same Orca editing, git, and terminal workflow.',
     gifPath: 'tile-06.gif',
     posterPath: 'tile-06.poster.jpg',
     recordedAtPath: 'tile-06.recorded-at.json',
@@ -155,7 +154,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     id: 'tile-09',
     kind: 'media',
     title: 'Orca CLI',
-    caption: 'Agents drive Orca too: orca worktree create, snapshot, click, fill.',
+    caption: 'Agents can drive Orca too: create workspaces, snapshot screens, click, and fill.',
     gifPath: 'tile-09.gif',
     posterPath: 'tile-09.poster.jpg',
     recordedAtPath: 'tile-09.recorded-at.json',
@@ -167,7 +166,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'Keyboard-native',
     caption:
-      'Jump across worktrees, open files, and remap every shortcut. Move at the speed of your fingers.',
+      'Jump across workspaces, open files, and remap every shortcut. Move at the speed of your fingers.',
     gifPath: 'tile-10.gif',
     posterPath: 'tile-10.poster.jpg',
     recordedAtPath: 'tile-10.recorded-at.json',

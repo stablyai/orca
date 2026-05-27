@@ -42,6 +42,9 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
     expect(resolveHookSource('/hook/grok')).toBe('grok')
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
+    expect(resolveHookSource('/hook/pi')).toBe('pi')
+    expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -75,6 +78,129 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
+    const event = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'wire omp status'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp',
+      toolName: 'bash',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('normalizes Command Code hooks and reads turn text from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'Run pwd and report it' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'Need to run pwd.' },
+              { type: 'text', text: 'The output is /tmp/project.' }
+            ]
+          })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        toolName: 'shell_command',
+        toolInput: 'pwd'
+      })
+
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        lastAssistantMessage: 'The output is /tmp/project.'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
   it('trims surrounding whitespace from extracted prompt text', () => {
@@ -748,6 +874,72 @@ describe('shared agent-hook-listener', () => {
     )
     expect(pluginTool?.payload.toolName).toBe('custom_plugin_tool')
     expect(pluginTool?.payload.toolInput).toBe('agent hooks')
+  })
+
+  it('clears stale Codex tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
+  })
+
+  it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
+    normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'BespokeTool',
+          tool_input: 'old preview'
+        }
+      },
+      'production'
+    )
+
+    const next = normalizeHookPayload(
+      state,
+      'droid',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'BespokeTool',
+          tool_input: { request_id: 'approval-1' }
+        }
+      },
+      'production'
+    )
+
+    expect(next?.payload.toolName).toBe('BespokeTool')
+    expect(next?.payload.toolInput).toBeUndefined()
   })
 
   it('normalizes Hermes post_llm_call to done with assistant text', () => {

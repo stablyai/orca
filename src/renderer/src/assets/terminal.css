@@ -25,6 +25,13 @@
   width: 100%;
 }
 
+.pane-manager-root .xterm.terminal-foreground-write-pending .xterm-cursor,
+.pane-manager-root .xterm.terminal-foreground-write-pending .xterm-cursor-layer {
+  /* Why: Windows PowerShell / ConPTY repaint bursts can briefly expose xterm's
+     intermediate cursor position; hide it only while foreground output settles. */
+  visibility: hidden;
+}
+
 .pane-manager-root .xterm-viewport {
   /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
      DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
@@ -37,6 +44,12 @@
    explicitly to 0 matches the intended layout and fixes the IME position. */
 .pane-manager-root .xterm .xterm-helpers {
   left: 0;
+}
+
+.pane-manager-root .xterm .xterm-helper-textarea {
+  /* Why: Chromium can still paint the native caret for xterm's hidden helper
+     textarea on Windows, which shows up as a stale cursor during redraws. */
+  caret-color: transparent;
 }
 
 /* Divider: the element is a wide transparent hit area; the visible line is

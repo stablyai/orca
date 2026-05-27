@@ -28,9 +28,14 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
-  /** Daemon session ID for reattach. When provided, the daemon reconnects
-   *  to an existing session instead of creating a new one. */
+  /** Daemon session ID. A caller-provided ID is treated as an attach request;
+   *  daemon hosts also pass minted IDs for fresh sessions that need stable
+   *  per-PTY state before provider.spawn returns. */
   sessionId?: string
+  /** True when the caller minted this daemon session for a fresh terminal.
+   *  Existing-session attach paths must stay false so recovery checks do not
+   *  replace the daemon out from under a still-live PTY. */
+  isNewSession?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on
@@ -168,15 +173,16 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
-  getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
+  getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
   pushBranch(
     worktreePath: string,
     publish?: boolean,
     pushTarget?: GitPushTarget,
     options?: { forceWithLease?: boolean }
   ): Promise<void>
-  pullBranch(worktreePath: string): Promise<void>
-  fetchRemote(worktreePath: string): Promise<void>
+  pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
+  fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
@@ -191,7 +197,7 @@ export type IGitProvider = {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean }
+    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
   ): Promise<void>
   removeWorktree(
     worktreePath: string,

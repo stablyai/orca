@@ -10,6 +10,7 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
+import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 
 const execFileAsync = promisify(execFile)
 
@@ -34,12 +35,14 @@ type ProcessMetadata = {
 }
 
 export async function scanWorkspacePorts(
-  worktrees: WorkspacePortProbe[]
+  worktrees: WorkspacePortProbe[],
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
   try {
     const rawPorts = await scanPlatformListeningPorts()
+    reconcileAdvertisedUrls(rawPorts, worktrees, urlWatcher)
     const ports = rawPorts
-      .map((port) => enrichPort(port, worktrees))
+      .map((port) => enrichPort(port, worktrees, urlWatcher))
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }
@@ -353,7 +356,11 @@ async function readTextIfAvailable(filePath: string): Promise<string | undefined
   }
 }
 
-function enrichPort(port: RawListeningPort, worktrees: WorkspacePortProbe[]): WorkspacePort {
+function enrichPort(
+  port: RawListeningPort,
+  worktrees: WorkspacePortProbe[],
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
+): WorkspacePort {
   const owner = attributePortToWorkspace(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
@@ -366,12 +373,45 @@ function enrichPort(port: RawListeningPort, worktrees: WorkspacePortProbe[]): Wo
   }
 
   if (owner) {
-    return { ...base, kind: 'workspace', owner }
+    // Why: only enrich workspace-attributed ports. Container and external
+    // ports may have URLs printed in unrelated terminals — the worktree
+    // scoping is the primary false-positive filter.
+    const advertised = urlWatcher.lookup(owner.worktreeId, port.port, port.pid)
+    return {
+      ...base,
+      protocol: advertised?.protocol ?? base.protocol,
+      kind: 'workspace',
+      owner,
+      ...(advertised ? { advertisedUrl: advertised.origin } : {})
+    }
   }
   if (isContainerProcess(port)) {
     return { ...base, kind: 'container' }
   }
   return { ...base, kind: 'external' }
+}
+
+function reconcileAdvertisedUrls(
+  ports: RawListeningPort[],
+  worktrees: WorkspacePortProbe[],
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
+): void {
+  const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
+  for (const worktree of worktrees) {
+    observationsByWorktree.set(worktree.id, [])
+  }
+  for (const port of ports) {
+    const owner = attributePortToWorkspace(port, worktrees)
+    if (!owner) {
+      continue
+    }
+    observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
+  }
+  for (const [worktreeId, observations] of observationsByWorktree) {
+    // Why: the scanner sees port disappearance and PID changes before a lazy
+    // lookup would otherwise pin a stale banner to a new listener.
+    urlWatcher.reconcileScan([worktreeId], observations)
+  }
 }
 
 function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {

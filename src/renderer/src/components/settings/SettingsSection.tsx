@@ -1,5 +1,6 @@
 import type React from 'react'
 import { createContext, useContext } from 'react'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
@@ -17,6 +18,7 @@ type SettingsSectionProps = {
   searchEntries?: SettingsSearchEntry[]
   children?: React.ReactNode
   className?: string
+  bodyClassName?: string
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
@@ -38,6 +40,7 @@ export function SettingsSection({
   searchEntries,
   children,
   className,
+  bodyClassName,
   badge,
   badgeAccessory,
   forceVisible = false,
@@ -60,23 +63,33 @@ export function SettingsSection({
   }
 
   return (
-    <section id={id} data-settings-section={id} className={className ?? 'scroll-mt-6 space-y-6'}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
+    <section id={id} data-settings-section={id} className={cn('scroll-mt-8 space-y-6', className)}>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-5">
+        <div className="min-w-0 space-y-2">
+          <h2 className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-tight text-foreground">
             {title}
             {badge ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
                 {badge}
               </span>
             ) : null}
             {badgeAccessory}
           </h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {children}
+      {/* Why: body content sits in a visually distinct band — a soft card with
+          rounded corners and tight inner padding — so each row group reads as
+          contained inside the section, not as a continuation of the sidebar. */}
+      <div
+        className={cn(
+          'rounded-xl border border-border/40 bg-card/30 px-8 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]',
+          bodyClassName
+        )}
+      >
+        {children}
+      </div>
     </section>
   )
 }

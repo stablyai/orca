@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: tab-switch shortcut behavior is shared by
+ * renderer and IPC entry points; keeping terminal, sequential, across-type,
+ * and MRU cases together makes regressions obvious. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock, getActiveTabNavOrderMock } = vi.hoisted(() => ({
@@ -16,6 +19,7 @@ vi.mock('@/components/tab-bar/group-tab-order', () => ({
 }))
 
 import {
+  handleSwitchRecentTab,
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
@@ -26,6 +30,8 @@ type ActiveTabType = 'terminal' | 'editor' | 'browser'
 type MockGroup = {
   id: string
   activeTabId: string | null
+  tabOrder?: string[]
+  recentTabIds?: string[]
 }
 
 type MockStore = {
@@ -309,6 +315,60 @@ describe('handleSwitchTabAcrossAllTypes', () => {
     getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1' }])
 
     expect(handleSwitchTabAcrossAllTypes(1)).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
+  })
+})
+
+describe('handleSwitchRecentTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('quick-toggles to the previously focused tab across tab types', () => {
+    const store = makeStore('editor')
+    store.activeFileId = 'file-c'
+    store.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-1',
+          activeTabId: 'tab-c',
+          tabOrder: ['tab-a', 'tab-b', 'tab-c'],
+          recentTabIds: ['tab-a', 'tab-b', 'tab-c']
+        }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'editor', id: 'file-a', tabId: 'tab-a' },
+      { type: 'browser', id: 'browser-b', tabId: 'tab-b' },
+      { type: 'editor', id: 'file-c', tabId: 'tab-c' }
+    ])
+
+    expect(handleSwitchRecentTab()).toBe(true)
+    expect(store.setActiveBrowserTab).toHaveBeenCalledWith('browser-b')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-b')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('browser')
+  })
+
+  it('returns false when the MRU stack has no previous visible tab', () => {
+    const store = makeStore('terminal')
+    store.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-1',
+          activeTabId: 'tab-term-1',
+          tabOrder: ['tab-term-1'],
+          recentTabIds: ['tab-term-1']
+        }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-term-1' }
+    ])
+
+    expect(handleSwitchRecentTab()).toBe(false)
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).not.toHaveBeenCalled()
   })

@@ -58,6 +58,7 @@ import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
+  highlight?: boolean
 }
 
 function clampPetSize(size: number): number {
@@ -102,6 +103,21 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
     }
   }
   return out as StatusBarItem[]
+}
+
+function normalizePersistedRightSidebarTab(
+  tab: PersistedUIState['rightSidebarTab'] | unknown
+): PersistedUIState['rightSidebarTab'] {
+  if (
+    tab === 'explorer' ||
+    tab === 'search' ||
+    tab === 'source-control' ||
+    tab === 'checks' ||
+    tab === 'ports'
+  ) {
+    return tab
+  }
+  return 'explorer'
 }
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -277,13 +293,71 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space' | 'skills'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space' | 'skills'
-  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space' | 'skills'
-  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'skills'
-  previousViewBeforeSkills: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
+  activeView:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeTasks:
+    | 'terminal'
+    | 'settings'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeSettings:
+    | 'terminal'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeActivity:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeAutomations:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeSpace:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'skills'
+    | 'mobile'
+  previousViewBeforeSkills:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'mobile'
+  previousViewBeforeMobile:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -332,6 +406,8 @@ export type UISlice = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  openMobilePage: () => void
+  closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -339,25 +415,33 @@ export type UISlice = {
   settingsNavigationTarget: {
     pane:
       | 'general'
+      | 'integrations'
+      | 'accounts'
       | 'browser'
+      | 'git'
       | 'appearance'
       | 'input'
       | 'tasks'
+      | 'floating-workspace'
       | 'terminal'
+      | 'quick-commands'
       | 'notifications'
       | 'computer-use'
       | 'developer-permissions'
+      | 'privacy'
       | 'shortcuts'
+      | 'stats'
       | 'repo'
       | 'agents'
-      | 'accounts'
       | 'voice'
       | 'experimental'
+      | 'orchestration'
       | 'servers'
       | 'mobile'
       | 'ssh'
     repoId: string | null
     sectionId?: string
+    intent?: 'add-quick-command'
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
@@ -372,6 +456,8 @@ export type UISlice = {
     | 'quick-open'
     | 'worktree-palette'
     | 'workspace-cleanup'
+    | 'project-added'
+    | 'worktree-visibility'
     | 'feature-wall'
     | 'feature-tips'
     | 'new-workspace-composer'
@@ -381,9 +467,6 @@ export type UISlice = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
-  featureTourNudgeVisible: boolean
-  showFeatureTourNudge: () => void
-  dismissFeatureTourNudge: () => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
@@ -448,7 +531,10 @@ export type UISlice = {
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   revealWorktreeInSidebar: (
     worktreeId: string,
-    options?: { behavior?: PendingSidebarWorktreeReveal['behavior'] }
+    options?: {
+      behavior?: PendingSidebarWorktreeReveal['behavior']
+      highlight?: boolean
+    }
   ) => void
   clearPendingRevealWorktreeId: () => void
   // Why: lets the SourceControl sidebar request that the diff editor scroll
@@ -546,6 +632,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
+  previousViewBeforeMobile: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -754,6 +841,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSkills
     })),
+  openMobilePage: () =>
+    set((state) => ({
+      activeView: 'mobile',
+      previousViewBeforeMobile:
+        state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
+    })),
+  closeMobilePage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeMobile
+    })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
@@ -781,13 +878,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   activeModal: 'none',
   modalData: {},
-  openModal: (modal, data = {}) =>
-    set((state) => ({
+  openModal: (modal, data = {}) => {
+    set({
       activeModal: modal,
-      modalData: data,
-      featureTourNudgeVisible:
-        modal === 'feature-wall' || modal === 'feature-tips' ? false : state.featureTourNudgeVisible
-    })),
+      modalData: data
+    })
+  },
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
@@ -810,15 +906,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ featureTipsSeenIds: next }).catch(console.error)
       return { featureTipsSeenIds: next }
     }),
-  featureTourNudgeVisible: false,
-  showFeatureTourNudge: () => {
-    const activeModal = get().activeModal
-    if (activeModal !== 'feature-wall' && activeModal !== 'feature-tips') {
-      set({ featureTourNudgeVisible: true })
-    }
-  },
-  dismissFeatureTourNudge: () => set({ featureTourNudgeVisible: false }),
-
   trustedOrcaHooks: {},
   markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
     set((s) => {
@@ -872,7 +959,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { setupScriptPromptDismissedRepoIds: next }
     }),
 
-  groupBy: 'workspace-status',
+  groupBy: 'repo',
   // Why: group keys are mode-specific (e.g. repo id vs PR status), so
   // collapsed state from one mode is meaningless in another. Clearing
   // also prevents unbounded accumulation of stale keys across mode switches.
@@ -1038,7 +1125,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
-        behavior: options?.behavior ?? 'smooth'
+        behavior: options?.behavior ?? 'smooth',
+        ...(options?.highlight ? { highlight: true } : {})
       }
     }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
@@ -1096,6 +1184,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           s.rightSidebarWidth,
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
+        rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
+        rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: Active-only was retired. Force the old persisted flag off so an

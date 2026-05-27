@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: the YAML status card, issue-command editor, policy grid, and legacy-hook section form one cohesive settings surface; splitting them across files would scatter tightly coupled state and prop drilling. */
+/* eslint-disable max-lines -- Why: the script editor, advanced/Command Source disclosure, issue-command override, and YAML state surfaces share tightly coupled state and persistence; splitting them across files would scatter prop drilling. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   HookCommandSourcePolicy,
@@ -7,21 +7,23 @@ import type {
   RepoHookSettings,
   SetupRunPolicy
 } from '../../../../shared/types'
-import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
-import { normalizeHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
 import { getRepositoryLocalCommandsSectionId } from './repository-settings-targets'
+import { matchesSettingsSearch } from './settings-search'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
+  hooksInspectionReady: boolean
   mayNeedUpdate: boolean
   copiedTemplate: boolean
   onCopyTemplate: () => void
@@ -29,10 +31,8 @@ type RepositoryHooksSectionProps = {
 }
 
 type PolicyOption<P> = { policy: P; label: string; description: string }
-export type LocalCommandRow = { value: string; isPlaceholder: boolean }
 const LOCAL_HOOK_NAMES = ['setup', 'archive'] as const
 type LocalHookName = (typeof LOCAL_HOOK_NAMES)[number]
-export type LocalCommandDraft = Record<LocalHookName, LocalCommandRow[]>
 type HookSettingsPolicyDraft = Partial<
   Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
 >
@@ -50,69 +50,74 @@ const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
 const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
   {
     policy: 'shared-only',
-    label: 'Use orca.yaml only',
-    description: 'Run only committed repo commands; ignore local Settings commands.'
+    label: 'orca.yaml only',
+    description: 'Run only committed repo commands; ignore local commands.'
   },
   {
     policy: 'local-only',
-    label: 'Use local only',
-    description: 'Ignore repo commands and run only your local Settings commands.'
+    label: 'Local only',
+    description: 'Ignore orca.yaml; run only your local commands.'
   },
   {
     policy: 'run-both',
     label: 'Run both',
-    description: 'Run orca.yaml first, then your local Settings command.'
+    description: 'orca.yaml first, then your local commands.'
   }
 ]
 
-const LOCAL_HOOK_FIELDS: {
+const COMMAND_SOURCE_LABEL: Record<HookCommandSourcePolicy, string> = {
+  'shared-only': 'orca.yaml only',
+  'local-only': 'Local only',
+  'run-both': 'Run both'
+}
+
+type LocalHookField = {
   name: LocalHookName
   label: string
   description: string
   placeholder: string
-}[] = [
+}
+
+const LOCAL_HOOK_FIELDS: LocalHookField[] = [
   {
     name: 'setup',
-    label: 'Local setup command',
-    description: 'Runs after a new workspace is created when the source policy includes local.',
-    placeholder: 'cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
+    label: 'Setup Script',
+    description:
+      'Runs after a new worktree is created; install deps, copy env files, run migrations.',
+    placeholder: '# e.g.\npnpm install\ncp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
   },
   {
     name: 'archive',
-    label: 'Local archive command',
-    description: 'Runs before a local workspace is archived or removed.',
-    placeholder: 'echo "Cleaning up $ORCA_WORKSPACE_NAME"'
+    label: 'Archive Script',
+    description: 'Runs before a worktree is archived or removed.',
+    placeholder: '# e.g.\necho "Cleaning up $ORCA_WORKSPACE_NAME"'
   }
 ]
 
-export function scriptToCommandRows(script: string | undefined): LocalCommandRow[] {
-  if (!script) {
-    return []
+const ENV_VARS: readonly { name: string; description: string }[] = [
+  {
+    name: '$ORCA_ROOT_PATH',
+    description:
+      "The main repo's path on disk - useful for copying files (e.g. .env) into the worktree."
+  },
+  {
+    name: '$ORCA_WORKTREE_PATH',
+    description:
+      "The new worktree's path - where setup commands run and where files should be copied to."
+  },
+  {
+    name: '$ORCA_WORKSPACE_NAME',
+    description: 'The workspace (branch) name for this worktree.'
   }
+]
 
-  return script.split('\n').map((line) => ({
-    value: line.endsWith('\r') ? line.slice(0, -1) : line,
-    isPlaceholder: false
-  }))
-}
-
-export function commandRowsToScript(commands: LocalCommandRow[]): string {
-  return commands
-    .filter((command) => !(command.isPlaceholder && command.value.length === 0))
-    .map((command) => command.value)
-    .join('\n')
-}
-
-function pruneLocalCommandPlaceholders(commands: LocalCommandRow[]): LocalCommandRow[] {
-  return commands.filter((command) => !(command.isPlaceholder && command.value.length === 0))
-}
-
-export function localCommandDraftToScripts(draft: LocalCommandDraft): RepoHookSettings['scripts'] {
-  return {
-    setup: commandRowsToScript(pruneLocalCommandPlaceholders(draft.setup)),
-    archive: commandRowsToScript(pruneLocalCommandPlaceholders(draft.archive))
-  }
-}
+const EXAMPLE_TEMPLATE = `scripts:
+  setup: |
+    pnpm worktree:setup
+  archive: |
+    echo "Cleaning up before archive"
+issueCommand: |
+  Complete {{artifact_url}}`
 
 function getHookSettingsDraft(hookSettings: Repo['hookSettings']): RepoHookSettings {
   return {
@@ -125,21 +130,46 @@ function getHookSettingsDraft(hookSettings: Repo['hookSettings']): RepoHookSetti
   }
 }
 
-function getLocalCommandsDraft(hookSettings: Repo['hookSettings']): LocalCommandDraft {
-  const draft = getHookSettingsDraft(hookSettings)
-  return {
-    setup: scriptToCommandRows(draft.scripts.setup),
-    archive: scriptToCommandRows(draft.scripts.archive)
-  }
+function areHookSettingsDraftsEqual(a: RepoHookSettings, b: RepoHookSettings): boolean {
+  return (
+    a.mode === b.mode &&
+    a.setupRunPolicy === b.setupRunPolicy &&
+    a.commandSourcePolicy === b.commandSourcePolicy &&
+    a.scripts.setup === b.scripts.setup &&
+    a.scripts.archive === b.scripts.archive
+  )
 }
 
-const EXAMPLE_TEMPLATE = `scripts:
-  setup: |
-    pnpm worktree:setup
-  archive: |
-    echo "Cleaning up before archive"
-issueCommand: |
-  Complete {{artifact_url}}`
+export type LocalCommandSourcePolicyNotice =
+  | { kind: 'checking' }
+  | { kind: 'action'; policy: 'local-only' | 'run-both'; label: string }
+
+export function getLocalCommandSourcePolicyNotice({
+  hooksInspectionReady,
+  currentPolicy,
+  setupScript,
+  archiveScript,
+  hasSharedScript
+}: {
+  hooksInspectionReady: boolean
+  currentPolicy: HookCommandSourcePolicy
+  setupScript: string | undefined
+  archiveScript: string | undefined
+  hasSharedScript: boolean
+}): LocalCommandSourcePolicyNotice | null {
+  if (!setupScript?.trim() && !archiveScript?.trim()) {
+    return null
+  }
+  if (currentPolicy !== 'shared-only') {
+    return null
+  }
+  if (!hooksInspectionReady) {
+    return { kind: 'checking' }
+  }
+  return hasSharedScript
+    ? { kind: 'action', policy: 'run-both', label: 'Run both' }
+    : { kind: 'action', policy: 'local-only', label: 'Use local commands' }
+}
 
 const YAML_STATE_STYLES: Record<
   string,
@@ -175,7 +205,6 @@ const YAML_STATE_STYLES: Record<
   }
 }
 
-/** Shared button grid for setup run-policy selectors. */
 function PolicyOptionGrid<P extends string>({
   options,
   selected,
@@ -193,6 +222,7 @@ function PolicyOptionGrid<P extends string>({
         const active = selected === policy
         return (
           <button
+            type="button"
             key={policy}
             onClick={() => onSelect(policy)}
             className={`rounded-xl border px-3 py-2.5 text-center transition-colors ${
@@ -209,6 +239,39 @@ function PolicyOptionGrid<P extends string>({
             >
               {description}
             </p>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SegmentedPolicyToggle<P extends string>({
+  options,
+  selected,
+  onSelect
+}: {
+  options: PolicyOption<P>[]
+  selected: P
+  onSelect: (p: P) => void
+}): React.JSX.Element {
+  return (
+    <div className="inline-flex gap-0.5 rounded-lg border border-border/60 bg-muted/50 p-0.5">
+      {options.map(({ policy, label, description }) => {
+        const active = selected === policy
+        return (
+          <button
+            type="button"
+            key={policy}
+            onClick={() => onSelect(policy)}
+            title={description}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              active
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+            }`}
+          >
+            {label}
           </button>
         )
       })}
@@ -248,19 +311,253 @@ function ExampleTemplateCard({
   )
 }
 
+function YamlScriptBlock({ content }: { content: string }): React.JSX.Element {
+  return (
+    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
+      {content}
+    </pre>
+  )
+}
+
+function EnvVarChips(): React.JSX.Element {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-muted-foreground">
+        Available environment variables (hover for details):
+      </p>
+      <TooltipProvider delayDuration={150}>
+        <div className="flex flex-wrap gap-1.5">
+          {ENV_VARS.map(({ name, description }) => (
+            <Tooltip key={name}>
+              <TooltipTrigger asChild>
+                <code
+                  tabIndex={0}
+                  className="cursor-help rounded-md border border-border/50 bg-muted/35 px-2 py-1 font-mono text-[11px] text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {name}
+                </code>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                {description}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+      </TooltipProvider>
+    </div>
+  )
+}
+
+type SaveStatus = 'idle' | 'saving' | 'saved'
+
+function SaveIndicator({ status }: { status: SaveStatus }): React.JSX.Element | null {
+  if (status === 'idle') {
+    return null
+  }
+  const isSaving = status === 'saving'
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+      aria-live="polite"
+    >
+      <span
+        className={`size-1.5 rounded-full ${
+          isSaving ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'
+        }`}
+      />
+      {isSaving ? 'Saving...' : 'Saved'}
+    </span>
+  )
+}
+
+function LocalCommandSourceNotice({
+  notice,
+  onSelectPolicy
+}: {
+  notice: LocalCommandSourcePolicyNotice
+  onSelectPolicy: (policy: 'local-only' | 'run-both') => void
+}): React.JSX.Element {
+  const isChecking = notice.kind === 'checking'
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+            Local scripts will not run
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {isChecking
+              ? 'Local scripts are saved. Orca is still checking orca.yaml before it can recommend which script source to use.'
+              : 'Local scripts are saved, but Script Source is set to orca.yaml only.'}
+          </p>
+        </div>
+      </div>
+      {notice.kind === 'action' ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => onSelectPolicy(notice.policy)}
+        >
+          {notice.label}
+        </Button>
+      ) : (
+        <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
+          Checking...
+        </span>
+      )}
+    </div>
+  )
+}
+
+type ScriptEditorProps = {
+  field: LocalHookField
+  value: string
+  hasShared: boolean
+  sharedScript: string | undefined
+  onChange: (next: string) => void
+  onCommit: () => void
+  sectionId?: string
+}
+
+function ScriptEditor({
+  field,
+  value,
+  hasShared,
+  sharedScript,
+  onChange,
+  onCommit,
+  sectionId
+}: ScriptEditorProps): React.JSX.Element {
+  const [showLocal, setShowLocal] = useState(value.length > 0)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const lastValueRef = useRef(value)
+  const savedTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (value === lastValueRef.current) {
+      return
+    }
+    lastValueRef.current = value
+    setSaveStatus('saving')
+    if (savedTimerRef.current !== null) {
+      window.clearTimeout(savedTimerRef.current)
+    }
+    // Why: persistence is synchronous from the editor's POV, but we briefly
+    // show "Saving..." then "Saved" so the indicator carries the auto-save trust
+    // signal a Save button would (without the click).
+    savedTimerRef.current = window.setTimeout(() => {
+      setSaveStatus('saved')
+      savedTimerRef.current = window.setTimeout(() => {
+        setSaveStatus('idle')
+        savedTimerRef.current = null
+      }, 1500)
+    }, 250)
+    return () => {
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current)
+        savedTimerRef.current = null
+      }
+    }
+  }, [value])
+
+  useEffect(() => {
+    // Why: when the repo or its persisted local script changes (e.g. switching repos),
+    // re-evaluate whether the local block should be visible by default.
+    if (value.length > 0) {
+      setShowLocal(true)
+    }
+  }, [value])
+
+  const showLocalEditor = showLocal || !hasShared
+  const lineCount = value ? value.split('\n').length : 0
+
+  return (
+    <div
+      className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
+      id={sectionId}
+    >
+      <div className="space-y-1">
+        <h5 className="text-sm font-semibold">{field.label}</h5>
+        <p className="text-xs text-muted-foreground">{field.description}</p>
+      </div>
+
+      <EnvVarChips />
+
+      {hasShared ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              orca.yaml
+              <span className="font-normal text-emerald-700/80 dark:text-emerald-300/80">
+                - shared with your team
+              </span>
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              Edit <code className="rounded bg-muted px-1 py-0.5">orca.yaml</code> to change.
+            </span>
+          </div>
+          <YamlScriptBlock content={sharedScript ?? ''} />
+        </div>
+      ) : null}
+
+      {showLocalEditor ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            {hasShared ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                local
+                <span className="font-normal">- just for you, on this machine</span>
+              </span>
+            ) : (
+              <span />
+            )}
+            <SaveIndicator status={saveStatus} />
+          </div>
+          <textarea
+            value={value}
+            aria-label={field.label}
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={onCommit}
+            placeholder={field.placeholder}
+            spellCheck={false}
+            rows={Math.min(Math.max(lineCount + 1, 4), 14)}
+            className="w-full min-w-0 resize-y rounded-lg border border-input bg-muted/20 px-3 py-2 font-mono text-[12px] leading-[1.55] shadow-xs transition-[color,box-shadow] outline-none placeholder:italic placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Runs as a single shell script. Saved on this machine.
+          </p>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowLocal(true)}
+          className="gap-1.5"
+        >
+          <Plus className="size-3.5" />
+          Add local script
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export function RepositoryHooksSection({
   repo,
   yamlHooks,
   hasHooksFile,
+  hooksInspectionReady,
   mayNeedUpdate,
   copiedTemplate,
   onCopyTemplate,
   onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  // Why: distinguish "file has unrecognised top-level keys" from "file is
-  // genuinely malformed" so users see a helpful update prompt instead of a
-  // confusing parse-error when a newer Orca version adds keys to `orca.yaml`.
+  const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -268,156 +565,131 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
+
   const [hookSettingsDraft, setHookSettingsDraft] = useState(() =>
     getHookSettingsDraft(repo.hookSettings)
   )
   const hookSettingsDraftRef = useRef(hookSettingsDraft)
   hookSettingsDraftRef.current = hookSettingsDraft
-  const [localCommandsDraft, setLocalCommandsDraft] = useState(() =>
-    getLocalCommandsDraft(repo.hookSettings)
-  )
-  const localCommandsDraftRef = useRef(localCommandsDraft)
-  localCommandsDraftRef.current = localCommandsDraft
-  const localCommandsRepoHookSettingsRef = useRef(repo.hookSettings)
+  const localCommandsRepoIdRef = useRef(repo.id)
   const localCommandsDraftDirtyRef = useRef(false)
+  const localCommandsAutosaveTimerRef = useRef<number | null>(null)
+  const persistRef = useRef(onUpdateHookSettings)
+  persistRef.current = onUpdateHookSettings
   const localCommandsPersistForRepoRef = useRef(onUpdateHookSettings)
-  const localHookEntries = (['setup', 'archive'] as const)
-    .map((hookName) => [hookName, hookSettingsDraft.scripts[hookName] ?? ''] as const)
-    .filter(([, script]) => Boolean(script))
-  // Why: the type allows `undefined` in persisted settings for backward compatibility,
-  // but the UI always needs a concrete value so the policy grid has an active selection.
+
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
-  const selectedCommandSourcePolicy: HookCommandSourcePolicy = normalizeHookCommandSourcePolicy(
-    hookSettingsDraft.commandSourcePolicy
-  )
+
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
-  const localCommandsRepoIdRef = useRef(repo.id)
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
   const [issueCommandSaveError, setIssueCommandSaveError] = useState<string | null>(null)
-  // Why: track the latest draft across blur/unmount so repo switches still
-  // persist the user's local override without racing the next repo's state load.
   const issueCommandDraftRef = useRef(issueCommandDraft)
   issueCommandDraftRef.current = issueCommandDraft
   const lastCommittedIssueCommandRef = useRef('')
 
-  localCommandsRepoHookSettingsRef.current = repo.hookSettings
+  const syncHookSettingsDraft = useCallback((next: RepoHookSettings) => {
+    if (areHookSettingsDraftsEqual(hookSettingsDraftRef.current, next)) {
+      return
+    }
+    hookSettingsDraftRef.current = next
+    setHookSettingsDraft(next)
+  }, [])
 
-  const setAndMaybePersistHookSettings = useCallback(
-    (nextSettings: RepoHookSettings, shouldPersist: boolean) => {
-      hookSettingsDraftRef.current = nextSettings
-      setHookSettingsDraft(nextSettings)
-      if (shouldPersist) {
-        localCommandsDraftDirtyRef.current = false
-        onUpdateHookSettings(nextSettings)
-      }
-    },
-    [onUpdateHookSettings]
-  )
+  const persistHookSettings = useCallback((next: RepoHookSettings) => {
+    hookSettingsDraftRef.current = next
+    setHookSettingsDraft(next)
+    localCommandsDraftDirtyRef.current = false
+    persistRef.current(next)
+  }, [])
 
-  const updateLocalCommandsDraft = useCallback(
-    (hookName: LocalHookName, commands: LocalCommandRow[], shouldPersist: boolean) => {
-      const nextCommandsDraft = { ...localCommandsDraftRef.current, [hookName]: commands }
-      localCommandsDraftRef.current = nextCommandsDraft
-      setLocalCommandsDraft(nextCommandsDraft)
-      if (!shouldPersist) {
-        localCommandsDraftDirtyRef.current = true
-      }
+  const clearLocalCommandsAutosaveTimer = useCallback(() => {
+    if (localCommandsAutosaveTimerRef.current !== null) {
+      window.clearTimeout(localCommandsAutosaveTimerRef.current)
+      localCommandsAutosaveTimerRef.current = null
+    }
+  }, [])
 
-      const nextSettings = {
-        ...hookSettingsDraftRef.current,
-        scripts: {
-          ...hookSettingsDraftRef.current.scripts,
-          [hookName]: commandRowsToScript(commands)
-        }
-      }
-      setAndMaybePersistHookSettings(nextSettings, shouldPersist)
-    },
-    [setAndMaybePersistHookSettings]
-  )
-
-  const commitLocalCommandsDraft = useCallback(
-    (hookName: LocalHookName) => {
-      // Why: Add Command creates an unsaved empty editor row. Existing blank script
-      // lines are real rows and must round-trip, so only placeholder blanks are pruned.
-      const next = pruneLocalCommandPlaceholders(localCommandsDraftRef.current[hookName])
-      updateLocalCommandsDraft(hookName, next, true)
-    },
-    [updateLocalCommandsDraft]
-  )
-
-  const flushDirtyLocalCommandsDraft = useCallback(
-    (persistHookSettings: (settings: RepoHookSettings) => void) => {
+  const flushScriptDraft = useCallback(
+    (persistHookSettings?: (settings: RepoHookSettings) => void) => {
+      clearLocalCommandsAutosaveTimer()
       if (!localCommandsDraftDirtyRef.current) {
         return
       }
+      localCommandsDraftDirtyRef.current = false
+      const persist = persistHookSettings ?? persistRef.current
+      persist(hookSettingsDraftRef.current)
+    },
+    [clearLocalCommandsAutosaveTimer]
+  )
 
-      const nextSettings = {
-        ...hookSettingsDraftRef.current,
+  const queueScriptDraftPersist = useCallback(() => {
+    localCommandsDraftDirtyRef.current = true
+    clearLocalCommandsAutosaveTimer()
+    // Why: repo settings persistence may be an SSH RPC; coalesce typing bursts
+    // so a pasted script does not enqueue one repo.update call per character.
+    localCommandsAutosaveTimerRef.current = window.setTimeout(() => {
+      flushScriptDraft()
+    }, 700)
+  }, [clearLocalCommandsAutosaveTimer, flushScriptDraft])
+
+  const updateScriptDraft = useCallback(
+    (hookName: LocalHookName, nextScript: string) => {
+      const current = hookSettingsDraftRef.current
+      const next: RepoHookSettings = {
+        ...current,
         scripts: {
-          ...hookSettingsDraftRef.current.scripts,
-          ...localCommandDraftToScripts(localCommandsDraftRef.current)
+          ...current.scripts,
+          [hookName]: nextScript
         }
       }
-      hookSettingsDraftRef.current = nextSettings
-      localCommandsDraftDirtyRef.current = false
-      persistHookSettings(nextSettings)
+      hookSettingsDraftRef.current = next
+      setHookSettingsDraft(next)
+      // Why: changing local commands should not silently change Command Source;
+      // if local commands are excluded, the warning below offers an explicit switch.
+      queueScriptDraftPersist()
     },
-    []
+    [queueScriptDraftPersist]
   )
+
+  const commitScriptDraft = useCallback(() => {
+    flushScriptDraft()
+  }, [flushScriptDraft])
 
   const updateHookSettingsPolicyDraft = useCallback(
     (updates: HookSettingsPolicyDraft) => {
-      const nextSettings = {
-        ...hookSettingsDraftRef.current,
-        ...updates
-      }
-      setAndMaybePersistHookSettings(nextSettings, true)
+      persistHookSettings({ ...hookSettingsDraftRef.current, ...updates })
     },
-    [setAndMaybePersistHookSettings]
+    [persistHookSettings]
   )
 
-  const handleClearLocalCommands = useCallback(() => {
-    const nextCommandsDraft = { setup: [], archive: [] }
-    localCommandsDraftRef.current = nextCommandsDraft
-    setLocalCommandsDraft(nextCommandsDraft)
-    const nextSettings = {
-      ...hookSettingsDraftRef.current,
-      scripts: {
-        ...hookSettingsDraftRef.current.scripts,
-        setup: '',
-        archive: ''
-      }
-    }
-    setAndMaybePersistHookSettings(nextSettings, true)
-  }, [setAndMaybePersistHookSettings])
-
+  // Why: repo switches reset state before textareas can blur, so flush the
+  // dirty draft through the previous repo's captured updater.
   useEffect(() => {
-    if (localCommandsRepoIdRef.current === repo.id) {
+    const next = getHookSettingsDraft(repo.hookSettings)
+    const isSameRepo = localCommandsRepoIdRef.current === repo.id
+
+    if (isSameRepo) {
       localCommandsPersistForRepoRef.current = onUpdateHookSettings
+      if (!localCommandsDraftDirtyRef.current) {
+        syncHookSettingsDraft(next)
+      }
       return
     }
-    // Why: repo switches reset the local editor state before inputs can blur,
-    // so flush dirty row drafts through the previous repo's captured updater.
-    flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+
+    flushScriptDraft(localCommandsPersistForRepoRef.current)
     localCommandsRepoIdRef.current = repo.id
-    const nextSettingsDraft = getHookSettingsDraft(localCommandsRepoHookSettingsRef.current)
-    const nextCommandsDraft = getLocalCommandsDraft(localCommandsRepoHookSettingsRef.current)
-    hookSettingsDraftRef.current = nextSettingsDraft
-    localCommandsDraftRef.current = nextCommandsDraft
-    localCommandsDraftDirtyRef.current = false
     localCommandsPersistForRepoRef.current = onUpdateHookSettings
-    setHookSettingsDraft(nextSettingsDraft)
-    setLocalCommandsDraft(nextCommandsDraft)
-  }, [flushDirtyLocalCommandsDraft, onUpdateHookSettings, repo.id])
+    hookSettingsDraftRef.current = next
+    setHookSettingsDraft(next)
+  }, [flushScriptDraft, onUpdateHookSettings, repo.id, repo.hookSettings, syncHookSettingsDraft])
 
   useEffect(() => {
     return () => {
-      flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+      flushScriptDraft()
     }
-  }, [flushDirtyLocalCommandsDraft])
+  }, [flushScriptDraft])
 
-  // Keep the local override editor in sync with the selected repo and flush unsaved edits on exit.
   useEffect(() => {
     let cancelled = false
     const repoId = repo.id
@@ -426,9 +698,6 @@ export function RepositoryHooksSection({
     setHasSharedIssueCommand(false)
     setIssueCommandSaveError(null)
 
-    // Why: settings only edit the local override, but we still need to know
-    // whether `orca.yaml` defines a shared default so the helper copy can
-    // explain what happens when the override is blank.
     void readRuntimeIssueCommand(settings, repoId)
       .then((result) => {
         if (cancelled) {
@@ -473,266 +742,131 @@ export function RepositoryHooksSection({
     }
   }, [issueCommandDraft, repo.id, settings])
 
+  const sharedSetupScript = yamlHooks?.scripts.setup
+  const sharedArchiveScript = yamlHooks?.scripts.archive
+  const hasSharedSetupScript = Boolean(sharedSetupScript?.trim())
+  const hasSharedArchiveScript = Boolean(sharedArchiveScript?.trim())
+  const hasSharedScript = Boolean(sharedSetupScript?.trim() || sharedArchiveScript?.trim())
+  const hasLocalScript = Boolean(
+    hookSettingsDraft.scripts.setup?.trim() || hookSettingsDraft.scripts.archive?.trim()
+  )
+  const selectedCommandSourcePolicy: HookCommandSourcePolicy = resolveHookCommandSourcePolicy(
+    hookSettingsDraft.commandSourcePolicy,
+    { hasLocalScript }
+  )
+  const localCommandSourceNotice = getLocalCommandSourcePolicyNotice({
+    hooksInspectionReady,
+    currentPolicy: selectedCommandSourcePolicy,
+    setupScript: hookSettingsDraft.scripts.setup,
+    archiveScript: hookSettingsDraft.scripts.archive,
+    hasSharedScript
+  })
+  const advancedMatchesSearch =
+    settingsSearchQuery.trim() !== '' &&
+    matchesSettingsSearch(settingsSearchQuery, {
+      title: 'Advanced',
+      description: 'Command source and orca.yaml details.',
+      keywords: [
+        'advanced',
+        'command source',
+        'orca.yaml',
+        'shared',
+        'local',
+        'both',
+        'authoritative'
+      ]
+    })
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
+
   return (
     <section className="space-y-6">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">Worktree Hooks</h2>
         <p className="text-xs text-muted-foreground">
-          Configure shared repo hooks from `orca.yaml` and personal commands stored locally on this
-          machine.
+          Scripts that run when worktrees are created or archived. Local scripts are stored on this
+          machine; `orca.yaml` scripts are shared with your team.
         </p>
       </div>
 
       <SearchableSetting
-        title="orca.yaml hooks"
-        description="Shared setup, archive, and issue automation commands for this repository."
-        keywords={['hooks', 'setup', 'archive', 'yaml']}
+        title="Setup Script"
+        description="Local and shared scripts that run after a new worktree is created."
+        keywords={[
+          'setup',
+          'script',
+          'command',
+          'local',
+          'local settings scripts',
+          'orca.yaml',
+          'orca.yaml hooks',
+          'hook'
+        ]}
       >
-        <div className={`space-y-3 rounded-xl border p-4 ${YAML_STATE_STYLES[yamlState].card}`}>
-          <div className="space-y-1">
-            <p className={`text-sm font-medium ${YAML_STATE_STYLES[yamlState].title}`}>
-              {YAML_STATE_STYLES[yamlState].heading}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {YAML_STATE_STYLES[yamlState].description}
-            </p>
-          </div>
-
-          {yamlState === 'loaded' ? (
-            <div className="space-y-2">
-              <div className="rounded-lg border border-border/50 bg-background/70">
-                <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-foreground">
-                  {renderYamlScriptPreview(yamlHooks)}
-                </pre>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Edit `orca.yaml` in the repository if you need to change these shared commands.
-              </p>
-            </div>
-          ) : yamlState === 'update-available' ? (
-            <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
-          ) : yamlState === 'invalid' ? (
-            <div className="space-y-5">
-              <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-background/60 p-4">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
-                  <AlertTriangle className="size-5" />
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-base font-semibold text-amber-900 dark:text-amber-100">
-                      `orca.yaml` could not be parsed
-                    </p>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      {/* Why: once a repo has an `orca.yaml`, the failure mode is usually bad shape
-                      rather than a missing concept. Showing a repair-oriented explanation and
-                      template here lets maintainers fix the committed file without needing the doc. */}
-                      The file is present, but Orca could not find valid `scripts` or `issueCommand`
-                      definitions in the expected format.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                      Recommended fixes
-                    </p>
-                    <ol className="space-y-2.5 text-sm text-muted-foreground">
-                      {PARSE_ERROR_FIXES.map((fix, index) => (
-                        <li key={fix} className="flex items-start gap-3">
-                          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-foreground">
-                            {index + 1}
-                          </span>
-                          <span className="leading-6">{fix}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-              </div>
-
-              <ExampleTemplateCard
-                copiedTemplate={copiedTemplate}
-                onCopyTemplate={onCopyTemplate}
-              />
-            </div>
-          ) : (
-            <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
-          )}
-        </div>
-      </SearchableSetting>
-
-      <SearchableSetting
-        id={getRepositoryLocalCommandsSectionId(repo.id)}
-        title="Local Settings Commands"
-        description="Personal setup and archive commands stored locally on this machine."
-        keywords={['local', 'personal', 'setup', 'archive']}
-      >
-        <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h5 className="text-sm font-semibold">Local Settings Commands</h5>
-              <p className="text-xs text-muted-foreground">
-                Stored in Orca on this machine. These commands are not committed to the repository.
-              </p>
-            </div>
-            {localHookEntries.length > 0 ? (
-              <Button type="button" variant="outline" size="sm" onClick={handleClearLocalCommands}>
-                Clear Local
-              </Button>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {['$ORCA_ROOT_PATH', '$ORCA_WORKTREE_PATH', '$ORCA_WORKSPACE_NAME'].map((name) => (
-              <code
-                key={name}
-                className="rounded-md border border-border/50 bg-muted/35 px-2 py-1 font-mono text-[11px] text-muted-foreground"
-              >
-                {name}
-              </code>
-            ))}
-          </div>
-
-          <div className="grid gap-3">
-            {LOCAL_HOOK_FIELDS.map((field) => {
-              const commands = localCommandsDraft[field.name]
-              return (
-                <div key={field.name} className="space-y-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-foreground">{field.label}</label>
-                      <p className="text-[11px] text-muted-foreground">{field.description}</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        updateLocalCommandsDraft(
-                          field.name,
-                          [...commands, { value: '', isPlaceholder: true }],
-                          false
-                        )
-                      }
-                    >
-                      <Plus />
-                      Add Command
-                    </Button>
-                  </div>
-
-                  <div className="overflow-hidden rounded-lg border border-border/50">
-                    {commands.length === 0 ? (
-                      <div className="px-3 py-4 text-sm text-muted-foreground">
-                        No local {field.name} commands configured.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-border/50">
-                        {commands.map((command, index) => (
-                          <div
-                            key={`${field.name}-${index}`}
-                            className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2"
-                          >
-                            <span className="w-5 text-right font-mono text-[11px] text-muted-foreground">
-                              {index + 1}
-                            </span>
-                            <Input
-                              value={command.value}
-                              onChange={(event) => {
-                                const next = [...commands]
-                                next[index] = {
-                                  value: event.target.value,
-                                  isPlaceholder: false
-                                }
-                                updateLocalCommandsDraft(field.name, next, false)
-                              }}
-                              onBlur={() => commitLocalCommandsDraft(field.name)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  updateLocalCommandsDraft(
-                                    field.name,
-                                    [
-                                      ...commands.slice(0, index + 1),
-                                      { value: '', isPlaceholder: true },
-                                      ...commands.slice(index + 1)
-                                    ],
-                                    false
-                                  )
-                                }
-                              }}
-                              placeholder={index === 0 ? field.placeholder : 'Command'}
-                              className="h-8 font-mono text-xs"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Remove ${field.label} ${index + 1}`}
-                              onClick={() =>
-                                updateLocalCommandsDraft(
-                                  field.name,
-                                  commands.filter((_, commandIndex) => commandIndex !== index),
-                                  true
-                                )
-                              }
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </SearchableSetting>
-
-      <SearchableSetting
-        title="Command Source"
-        description="Choose whether Orca runs commands from `orca.yaml`, local Settings, or both."
-        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'authoritative']}
-      >
-        <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-          <div className="space-y-1">
-            <h5 className="text-sm font-semibold">Command Source</h5>
-            <p className="text-xs text-muted-foreground">
-              Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.
-            </p>
-          </div>
-
-          <PolicyOptionGrid
-            options={COMMAND_SOURCE_POLICY_OPTIONS}
-            selected={selectedCommandSourcePolicy}
-            onSelect={(policy) => updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })}
-            columns="md:grid-cols-3"
-          />
-        </div>
+        <ScriptEditor
+          key={`${repo.id}:setup`}
+          field={LOCAL_HOOK_FIELDS[0]}
+          value={hookSettingsDraft.scripts.setup ?? ''}
+          hasShared={hasSharedSetupScript}
+          sharedScript={sharedSetupScript}
+          onChange={(next) => updateScriptDraft('setup', next)}
+          onCommit={commitScriptDraft}
+          sectionId={getRepositoryLocalCommandsSectionId(repo.id)}
+        />
       </SearchableSetting>
 
       <SearchableSetting
         title="When to Run Setup"
-        description="Choose the default behavior when a setup command is available."
+        description="Choose the default behavior when a setup script is available."
         keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
       >
-        <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-          <div className="space-y-1">
-            <h5 className="text-sm font-semibold">When to Run Setup</h5>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+          <div className="min-w-0">
+            <h5 className="text-sm font-semibold">When to run</h5>
             <p className="text-xs text-muted-foreground">
-              Choose the default behavior when a setup command is available.
+              Default behavior when a new worktree is created.
             </p>
           </div>
-
-          <PolicyOptionGrid
+          <SegmentedPolicyToggle
             options={SETUP_RUN_POLICY_OPTIONS}
             selected={selectedSetupRunPolicy}
             onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
-            columns="md:grid-cols-3"
           />
         </div>
       </SearchableSetting>
+
+      <SearchableSetting
+        title="Archive Script"
+        description="Local and shared scripts that run before a worktree is archived."
+        keywords={[
+          'archive',
+          'script',
+          'command',
+          'local',
+          'local settings scripts',
+          'orca.yaml',
+          'orca.yaml hooks',
+          'hook'
+        ]}
+      >
+        <ScriptEditor
+          key={`${repo.id}:archive`}
+          field={LOCAL_HOOK_FIELDS[1]}
+          value={hookSettingsDraft.scripts.archive ?? ''}
+          hasShared={hasSharedArchiveScript}
+          sharedScript={sharedArchiveScript}
+          onChange={(next) => updateScriptDraft('archive', next)}
+          onCommit={commitScriptDraft}
+        />
+      </SearchableSetting>
+
+      {localCommandSourceNotice ? (
+        <LocalCommandSourceNotice
+          notice={localCommandSourceNotice}
+          onSelectPolicy={(policy) =>
+            updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })
+          }
+        />
+      ) : null}
 
       <SearchableSetting
         title="Custom GitHub Issue Command"
@@ -742,32 +876,140 @@ export function RepositoryHooksSection({
         <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
           <div className="space-y-1">
             <h5 className="text-sm font-semibold">Custom GitHub Issue Command</h5>
-          </div>
-          <div className="space-y-2">
-            <textarea
-              value={issueCommandDraft}
-              onChange={(e) => setIssueCommandDraft(e.target.value)}
-              onBlur={commitIssueCommand}
-              placeholder="Complete {{artifact_url}}"
-              rows={5}
-              className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
             <p className="text-xs text-muted-foreground">
-              Use <code className="rounded bg-muted px-1 py-0.5">{'{{artifact_url}}'}</code> for the
-              linked issue or PR URL. Leave empty to use the built-in{' '}
-              <code className="rounded bg-muted px-1 py-0.5">Complete {'{{artifact_url}}'}</code>{' '}
-              default.
+              Optional override. Use{' '}
+              <code className="rounded bg-muted px-1 py-0.5">{'{{artifact_url}}'}</code> for the
+              linked issue or PR URL.
             </p>
-            <p className="text-xs text-muted-foreground">
-              Leave blank to use the repo default from{' '}
-              <code className="rounded bg-muted px-1 py-0.5">orca.yaml</code>
-              {hasSharedIssueCommand ? '.' : ' when one exists.'}
-            </p>
-            {issueCommandSaveError ? (
-              <p className="text-xs text-destructive">{issueCommandSaveError}</p>
-            ) : null}
           </div>
+          <textarea
+            value={issueCommandDraft}
+            aria-label="Custom GitHub Issue Command"
+            onChange={(e) => setIssueCommandDraft(e.target.value)}
+            onBlur={commitIssueCommand}
+            placeholder="Complete {{artifact_url}}"
+            rows={4}
+            spellCheck={false}
+            className="w-full min-w-0 resize-y rounded-md border border-input bg-muted/20 px-3 py-2 font-mono text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:italic placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Leave blank to use the repo default from{' '}
+            <code className="rounded bg-muted px-1 py-0.5">orca.yaml</code>
+            {hasSharedIssueCommand ? '.' : ' when one exists.'}
+          </p>
+          {issueCommandSaveError ? (
+            <p className="text-xs text-destructive">{issueCommandSaveError}</p>
+          ) : null}
         </div>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Advanced"
+        description="Command source and orca.yaml details."
+        keywords={[
+          'advanced',
+          'command source',
+          'orca.yaml',
+          'shared',
+          'local',
+          'both',
+          'authoritative'
+        ]}
+      >
+        <details
+          className="group rounded-2xl border border-border/50 bg-background/80 shadow-sm"
+          open={advancedMatchesSearch || isAdvancedOpen}
+          onToggle={(event) => {
+            if (advancedMatchesSearch) {
+              event.currentTarget.open = true
+              return
+            }
+            setIsAdvancedOpen(event.currentTarget.open)
+          }}
+        >
+          <summary
+            className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden"
+            onClick={(event) => {
+              if (advancedMatchesSearch) {
+                event.preventDefault()
+              }
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
+              <h5 className="text-sm font-semibold">Advanced</h5>
+              <span className="text-xs text-muted-foreground">Command source &amp; orca.yaml</span>
+            </div>
+            <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+              {COMMAND_SOURCE_LABEL[selectedCommandSourcePolicy]}
+            </span>
+          </summary>
+
+          <div className="space-y-5 border-t border-border/50 px-4 py-4">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Command Source</p>
+                <p className="text-[11px] text-muted-foreground">
+                  When both <code className="rounded bg-muted px-1 py-0.5">orca.yaml</code> and
+                  local commands exist, choose which run.
+                </p>
+              </div>
+              <PolicyOptionGrid
+                options={COMMAND_SOURCE_POLICY_OPTIONS}
+                selected={selectedCommandSourcePolicy}
+                onSelect={(policy) =>
+                  updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })
+                }
+                columns="md:grid-cols-3"
+              />
+            </div>
+
+            <div className={`space-y-3 rounded-xl border p-3 ${YAML_STATE_STYLES[yamlState].card}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className={`text-sm font-medium ${YAML_STATE_STYLES[yamlState].title}`}>
+                    {YAML_STATE_STYLES[yamlState].heading}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {YAML_STATE_STYLES[yamlState].description}
+                  </p>
+                </div>
+              </div>
+
+              {yamlState === 'loaded' ? (
+                <YamlScriptBlock content={renderYamlScriptPreview(yamlHooks)} />
+              ) : yamlState === 'invalid' ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-background/60 p-3">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      <p>
+                        The file is present, but Orca could not find valid `scripts` or
+                        `issueCommand` definitions.
+                      </p>
+                      <ol className="space-y-1.5 pl-4 text-[11.5px]">
+                        {PARSE_ERROR_FIXES.map((fix) => (
+                          <li key={fix} className="list-decimal leading-5">
+                            {fix}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                  <ExampleTemplateCard
+                    copiedTemplate={copiedTemplate}
+                    onCopyTemplate={onCopyTemplate}
+                  />
+                </div>
+              ) : (
+                <ExampleTemplateCard
+                  copiedTemplate={copiedTemplate}
+                  onCopyTemplate={onCopyTemplate}
+                />
+              )}
+            </div>
+          </div>
+        </details>
       </SearchableSetting>
     </section>
   )
@@ -778,6 +1020,7 @@ const PARSE_ERROR_FIXES = [
   'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.',
   'Compare your file against the working template below and copy that shape if needed.'
 ]
+
 function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
   const fmt = (key: string, cmd?: string): string =>
     cmd ? `\n  ${key}: |\n${cmd.replace(/^/gm, '    ')}` : ''

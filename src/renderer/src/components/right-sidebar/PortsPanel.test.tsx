@@ -3,8 +3,15 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
+import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import {
+  addressForPort,
+  addressForPortForwardEntry,
+  browserUrlForPort,
+  browserUrlForPortForwardEntry
+} from '@/lib/workspace-port-urls'
 
 const { activateAndRevealWorktreeMock } = vi.hoisted(() => ({
   activateAndRevealWorktreeMock: vi.fn()
@@ -14,13 +21,13 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: activateAndRevealWorktreeMock
 }))
 
+import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
-  browserUrlForPort,
-  getLocalWorkspacePortSections,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
+  refreshWorkspacePortScanAfterStop,
   scanWorkspacePortsForTarget
-} from './PortsPanel'
+} from '@/lib/workspace-port-actions'
 
 const workspacePort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',
@@ -57,12 +64,14 @@ const localScan = vi.fn()
 const localKill = vi.fn()
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const openUrl = vi.fn()
 
 beforeEach(() => {
   localScan.mockReset()
   localKill.mockReset()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  openUrl.mockReset()
   activateAndRevealWorktreeMock.mockReset()
   clearRuntimeCompatibilityCacheForTests()
   vi.stubGlobal('window', {
@@ -76,6 +85,9 @@ beforeEach(() => {
       },
       runtimeEnvironments: {
         call: runtimeEnvironmentCall
+      },
+      shell: {
+        openUrl
       }
     }
   })
@@ -250,7 +262,120 @@ describe('PortsPanel runtime routing', () => {
     })
   })
 
+  it('opens workspace ports in the system browser when link routing is off', async () => {
+    const createBrowserTab = vi.fn()
+    const setRemoteBrowserPageHandle = vi.fn()
+    openUrl.mockResolvedValueOnce(undefined)
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'local' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
+        openInOrcaBrowser: false
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).toHaveBeenCalledWith('http://127.0.0.1:63468')
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('returns post-stop refresh failures without throwing', async () => {
+    const setWorkspacePortScan = vi.fn()
+    const setWorkspacePortScanRefreshing = vi.fn()
+    localScan.mockRejectedValueOnce(new Error('scan failed'))
+
+    await expect(
+      refreshWorkspacePortScanAfterStop({
+        runtimeTarget: { kind: 'local' },
+        setWorkspacePortScan: setWorkspacePortScan as never,
+        setWorkspacePortScanRefreshing: setWorkspacePortScanRefreshing as never
+      })
+    ).resolves.toEqual({ ok: false, reason: 'scan failed' })
+
+    expect(setWorkspacePortScan).not.toHaveBeenCalled()
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(1, true)
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('keeps remote workspace ports in the server-side browser when link routing is off', async () => {
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result:
+          method === 'status.get' ? compatibleStatus : { browserPageId: 'remote-browser-page-1' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const createBrowserTab = vi.fn(() => ({ activePageId: 'local-page-1' }))
+    const setRemoteBrowserPageHandle = vi.fn()
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
+        openInOrcaBrowser: false
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get',
+      'browser.tabCreate'
+    ])
+    expect(createBrowserTab).toHaveBeenCalledWith(
+      'repo::/workspace/app',
+      'http://127.0.0.1:63468',
+      { activate: true }
+    )
+    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
+      environmentId: 'env-1',
+      remotePageId: 'remote-browser-page-1'
+    })
+  })
+
   it('defaults unknown protocols to http for built-in browser opens', () => {
     expect(browserUrlForPort(workspacePort)).toBe('http://127.0.0.1:63468')
+  })
+
+  it('prefers advertisedUrl over the OS-derived host:port', () => {
+    const advertised: WorkspacePort = {
+      ...workspacePort,
+      advertisedUrl: 'https://local.getmontecarlo.com:63468'
+    }
+    expect(browserUrlForPort(advertised)).toBe('https://local.getmontecarlo.com:63468')
+    expect(addressForPort(advertised)).toBe('local.getmontecarlo.com:63468')
+  })
+
+  it('formats SSH forwarded advertised URLs with a single protocol fallback order', () => {
+    const forward: PortForwardEntry = {
+      id: 'forward-1',
+      connectionId: 'connection-1',
+      localPort: 63468,
+      remoteHost: 'localhost',
+      remotePort: 3001,
+      advertisedUrl: 'https://local.getmontecarlo.com:3001'
+    }
+
+    expect(browserUrlForPortForwardEntry(forward)).toBe('https://local.getmontecarlo.com:63468')
+    expect(addressForPortForwardEntry(forward)).toBe('local.getmontecarlo.com:63468')
+    expect(browserUrlForPortForwardEntry({ ...forward, advertisedProtocol: 'http' })).toBe(
+      'http://local.getmontecarlo.com:63468'
+    )
+    expect(
+      browserUrlForPortForwardEntry({
+        ...forward,
+        advertisedUrl: undefined,
+        remotePort: 8443
+      })
+    ).toBe('https://127.0.0.1:63468')
+    expect(addressForPortForwardEntry({ ...forward, advertisedUrl: undefined })).toBe(
+      '127.0.0.1:63468'
+    )
   })
 })

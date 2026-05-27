@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openHttpLink, registerHttpLinkStoreAccessor } from './http-link-routing'
 
 const openUrlMock = vi.fn()
@@ -49,6 +50,20 @@ describe('openHttpLink', () => {
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
 
     expect(createBrowserTabMock).toHaveBeenCalled()
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('routes floating workspace links into Orca without changing the active repo worktree', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com/',
+      { activate: true }
+    )
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 

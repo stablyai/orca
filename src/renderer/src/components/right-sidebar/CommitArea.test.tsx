@@ -23,10 +23,13 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
   return {
     worktreeId: 'wt-1',
+    groupId: 'group-1',
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    commitFailureRecoveryPrompt: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    isFixingCommitFailureWithAI: false,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -40,6 +43,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
+    onFixCommitFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
@@ -138,7 +142,42 @@ describe('CommitArea', () => {
     expect(markup).toContain('aria-live="polite"')
     expect(markup).toContain('Lint failed during commit.')
     expect(markup).not.toContain('full lint output line')
+    expect(markup).toContain('Fix')
+    expect(markup).toContain('aria-label="Choose agent to fix commit failure"')
     expect(markup).toContain('Details')
+  })
+
+  it('disables the commit failure fix action while an AI launch is in progress', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.',
+      isFixingCommitFailureWithAI: true
+    })
+
+    const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+      .map((match) => match[0])
+      .find((entry) => entry.includes('aria-label="Fix commit failure with AI"'))
+
+    expect(button).toBeDefined()
+    expect(button).toContain('disabled=""')
+    expect(button).toContain('animate-spin')
+  })
+
+  it('enables the agent picker when commit failure context is available', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.'
+    })
+
+    const picker = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+      .map((match) => match[0])
+      .find((entry) => entry.includes('aria-label="Choose agent to fix commit failure"'))
+
+    expect(picker).toBeDefined()
+    expect(picker).not.toContain('disabled=""')
+    expect(picker).toContain('lucide-chevron-down')
   })
 
   it('omits the details trigger when the raw error matches the summary', () => {

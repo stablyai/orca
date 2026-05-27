@@ -72,7 +72,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
@@ -92,6 +92,7 @@ import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFi
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
+import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
@@ -131,6 +132,7 @@ import type {
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
 import {
   linearCreateIssue,
@@ -254,7 +256,7 @@ const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 const GITHUB_TASK_GRID_CLASS =
   'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
 const GITHUB_PR_TASK_GRID_CLASS =
-  'min-w-[1170px] grid-cols-[72px_minmax(260px,2fr)_minmax(130px,0.8fr)_132px_128px_132px_92px_158px]'
+  'min-w-[1020px] grid-cols-[72px_minmax(360px,2fr)_132px_128px_132px_92px_158px]'
 const GITHUB_TASK_ROW_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
 const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
@@ -1844,7 +1846,7 @@ function PaginationBar({
 }): React.JSX.Element {
   const pageNumbers = getPageNumbers(currentPage, totalPages)
   const btnClass =
-    'inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+    'inline-flex w-24 items-center justify-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
   const numClass = (page: number): string =>
     cn(
       'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
@@ -1970,6 +1972,7 @@ export default function TaskPage(): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
   // Why: initial selection resolution honors (1) an explicit preselection from
@@ -2667,9 +2670,9 @@ export default function TaskPage(): React.JSX.Element {
     ) {
       return
     }
-    // Why: GitLab queries don't work over SSH-relay (yet) and folder-
-    // mode repos have no remotes to derive a project from. Filter both.
-    const eligibleRepos = selectedRepos.filter((r) => !r.connectionId)
+    // Why: folder-mode repos have no remotes to derive a GitLab project from;
+    // SSH-backed Git repos go through the same provider-aware IPC path.
+    const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -4132,7 +4135,15 @@ export default function TaskPage(): React.JSX.Element {
             cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
             too low, breaking the visual band across the top chrome. */}
         <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
-          <div className="flex-none flex flex-col gap-3">
+          <div
+            className={cn(
+              'flex-none flex flex-col gap-3',
+              // Why: GitHub detail views (PR + Issue) fill the entire right
+              // pane — the list filter row above them is not relevant and
+              // would visually duplicate the detail page's own breadcrumb.
+              taskSource === 'github' && dialogWorkItem && 'hidden'
+            )}
+          >
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
@@ -4294,14 +4305,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4436,7 +4447,7 @@ export default function TaskPage(): React.JSX.Element {
                       // Why: unify feature 1 (indicator) and feature 2 (selector)
                       // into a single chip per repo. Rendering both separately
                       // produced visually redundant output — two local-repo
-                      // dot-labels, duplicate slugs. The selector's active pill
+                      // badge labels, duplicate slugs. The selector's active pill
                       // + tooltip already announce the source, so the "Issues
                       // from {slug}" chip is only shown when the selector does
                       // not render (no upstream remote — nothing to toggle).
@@ -4450,7 +4461,7 @@ export default function TaskPage(): React.JSX.Element {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {rows.map((s) => {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
-                            const showDotLabel = selectedRepos.length > 1 && repo
+                            const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             // Why: the static indicator has its own wrapping
                             // chip styles, so we render it standalone and don't
@@ -4463,7 +4474,7 @@ export default function TaskPage(): React.JSX.Element {
                                   issues={s.sources.issues}
                                   prs={s.sources.prs}
                                   localRepo={
-                                    showDotLabel && repo
+                                    showRepoBadgeLabel && repo
                                       ? { displayName: repo.displayName, color: repo.badgeColor }
                                       : undefined
                                   }
@@ -4481,11 +4492,11 @@ export default function TaskPage(): React.JSX.Element {
                             // uses `inline-flex`, so the visual rendering is identical.
                             return (
                               <div key={s.repoId} className={issueSourceChipClass}>
-                                {showDotLabel ? (
-                                  <RepoDotLabel
+                                {showRepoBadgeLabel ? (
+                                  <RepoBadgeLabel
                                     name={repo.displayName}
                                     color={repo.badgeColor}
-                                    dotClassName="size-1.5"
+                                    badgeClassName="size-1.5"
                                     className="text-[10px] text-muted-foreground"
                                   />
                                 ) : null}
@@ -4656,14 +4667,14 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(next) => {
                             setRepoSelection(next)
                             void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           onSelectAll={() => {
                             const allIds = new Set(eligibleRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save repo selection.')
+                              toast.error('Failed to save project selection.')
                             })
                           }}
                           triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -4740,20 +4751,36 @@ export default function TaskPage(): React.JSX.Element {
           </div>
 
           {taskSource === 'github' && dialogWorkItem ? (
-            <GitHubItemDialog
-              workItem={dialogWorkItem}
-              initialTab={dialogInitialTab}
-              repoPath={dialogRepoPath}
-              repoId={dialogWorkItem.repoId}
-              variant="page"
-              backLabel="GitHub list"
-              onUse={(item) => {
-                setDialogWorkItem(null)
-                handleUseWorkItem(item)
-              }}
-              onReviewRequestsChange={handleDialogReviewRequestsChange}
-              onClose={closeTaskDetailPage}
-            />
+            dialogWorkItem.type === 'pr' ? (
+              <PullRequestPage
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                backLabel="Pull requests"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            ) : (
+              <GitHubItemDialog
+                workItem={dialogWorkItem}
+                initialTab={dialogInitialTab}
+                repoPath={dialogRepoPath}
+                repoId={dialogWorkItem.repoId}
+                variant="page"
+                backLabel="GitHub list"
+                onUse={(item) => {
+                  setDialogWorkItem(null)
+                  handleUseWorkItem(item)
+                }}
+                onReviewRequestsChange={handleDialogReviewRequestsChange}
+                onClose={closeTaskDetailPage}
+              />
+            )
           ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
               <ProjectViewWrapper />
@@ -4772,7 +4799,7 @@ export default function TaskPage(): React.JSX.Element {
                 >
                   <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>ID</span>
                   <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>Title / Context</span>
-                  <span>{activeGithubTaskKind === 'issues' ? 'Assignees' : 'Branch'}</span>
+                  {activeGithubTaskKind === 'issues' ? <span>Assignees</span> : null}
                   {showPRManagementColumns ? (
                     <>
                       <span>Reviewers</span>
@@ -4796,7 +4823,7 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} of {selectedRepos.length} repos failed to load
+                    {failedCount} of {selectedRepos.length} projects failed to load
                   </div>
                 ) : null}
 
@@ -4862,9 +4889,11 @@ export default function TaskPage(): React.JSX.Element {
                           <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
                           <div className="mt-2 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
                         </div>
-                        <div className="flex items-center">
-                          <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
-                        </div>
+                        {!showPRManagementColumns ? (
+                          <div className="flex items-center">
+                            <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+                          </div>
+                        ) : null}
                         {showPRManagementColumns ? (
                           <>
                             <div className="flex items-center">
@@ -4979,10 +5008,10 @@ export default function TaskPage(): React.JSX.Element {
                               {selectedRepos.length > 1 && itemRepo ? (
                                 // Why: disambiguate rows when multiple repos are in
                                 // the merged list — a single-repo view doesn't need it.
-                                <RepoDotLabel
+                                <RepoBadgeLabel
                                   name={itemRepo.displayName}
                                   color={itemRepo.badgeColor}
-                                  dotClassName="size-1.5"
+                                  badgeClassName="size-1.5"
                                   className="shrink-0 text-[11px] text-muted-foreground"
                                 />
                               ) : null}
@@ -5009,20 +5038,11 @@ export default function TaskPage(): React.JSX.Element {
                             </div>
                           </div>
 
-                          <div className="min-w-0 flex items-center text-xs text-muted-foreground">
-                            {item.type === 'pr' ? (
-                              <div className="min-w-0">
-                                <div className="truncate text-foreground">
-                                  {item.branchName || 'unknown head'}
-                                </div>
-                                <div className="truncate text-[10px] text-muted-foreground">
-                                  into {item.baseRefName || 'base'}
-                                </div>
-                              </div>
-                            ) : (
+                          {!showPRManagementColumns ? (
+                            <div className="min-w-0 flex items-center text-xs text-muted-foreground">
                               <GHAssigneesCell item={item} repo={itemRepo ?? null} />
-                            )}
-                          </div>
+                            </div>
+                          ) : null}
 
                           {showPRManagementColumns ? (
                             <>
@@ -5157,7 +5177,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
                       ? 'No pending todos. You’re all caught up!'
-                      : 'Select a repo so we can authenticate to GitLab.'}
+                      : 'Select a project so we can authenticate to GitLab.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5251,7 +5271,7 @@ export default function TaskPage(): React.JSX.Element {
                         : gitlabView === 'mrs'
                           ? 'No GitLab MRs match this filter.'
                           : 'No GitLab work matches this filter.'
-                      : 'Select a repo to see GitLab work items.'}
+                      : 'Select a project to see GitLab work items.'}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -5313,7 +5333,7 @@ export default function TaskPage(): React.JSX.Element {
                             e.stopPropagation()
                             void window.api.shell.openUrl(item.url)
                           }}
-                          aria-label="Open in browser"
+                          aria-label="Open in GitLab"
                           className="text-muted-foreground hover:text-foreground"
                         >
                           <ExternalLink className="size-3.5" />
@@ -5888,7 +5908,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewIssue()
             }
@@ -5970,7 +5990,7 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => setNewIssueRepoId(v)}
@@ -5982,7 +6002,7 @@ export default function TaskPage(): React.JSX.Element {
                   <SelectContent>
                     {selectedRepos.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
-                        <RepoDotLabel name={r.displayName} color={r.badgeColor} />
+                        <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -6018,7 +6038,7 @@ export default function TaskPage(): React.JSX.Element {
                 className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
@@ -6056,7 +6076,7 @@ export default function TaskPage(): React.JSX.Element {
         <DialogContent
           className="sm:max-w-lg"
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               void handleCreateNewLinearIssue()
             }
@@ -6128,7 +6148,7 @@ export default function TaskPage(): React.JSX.Element {
                 className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button

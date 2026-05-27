@@ -15,6 +15,11 @@ import { toast } from 'sonner'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
+import {
+  countFolderWorkspaceDeletes,
+  getDeleteWorktreeDialogCopy,
+  isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
+} from './delete-worktree-dialog-copy'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -23,6 +28,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const removeWorktree = useAppStore((s) => s.removeWorktree)
   const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
   const allWorktrees = useAppStore((s) => s.allWorktrees)
+  const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -54,7 +60,20 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     const selected = new Set(worktreeIds)
     return allWorktrees().filter((item) => selected.has(item.id))
   }, [allWorktrees, worktreeIds])
+  const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
+  const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
+  const folderWorkspaceDeleteCount = useMemo(
+    () => countFolderWorkspaceDeletes(repoMap, worktrees),
+    [repoMap, worktrees]
+  )
+  const deleteCopy = getDeleteWorktreeDialogCopy({
+    isBatchDelete,
+    worktree,
+    worktreeCount: worktrees.length,
+    folderWorkspaceDeleteCount,
+    isFolderWorkspaceDelete
+  })
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const lineageDelete = useMemo(
     () =>
@@ -262,21 +281,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             {isBatchDelete ? 'Delete Workspaces' : 'Delete Workspace'}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {isBatchDelete ? (
-              <>
-                Remove{' '}
-                <span className="font-medium text-foreground">{worktrees.length} workspaces</span>{' '}
-                from git and delete their workspace folders.
-              </>
-            ) : (
-              <>
-                Remove{' '}
-                <span className="break-all font-medium text-foreground">
-                  {worktree?.displayName}
-                </span>{' '}
-                from git and delete its workspace folder.
-              </>
-            )}
+            Remove <span className={deleteCopy.targetClassName}>{deleteCopy.targetLabel}</span>{' '}
+            {deleteCopy.descriptionSuffix}
           </DialogDescription>
         </DialogHeader>
 
@@ -328,7 +334,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 This is the <span className="font-semibold">main worktree</span> (the original clone
-                directory). Git does not allow removing the main worktree.
+                directory). {deleteCopy.mainWorktreeBlocker}
               </div>
             </div>
           </div>

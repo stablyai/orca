@@ -82,7 +82,11 @@ describe('getHostedReviewForBranch', () => {
     })
 
     await expect(
-      getHostedReviewForBranch({ repoPath: '/repo', branch: 'refs/heads/feature' })
+      getHostedReviewForBranch({
+        repoPath: '/repo',
+        connectionId: 'ssh-1',
+        branch: 'refs/heads/feature'
+      })
     ).resolves.toEqual({
       provider: 'gitlab',
       number: 7,
@@ -93,6 +97,8 @@ describe('getHostedReviewForBranch', () => {
       updatedAt: '2026-05-10T00:00:00.000Z',
       mergeable: 'MERGEABLE'
     })
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
+    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature', null, 'ssh-1')
     expect(getPRForBranchMock).not.toHaveBeenCalled()
   })
 

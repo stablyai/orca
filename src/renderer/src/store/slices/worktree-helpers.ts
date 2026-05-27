@@ -1,6 +1,8 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
   GitPushTarget,
   SetupDecision,
   TuiAgent,
@@ -22,6 +24,7 @@ export type WorktreeDeleteState = {
 
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
+  detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
@@ -63,6 +66,7 @@ export type WorktreeSlice = {
    * sessions (design §4.4). Session-only; never persisted.
    */
   hasHydratedWorktreePurge: boolean
+  fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
@@ -130,6 +134,7 @@ export type WorktreeSlice = {
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
+  getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.
    * Called by the `worktrees:changed` listener on server-side deletions and

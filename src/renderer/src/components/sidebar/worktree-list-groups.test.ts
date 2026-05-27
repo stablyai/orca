@@ -668,4 +668,15 @@ describe('WorktreeList header styles', () => {
 
     expect(source).toContain('[&_path]:cursor-pointer')
   })
+
+  it('resolves repo header color from repo group headers only', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).toContain('resolveRepoGroupHeaderColor({')
+    expect(source).toContain('headerKey: row.key')
+    expect(source).toContain('color={repoHeaderColor}')
+  })
 })

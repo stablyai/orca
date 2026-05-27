@@ -115,14 +115,22 @@ export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollS
 }
 
 function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
+  if (!terminal.element) {
+    return
+  }
   const buf = terminal.buffer.active
   if (state.bufferType === 'alternate' || buf.type !== state.bufferType) {
     return
   }
 
+  // Why: WebGL suspend disposes xterm's render service while leaving
+  // terminal.element attached, so scrollToBottom/scrollToLine/scrollLines all
+  // throw "cannot read dimensions" until the pane re-attaches. Swallow that
+  // window quietly — the next visibility flip re-fits and re-restores.
   if (state.wasAtBottom) {
-    terminal.scrollToBottom()
-    forceViewportScrollbarSync(terminal)
+    if (safeScrollCall(() => terminal.scrollToBottom())) {
+      forceViewportScrollbarSync(terminal)
+    }
     return
   }
 
@@ -136,8 +144,24 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
   // reflow settles; keep the marker alive so each call consults the live
   // line. Callers (restoreScrollState, the timeout in
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
-  terminal.scrollToLine(targetLine)
-  forceViewportScrollbarSync(terminal)
+  if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
+    forceViewportScrollbarSync(terminal)
+  }
+}
+
+function safeScrollCall(fn: () => void): boolean {
+  try {
+    fn()
+    return true
+  } catch (err) {
+    // Why: xterm's renderer can null out internal dimensions during WebGL
+    // teardown, throwing "Cannot read properties of undefined (reading
+    // 'dimensions')". Tolerate that; surface anything else.
+    if (err instanceof TypeError && /dimensions/.test(err.message)) {
+      return false
+    }
+    throw err
+  }
 }
 
 function releaseScrollStateMarker(state: ScrollState): void {
@@ -155,10 +179,10 @@ function forceViewportScrollbarSync(terminal: Terminal): void {
     return
   }
   if (buf.viewportY > 0) {
-    terminal.scrollLines(-1)
-    terminal.scrollLines(1)
+    safeScrollCall(() => terminal.scrollLines(-1))
+    safeScrollCall(() => terminal.scrollLines(1))
   } else if (buf.viewportY < buf.baseY) {
-    terminal.scrollLines(1)
-    terminal.scrollLines(-1)
+    safeScrollCall(() => terminal.scrollLines(1))
+    safeScrollCall(() => terminal.scrollLines(-1))
   }
 }

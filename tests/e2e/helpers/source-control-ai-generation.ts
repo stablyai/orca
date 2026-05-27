@@ -64,9 +64,7 @@ export async function seedCreatePrComposer(page: Page): Promise<{
       blockedReason: null,
       nextAction: null,
       defaultBaseRef: primaryBranch,
-      head: branch,
-      title: 'Seed PR title',
-      body: 'Seed PR body'
+      head: branch
     }
 
     store.setState((current) => ({

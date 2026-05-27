@@ -585,7 +585,7 @@ export function CommitMessageAiPane({
         title="Enable AI commit messages"
         description="Adds a Generate button to the Source Control panel."
         keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Enable AI commit messages</Label>
@@ -627,7 +627,7 @@ export function CommitMessageAiPane({
         title="Agent"
         description="Which agent to invoke when generating a commit message."
         keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Agent</Label>
@@ -707,7 +707,7 @@ export function CommitMessageAiPane({
         title="Custom command"
         description="Command line Orca runs to generate the commit message."
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
-        className="space-y-2 px-1 py-2"
+        className="space-y-2 py-2"
       >
         <div className="space-y-0.5">
           <Label htmlFor="commit-message-ai-custom-command">Custom command</Label>
@@ -755,7 +755,7 @@ export function CommitMessageAiPane({
         title="Model"
         description="Which model the selected agent uses to generate the message."
         keywords={['model', 'haiku', 'sonnet', 'opus', 'gpt']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Model</Label>
@@ -816,7 +816,7 @@ export function CommitMessageAiPane({
         title="Thinking effort"
         description="Reasoning effort level for the selected model. Higher levels are slower."
         keywords={['thinking', 'effort', 'reasoning']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Thinking effort</Label>
@@ -857,7 +857,7 @@ export function CommitMessageAiPane({
         description="Optional instructions appended to the base prompt (e.g. Conventional Commits style)."
         keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
         forceVisible={isCustomPromptDirty}
-        className="space-y-2 px-1 py-2"
+        className="space-y-2 py-2"
       >
         <div className="space-y-0.5">
           <Label htmlFor="commit-message-ai-custom-prompt">Custom prompt</Label>

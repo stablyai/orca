@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates SSH IPC handlers, port-forward
 broadcasting, and session lifecycle in one file to keep the data flow obvious. */
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
@@ -9,6 +9,7 @@ import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import {
   type DetectedPort,
+  type EnrichedDetectedPort,
   type SavedPortForward,
   type SshTarget,
   type SshConnectionStatus,
@@ -20,6 +21,13 @@ import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { registerSshBrowseHandler } from './ssh-browse'
+import {
+  getConnectionIdsForWorktree,
+  enrichSshDetectedPorts,
+  enrichSshForwardEntries,
+  getWorktreeIdsForConnection
+} from '../ports/ssh-advertised-url-enrichment'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
 import {
   clearProviderPtyState,
@@ -32,6 +40,22 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
+let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
+let persistedStore: Store | null = null
+let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
+let powerMonitorUnsubscribe: (() => void) | null = null
+
+export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
+  if (!registeredConnectSshTarget) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  return registeredConnectSshTarget(targetId)
+}
+
+export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
+  return registeredGetSshState?.(targetId)
+}
 
 // Why: one session per SSH target encapsulates the entire relay lifecycle
 // (multiplexer, providers, abort controller, state machine). Eliminates the
@@ -129,20 +153,50 @@ function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, target
   if (!win || win.isDestroyed()) {
     return
   }
-  const forwards = portForwardManager!.listForwards(targetId)
-  win.webContents.send('ssh:port-forwards-changed', { targetId, forwards })
+  win.webContents.send('ssh:port-forwards-changed', {
+    targetId,
+    forwards: listForwardsEnriched(targetId)
+  })
 }
 
 function broadcastDetectedPorts(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
-  ports: DetectedPort[]
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
   const win = getMainWindow()
   if (!win || win.isDestroyed()) {
     return
   }
-  win.webContents.send('ssh:detected-ports-changed', { targetId, ports })
+  win.webContents.send('ssh:detected-ports-changed', {
+    targetId,
+    ports: enrichDetected(targetId, ports, options)
+  })
+}
+
+function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
+  const raw = portForwardManager!.listForwards(targetId)
+  if (!persistedStore) {
+    return raw
+  }
+  return enrichSshForwardEntries(raw, getWorktreeIdsForConnection(persistedStore, targetId))
+}
+
+function enrichDetected(
+  targetId: string,
+  ports: DetectedPort[],
+  options?: Parameters<typeof enrichSshDetectedPorts>[3]
+): EnrichedDetectedPort[] {
+  if (!persistedStore) {
+    return ports
+  }
+  return enrichSshDetectedPorts(
+    ports,
+    getWorktreeIdsForConnection(persistedStore, targetId),
+    undefined,
+    options
+  )
 }
 
 // Why: after user-initiated add/remove/update the runtime manager is the
@@ -228,6 +282,64 @@ async function restorePortForwards(
   broadcastPortForwards(getMainWindow, targetId)
 }
 
+function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null): void {
+  advertisedUrlWatcherUnsubscribe?.()
+  // Why: SSH port scans only emit when raw host/port/PID data changes. A
+  // terminal can print the advertised URL after the raw port row is already
+  // visible, so the watcher must also trigger a renderer refresh.
+  advertisedUrlWatcherUnsubscribe = advertisedUrlWatcher.onDidChange(({ worktreeId }) => {
+    if (!persistedStore) {
+      return
+    }
+    for (const targetId of getConnectionIdsForWorktree(persistedStore, worktreeId)) {
+      const session = activeSessions.get(targetId)
+      if (!session) {
+        continue
+      }
+      const scanner = session.getPortScanner()
+      if (scanner) {
+        // Why: watcher changes can arrive before the next SSH scan refreshes
+        // listener PIDs; cached scanner rows must not pin a fresh URL stale.
+        broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId), {
+          validatePid: false
+        })
+      }
+      broadcastPortForwards(getMainWindow, targetId)
+    }
+  })
+}
+
+function registerPowerMonitorReconnect(): void {
+  powerMonitorUnsubscribe?.()
+  const onSuspend = (): void => {
+    for (const session of activeSessions.values()) {
+      session.prepareForHostSleep()
+    }
+  }
+  const onResume = (): void => {
+    for (const targetId of activeSessions.keys()) {
+      const conn = connectionManager?.getConnection(targetId)
+      if (!conn) {
+        continue
+      }
+      const reconnect = connectionManager?.reconnect(targetId)
+      void reconnect?.catch((err) => {
+        console.warn(
+          `[ssh] Failed to reconnect ${targetId} after system resume: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+      })
+    }
+  }
+  powerMonitor.on('suspend', onSuspend)
+  powerMonitor.on('resume', onResume)
+  powerMonitorUnsubscribe = () => {
+    powerMonitor.off('suspend', onSuspend)
+    powerMonitor.off('resume', onResume)
+  }
+}
+
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
@@ -259,6 +371,8 @@ export function registerSshHandlers(
   }
 
   sshStore = new SshConnectionStore(store)
+  persistedStore = store
+  registerAdvertisedUrlRefresh(getMainWindow)
 
   registerCredentialHandler(getMainWindow)
 
@@ -323,6 +437,7 @@ export function registerSshHandlers(
 
   connectionManager = new SshConnectionManager(callbacks)
   portForwardManager = new SshPortForwardManager()
+  registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
 
   // ── Target CRUD ────────────────────────────────────────────────────
@@ -370,8 +485,8 @@ export function registerSshHandlers(
 
   // ── Connection lifecycle ───────────────────────────────────────────
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    const reset = resetRelayInFlight.get(args.targetId)
+  async function connectTarget(targetId: string): Promise<SshConnectionState> {
+    const reset = resetRelayInFlight.get(targetId)
     if (reset) {
       await reset
     }
@@ -379,18 +494,25 @@ export function registerSshHandlers(
     // Why: serialize concurrent ssh:connect calls for the same target.
     // Multiple tabs can fire connect simultaneously; without this, they
     // interleave and the first session leaks.
-    const existing = connectInFlight.get(args.targetId)
+    const existing = connectInFlight.get(targetId)
     if (existing) {
       return existing
     }
 
-    const promise = doConnect(args.targetId)
-    connectInFlight.set(args.targetId, promise)
+    const promise = doConnect(targetId)
+    connectInFlight.set(targetId, promise)
     try {
       return await promise
     } finally {
-      connectInFlight.delete(args.targetId)
+      connectInFlight.delete(targetId)
     }
+  }
+
+  registeredConnectSshTarget = connectTarget
+  registeredGetSshState = (targetId: string) => getPublicSshState(targetId)
+
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
+    return connectTarget(args.targetId)
   })
 
   async function doConnect(targetId: string): Promise<SshConnectionState> {
@@ -931,12 +1053,20 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
-    return portForwardManager!.listForwards(args?.targetId)
+    const all = portForwardManager!.listForwards(args?.targetId)
+    if (!persistedStore || !args?.targetId) {
+      // Why: the cross-target list is rare and we cannot map every entry to
+      // worktrees in a single call; serve the raw list. Per-target callers
+      // get full enrichment.
+      return all
+    }
+    return enrichSshForwardEntries(all, getWorktreeIdsForConnection(persistedStore, args.targetId))
   })
 
   ipcMain.handle('ssh:listDetectedPorts', (_event, args: { targetId: string }) => {
     const session = activeSessions.get(args.targetId)
-    return session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
+    const ports = session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
+    return enrichDetected(args.targetId, ports)
   })
 
   return { connectionManager, sshStore }

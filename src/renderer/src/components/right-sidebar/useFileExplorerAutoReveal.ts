@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -13,7 +12,7 @@ type UseFileExplorerAutoRevealParams = {
   openFiles: OpenFile[]
   rowsByPath: Map<string, TreeNode>
   flatRows: TreeNode[]
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  setSelectedPath: (path: string | null) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
 

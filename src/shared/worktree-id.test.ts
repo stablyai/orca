@@ -3,7 +3,8 @@ import {
   WORKTREE_ID_SEPARATOR,
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId,
-  splitWorktreeId
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
 } from './worktree-id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
@@ -73,6 +74,23 @@ describe('splitWorktreeId', () => {
   it('splits on the first separator when the path itself contains "::"', () => {
     expect(splitWorktreeId('repo::a::b')).toEqual({ repoId: 'repo', worktreePath: 'a::b' })
   })
+
+  it('preserves folder workspace instance suffixes in the literal parsed path', () => {
+    expect(
+      splitWorktreeId('repo::/folder::workspace:123e4567-e89b-12d3-a456-426614174000')
+    ).toEqual({
+      repoId: 'repo',
+      worktreePath: '/folder::workspace:123e4567-e89b-12d3-a456-426614174000'
+    })
+  })
+})
+
+describe('splitWorktreeIdForFilesystem', () => {
+  it('strips folder workspace instance suffixes from the parsed path', () => {
+    expect(
+      splitWorktreeIdForFilesystem('repo::/folder::workspace:123e4567-e89b-12d3-a456-426614174000')
+    ).toEqual({ repoId: 'repo', worktreePath: '/folder' })
+  })
 })
 
 describe('getWorktreePathBasenameFromId', () => {
@@ -86,6 +104,14 @@ describe('getWorktreePathBasenameFromId', () => {
     expect(getWorktreePathBasenameFromId('repo-123::C:\\workspaces\\nightly-checks')).toBe(
       'nightly-checks'
     )
+  })
+
+  it('returns the real folder basename for folder workspace instance ids', () => {
+    expect(
+      getWorktreePathBasenameFromId(
+        'repo-123::/abs/project::workspace:123e4567-e89b-12d3-a456-426614174000'
+      )
+    ).toBe('project')
   })
 
   it('returns null when no worktree path is available', () => {

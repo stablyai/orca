@@ -35,6 +35,7 @@ import { registerSkillsHandlers } from './skills'
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
 import { registerWorkspacePortHandlers } from './workspace-ports'
 import { registerAutomationHandlers } from './automations'
+import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
@@ -58,8 +59,13 @@ import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { KeybindingService } from '../keybindings/keybinding-service'
 
 let registered = false
+
+type CoreHandlerLifecycleOptions = {
+  onBeforeRelaunch?: () => void
+}
 
 export function registerCoreHandlers(
   store: Store,
@@ -75,7 +81,9 @@ export function registerCoreHandlers(
   automations?: AutomationService,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
   agentAwakeService?: AgentAwakeService,
-  crashReports?: CrashReportStore
+  crashReports?: CrashReportStore,
+  keybindings?: KeybindingService,
+  lifecycleOptions: CoreHandlerLifecycleOptions = {}
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -88,7 +96,7 @@ export function registerCoreHandlers(
   }
   registered = true
 
-  registerAppHandlers(store)
+  registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)
@@ -124,6 +132,9 @@ export function registerCoreHandlers(
   registerSkillsHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
+  }
+  if (keybindings) {
+    registerKeybindingHandlers(keybindings)
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()

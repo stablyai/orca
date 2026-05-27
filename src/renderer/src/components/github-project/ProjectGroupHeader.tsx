@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isIterationCurrent, type ProjectGroup } from './group-sort'
+import { isIterationCurrent, type ProjectGroup } from '../../../../shared/github-project-group-sort'
 
 type Props = {
   group: ProjectGroup

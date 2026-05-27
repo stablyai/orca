@@ -218,6 +218,67 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('forwards SSH connectionId when creating pull requests through local IPC', async () => {
+    mockApi.hostedReview.create.mockResolvedValueOnce({
+      ok: true,
+      number: 12,
+      url: 'https://github.com/acme/orca/pull/12'
+    })
+    const store = makeStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
+    })
+
+    await expect(
+      store.getState().createHostedReview('/repo', {
+        provider: 'github',
+        base: 'main',
+        head: 'feature/create-pr',
+        title: 'Create PR',
+        worktreePath: '/remote/worktree'
+      })
+    ).resolves.toMatchObject({ ok: true, number: 12 })
+
+    expect(mockApi.hostedReview.create).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      connectionId: 'ssh-1',
+      provider: 'github',
+      base: 'main',
+      head: 'feature/create-pr',
+      title: 'Create PR',
+      worktreePath: '/remote/worktree'
+    })
+  })
+
+  it('forwards SSH connectionId when checking pull request creation eligibility', async () => {
+    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
+      provider: 'github',
+      review: null,
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+    const store = makeStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
+    })
+
+    await store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      worktreePath: '/remote/worktree',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+
+    expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      connectionId: 'ssh-1',
+      worktreePath: '/remote/worktree',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+  })
+
   it('uses the selected worktree selector for runtime pull request creation', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
       ok: true,

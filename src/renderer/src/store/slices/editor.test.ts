@@ -93,13 +93,13 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
-  it('setRightSidebarTab writes the active worktree entry', () => {
+  it('setRightSidebarTab updates the global tab without writing a worktree entry', () => {
     const store = createEditorStore()
 
     store.getState().setRightSidebarTab('search')
 
     expect(store.getState().rightSidebarTab).toBe('search')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({ 'wt-1': 'search' })
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
   it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
@@ -113,22 +113,20 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
   })
 
-  it('revealInExplorer records explorer for the target worktree', () => {
+  it('revealInExplorer selects explorer globally without writing a worktree entry', () => {
     const store = createEditorStore()
+    const remembered = { 'wt-1': 'search' as const, 'wt-2': 'checks' as const }
     store.setState({
       activeWorktreeId: 'wt-1',
       rightSidebarTab: 'search',
-      rightSidebarTabByWorktree: { 'wt-1': 'search', 'wt-2': 'checks' }
+      rightSidebarTabByWorktree: remembered
     })
 
     store.getState().revealInExplorer('wt-2', '/repo/file.ts')
 
     expect(store.getState().rightSidebarOpen).toBe(true)
     expect(store.getState().rightSidebarTab).toBe('explorer')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({
-      'wt-1': 'search',
-      'wt-2': 'explorer'
-    })
+    expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
     expect(store.getState().pendingExplorerReveal).toMatchObject({
       worktreeId: 'wt-2',
       filePath: '/repo/file.ts'
@@ -1334,6 +1332,7 @@ describe('createEditorSlice remote branch actions', () => {
   const gitUpstreamStatusMock = vi.fn()
   const gitPushMock = vi.fn()
   const gitPullMock = vi.fn()
+  const gitRebaseFromBaseMock = vi.fn()
   const gitFetchMock = vi.fn()
 
   beforeEach(() => {
@@ -1342,6 +1341,7 @@ describe('createEditorSlice remote branch actions', () => {
     gitUpstreamStatusMock.mockReset()
     gitPushMock.mockReset()
     gitPullMock.mockReset()
+    gitRebaseFromBaseMock.mockReset()
     gitFetchMock.mockReset()
 
     gitStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
@@ -1361,6 +1361,7 @@ describe('createEditorSlice remote branch actions', () => {
         upstreamStatus: gitUpstreamStatusMock,
         push: gitPushMock,
         pull: gitPullMock,
+        rebaseFromBase: gitRebaseFromBaseMock,
         fetch: gitFetchMock
       }
     }
@@ -1444,6 +1445,44 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitPullMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: undefined
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('runs rebase from base and refreshes upstream on success', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main', undefined, pushTarget)
+
+    expect(gitRebaseFromBaseMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      baseRef: 'origin/main',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('fetches the explicit push target and refreshes that target status', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().fetchBranch('wt-1', '/repo', undefined, pushTarget)
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
     })
     expect(toastErrorMock).not.toHaveBeenCalled()
   })

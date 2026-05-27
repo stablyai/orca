@@ -7,22 +7,62 @@ import {
   Switch,
   StyleSheet,
   Platform,
-  ActivityIndicator,
-  Image
+  ActivityIndicator
 } from 'react-native'
-import { ChevronDown, ChevronUp, Check, Terminal } from 'lucide-react-native'
-import Svg, { Path, G } from 'react-native-svg'
+import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
-import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
+import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
+import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
+import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
+import {
+  isSetupHookTrusted,
+  normalizeSetupHookTrust,
+  trustedOrcaHooksWithSetupApproval,
+  wasSetupHookPreviouslyApproved,
+  type SetupHookTrust
+} from '../tasks/setup-hook-trust'
+import { isMobileTuiAgent, MOBILE_TUI_AGENT_LAUNCH_COMMANDS } from '../tasks/mobile-tui-agents'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/types'
+import type { SshConnectionState } from '../../../src/shared/ssh-types'
 
 type Repo = {
   id: string
   displayName: string
   path: string
+  badgeColor?: string
+  connectionId?: string | null
+}
+
+type SetupDecision = 'inherit' | 'run' | 'skip'
+type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
+type RuntimeSettings = {
+  defaultTuiAgent?: string | 'blank' | null
+  agentCmdOverrides?: Record<string, string>
+}
+
+type RepoHooksResponse = {
+  hooks: { scripts?: { setup?: string } } | null
+  source: string | null
+  setupRunPolicy?: SetupRunPolicy
+  setupTrust?: SetupHookTrust
+}
+
+type CreateOptions = {
+  setupOverride?: Exclude<SetupDecision, 'inherit'>
+  approvedSetupContentHash?: string
+}
+
+type SetupTrustPrompt = {
+  repoId: string
+  repoName: string
+  scriptContent: string
+  contentHash: string
+  previouslyApproved: boolean
 }
 
 type AgentOption = {
@@ -31,139 +71,41 @@ type AgentOption = {
   faviconDomain?: string
 }
 
-// Why: matches the AGENT_CATALOG ordering and faviconDomain values from
-// src/renderer/src/lib/agent-catalog.tsx so mobile uses the same icon sources.
-const AGENT_OPTIONS: AgentOption[] = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'grok', label: 'Grok', faviconDomain: 'x.ai' },
-  { id: 'copilot', label: 'GitHub Copilot', faviconDomain: 'github.com' },
-  { id: 'opencode', label: 'OpenCode', faviconDomain: 'opencode.ai' },
-  { id: 'pi', label: 'Pi' },
-  { id: 'gemini', label: 'Gemini', faviconDomain: 'gemini.google.com' },
-  { id: 'aider', label: 'Aider' },
-  { id: 'goose', label: 'Goose', faviconDomain: 'goose-docs.ai' },
-  { id: 'amp', label: 'Amp', faviconDomain: 'ampcode.com' },
-  { id: 'kilo', label: 'Kilocode', faviconDomain: 'kilo.ai' },
-  { id: 'kiro', label: 'Kiro', faviconDomain: 'kiro.dev' },
-  { id: 'crush', label: 'Charm', faviconDomain: 'charm.sh' },
-  { id: 'aug', label: 'Auggie', faviconDomain: 'augmentcode.com' },
-  { id: 'cline', label: 'Cline', faviconDomain: 'cline.bot' },
-  { id: 'codebuff', label: 'Codebuff', faviconDomain: 'codebuff.com' },
-  { id: 'continue', label: 'Continue', faviconDomain: 'continue.dev' },
-  { id: 'cursor', label: 'Cursor', faviconDomain: 'cursor.com' },
-  { id: 'droid', label: 'Droid', faviconDomain: 'factory.ai' },
-  { id: 'kimi', label: 'Kimi', faviconDomain: 'moonshot.cn' },
-  { id: 'mistral-vibe', label: 'Mistral Vibe', faviconDomain: 'mistral.ai' },
-  { id: 'qwen-code', label: 'Qwen Code', faviconDomain: 'qwenlm.github.io' },
-  { id: 'rovo', label: 'Rovo Dev', faviconDomain: 'atlassian.com' },
-  { id: 'hermes', label: 'Hermes', faviconDomain: 'nousresearch.com' }
-]
+const AGENT_OPTIONS: AgentOption[] = MOBILE_AGENT_CATALOG
 
 const BLANK_TERMINAL: AgentOption = { id: '__blank__', label: 'Blank Terminal' }
-const ALL_AGENTS = [...AGENT_OPTIONS, BLANK_TERMINAL]
 
-// Why: mirrors launchCmd from src/shared/tui-agent-config.ts so terminal.create
-// gets the correct binary name for each agent.
-const AGENT_COMMANDS: Record<string, string> = {
-  claude: 'claude',
-  codex: 'codex',
-  grok: 'grok',
-  copilot: 'copilot',
-  opencode: 'opencode',
-  pi: 'pi',
-  gemini: 'gemini',
-  aider: 'aider',
-  goose: 'goose',
-  amp: 'amp',
-  kilo: 'kilo',
-  kiro: 'kiro',
-  crush: 'crush',
-  aug: 'auggie',
-  cline: 'cline',
-  codebuff: 'codebuff',
-  continue: 'continue',
-  cursor: 'cursor-agent',
-  droid: 'droid',
-  kimi: 'kimi',
-  'mistral-vibe': 'mistral-vibe',
-  'qwen-code': 'qwen-code',
-  rovo: 'rovo',
-  hermes: 'hermes'
+function agentOptionFor(id: string | null | undefined): AgentOption | null {
+  if (!id) return null
+  if (id === 'blank' || id === '__blank__') return BLANK_TERMINAL
+  return AGENT_OPTIONS.find((agent) => agent.id === id) ?? null
 }
 
-// ── Agent icons ─────────────────────────────────────────────────────
-// SVG paths sourced from the desktop codebase:
-//   Claude & OpenAI: shared in ./AgentIcons.tsx
-//   Pi & Aider: src/renderer/src/lib/agent-catalog.tsx
-// Agents with a faviconDomain use Google's favicon service (same as desktop).
-
-function PiIcon({ size = 16 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 800 800">
-      <Path
-        fill={colors.textPrimary}
-        fillRule="evenodd"
-        d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
-      />
-      <Path fill={colors.textPrimary} d="M517.36 400 H634.72 V634.72 H517.36 Z" />
-    </Svg>
-  )
-}
-
-function AiderIcon({ size = 16 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 436 436">
-      <G transform="translate(0,436) scale(0.1,-0.1)" fill={colors.textPrimary} stroke="none">
-        <Path d="M0 2180 l0 -2180 2180 0 2180 0 0 2180 0 2180 -2180 0 -2180 0 0 -2180z m2705 1818 c20 -20 28 -121 30 -398 l2 -305 216 -5 c118 -3 218 -8 222 -12 3 -3 10 -46 15 -95 5 -48 16 -126 25 -172 17 -86 17 -81 -17 -233 -14 -67 -13 -365 2 -438 21 -100 22 -159 5 -247 -24 -122 -24 -363 1 -458 23 -88 23 -213 1 -330 -9 -49 -17 -109 -17 -132 l0 -43 203 0 c111 0 208 -4 216 -9 10 -6 18 -51 27 -148 8 -76 16 -152 20 -168 7 -39 -23 -361 -37 -387 -10 -18 -21 -19 -214 -16 -135 2 -208 7 -215 14 -22 22 -33 301 -21 501 6 102 8 189 5 194 -8 13 -417 12 -431 -2 -12 -12 -8 -146 8 -261 8 -55 8 -95 1 -140 -6 -35 -14 -99 -17 -143 -9 -123 -14 -141 -41 -154 -18 -8 -217 -11 -679 -11 l-653 0 -11 33 c-31 97 -43 336 -27 533 5 56 6 113 2 128 l-6 26 -194 0 c-211 0 -252 4 -261 28 -12 33 -17 392 -6 522 15 186 -2 174 260 180 115 3 213 8 217 12 4 4 1 52 -5 105 -7 54 -17 130 -22 168 -7 56 -5 91 11 171 10 55 22 130 26 166 4 36 10 72 15 79 7 12 128 15 665 19 l658 5 8 30 c5 18 4 72 -3 130 -12 115 -7 346 11 454 10 61 10 75 -1 82 -8 5 -300 9 -650 9 l-636 0 -27 25 c-18 16 -26 34 -26 57 0 18 -5 87 -10 153 -10 128 5 449 22 472 5 7 26 13 46 15 78 6 1281 3 1287 -4z" />
-        <Path d="M1360 1833 c0 -5 -1 -164 -3 -356 l-2 -347 625 -1 c704 -1 708 -1 722 7 5 4 7 20 4 38 -29 141 -32 491 -6 595 9 38 8 45 -7 57 -15 11 -139 13 -675 14 -362 0 -658 -3 -658 -7z" />
-      </G>
-    </Svg>
-  )
-}
-
-function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
-  return (
-    <Image
-      source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=64` }}
-      style={{ width: size, height: size, borderRadius: 2 }}
-    />
-  )
-}
-
-function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number }) {
-  return (
-    <View
-      style={[
-        styles.letterIcon,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.22,
-          backgroundColor: colors.textMuted + '33'
-        }
-      ]}
-    >
-      <Text style={[styles.letterIconText, { fontSize: size * 0.55, color: colors.textPrimary }]}>
-        {letter}
-      </Text>
-    </View>
-  )
-}
-
-function AgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
-  if (agentId === 'claude') return <ClaudeIcon size={size} />
-  if (agentId === 'codex') return <OpenAIIcon size={size} />
-  if (agentId === 'pi') return <PiIcon size={size} />
-  if (agentId === 'aider') return <AiderIcon size={size} />
-  if (agentId === '__blank__') return <Terminal size={size} color={colors.textMuted} />
-
-  const agent = AGENT_OPTIONS.find((a) => a.id === agentId)
-  if (agent?.faviconDomain) {
-    return <FaviconIcon domain={agent.faviconDomain} size={size} />
+function pickPreferredAgent(
+  settings: RuntimeSettings | null,
+  detectedAgentIds: Set<string> | null
+): AgentOption {
+  const preferred = agentOptionFor(settings?.defaultTuiAgent)
+  if (preferred?.id === '__blank__') {
+    return preferred
   }
-  const label = agent?.label ?? agentId
-  return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
+  if (preferred && (detectedAgentIds === null || detectedAgentIds.has(preferred.id)))
+    return preferred
+  const detectedOption = AGENT_OPTIONS.find(
+    (agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id)
+  )
+  return detectedOption ?? BLANK_TERMINAL
+}
+
+function repoColor(name: string): string {
+  const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  return palette[Math.abs(hash) % palette.length]!
+}
+
+function repoBadgeColor(repo: Repo | null): string {
+  return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
 }
 
 // ── Picker sub-modal ────────────────────────────────────────────────
@@ -249,12 +191,25 @@ export function NewWorktreeModal({
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
+  const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
+  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<string> | null>(null)
+  const [agentOverridden, setAgentOverridden] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
+  const [sshState, setSshState] = useState<SshConnectionState | null>(null)
+  const [sshConnecting, setSshConnecting] = useState(false)
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupCommand, setSetupCommand] = useState<string | null>(null)
   const [setupSource, setSetupSource] = useState<string | null>(null)
+  const [setupTrust, setSetupTrust] = useState<SetupHookTrust | null>(null)
+  const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
+  const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
+  const [setupRunPolicy, setSetupRunPolicy] = useState<SetupRunPolicy>('run-by-default')
+  const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
+    SetupDecision,
+    'inherit'
+  > | null>(null)
   const [runSetup, setRunSetup] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -265,6 +220,13 @@ export function NewWorktreeModal({
   // as a server-bound fallback when the user submits with a blank field, so
   // it's recomputed lazily inside handleCreate() to stay fresh against
   // existingWorktreePaths at submission time.
+
+  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const sshGate = deriveWorkspaceSshGate({
+    connectionId: selectedRepoConnectionId,
+    state: sshState,
+    connecting: sshConnecting
+  })
 
   useEffect(() => {
     if (!visible) {
@@ -279,20 +241,44 @@ export function NewWorktreeModal({
     setShowAdvanced(false)
     setSetupCommand(null)
     setSetupSource(null)
+    setSetupTrust(null)
+    setTrustedOrcaHooks({})
+    setSetupTrustPrompt(null)
+    setSetupRunPolicy('run-by-default')
+    setSetupDecisionChoice(null)
     setRunSetup(true)
     setError('')
     setCreating(false)
     setShowRepoPicker(false)
     setShowAgentPicker(false)
+    setRuntimeSettings(null)
+    setDetectedAgentIds(null)
+    setAgentOverridden(false)
+    setSshState(null)
+    setSshConnecting(false)
     setSelectedAgent(AGENT_OPTIONS[0]!)
     setLoading(true)
 
     void (async () => {
       try {
-        const response = await client.sendRequest('repo.list')
+        const [repoResponse, settingsResponse, uiResponse] = await Promise.all([
+          client.sendRequest('repo.list'),
+          client.sendRequest('settings.get'),
+          client.sendRequest('ui.get')
+        ])
         if (stale) return
-        if (response.ok) {
-          const result = (response as RpcSuccess).result as { repos: Repo[] }
+        if (settingsResponse.ok) {
+          const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
+          setRuntimeSettings(result.settings)
+        }
+        if (uiResponse.ok) {
+          const result = (uiResponse as RpcSuccess).result as {
+            ui?: { trustedOrcaHooks?: PersistedTrustedOrcaHooks }
+          }
+          setTrustedOrcaHooks(result.ui?.trustedOrcaHooks ?? {})
+        }
+        if (repoResponse.ok) {
+          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
           setRepos(result.repos)
           if (result.repos.length === 1) {
             setSelectedRepo(result.repos[0]!)
@@ -312,9 +298,89 @@ export function NewWorktreeModal({
   }, [visible, client])
 
   useEffect(() => {
+    if (!visible || !client || !selectedRepoConnectionId) {
+      setSshState(null)
+      setSshConnecting(false)
+      return
+    }
+    let stale = false
+    void client
+      .sendRequest('ssh.getState', { targetId: selectedRepoConnectionId })
+      .then((response) => {
+        if (stale) return
+        if (!response.ok) {
+          throw new Error(response.error.message)
+        }
+        const state = (response as RpcSuccess).result as { state?: SshConnectionState | null }
+        setSshState(
+          state.state ?? {
+            targetId: selectedRepoConnectionId,
+            status: 'disconnected',
+            error: null,
+            reconnectAttempt: 0
+          }
+        )
+      })
+      .catch((err) => {
+        if (!stale) {
+          setSshState({
+            targetId: selectedRepoConnectionId,
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Failed to read SSH connection state.',
+            reconnectAttempt: 0
+          })
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [client, selectedRepoConnectionId, visible])
+
+  useEffect(() => {
+    if (!visible || !client) return
+    if (selectedRepoConnectionId && sshGate.status !== 'connected') {
+      setDetectedAgentIds(null)
+      return
+    }
+    let stale = false
+    setDetectedAgentIds(null)
+    void (async () => {
+      try {
+        const response = selectedRepoConnectionId
+          ? await client.sendRequest('preflight.detectRemoteAgents', {
+              connectionId: selectedRepoConnectionId
+            })
+          : await client.sendRequest('preflight.detectAgents')
+        if (stale) return
+        setDetectedAgentIds(
+          response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+        )
+      } catch {
+        if (!stale) setDetectedAgentIds(new Set())
+      }
+    })()
+    return () => {
+      stale = true
+    }
+  }, [client, selectedRepoConnectionId, sshGate.status, visible])
+
+  useEffect(() => {
+    if (!visible || agentOverridden) return
+    setSelectedAgent(pickPreferredAgent(runtimeSettings, detectedAgentIds))
+  }, [agentOverridden, detectedAgentIds, runtimeSettings, visible])
+
+  useEffect(() => {
+    if (!visible || detectedAgentIds === null || selectedAgent.id === '__blank__') return
+    if (detectedAgentIds.has(selectedAgent.id)) return
+    setSelectedAgent(pickPreferredAgent(runtimeSettings, detectedAgentIds))
+    setAgentOverridden(false)
+  }, [detectedAgentIds, runtimeSettings, selectedAgent.id, visible])
+
+  useEffect(() => {
     if (!client || !selectedRepo) {
       setSetupCommand(null)
       setSetupSource(null)
+      setSetupTrust(null)
       return
     }
     let stale = false
@@ -325,20 +391,26 @@ export function NewWorktreeModal({
         })
         if (stale) return
         if (response.ok) {
-          const result = (response as RpcSuccess).result as {
-            hooks: { scripts: { setup?: string } } | null
-            source: string | null
-            setupRunPolicy: string
-          }
-          const cmd = result.hooks?.scripts.setup ?? null
+          const result = (response as RpcSuccess).result as RepoHooksResponse
+          const cmd = result.hooks?.scripts?.setup?.trim() || null
+          const policy = result.setupRunPolicy ?? 'run-by-default'
           setSetupCommand(cmd)
           setSetupSource(result.source)
-          setRunSetup(result.setupRunPolicy !== 'skip-by-default')
+          setSetupTrust(normalizeSetupHookTrust(result.setupTrust))
+          setSetupRunPolicy(policy)
+          setSetupDecisionChoice(null)
+          setRunSetup(policy !== 'skip-by-default')
+          if (cmd && policy === 'ask') {
+            setShowAdvanced(true)
+          }
         }
       } catch {
         if (!stale) {
           setSetupCommand(null)
           setSetupSource(null)
+          setSetupTrust(null)
+          setSetupRunPolicy('run-by-default')
+          setSetupDecisionChoice(null)
         }
       }
     })()
@@ -347,14 +419,81 @@ export function NewWorktreeModal({
     }
   }, [client, selectedRepo])
 
-  async function handleCreate() {
+  async function connectSelectedSshRepo(): Promise<void> {
+    if (!client || !selectedRepoConnectionId) return
+    setSshConnecting(true)
+    setSshState({
+      targetId: selectedRepoConnectionId,
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 0
+    })
+    try {
+      const response = await client.sendRequest(
+        'ssh.connect',
+        { targetId: selectedRepoConnectionId },
+        { timeoutMs: 120_000 }
+      )
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      const result = (response as RpcSuccess).result as { state?: SshConnectionState | null }
+      setSshState(
+        result.state ?? {
+          targetId: selectedRepoConnectionId,
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0
+        }
+      )
+    } catch (err) {
+      setSshState({
+        targetId: selectedRepoConnectionId,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Failed to connect to SSH repository.',
+        reconnectAttempt: 0
+      })
+    } finally {
+      setSshConnecting(false)
+    }
+  }
+
+  async function persistSetupHookTrust(
+    repoId: string,
+    contentHash: string,
+    alwaysTrust: boolean
+  ): Promise<void> {
+    if (!client) return
+    const next = trustedOrcaHooksWithSetupApproval({
+      trust: trustedOrcaHooks,
+      repoId,
+      contentHash,
+      alwaysTrust
+    })
+    const response = await client.sendRequest('ui.set', { trustedOrcaHooks: next })
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    setTrustedOrcaHooks(next)
+  }
+
+  async function handleCreate(options: CreateOptions = {}) {
     if (!client || !selectedRepo) return
     setCreating(true)
     setError('')
 
     try {
+      if (sshGate.requiresConnection) {
+        setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
+        return
+      }
       const command =
-        selectedAgent.id !== '__blank__' ? AGENT_COMMANDS[selectedAgent.id] : undefined
+        selectedAgent.id !== '__blank__'
+          ? (runtimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
+            (isMobileTuiAgent(selectedAgent.id)
+              ? MOBILE_TUI_AGENT_LAUNCH_COMMANDS[selectedAgent.id]
+              : undefined))
+          : undefined
 
       // Why: blank name field — match desktop behavior by computing the
       // next available marine-creature name at submit time and passing it
@@ -381,6 +520,37 @@ export function NewWorktreeModal({
       ]
       const candidateFor = (attempt: number): string =>
         attempt === 0 ? baseName : `${baseName}-${attempt + 1}`
+      let setupDecision: SetupDecision = 'inherit'
+      if (setupCommand) {
+        if (options.setupOverride) {
+          setupDecision = options.setupOverride
+        } else if (setupRunPolicy === 'ask') {
+          if (!setupDecisionChoice) {
+            setError('Choose whether to run the setup script.')
+            return
+          }
+          setupDecision = setupDecisionChoice
+        } else {
+          setupDecision = runSetup ? 'run' : 'skip'
+        }
+      }
+      if (
+        setupDecision === 'run' &&
+        setupTrust &&
+        setupTrust.contentHash !== options.approvedSetupContentHash &&
+        !isSetupHookTrusted(trustedOrcaHooks, selectedRepo.id, setupTrust.contentHash)
+      ) {
+        // Why: desktop prompts before running repo-owned orca.yaml setup hooks.
+        // Mobile stores the same trust hash so approvals carry across surfaces.
+        setSetupTrustPrompt({
+          repoId: selectedRepo.id,
+          repoName: selectedRepo.displayName,
+          scriptContent: setupTrust.scriptContent,
+          contentHash: setupTrust.contentHash,
+          previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, selectedRepo.id)
+        })
+        return
+      }
 
       let lastError: string | null = null
       for (let attempt = 0; attempt < 25; attempt += 1) {
@@ -388,12 +558,15 @@ export function NewWorktreeModal({
         const params: Record<string, unknown> = {
           repo: `id:${selectedRepo.id}`,
           startupCommand: command,
-          setupDecision: runSetup ? 'inherit' : 'skip',
+          setupDecision,
           name: candidateName
         }
+        if (selectedAgent.id !== '__blank__') params.createdWithAgent = selectedAgent.id
         if (note.trim()) params.comment = note.trim()
 
-        const response = await client.sendRequest('worktree.create', params)
+        const response = await client.sendRequest('worktree.create', params, {
+          timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
+        })
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktree: { id: string } }
           onClose()
@@ -414,7 +587,20 @@ export function NewWorktreeModal({
     }
   }
 
-  const canCreate = selectedRepo != null && !creating
+  const needsSetupChoice = Boolean(setupCommand) && setupRunPolicy === 'ask'
+  const agentDetectionPending =
+    selectedRepo != null && !sshGate.requiresConnection && detectedAgentIds === null
+  const canCreate =
+    selectedRepo != null &&
+    !creating &&
+    !sshGate.requiresConnection &&
+    !agentDetectionPending &&
+    (!needsSetupChoice || setupDecisionChoice != null)
+  const visibleAgentOptions =
+    detectedAgentIds === null
+      ? AGENT_OPTIONS
+      : AGENT_OPTIONS.filter((agent) => detectedAgentIds.has(agent.id))
+  const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
 
   return (
     <>
@@ -439,6 +625,11 @@ export function NewWorktreeModal({
             <View style={styles.field}>
               <Text style={styles.label}>Repository</Text>
               <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
+                {selectedRepo ? (
+                  <View
+                    style={[styles.repoDot, { backgroundColor: repoBadgeColor(selectedRepo) }]}
+                  />
+                ) : null}
                 <Text
                   style={[styles.fieldButtonText, !selectedRepo && styles.fieldButtonPlaceholder]}
                   numberOfLines={1}
@@ -448,6 +639,49 @@ export function NewWorktreeModal({
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
             </View>
+
+            {selectedRepoConnectionId ? (
+              <View style={styles.field}>
+                <Text style={styles.label}>SSH Connection</Text>
+                <View style={styles.sshBox}>
+                  <View style={styles.sshRow}>
+                    <View
+                      style={[
+                        styles.sshDot,
+                        sshGate.status === 'connected'
+                          ? styles.sshDotConnected
+                          : sshGate.connectInProgress
+                            ? styles.sshDotProgress
+                            : styles.sshDotDisconnected
+                      ]}
+                    />
+                    <View style={styles.sshCopy}>
+                      <Text style={styles.sshTitle} numberOfLines={1}>
+                        {selectedRepo?.displayName ?? 'Remote repository'}
+                      </Text>
+                      <Text style={styles.sshSubtitle}>
+                        {workspaceSshStatusLabel(sshGate.status)}
+                      </Text>
+                    </View>
+                    {sshGate.status === 'connected' ? null : (
+                      <Pressable
+                        style={[
+                          styles.sshConnectButton,
+                          sshGate.connectInProgress && styles.disabled
+                        ]}
+                        disabled={sshGate.connectInProgress}
+                        onPress={() => void connectSelectedSshRepo()}
+                      >
+                        <Text style={styles.sshConnectText}>
+                          {sshGate.connectInProgress ? 'Connecting...' : 'Connect'}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  {sshGate.error ? <Text style={styles.errorInline}>{sshGate.error}</Text> : null}
+                </View>
+              </View>
+            ) : null}
 
             <View style={styles.field}>
               <Text style={styles.label}>
@@ -474,10 +708,14 @@ export function NewWorktreeModal({
 
             <View style={styles.field}>
               <Text style={styles.label}>Agent</Text>
-              <Pressable style={styles.fieldButton} onPress={() => setShowAgentPicker(true)}>
-                <AgentIcon agentId={selectedAgent.id} size={16} />
+              <Pressable
+                style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
+                disabled={sshGate.requiresConnection}
+                onPress={() => setShowAgentPicker(true)}
+              >
+                <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
-                  {selectedAgent.label}
+                  {sshGate.requiresConnection ? 'Connect repository first' : selectedAgent.label}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
@@ -520,16 +758,39 @@ export function NewWorktreeModal({
                       )}
                     </View>
                     <View style={styles.setupBox}>
-                      <View style={styles.setupToggleRow}>
-                        <Text style={styles.setupToggleLabel}>Run setup command</Text>
-                        <Switch
-                          value={runSetup}
-                          onValueChange={setRunSetup}
-                          trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-                          thumbColor={colors.textPrimary}
-                          style={styles.setupSwitch}
-                        />
-                      </View>
+                      {setupRunPolicy === 'ask' ? (
+                        <View style={styles.setupChoiceRow}>
+                          <Pressable
+                            style={[
+                              styles.setupChoiceButton,
+                              setupDecisionChoice === 'run' && styles.setupChoiceButtonSelected
+                            ]}
+                            onPress={() => setSetupDecisionChoice('run')}
+                          >
+                            <Text style={styles.setupChoiceText}>Run</Text>
+                          </Pressable>
+                          <Pressable
+                            style={[
+                              styles.setupChoiceButton,
+                              setupDecisionChoice === 'skip' && styles.setupChoiceButtonSelected
+                            ]}
+                            onPress={() => setSetupDecisionChoice('skip')}
+                          >
+                            <Text style={styles.setupChoiceText}>Skip</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <View style={styles.setupToggleRow}>
+                          <Text style={styles.setupToggleLabel}>Run setup command</Text>
+                          <Switch
+                            value={runSetup}
+                            onValueChange={setRunSetup}
+                            trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
+                            thumbColor={colors.textPrimary}
+                            style={styles.setupSwitch}
+                          />
+                        </View>
+                      )}
                       <View style={styles.setupCommandBlock}>
                         <Text style={styles.setupCommand}>{setupCommand}</Text>
                       </View>
@@ -550,7 +811,9 @@ export function NewWorktreeModal({
                 {creating ? (
                   <ActivityIndicator size="small" color={colors.bgBase} />
                 ) : (
-                  <Text style={styles.createText}>Create Workspace</Text>
+                  <Text style={styles.createText}>
+                    {sshGate.requiresConnection ? 'Connect Repository' : 'Create Workspace'}
+                  </Text>
                 )}
               </Pressable>
             </View>
@@ -567,17 +830,119 @@ export function NewWorktreeModal({
         selectedId={selectedRepo?.id ?? ''}
         onSelect={(item) => setSelectedRepo((item as { _repo: Repo })._repo)}
         onClose={() => setShowRepoPicker(false)}
+        renderIcon={(item) => {
+          const repo = (item as { _repo: Repo })._repo
+          return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(repo) }]} />
+        }}
       />
 
       <PickerListModal
         visible={visible && showAgentPicker}
         title="Agent"
-        items={ALL_AGENTS}
+        items={pickerAgentOptions}
         selectedId={selectedAgent.id}
-        onSelect={(agent) => setSelectedAgent(agent)}
+        onSelect={(agent) => {
+          setAgentOverridden(true)
+          setSelectedAgent(agent)
+        }}
         onClose={() => setShowAgentPicker(false)}
-        renderIcon={(agent) => <AgentIcon agentId={agent.id} size={18} />}
+        renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
       />
+
+      <BottomDrawer
+        visible={visible && setupTrustPrompt != null}
+        onClose={() => setSetupTrustPrompt(null)}
+      >
+        {setupTrustPrompt ? (
+          <View>
+            <View style={styles.trustHeader}>
+              <Text style={styles.title}>
+                {setupTrustPrompt.previouslyApproved
+                  ? `${setupTrustPrompt.repoName}'s setup script changed`
+                  : `Run setup from ${setupTrustPrompt.repoName}?`}
+              </Text>
+              <Text style={styles.subtitle}>
+                This repository's orca.yaml runs before the workspace starts. Only run it if you
+                trust this repository.
+              </Text>
+            </View>
+
+            <View style={styles.trustScriptBox}>
+              <Text style={styles.trustScriptLabel}>
+                {setupTrustPrompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+              </Text>
+              <Text style={styles.trustScriptText}>{setupTrustPrompt.scriptContent}</Text>
+            </View>
+
+            <View style={styles.trustActionGroup}>
+              <Pressable
+                style={styles.trustActionRow}
+                disabled={creating}
+                onPress={() =>
+                  void (async () => {
+                    try {
+                      await persistSetupHookTrust(
+                        setupTrustPrompt.repoId,
+                        setupTrustPrompt.contentHash,
+                        false
+                      )
+                      const approvedHash = setupTrustPrompt.contentHash
+                      setSetupTrustPrompt(null)
+                      await handleCreate({
+                        setupOverride: 'run',
+                        approvedSetupContentHash: approvedHash
+                      })
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+                    }
+                  })()
+                }
+              >
+                <Check size={16} color={colors.textPrimary} />
+                <Text style={styles.trustActionText}>Run hooks</Text>
+              </Pressable>
+              <View style={styles.trustActionSeparator} />
+              <Pressable
+                style={styles.trustActionRow}
+                disabled={creating}
+                onPress={() =>
+                  void (async () => {
+                    try {
+                      await persistSetupHookTrust(
+                        setupTrustPrompt.repoId,
+                        setupTrustPrompt.contentHash,
+                        true
+                      )
+                      const approvedHash = setupTrustPrompt.contentHash
+                      setSetupTrustPrompt(null)
+                      await handleCreate({
+                        setupOverride: 'run',
+                        approvedSetupContentHash: approvedHash
+                      })
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+                    }
+                  })()
+                }
+              >
+                <Check size={16} color={colors.textPrimary} />
+                <Text style={styles.trustActionText}>Always trust and run</Text>
+              </Pressable>
+              <View style={styles.trustActionSeparator} />
+              <Pressable
+                style={styles.trustActionRow}
+                disabled={creating}
+                onPress={() => {
+                  setSetupTrustPrompt(null)
+                  void handleCreate({ setupOverride: 'skip' })
+                }}
+              >
+                <Text style={styles.trustActionText}>Don't run</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </BottomDrawer>
     </>
   )
 }
@@ -636,6 +1001,72 @@ const styles = StyleSheet.create({
   },
   fieldButtonPlaceholder: {
     color: colors.textMuted
+  },
+  repoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999
+  },
+  disabled: {
+    opacity: 0.55
+  },
+  sshBox: {
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.input,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs
+  },
+  sshRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  sshDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999
+  },
+  sshDotConnected: {
+    backgroundColor: colors.statusGreen
+  },
+  sshDotProgress: {
+    backgroundColor: colors.statusAmber
+  },
+  sshDotDisconnected: {
+    backgroundColor: colors.statusRed
+  },
+  sshCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  sshTitle: {
+    fontSize: typography.bodySize,
+    color: colors.textPrimary,
+    fontWeight: '600'
+  },
+  sshSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1
+  },
+  sshConnectButton: {
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  sshConnectText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  errorInline: {
+    color: colors.statusRed,
+    fontSize: 12
   },
   input: {
     backgroundColor: colors.bgRaised,
@@ -699,6 +1130,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary
   },
+  setupChoiceRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm
+  },
+  setupChoiceButton: {
+    flex: 1,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    paddingVertical: spacing.sm
+  },
+  setupChoiceButtonSelected: {
+    backgroundColor: colors.bgPanel,
+    borderColor: colors.textSecondary
+  },
+  setupChoiceText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
   setupSwitch: {
     transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
   },
@@ -712,6 +1165,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: typography.monoFamily,
     color: colors.textPrimary
+  },
+  trustHeader: {
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md
+  },
+  trustScriptBox: {
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.input,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: spacing.md,
+    marginBottom: spacing.md
+  },
+  trustScriptLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm
+  },
+  trustScriptText: {
+    fontSize: 13,
+    fontFamily: typography.monoFamily,
+    color: colors.textPrimary
+  },
+  trustActionGroup: {
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.input,
+    overflow: 'hidden'
+  },
+  trustActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md
+  },
+  trustActionText: {
+    flex: 1,
+    fontSize: typography.bodySize,
+    color: colors.textPrimary,
+    fontWeight: '500'
+  },
+  trustActionSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginHorizontal: spacing.md
   },
   actions: {
     flexDirection: 'row',
@@ -734,14 +1233,6 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
-  letterIcon: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  letterIconText: {
-    fontWeight: '700'
-  },
-
   // Picker sub-modal styles
   pickerHeader: {
     paddingHorizontal: spacing.xs,

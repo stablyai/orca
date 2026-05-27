@@ -42,6 +42,75 @@ import {
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
+import type { KeybindingOverrides } from '../../shared/keybindings'
+
+const AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS = 2_000
+
+function resolveWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<{ value: T; timedOut: boolean }> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ value: fallbackValue, timedOut: true }), timeoutMs)
+  })
+  return Promise.race([
+    promise.then((value) => ({ value, timedOut: false })),
+    timeoutPromise
+  ]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+  })
+}
+
+function releaseAutomationVisibilityToken(renderer: Electron.WebContents, token: string): void {
+  if (renderer.isDestroyed()) {
+    return
+  }
+  renderer
+    .executeJavaScript(
+      `(function() {
+        var bridge = window.__orcaBrowserAutomationVisibility;
+        if (!bridge || typeof bridge.release !== 'function') return false;
+        return bridge.release(${JSON.stringify(token)});
+      })()`
+    )
+    .catch(() => {})
+}
+
+function cleanupLateAutomationVisibilityToken(
+  renderer: Electron.WebContents,
+  acquirePromise: Promise<unknown>
+): void {
+  acquirePromise
+    .then((lateToken) => {
+      if (typeof lateToken !== 'string' || lateToken.length === 0) {
+        return
+      }
+      // Why: the renderer creates the lease before waiting for paint; if main's
+      // acquire timeout wins, release the eventual token so hidden webviews do
+      // not stay paintable indefinitely.
+      releaseAutomationVisibilityToken(renderer, lateToken)
+    })
+    .catch(() => {})
+}
+
+function createNoopRestoreForTimedOutAutomationAcquire(
+  renderer: Electron.WebContents,
+  acquirePromise: Promise<unknown>,
+  timedOut: boolean
+): () => void {
+  if (timedOut) {
+    cleanupLateAutomationVisibilityToken(renderer, acquirePromise)
+  }
+  return () => {}
+}
+
+function isAutomationVisibilityToken(token: unknown): token is string {
+  return typeof token === 'string' && token.length > 0
+}
 
 // Why: mobile presets need a touch-capable UA or responsive sites serve the
 // desktop variant based on UA sniffing. This is the Chrome DevTools default
@@ -96,6 +165,7 @@ function safeOrigin(rawUrl: string): string {
 }
 
 export class BrowserManager {
+  private settingsResolver: (() => { keybindings?: KeybindingOverrides }) | null = null
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
@@ -132,6 +202,10 @@ export class BrowserManager {
   private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
+
+  setSettingsResolver(resolver: () => { keybindings?: KeybindingOverrides }): void {
+    this.settingsResolver = resolver
+  }
 
   // Why: Page.addScriptToEvaluateOnNewDocument (via the CDP debugger) is the
   // only reliable way to run JS before page scripts on every navigation.
@@ -428,6 +502,42 @@ export class BrowserManager {
           })()`
         )
         .catch(() => {})
+    }
+  }
+
+  async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return () => {}
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    if (!renderer || renderer.isDestroyed()) {
+      return () => {}
+    }
+
+    // Why: agent browser commands need a paintable webview for lazy-loading
+    // sites, but must not steal the user's visible Orca tab/worktree.
+    const acquirePromise = renderer
+      .executeJavaScript(
+        `(async function() {
+            var bridge = window.__orcaBrowserAutomationVisibility;
+            if (!bridge || typeof bridge.acquire !== 'function') return null;
+            return await bridge.acquire(${JSON.stringify(browserPageId)});
+          })()`
+      )
+      .catch(() => null)
+    const { value: token, timedOut } = await resolveWithTimeout(
+      acquirePromise,
+      AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS,
+      null
+    )
+
+    if (!isAutomationVisibilityToken(token)) {
+      return createNoopRestoreForTimedOutAutomationAcquire(renderer, acquirePromise, timedOut)
+    }
+
+    return () => {
+      releaseAutomationVisibilityToken(renderer, token)
     }
   }
 
@@ -1258,7 +1368,8 @@ export class BrowserManager {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId)
+        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
+        getKeybindings: () => this.settingsResolver?.().keybindings
       })
     )
   }
@@ -1282,7 +1393,8 @@ export class BrowserManager {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false
+        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+        getKeybindings: () => this.settingsResolver?.().keybindings
       })
     )
   }

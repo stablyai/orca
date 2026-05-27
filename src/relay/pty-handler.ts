@@ -111,12 +111,17 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 /** Returns env to merge into the PTY's spawn env. Receives spawn context so
  *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
  *  paths derived from the renderer's paneKey) can compute it without pulling
- *  the renderer's env in twice. */
+ *  the renderer's env in twice. `command` is the renderer-chosen agent launch
+ *  command (`pi`, `omp`, …) — supplied by ssh-pty-provider.ts so the Pi
+ *  overlay can resolve the per-agent source dir without disk-presence
+ *  guessing. NEVER undefined for client-driven spawns that target a
+ *  Pi-compatible agent; may be undefined for CLI-launched bare shells. */
 export type PtyEnvAugmenter = (ctx: {
   id: string
   paneKey?: string
   shell: string
   env: Record<string, string>
+  command?: string
 }) => Record<string, string>
 
 export class PtyHandler {
@@ -143,6 +148,14 @@ export class PtyHandler {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
     this.registerHandlers()
+  }
+
+  setGraceTimeMs(graceTimeMs: number): void {
+    this.graceTimeMs = Math.max(0, Math.floor(graceTimeMs))
+  }
+
+  get configuredGraceTimeMs(): number {
+    return this.graceTimeMs
   }
 
   /** Subscribe to PTY-exit events. Used by the relay-hook server to evict
@@ -175,7 +188,7 @@ export class PtyHandler {
    *  otherwise agent-status over SSH silently breaks on every revive. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string }
+    ctx: { id: string; paneKey?: string; shell: string; command?: string }
   ): Record<string, string> {
     const baseEnv = { ...process.env, ...rendererEnv } as Record<string, string>
     const augmented: Record<string, string> = {}
@@ -298,8 +311,12 @@ export class PtyHandler {
     // dirs) override renderer-supplied env so live remote paths and hook coords
     // win over local userData paths. The context lets overlay augmenters derive
     // per-PTY OpenCode/Pi directories from the stable paneKey when present.
+    // `command` is forwarded by ssh-pty-provider.ts only as a hint for
+    // overlay resolution — the relay still launches a login shell and the
+    // command is typed in via pty.data writes.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell })
+    const command = typeof params.command === 'string' ? params.command : undefined
+    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
 
     // Why: SSH exec channels give the relay a minimal environment without
@@ -589,6 +606,16 @@ export class PtyHandler {
         revivedEnv.ORCA_WORKTREE_ID = entry.worktreeId
       }
       const shell = resolveDefaultShell()
+      // Why: `command` is intentionally absent from this revive path because
+      // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
+      // never stored the renderer-chosen launch command. The Pi/OMP overlay
+      // augmenter in src/relay/relay.ts therefore sees `ctx.command ===
+      // undefined` for revived PTYs and falls back to the Pi-default kind
+      // (see detectPiAgentKindFromCommand in src/shared/pi-agent-kind.ts).
+      // Acceptable pre-OMP fallback: a cold-restart revived OMP shell that
+      // later relaunches `omp` keeps the historical behavior of loading the
+      // Pi overlay. Plumbing `command` through serialization is a separate,
+      // larger change (out of scope for PR #2662).
       const spawnEnv = this.buildSpawnEnv(revivedEnv, {
         id: entry.id,
         paneKey: entry.paneKey,

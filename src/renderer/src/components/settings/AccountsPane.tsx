@@ -264,7 +264,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
           title="Claude Accounts"
           description="Optional account switcher for the shared Claude auth files."
           keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
@@ -450,7 +450,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             entry.description ?? '',
             ...(entry.keywords ?? [])
           ])}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           {/* Why: Settings deep-links can target this subsection directly from
           the status-bar account switcher. Keeping a stable DOM anchor here
@@ -644,7 +644,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             'rate limit',
             'status bar'
           ]}
-          className="flex items-center justify-between gap-4 px-1 py-2"
+          className="flex items-center justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
             <Label>Use Gemini CLI credentials (experimental)</Label>

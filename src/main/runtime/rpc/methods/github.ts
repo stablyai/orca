@@ -13,6 +13,10 @@ const WorkItemsList = RepoSelector.extend({
   before: OptionalString
 })
 
+const IssuesList = RepoSelector.extend({
+  limit: OptionalFiniteNumber
+})
+
 const WorkItem = RepoSelector.extend({
   number: z.number().int().positive(),
   type: z.enum(['issue', 'pr']).optional()
@@ -100,6 +104,15 @@ const ReviewThread = RepoSelector.extend({
 const UpdatePrTitle = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   title: requiredString('Missing title'),
+  prRepo: SlugRepo.nullable().optional()
+})
+
+const UpdatePr = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  updates: z.object({
+    title: OptionalString,
+    body: z.string().optional()
+  }),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -273,6 +286,11 @@ export const GITHUB_METHODS: RpcMethod[] = [
       runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
   }),
   defineMethod({
+    name: 'github.listIssues',
+    params: IssuesList,
+    handler: async (params, { runtime }) => runtime.listRepoIssues(params.repo, params.limit)
+  }),
+  defineMethod({
     name: 'github.countWorkItems',
     params: WorkItemsCount,
     handler: async (params, { runtime }) => runtime.countRepoWorkItems(params.repo, params.query)
@@ -397,6 +415,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: UpdatePrTitle,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRTitle(params.repo, params.prNumber, params.title, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.updatePR',
+    params: UpdatePr,
+    handler: async (params, { runtime }) =>
+      runtime.updateRepoPRDetails(
+        params.repo,
+        params.prNumber,
+        params.updates,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.mergePR',

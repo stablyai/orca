@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
+import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 
@@ -29,44 +30,8 @@ function getGitHubSetupState(
   return status.gh.authenticated ? 'connected' : 'not-authenticated'
 }
 
-type StatusTone = 'connected' | 'attention' | 'neutral'
-
-const statusToneClassNames: Record<StatusTone, { pill: string; dot: string }> = {
-  connected: {
-    pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-    dot: 'bg-emerald-500'
-  },
-  attention: {
-    pill: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    dot: 'bg-amber-500'
-  },
-  neutral: {
-    pill: 'border-border bg-background text-muted-foreground',
-    dot: 'bg-muted-foreground'
-  }
-}
-
-function StatusPill({
-  tone,
-  children
-}: {
-  tone: StatusTone
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        statusToneClassNames[tone].pill
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', statusToneClassNames[tone].dot)} />
-      {children}
-    </span>
-  )
-}
-
-function GitHubRow(): React.JSX.Element {
+export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element {
+  const { compact = false } = props
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -78,28 +43,30 @@ function GitHubRow(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border border-border bg-muted/20">
-      <div className="flex items-start gap-4 p-5">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-          <Github className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-[15px] font-semibold leading-tight text-foreground">GitHub</h3>
-            {state === 'connected' ? (
-              <StatusPill tone="connected">Connected</StatusPill>
-            ) : state === 'not-installed' ? (
-              <StatusPill tone="attention">CLI not installed</StatusPill>
-            ) : state === 'not-authenticated' ? (
-              <StatusPill tone="attention">Sign in needed</StatusPill>
-            ) : (
-              <StatusPill tone="neutral">Checking…</StatusPill>
-            )}
+      <div className={cn(compact ? 'flex flex-col gap-3 p-4' : 'flex items-start gap-4 p-5')}>
+        <div className={cn('flex items-start gap-3', compact ? '' : 'gap-4 flex-1 min-w-0')}>
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+            <Github className="size-5" />
           </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Pull requests, issues, and check status.
-          </p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[15px] font-semibold leading-tight text-foreground">GitHub</h3>
+              {state === 'connected' ? (
+                <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
+              ) : state === 'not-installed' ? (
+                <IntegrationStatusPill tone="attention">CLI not installed</IntegrationStatusPill>
+              ) : state === 'not-authenticated' ? (
+                <IntegrationStatusPill tone="attention">Sign in needed</IntegrationStatusPill>
+              ) : (
+                <IntegrationStatusPill tone="neutral">Checking…</IntegrationStatusPill>
+              )}
+            </div>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              Pull requests, issues, and check status.
+            </p>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className={cn('flex items-center gap-2', compact ? 'flex-wrap' : 'shrink-0')}>
           {state === 'not-installed' ? (
             <Button
               variant="outline"
@@ -121,17 +88,19 @@ function GitHubRow(): React.JSX.Element {
               {githubTerminalOpen ? 'Signing in' : 'Sign in'}
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void refreshPreflightStatus({ force: true })}
-          >
-            Re-check
-          </Button>
+          {state !== 'connected' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void refreshPreflightStatus({ force: true })}
+            >
+              Re-check
+            </Button>
+          ) : null}
         </div>
       </div>
       {state === 'not-authenticated' && githubTerminalOpen ? (
-        <div className="px-5 pb-5">
+        <div className={cn(compact ? 'px-4 pb-4' : 'px-5 pb-5')}>
           <OnboardingInlineCommandTerminal
             command="gh auth login"
             title="GitHub setup"
@@ -144,7 +113,8 @@ function GitHubRow(): React.JSX.Element {
   )
 }
 
-function LinearRow(): React.JSX.Element {
+export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element {
+  const { compact = false } = props
   const linearStatus = useAppStore((s) => s.linearStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -182,22 +152,26 @@ function LinearRow(): React.JSX.Element {
   return (
     <>
       <div className="rounded-xl border border-border bg-muted/20">
-        <div className="flex items-start gap-4 p-5">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-            <LinearIcon className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>
-              {linearStatus.connected ? <StatusPill tone="connected">Connected</StatusPill> : null}
+        <div className={cn(compact ? 'flex flex-col gap-3 p-4' : 'flex items-start gap-4 p-5')}>
+          <div className={cn('flex items-start gap-3', compact ? '' : 'gap-4 flex-1 min-w-0')}>
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+              <LinearIcon className="size-5" />
             </div>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-              {linearStatus.connected
-                ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another any time.`
-                : 'Paste a Linear API key to link issues to workspaces. Stored locally; nothing leaves this machine.'}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>
+                {linearStatus.connected ? (
+                  <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                {linearStatus.connected
+                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another any time.`
+                  : 'Paste a Linear API key to link issues to workspaces. Stored locally; nothing leaves this machine.'}
+              </p>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className={cn('flex items-center gap-2', compact ? 'flex-wrap' : 'shrink-0')}>
             {linearStatus.connected ? (
               <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
                 Add workspace
@@ -207,9 +181,11 @@ function LinearRow(): React.JSX.Element {
                 Connect
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
-              Re-check
-            </Button>
+            {!linearStatus.connected ? (
+              <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
+                Re-check
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -334,7 +310,7 @@ export function IntegrationsStep(): React.JSX.Element {
               Issues, sprints, and assignees.
             </span>
           </div>
-          <StatusPill tone="neutral">Coming soon</StatusPill>
+          <IntegrationStatusPill tone="neutral">Coming soon</IntegrationStatusPill>
         </div>
       </div>
     </div>

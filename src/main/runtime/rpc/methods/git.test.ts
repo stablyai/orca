@@ -220,7 +220,7 @@ describe('git RPC methods', () => {
       makeRequest('git.push', {
         worktree: 'id:wt-1',
         publish: true,
-        pushTarget: { remote: 'origin' }
+        pushTarget: { remoteName: 'origin', branchName: 'feature' }
       })
     )
     const response = await dispatcher.dispatch(
@@ -240,7 +240,7 @@ describe('git RPC methods', () => {
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith(
       'id:wt-1',
       true,
-      { remote: 'origin' },
+      { remoteName: 'origin', branchName: 'feature' },
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
@@ -261,6 +261,41 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', undefined, undefined, true)
+  })
+
+  it('forwards rebase-from-base to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      rebaseRuntimeGitFromBase: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.rebaseFromBase', {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main'
+      })
+    )
+
+    expect(runtime.rebaseRuntimeGitFromBase).toHaveBeenCalledWith('id:wt-1', 'origin/main')
+  })
+
+  it('forwards fetch push target to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fetchRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await dispatcher.dispatch(
+      makeRequest('git.fetch', {
+        worktree: 'id:wt-1',
+        pushTarget
+      })
+    )
+
+    expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
   it('forwards commit-message settings to the runtime', async () => {
