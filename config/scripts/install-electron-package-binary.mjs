@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { platform as osPlatform, tmpdir } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
@@ -31,7 +31,7 @@ main().catch((error) => {
 })
 
 async function main() {
-  if (electronPackageLoads()) {
+  if (electronPackageIsUsable()) {
     return
   }
 
@@ -39,24 +39,36 @@ async function main() {
   // Node. Install only Electron's npm package binary here; do not run the full
   // Electron native-module rebuild path, which would undo the Node ABI rebuild.
   console.log('[electron-package] Electron package binary is missing; running Electron install.')
+  resetPartialElectronInstall()
   await installElectronPackageBinary()
 
   repairElectronPathFile()
 
-  if (!electronPackageLoads()) {
+  if (!electronPackageIsUsable()) {
     logElectronInstallDiagnostics()
     console.error('[electron-package] Electron package is still unavailable after install.')
     process.exit(1)
   }
 }
 
-function electronPackageLoads() {
+function electronPackageIsUsable() {
   try {
-    require('electron')
-    return true
+    const electronPath = resolveElectronPath()
+    return existsSync(electronPath)
   } catch {
     return false
   }
+}
+
+function resolveElectronPath() {
+  const electronModulePath = require.resolve('electron')
+  delete require.cache[electronModulePath]
+  return require('electron')
+}
+
+function resetPartialElectronInstall() {
+  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
+  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
 }
 
 function repairElectronPathFile() {
@@ -82,6 +94,7 @@ function repairElectronPathFile() {
 async function installElectronPackageBinary() {
   const electronDistDir = resolve(electronPackageDir, 'dist')
   const tempDir = mkdtempSync(resolve(tmpdir(), 'orca-electron-'))
+  const cacheRoot = join(tempDir, 'cache')
 
   try {
     const zipPath = await downloadArtifact({
@@ -89,6 +102,7 @@ async function installElectronPackageBinary() {
       artifactName: 'electron',
       platform: process.env.npm_config_platform || osPlatform(),
       arch: process.env.npm_config_arch || process.arch,
+      cacheRoot,
       force: true,
       tempDirectory: tempDir,
       ...(shouldUseRemoteChecksums() ? {} : { checksums: electronRequire('./checksums.json') })
