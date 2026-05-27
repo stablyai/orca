@@ -1069,6 +1069,7 @@ export type GitHubPullRequestStateUpdate = {
 export type LinearIssueUpdate = {
   stateId?: string
   title?: string
+  description?: string
   assigneeId?: string | null
   estimate?: number | null
   priority?: number

@@ -1161,6 +1161,10 @@ const api = {
       workspaceId?: string
       parentIssueId?: string
       projectId?: string | null
+      stateId?: string
+      priority?: number
+      assigneeId?: string | null
+      labelIds?: string[]
     }): Promise<
       | { ok: true; id: string; identifier: string; title: string; url: string }
       | { ok: false; error: string }

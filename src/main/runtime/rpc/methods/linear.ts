@@ -3,6 +3,8 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
+const LinearPriority = z.number().int().min(0).max(4).optional()
+const LinearLabelIds = z.array(requiredString('Invalid label ID')).optional()
 
 const Connect = z.object({
   apiKey: requiredString('Invalid API key')
@@ -38,7 +40,11 @@ const CreateIssue = z.object({
   description: OptionalString,
   workspaceId: OptionalString,
   parentIssueId: OptionalString,
-  projectId: z.union([z.string(), z.null()]).optional()
+  projectId: z.union([z.string(), z.null()]).optional(),
+  stateId: OptionalString,
+  priority: LinearPriority,
+  assigneeId: z.union([z.string(), z.null()]).optional(),
+  labelIds: LinearLabelIds
 })
 
 const IssueId = z.object({
@@ -71,6 +77,7 @@ const IssueUpdate = z.object({
   updates: z.object({
     stateId: OptionalString,
     title: OptionalString,
+    description: z.string().optional(),
     assigneeId: z.union([z.string(), z.null()]).optional(),
     estimate: z.union([z.number().int().min(0), z.null()]).optional(),
     priority: z.number().int().min(0).max(4).optional(),
@@ -127,7 +134,13 @@ export const LINEAR_METHODS: RpcMethod[] = [
         params.description?.trim() || undefined,
         params.workspaceId,
         params.parentIssueId,
-        params.projectId
+        params.projectId,
+        {
+          stateId: params.stateId,
+          priority: params.priority,
+          assigneeId: params.assigneeId,
+          labelIds: params.labelIds
+        }
       )
   }),
   defineMethod({
