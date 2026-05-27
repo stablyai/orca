@@ -784,8 +784,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
     expect(argv).toContain('refs/heads/**/*upstream*')
+    expect(argv).toContain('refs/heads/**/*upstream*/**')
     expect(argv).toContain('refs/remotes/**/*upstream*')
-    expect(argv).toContain('refs/remotes/*upstream*/**')
+    expect(argv).toContain('refs/remotes/**/*upstream*/**')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
     expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])

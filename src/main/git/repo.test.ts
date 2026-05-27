@@ -120,11 +120,28 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('feature/login')
   })
 
+  it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('feature/login')
+  })
+
   it('finds a remote slashed branch when the query lands in a deep segment', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/feature/login', sha)
 
     const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in an ancestor segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
 
     expect(results).toContain('origin/feature/login')
   })
