@@ -2632,6 +2632,12 @@ export class Store {
     return this.state.workspaceSession ?? getDefaultWorkspaceSession()
   }
 
+  /** Resolve the worktree a terminal tab belongs to, from the session's
+   *  tab→worktree map. More reliable than agent-echoed hook fields. */
+  getWorktreeIdForTab(tabId: string): string | undefined {
+    return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
+  }
+
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)

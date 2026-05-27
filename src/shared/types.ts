@@ -1575,6 +1575,10 @@ export type GlobalSettings = {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** When enabled, Orca renames a workspace's auto-generated creature branch to
+   *  a short name derived from the first prompt once work begins. Opt-in;
+   *  uses the same agent configured for AI commit messages. */
+  autoRenameBranchFromWork: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
