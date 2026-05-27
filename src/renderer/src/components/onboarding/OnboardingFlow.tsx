@@ -14,6 +14,7 @@ import { OnboardingTourStep } from './OnboardingTourStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
+import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 
 const stepCopy = {
@@ -172,11 +173,7 @@ export default function OnboardingFlow({
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
       data-onboarding-overlay
       onPointerDown={(event) => {
-        if (event.button !== 0) {
-          return
-        }
-        const target = event.target
-        if (!(target instanceof Element) || target.closest('[data-onboarding-modal]')) {
+        if (!shouldRequestOnboardingSkipConfirmation(event)) {
           return
         }
         requestSkipConfirmation('button')
