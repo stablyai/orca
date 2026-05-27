@@ -171,7 +171,8 @@ describe('attachMainWindowServices', () => {
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn()
+      on: vi.fn(),
+      removeListener: vi.fn()
     })
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
@@ -316,7 +317,8 @@ describe('attachMainWindowServices', () => {
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock
+      on: browserSessionOnMock,
+      removeListener: vi.fn()
     })
 
     const mainWindowOnMock = vi.fn()
@@ -378,12 +380,38 @@ describe('attachMainWindowServices', () => {
     })
   })
 
+  it('replaces the persistent browser-session download handler on re-attach', () => {
+    const browserSessionOnMock = vi.fn()
+    const browserSessionRemoveListenerMock = vi.fn()
+    sessionFromPartitionMock.mockReturnValue({
+      setPermissionRequestHandler: setPermissionRequestHandlerMock,
+      setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
+      on: browserSessionOnMock,
+      removeListener: browserSessionRemoveListenerMock
+    })
+
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    const downloadOnCalls = browserSessionOnMock.mock.calls.filter(
+      ([eventName]) => eventName === 'will-download'
+    )
+    const downloadRemoveCalls = browserSessionRemoveListenerMock.mock.calls.filter(
+      ([eventName]) => eventName === 'will-download'
+    )
+    expect(downloadOnCalls).toHaveLength(2)
+    expect(downloadRemoveCalls).toHaveLength(2)
+    expect(downloadRemoveCalls[1][1]).toBe(downloadOnCalls[0][1])
+  })
+
   it('clears browser guest registrations when the main window closes', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn()
+      on: vi.fn(),
+      removeListener: vi.fn()
     })
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
