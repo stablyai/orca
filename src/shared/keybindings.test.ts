@@ -9,6 +9,7 @@ import {
   keybindingFromInput,
   keybindingFromInputForAction,
   keybindingMatchesAction,
+  keybindingMatchesInput,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
   normalizeKeybindingList
@@ -79,6 +80,34 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
     expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+Shift+J')
     expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
+  })
+
+  it('preserves explicit numpad shortcut tokens', () => {
+    const numpadAdd = {
+      key: '+',
+      code: 'NumpadAdd',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+
+    expect(keybindingFromInput(numpadAdd, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+NumpadAdd'
+    })
+    expect(keybindingMatchesAction('zoom.in', numpadAdd, 'darwin')).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'zoom.out',
+        {
+          ...numpadAdd,
+          key: '-',
+          code: 'NumpadSubtract'
+        },
+        'darwin'
+      )
+    ).toBe(true)
   })
 
   it('defines a default shortcut for opening markdown notes', () => {
@@ -258,6 +287,107 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches file explorer undo and redo by produced logical key', () => {
+    expect(getEffectiveKeybindingsForAction('fileExplorer.undo', 'darwin')).toEqual(['Mod+Z'])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'darwin')).toEqual(['Mod+Shift+Z'])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'linux')).toEqual([
+      'Mod+Shift+Z',
+      'Ctrl+Y'
+    ])
+
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.undo',
+        { key: 'z', code: 'Semicolon', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.undo',
+        { key: ';', code: 'KeyZ', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'Z', code: 'Semicolon', control: false, meta: true, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'y', code: 'KeyF', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'f', code: 'KeyY', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(false)
+  })
+
+  it('matches non-QWERTY shortcuts by the produced logical key', () => {
+    const dvorakPhysicalW = {
+      key: ',',
+      code: 'KeyW',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+    const dvorakPhysicalComma = {
+      key: 'w',
+      code: 'Comma',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('app.settings', dvorakPhysicalW, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.close', dvorakPhysicalW, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.close', dvorakPhysicalComma, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('app.settings', dvorakPhysicalComma, 'darwin')).toBe(false)
+    expect(keybindingFromInput(dvorakPhysicalW, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Comma'
+    })
+    expect(keybindingFromInput(dvorakPhysicalComma, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+W'
+    })
+  })
+
+  it('uses shifted punctuation aliases only while Shift is pressed', () => {
+    const shiftedComma = {
+      key: '<',
+      code: 'Comma',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingMatchesInput('Mod+Shift+Comma', shiftedComma, 'darwin')).toBe(true)
+    expect(keybindingFromInput(shiftedComma, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Shift+Comma'
+    })
+    expect(
+      keybindingMatchesInput(
+        'Mod+Comma',
+        { ...shiftedComma, code: 'IntlBackslash', shift: false },
+        'darwin'
+      )
+    ).toBe(false)
   })
 
   it('matches logical bracket shortcuts on JIS keyboards without changing code fallback', () => {
