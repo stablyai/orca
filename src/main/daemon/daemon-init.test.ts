@@ -780,6 +780,96 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
+  it('removes detached daemon startup listeners after readiness', async () => {
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+      message: [],
+      error: [],
+      exit: []
+    }
+    const offMock = vi.fn((event: string, cb: (arg?: unknown) => void) => {
+      handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+      return child
+    })
+    const child = {
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        handlers[event]?.push(cb)
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready' }))
+        }
+        return this
+      },
+      off: offMock,
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(offMock).toHaveBeenCalledWith('message', expect.any(Function))
+    expect(offMock).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(offMock).toHaveBeenCalledWith('exit', expect.any(Function))
+    expect(handlers.message).toHaveLength(0)
+    expect(handlers.error).toHaveLength(0)
+    expect(handlers.exit).toHaveLength(0)
+    expect(child.disconnect).toHaveBeenCalledOnce()
+    expect(child.unref).toHaveBeenCalledOnce()
+  })
+
+  it('removes detached daemon startup listeners after startup error', async () => {
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+      message: [],
+      error: [],
+      exit: []
+    }
+    const offMock = vi.fn((event: string, cb: (arg?: unknown) => void) => {
+      handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+      return child
+    })
+    const child = {
+      pid: undefined,
+      on(event: string, cb: (arg?: unknown) => void) {
+        handlers[event]?.push(cb)
+        if (event === 'error') {
+          queueMicrotask(() => cb(new Error('startup failed')))
+        }
+        return this
+      },
+      off: offMock,
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow('startup failed')
+
+    expect(offMock).toHaveBeenCalledWith('message', expect.any(Function))
+    expect(offMock).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(offMock).toHaveBeenCalledWith('exit', expect.any(Function))
+    expect(handlers.message).toHaveLength(0)
+    expect(handlers.error).toHaveLength(0)
+    expect(handlers.exit).toHaveLength(0)
+    expect(child.disconnect).not.toHaveBeenCalled()
+    expect(child.unref).not.toHaveBeenCalled()
+  })
+
   it('keeps packaged healthy-daemon reuse independent of dev app-path identity', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
