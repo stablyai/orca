@@ -810,6 +810,44 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
   })
 
+  it('does not intercept regular URL clicks in the file-path fallback', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installFilePathLinkClickFallback(1, terminal, {
+      startupCwd: '/tmp',
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      runtimeEnvironmentId: null,
+      managerRef: { current: null },
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache: new Map<string, boolean>()
+    })
+    const mouseUp = getRegisteredMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+    await flushAsyncWork()
+
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+  })
+
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
     setPlatform('Macintosh')
     const rows = [

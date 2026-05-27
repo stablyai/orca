@@ -7,22 +7,14 @@ export type ParsedTerminalFileLink = {
   displayText: string
 }
 
-export type ResolvedTerminalFileLink = {
+export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'column'> & {
   absolutePath: string
-  line: number | null
-  column: number | null
 }
 
-// Ported from VSCode's terminal link detectors (MIT).
-//   Local paths:  src/vs/workbench/contrib/terminalContrib/links/browser/terminalLocalLinkDetector.ts
-//   Bare words:   src/vs/workbench/contrib/terminalContrib/links/browser/terminalWordLinkDetector.ts
-//
-// Two passes, matching VSCode's split between `TerminalLocalLinkDetector`
-// (paths with a separator, including line:col suffix) and
-// `TerminalWordLinkDetector` (bare whitespace-delimited tokens that only
-// become links if they resolve against the cwd). The provider runs fs.stat
-// on every candidate, so the word-pass stays conservative to keep fan-out
-// small.
+// Ported from VSCode's terminal link detectors (MIT): local paths from
+// `terminalLocalLinkDetector.ts`, bare words from `terminalWordLinkDetector.ts`.
+// Two passes match VSCode's split: separator paths, plus conservative bare
+// filename tokens that only become links if they resolve against the cwd.
 
 // Matches a path with at least one `/` separator, optionally followed by
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
@@ -220,7 +212,6 @@ function looksLikeFilename(token: string): boolean {
 }
 
 type DetectedRange = { startIndex: number; endIndex: number; text: string }
-
 // Shared tokenization: run a regex over the line, trim boundary punctuation,
 // hand each surviving range to the caller. Collapses the three near-copies
 // of this loop the module had grown.
@@ -235,11 +226,13 @@ function* detectRanges(lineText: string, regex: RegExp): Generator<DetectedRange
 }
 
 function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
-  if (range.text.includes('://')) {
-    return true
-  }
   const prefix = lineText.slice(0, range.startIndex)
-  return /[A-Za-z][A-Za-z0-9+.-]*:\/\/$/.test(prefix)
+  // Why: local-path matching can start at the `//host/path` portion of a URL.
+  return (
+    range.text.includes('://') ||
+    (/[A-Za-z][A-Za-z0-9+.-]*:(?:\/\/)?$/.test(prefix) &&
+      (prefix.endsWith('://') || range.text.startsWith('//')))
+  )
 }
 
 function toParsedLink(range: DetectedRange): ParsedTerminalFileLink | null {
