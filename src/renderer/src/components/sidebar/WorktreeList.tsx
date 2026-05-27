@@ -236,17 +236,26 @@ function getMountedWorktreeBounds(
 
 export function getScrollTopToRevealBounds(
   container: HTMLElement,
-  bounds: Pick<VirtualItemBounds, 'start' | 'end'>
+  bounds: Pick<VirtualItemBounds, 'start' | 'end'>,
+  // Why: the active group/repo header sticks at the viewport top and paints over
+  // content, so the unobstructed region starts below it. Reveal a row to clear
+  // the header instead of aligning its top behind it.
+  stickyHeaderHeight = 0
 ): number | null {
-  const viewportTop = container.scrollTop
-  const viewportBottom = viewportTop + container.clientHeight
+  const viewportTop = container.scrollTop + stickyHeaderHeight
+  const viewportBottom = container.scrollTop + container.clientHeight
   if (bounds.start < viewportTop) {
-    return bounds.start
+    return bounds.start - stickyHeaderHeight
   }
   if (bounds.end > viewportBottom) {
     return bounds.end - container.clientHeight
   }
   return null
+}
+
+function getActiveStickyHeaderHeight(container: HTMLElement): number {
+  const header = container.querySelector<HTMLElement>('[data-worktree-sticky-header-active]')
+  return header?.getBoundingClientRect().height ?? 0
 }
 
 function revealMountedWorktreeElement(
@@ -258,7 +267,11 @@ function revealMountedWorktreeElement(
   if (!bounds) {
     return false
   }
-  const nextScrollTop = getScrollTopToRevealBounds(container, bounds)
+  const nextScrollTop = getScrollTopToRevealBounds(
+    container,
+    bounds,
+    getActiveStickyHeaderHeight(container)
+  )
   if (nextScrollTop !== null) {
     container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
   }

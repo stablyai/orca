@@ -19,4 +19,22 @@ describe('getScrollTopToRevealBounds', () => {
   it('does not scroll when the current workspace card is already fully visible', () => {
     expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 125, end: 260 })).toBeNull()
   })
+
+  it('offsets the upward reveal so the card clears a sticky header overlay', () => {
+    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 60, end: 120 }, 28)).toBe(
+      32
+    )
+  })
+
+  it('treats a card behind the sticky header as obstructed and scrolls it clear', () => {
+    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 110, end: 180 }, 28)).toBe(
+      82
+    )
+  })
+
+  it('still reports no scroll when the card sits below the sticky header band', () => {
+    expect(
+      getScrollTopToRevealBounds(makeContainer(100, 200), { start: 130, end: 260 }, 28)
+    ).toBeNull()
+  })
 })
