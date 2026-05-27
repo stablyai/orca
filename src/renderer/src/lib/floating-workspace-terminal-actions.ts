@@ -188,7 +188,10 @@ export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | nul
   if (target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) === null) {
     return false
   }
-  return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
+  return (
+    target.classList?.contains('xterm-helper-textarea') === true ||
+    target.closest('.xterm') !== null
+  )
 }
 
 export function shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
