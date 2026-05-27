@@ -73,13 +73,31 @@ export function GitPane({
       title: 'Refresh Local Base Ref',
       description:
         'Safely fast-forward local main or master so AI tools and diffs use a fresh base.',
-      keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
+      keywords: [
+        'main',
+        'master',
+        'origin/main',
+        'git diff',
+        'base ref',
+        'fresh base',
+        'safely',
+        'worktree'
+      ]
     }) ? (
       <SearchableSetting
         key="refresh-base-ref"
         title="Refresh Local Base Ref"
         description="Safely fast-forward local main or master so AI tools and diffs use a fresh base."
-        keywords={['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']}
+        keywords={[
+          'main',
+          'master',
+          'origin/main',
+          'git diff',
+          'base ref',
+          'fresh base',
+          'safely',
+          'worktree'
+        ]}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
