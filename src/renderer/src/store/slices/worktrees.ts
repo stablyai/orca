@@ -1875,7 +1875,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 [worktreeId!]: tabs.map((tab) => ({
                   ...tab,
                   ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  ...(shouldTagTabs ? { pendingActivationSpawn: true } : {})
+                  // Why: the allDead generation bump remounts the pane and
+                  // fresh-spawns a PTY — a click side-effect, not real activity.
+                  // Tag it (not just first activations) so the respawn doesn't
+                  // stamp lastActivityAt and bounce the worktree to the top of
+                  // Recent on every re-click of a slept/disconnected worktree.
+                  ...(allDead || shouldTagTabs ? { pendingActivationSpawn: true } : {})
                 }))
               }
             }
