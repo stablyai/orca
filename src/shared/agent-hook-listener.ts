@@ -801,6 +801,9 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     record.hook_event_name ??
     record.hookEventName
   if (source === 'antigravity' && eventName === 'Stop') {
+    if (isAntigravityStopStillBusy(record)) {
+      return false
+    }
     const transcriptPath = record.transcriptPath ?? record.transcript_path
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
@@ -1019,6 +1022,9 @@ function extractAntigravityToolFields(
     )
   }
   if (eventName === 'Stop') {
+    if (isAntigravityStopStillBusy(hookPayload)) {
+      return {}
+    }
     const message =
       readString(hookPayload, 'last_assistant_message') ??
       readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
@@ -1789,6 +1795,10 @@ function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+function isAntigravityStopStillBusy(hookPayload: Record<string, unknown>): boolean {
+  return hookPayload.fullyIdle === false || hookPayload.fully_idle === false
+}
+
 function normalizeAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -1810,11 +1820,14 @@ function normalizeAntigravityEvent(
   }
 
   const toolName = readAntigravityToolCall(hookPayload).toolName
+  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
       : eventName === 'Stop'
-        ? 'done'
+        ? stopStillBusy
+          ? 'working'
+          : 'done'
         : eventName === 'PreInvocation' ||
             eventName === 'PostInvocation' ||
             eventName === 'PreToolUse' ||
@@ -1851,7 +1864,10 @@ function normalizeAntigravityEvent(
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
-  if (eventName === 'Stop' && transcriptPath) {
+  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps.
+  // Only a fully idle Stop is terminal; otherwise the sidebar would bounce
+  // done -> working during tool-heavy turns and ignore later tool updates.
+  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }
   return payload

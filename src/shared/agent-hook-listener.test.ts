@@ -302,6 +302,29 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('normalizes Antigravity events even when the hook body is empty', () => {
+    const started = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        hook_event_name: 'PreInvocation',
+        payload: {}
+      },
+      'production'
+    )
+
+    // Why: Antigravity can invoke managed hooks without stdin. The wrapper
+    // posts `{}` in that case, and the event name is still enough to keep the
+    // visible status alive.
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: '',
+      agentType: 'antigravity'
+    })
+  })
+
   it('reads Antigravity user requests from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -507,7 +530,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('normalizes Antigravity Stop to done even when fullyIdle is false', () => {
+  it('keeps Antigravity Stop working while fullyIdle is false', () => {
     const event = normalizeHookPayload(
       state,
       'antigravity',
@@ -520,8 +543,44 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload).toMatchObject({
-      state: 'done',
+      state: 'working',
       agentType: 'antigravity'
+    })
+  })
+
+  it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
+    const transcriptPath = '/tmp/antigravity-non-idle-transcript.jsonl'
+    const stop = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { transcriptPath, fullyIdle: false }
+      },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('working')
+
+    const nextTool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PostToolUse',
+        payload: {
+          transcriptPath,
+          toolCall: { name: 'run_command', args: { CommandLine: 'pwd' } }
+        }
+      },
+      'production'
+    )
+
+    expect(nextTool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'antigravity',
+      toolName: 'run_command',
+      toolInput: 'pwd'
     })
   })
 
@@ -570,6 +629,12 @@ describe('shared agent-hook-listener', () => {
           transcriptPath: '/tmp/antigravity-transcript.jsonl',
           last_assistant_message: 'done'
         }
+      })
+    ).toBe(false)
+    expect(
+      hasPendingAgentResultText('antigravity', {
+        hook_event_name: 'Stop',
+        payload: { fullyIdle: false, transcriptPath: '/tmp/antigravity-transcript.jsonl' }
       })
     ).toBe(false)
   })
