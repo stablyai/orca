@@ -5919,6 +5919,30 @@ function SourceControlBranchTreeDirectoryRow({
   )
 }
 
+// Why: a compact +added/-removed magnitude lets users gauge the size of a
+// change at a glance, the way GitHub Desktop and VS Code do. Colors match the
+// diff viewer's hunk header (DiffSectionHeader) for consistency.
+function DiffLineCounts({
+  added,
+  removed
+}: {
+  added?: number
+  removed?: number
+}): React.JSX.Element | null {
+  const hasAdded = typeof added === 'number' && added > 0
+  const hasRemoved = typeof removed === 'number' && removed > 0
+  if (!hasAdded && !hasRemoved) {
+    return null
+  }
+  return (
+    <span className="shrink-0 tabular-nums text-[10px]">
+      {hasAdded && <span className="text-green-600 dark:text-green-500">+{added}</span>}
+      {hasAdded && hasRemoved && <span> </span>}
+      {hasRemoved && <span className="text-red-500">-{removed}</span>}
+    </span>
+  )
+}
+
 const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
@@ -6046,12 +6070,15 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         {entry.conflictStatus ? (
           <ConflictBadge entry={entry} />
         ) : (
-          <span
-            className="w-4 shrink-0 text-center text-[10px] font-bold"
-            style={{ color: STATUS_COLORS[entry.status] }}
-          >
-            {STATUS_LABELS[entry.status]}
-          </span>
+          <>
+            <DiffLineCounts added={entry.added} removed={entry.removed} />
+            <span
+              className="w-4 shrink-0 text-center text-[10px] font-bold"
+              style={{ color: STATUS_COLORS[entry.status] }}
+            >
+              {STATUS_LABELS[entry.status]}
+            </span>
+          </>
         )}
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
@@ -6191,6 +6218,7 @@ function BranchEntryRow({
             <span className="tabular-nums">{commentCount}</span>
           </span>
         )}
+        <DiffLineCounts added={entry.added} removed={entry.removed} />
         <span
           className="w-4 shrink-0 text-center text-[10px] font-bold"
           style={{ color: STATUS_COLORS[entry.status] }}

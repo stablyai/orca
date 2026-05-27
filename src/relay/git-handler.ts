@@ -7,7 +7,8 @@ import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import { parseBranchDiff, parseBranchDiffNumstat, parseWorktreeList } from './git-handler-utils'
+import { parseBranchDiff, parseWorktreeList } from './git-handler-utils'
+import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -285,7 +286,7 @@ export class GitHandler {
         ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
         worktreePath
       )
-      return parseBranchDiff(stdout, parseBranchDiffNumstat(numstat))
+      return parseBranchDiff(stdout, parseNumstat(numstat))
     })
   }
 

@@ -285,6 +285,11 @@ describe('getStatus', () => {
     gitExecFileAsyncBufferMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
+    // Why: after the status call, getStatus may issue `git diff --numstat`
+    // calls to attach per-entry line counts. Tests that don't care about counts
+    // set only a `mockResolvedValueOnce` for the status output; this default
+    // keeps those follow-up numstat calls from returning undefined.
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
@@ -517,6 +522,82 @@ describe('getStatus', () => {
     )
     expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
     expect(result.entries).toEqual([])
+  })
+
+  it('attaches per-area line counts from staged and unstaged numstat', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout:
+            '1 M. N... 100644 100644 100644 aaaa aaaa src/staged.ts\n' +
+            '1 .M N... 100644 100644 100644 bbbb bbbb src/unstaged.ts\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({
+          stdout: args.includes('--cached') ? '10\t0\tsrc/staged.ts\n' : '3\t4\tsrc/unstaged.ts\n'
+        })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      { path: 'src/staged.ts', status: 'modified', area: 'staged', added: 10, removed: 0 },
+      { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged', added: 3, removed: 4 }
+    ])
+  })
+
+  it('counts untracked file contents as additions', async () => {
+    existsSyncMock.mockReturnValue(false)
+    readFileMock.mockImplementation((target: string) =>
+      String(target).endsWith('.git')
+        ? Promise.resolve('gitdir: /repo/.git/worktrees/feature\n')
+        : Promise.resolve(Buffer.from('one\ntwo\nthree\n'))
+    )
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? src/brand-new.ts\n' })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      { path: 'src/brand-new.ts', status: 'untracked', area: 'untracked', added: 3 }
+    ])
+  })
+
+  it('leaves binary working-tree changes without counts', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout: '1 .M N... 100644 100644 100644 cccc cccc assets/logo.png\n'
+        })
+      }
+      // git reports binary files as '-' in both numstat columns.
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '-\t-\tassets/logo.png\n' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      { path: 'assets/logo.png', status: 'modified', area: 'unstaged' }
+    ])
+  })
+
+  it('skips numstat entirely for a clean working tree', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 })
 

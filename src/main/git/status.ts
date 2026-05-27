@@ -21,6 +21,13 @@ import {
   getEffectiveGitUpstreamStatus,
   splitRemoteBranchName
 } from '../../shared/git-effective-upstream'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
+import {
+  applyLineStats,
+  collectUntrackedAdditions,
+  parseNumstat,
+  type GitLineStats
+} from '../../shared/git-uncommitted-line-stats'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
@@ -170,6 +177,13 @@ export async function getStatus(
     // Not a git repo or git not available
   }
 
+  // Why: attach per-area line counts for the sidebar. Diffs run after status
+  // (we need the entry list first) and only for areas that have entries, so a
+  // clean tree costs zero extra git calls. Staged and unstaged are diffed
+  // separately so each row reflects only its own staging area; untracked files
+  // have no baseline and count their full contents as additions.
+  await attachLineStats(worktreePath, entries)
+
   return {
     entries,
     conflictOperation,
@@ -190,6 +204,50 @@ export async function getStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+async function runNumstat(
+  worktreePath: string,
+  cached: boolean
+): Promise<Map<string, GitLineStats>> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      { cwd: worktreePath, env: gitOptionalLocksDisabledEnv() }
+    )
+    return parseNumstat(stdout)
+  } catch {
+    // Why: a numstat failure (e.g. transient lock) should leave rows without
+    // counts rather than break the whole status refresh.
+    return new Map()
+  }
+}
+
+async function attachLineStats(worktreePath: string, entries: GitStatusEntry[]): Promise<void> {
+  if (entries.length === 0) {
+    return
+  }
+  const hasStaged = entries.some((entry) => entry.area === 'staged')
+  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
+  const untrackedPaths = entries
+    .filter((entry) => entry.area === 'untracked')
+    .map((entry) => entry.path)
+  const emptyStats = new Map<string, GitLineStats>()
+  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
+    hasStaged ? runNumstat(worktreePath, true) : Promise.resolve(emptyStats),
+    hasUnstaged ? runNumstat(worktreePath, false) : Promise.resolve(emptyStats),
+    collectUntrackedAdditions(worktreePath, untrackedPaths)
+  ])
+  for (const entry of entries) {
+    applyLineStats(
+      entry,
+      entry.area === 'staged'
+        ? stagedStats.get(entry.path)
+        : entry.area === 'unstaged'
+          ? unstagedStats.get(entry.path)
+          : untrackedStats.get(entry.path)
+    )
   }
 }
 
@@ -678,7 +736,7 @@ async function loadBranchChanges(
       gitOptions
     )
   ])
-  const statsByPath = parseBranchChangeNumstat(numstat)
+  const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
   // [Fix]: Split by /\r?\n/ instead of '\n' to handle Git CRLF output on Windows,
@@ -737,7 +795,7 @@ async function loadCommitChanges(
     gitExecFileAsync(args, gitOptions),
     gitExecFileAsync(numstatArgs, gitOptions)
   ])
-  const statsByPath = parseBranchChangeNumstat(numstat)
+  const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
   for (const line of stdout.split(/\r?\n/)) {
@@ -750,45 +808,6 @@ async function loadCommitChanges(
     }
   }
   return entries
-}
-
-function parseBranchChangeCount(value: string): number | undefined {
-  if (value === '-') {
-    return undefined
-  }
-  const count = Number.parseInt(value, 10)
-  return Number.isFinite(count) ? count : undefined
-}
-
-function normalizeBranchNumstatPath(path: string): string {
-  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
-  if (bracedRename) {
-    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
-  }
-  const renameMarker = ' => '
-  const markerIndex = path.lastIndexOf(renameMarker)
-  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
-}
-
-function parseBranchChangeNumstat(
-  stdout: string
-): Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>> {
-  const stats = new Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>>()
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const parts = line.split('\t')
-    const rawPath = parts.slice(2).join('\t')
-    if (!rawPath) {
-      continue
-    }
-    stats.set(normalizeBranchNumstatPath(rawPath), {
-      added: parseBranchChangeCount(parts[0] ?? ''),
-      removed: parseBranchChangeCount(parts[1] ?? '')
-    })
-  }
-  return stats
 }
 
 function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
@@ -930,16 +949,6 @@ function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
     isBinary,
     exists: true
   }
-}
-
-function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i += 1) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
 }
 
 function buildDiffResult(
