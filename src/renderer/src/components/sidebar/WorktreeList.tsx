@@ -1096,9 +1096,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyHeaderIndex = getActiveStickyHeaderIndexForScroll({
-    firstHeaderIndex,
     rangeStartIndex: stickyRangeStartIndexRef.current,
-    rows: renderRows,
     scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
     stickyHeaderIndexes,
     virtualItems
@@ -1979,11 +1977,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   ref={measureVirtualRowElement}
                   className={cn(
                     'left-0 right-0',
-                    // Why: keep the secondary-header spacer on the measured
-                    // virtual row only while it scrolls in normally. The
-                    // active sticky row is measured from estimates, and moving
-                    // the painted header with a transform makes the repo label
-                    // visibly hop during sticky handoff.
+                    // Why: the inter-group spacer only applies while the header
+                    // scrolls in normally; the pinned header drops it to sit
+                    // flush at the top. The swap fires when the header row
+                    // reaches the top (see getActiveStickyHeaderIndexForScroll),
+                    // so the previous repo no longer stays pinned over it.
                     hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-2',
                     isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
                   )}
