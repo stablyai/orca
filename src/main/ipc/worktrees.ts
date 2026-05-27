@@ -1048,36 +1048,6 @@ export function registerWorktreeHandlers(
 
         let shouldTearDownPtys = true
 
-        // Why: run the preflight check FIRST for local repos so we fail fast if
-        // the worktree has changes — without running archive hooks or removing
-        // symlinks first. Archive hooks are expensive (arbitrary user scripts) and
-        // should only run when deletion is actually possible.
-        if (!repo.connectionId) {
-          try {
-            await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
-          } catch (error) {
-            if (!isOrphanCompatiblePreflightError(error)) {
-              throw new Error(
-                formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
-              )
-            }
-            shouldTearDownPtys = false
-          }
-        }
-
-        // Why: for SSH repos, run a preflight check BEFORE archive hooks so we
-        // fail fast if the worktree has changes. The preflight runs git status --porcelain
-        // which is a lightweight operation, avoiding a 20-30 second delay from running
-        // archive hooks before discovering the worktree is dirty.
-        if (repo.connectionId && !args.force) {
-          const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
-          if (!clean) {
-            const error = new Error('Worktree has uncommitted or untracked changes.')
-            ;(error as Error & { stdout?: string }).stdout = stdout
-            throw error
-          }
-        }
-
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {
@@ -1093,6 +1063,17 @@ export function registerWorktreeHandlers(
         }
 
         if (repo.connectionId) {
+          // Why: SSH deletion mirrors the local flow: hooks run while the
+          // directory is intact, then the clean check guards destructive removal.
+          if (!args.force) {
+            const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+            if (!clean) {
+              const error = new Error('Worktree has uncommitted or untracked changes.')
+              ;(error as Error & { stdout?: string }).stdout = stdout
+              throw error
+            }
+          }
+
           await (deleteBranch
             ? provider!.removeWorktree(canonicalWorktreePath, args.force)
             : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
@@ -1117,6 +1098,19 @@ export function registerWorktreeHandlers(
         // deletion would require the Force Delete toast once the feature is on.
         if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
           await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
+        }
+
+        try {
+          await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
+        } catch (error) {
+          if (!isOrphanCompatiblePreflightError(error)) {
+            throw new Error(
+              formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+            )
+          }
+          // Why: orphan cleanup does not need live shells to be killed first,
+          // and preflight did not prove the worktree is cleanly removable.
+          shouldTearDownPtys = false
         }
 
         if (shouldTearDownPtys) {

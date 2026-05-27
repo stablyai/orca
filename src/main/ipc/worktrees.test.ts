@@ -2779,7 +2779,10 @@ describe('registerWorktreeHandlers', () => {
       removeWorktree: vi.fn().mockImplementation(async () => {
         callOrder.push('remove')
       }),
-      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      worktreeIsClean: vi.fn().mockImplementation(async () => {
+        callOrder.push('preflight')
+        return { clean: true }
+      }),
       execNonInteractive: vi.fn().mockImplementation(async () => {
         callOrder.push('archive')
         return { stdout: '', stderr: '', exitCode: 0, timedOut: false }
@@ -2814,8 +2817,128 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
-    expect(callOrder).toEqual(['archive', 'remove'])
+    expect(callOrder).toEqual(['archive', 'preflight', 'remove'])
     expect(runHookMock).not.toHaveBeenCalled()
+  })
+
+  it('runs SSH archive hooks before failing dirty non-force removal', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const callOrder: string[] = []
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockImplementation(async () => {
+        callOrder.push('remove')
+      }),
+      worktreeIsClean: vi.fn().mockImplementation(async () => {
+        callOrder.push('preflight')
+        return { clean: false, stdout: ' M src/file.ts\n?? scratch.txt\n' }
+      }),
+      execNonInteractive: vi.fn().mockImplementation(async () => {
+        callOrder.push('archive')
+        return { stdout: '', stderr: '', exitCode: 0, timedOut: false }
+      })
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: echo archived\n',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-ssh::/remote/feature-wt'
+      })
+    ).rejects.toThrow('Worktree has uncommitted or untracked changes.')
+
+    expect(callOrder).toEqual(['archive', 'preflight'])
+    expect(provider.removeWorktree).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('skips SSH dirty preflight for force removal', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn(),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: echo archived\n',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-ssh::/remote/feature-wt',
+      force: true
+    })
+
+    expect(provider.worktreeIsClean).not.toHaveBeenCalled()
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
   })
 
   it('continues SSH worktree removal when the archive hook fails', async () => {
