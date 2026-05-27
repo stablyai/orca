@@ -29,6 +29,10 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
       return this
     }
 
+    listenerCount(eventName: string): number {
+      return this.listeners.get(eventName)?.size ?? 0
+    }
+
     removeAllListeners(): this {
       this.listeners.clear()
       return this
@@ -235,6 +239,35 @@ describe('SttService', () => {
       await vi.advanceTimersByTimeAsync(1)
       await stopPromise
       expect(worker!.terminated).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retain or reuse a worker that timed out while stopping', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService({
+        getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+      } as never)
+
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      const firstWorker = getLastWorker()
+      expect(firstWorker).toBeDefined()
+      firstWorker!.emitStoppedOnStop = false
+
+      const stopPromise = service.stopDictation('desktop')
+      await vi.advanceTimersByTimeAsync(60_000)
+      await stopPromise
+
+      expect(firstWorker!.terminated).toBe(true)
+      expect(firstWorker!.listenerCount('message')).toBe(0)
+
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+
+      expect(getCreatedWorkerCount()).toBe(2)
+      expect(getLastWorker()).not.toBe(firstWorker)
     } finally {
       vi.useRealTimers()
     }
