@@ -9,12 +9,15 @@ import type {
   GitUpstreamStatus,
   GitWorktreeInfo,
   GlobalSettings,
+  Repo,
   TuiAgent,
   Worktree
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../shared/source-control-ai'
+import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
@@ -62,9 +65,34 @@ import { gitExecFileAsync } from '../git/runner'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
-  Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>
+  Pick<
+    GlobalSettings,
+    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
+  >
 > & {
   commitMessageDiscoveryHostKey?: string
+}
+
+function getRuntimeGitGenerationSettings(
+  settings: GlobalSettings,
+  settingsOverride: RuntimeCommitMessageSettingsOverride | undefined,
+  operation: SourceControlAiOperation
+): GlobalSettings {
+  const mergedSettings = {
+    ...settings,
+    ...settingsOverride
+  }
+  if (
+    settingsOverride?.commitMessageAi !== undefined &&
+    settingsOverride.sourceControlAi === undefined
+  ) {
+    mergedSettings.sourceControlAi = mergeLegacyCommitMessageAiIntoSourceControlAi(
+      settings.sourceControlAi,
+      settingsOverride.commitMessageAi,
+      { pullRequestInstructionsFromLegacy: operation === 'pullRequest' }
+    )
+  }
+  return mergedSettings
 }
 
 function normalizeRuntimeGitRelativePath(filePath: string): string {
@@ -80,7 +108,7 @@ function normalizeRuntimeGitRelativePath(filePath: string): string {
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
-  ): Promise<{ worktree: ResolvedRuntimeGitWorktree; connectionId?: string }>
+  ): Promise<{ worktree: ResolvedRuntimeGitWorktree; repo?: Repo; connectionId?: string }>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
 }
@@ -388,11 +416,14 @@ export class RuntimeGitCommands {
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
     const resolvedSettings = resolveCommitMessageSettings(
-      {
-        ...this.host.getRuntimeSettings(),
-        ...settingsOverride
-      },
-      discoveryHostKey
+      getRuntimeGitGenerationSettings(
+        this.host.getRuntimeSettings(),
+        settingsOverride,
+        'commitMessage'
+      ),
+      discoveryHostKey,
+      'commitMessage',
+      target.repo ?? null
     )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }
@@ -469,11 +500,14 @@ export class RuntimeGitCommands {
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
     const resolvedSettings = resolveCommitMessageSettings(
-      {
-        ...this.host.getRuntimeSettings(),
-        ...settingsOverride
-      },
-      discoveryHostKey
+      getRuntimeGitGenerationSettings(
+        this.host.getRuntimeSettings(),
+        settingsOverride,
+        'pullRequest'
+      ),
+      discoveryHostKey,
+      'pullRequest',
+      target.repo ?? null
     )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }

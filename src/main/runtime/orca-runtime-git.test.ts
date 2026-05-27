@@ -150,7 +150,9 @@ describe('RuntimeGitCommands', () => {
       expect.objectContaining({
         commitMessageAi: { enabled: true, agentId: 'codex' }
       }),
-      'local'
+      'local',
+      'commitMessage',
+      null
     )
     expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
       context,
@@ -203,7 +205,9 @@ describe('RuntimeGitCommands', () => {
 
     expect(mocks.resolveCommitMessageSettings).toHaveBeenCalledWith(
       expect.any(Object),
-      'ssh:conn-1'
+      'ssh:conn-1',
+      'commitMessage',
+      null
     )
     expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
       context,

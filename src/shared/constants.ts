@@ -16,6 +16,7 @@ import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { getDefaultSourceControlAiSettings } from './source-control-ai'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -301,6 +302,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customPrompt: '',
       customAgentCommand: ''
     },
+    sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: getDefaultVoiceSettings()
   }
 }

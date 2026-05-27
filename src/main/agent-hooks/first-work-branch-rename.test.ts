@@ -147,6 +147,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID })
+    )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })

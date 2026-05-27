@@ -11,6 +11,7 @@ import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
+import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
@@ -92,6 +93,7 @@ export function RepositoryPane({
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
+  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Source Control AI')
 
   const hooksSection =
     !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
@@ -203,6 +205,13 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    !isFolder && matchesSettingsSearch(searchQuery, sourceControlAiEntries) ? (
+      <RepositorySourceControlAiSection
+        key="source-control-ai"
+        repo={repo}
+        updateRepo={updateRepo}
+      />
+    ) : null,
     !isFolder &&
     !repo.connectionId &&
     symlinksEnabled &&

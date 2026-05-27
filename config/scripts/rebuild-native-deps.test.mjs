@@ -65,6 +65,32 @@ describe('rebuild-native-deps Electron install fallback', () => {
       rmSync(projectDir, { recursive: true, force: true })
     }
   })
+
+  it('clears partial Electron package contents before retrying install', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir, {
+        installExitsWith: 1,
+        logPartialStateBeforeInstall: true
+      })
+      writeFakeElectronRebuild(projectDir)
+      mkdirSync(join(projectDir, 'node_modules', 'electron', 'dist', 'locales'), { recursive: true })
+      writeFileSync(join(projectDir, 'node_modules', 'electron', 'dist', 'locales', 'stale.pak'), '')
+      writeFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'stale-path')
+
+      const result = runRebuildScript(projectDir, {
+        ORCA_STRICT_ELECTRON_INSTALL: '1'
+      })
+
+      expect(result.status).toBe(1)
+      expect(readFileSync(join(projectDir, 'electron-install.log'), 'utf8')).toBe(
+        'partial cleared\ninstall attempted\n'
+      )
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
 })
 
 function mkTempProject() {
@@ -85,7 +111,10 @@ function runRebuildScript(projectDir, extraEnv = {}) {
   })
 }
 
-function writeFakeElectronPackage(projectDir, { installExitsWith }) {
+function writeFakeElectronPackage(
+  projectDir,
+  { installExitsWith, logPartialStateBeforeInstall = false }
+) {
   const electronDir = join(projectDir, 'node_modules', 'electron')
   mkdirSync(electronDir, { recursive: true })
   writeFileSync(join(electronDir, 'package.json'), JSON.stringify({ version: '41.5.0' }))
@@ -96,7 +125,15 @@ function writeFakeElectronPackage(projectDir, { installExitsWith }) {
   writeFileSync(
     join(electronDir, 'install.js'),
     `
-const { appendFileSync } = require('node:fs')
+const { appendFileSync, existsSync } = require('node:fs')
+if (${JSON.stringify(logPartialStateBeforeInstall)}) {
+  appendFileSync(
+    'electron-install.log',
+    existsSync('node_modules/electron/dist') || existsSync('node_modules/electron/path.txt')
+      ? 'partial still present\\n'
+      : 'partial cleared\\n'
+  )
+}
 appendFileSync('electron-install.log', 'install attempted\\n')
 process.exit(${installExitsWith})
 `

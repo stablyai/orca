@@ -207,8 +207,8 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved commit prompt changes?',
-      description: 'You have unsaved AI commit prompt changes. Leaving will discard them.',
+      title: 'Discard unsaved Source Control AI prompt changes?',
+      description: 'You have unsaved Source Control AI prompt changes. Leaving will discard them.',
       confirmLabel: 'Discard',
       confirmVariant: 'destructive'
     })
@@ -257,7 +257,7 @@ function Settings(): React.JSX.Element {
         return
       }
       // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved commit prompt confirmation dialog.
+      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
       if (hasVisibleOverlay()) {
         return
       }
@@ -766,7 +766,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and AI commit messages."
+                  description="Branch naming, base refs, attribution, and Source Control AI."
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedCommitPromptChanges}
                 >

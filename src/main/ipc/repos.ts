@@ -18,6 +18,7 @@ import type {
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
+import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
@@ -827,6 +828,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'projectGroupId'
             | 'projectGroupOrder'
+            | 'sourceControlAi'
           >
         >
       }
@@ -882,6 +884,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           !Number.isFinite(updates.externalWorktreeVisibilityPromptDismissedAt))
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
+      }
+      if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
+        const normalizedSourceControlAi = normalizeRepoSourceControlAiOverrides(
+          updates.sourceControlAi
+        )
+        if (normalizedSourceControlAi === undefined) {
+          delete updates.sourceControlAi
+        } else {
+          updates.sourceControlAi = normalizedSourceControlAi
+        }
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {

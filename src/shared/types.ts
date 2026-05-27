@@ -16,6 +16,10 @@ import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
+import type {
+  RepoSourceControlAiOverrides,
+  SourceControlAiSettings
+} from './source-control-ai-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -104,6 +108,8 @@ export type Repo = {
   projectGroupId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */
   projectGroupOrder?: number
+  /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
+  sourceControlAi?: RepoSourceControlAiOverrides
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
@@ -1914,6 +1920,8 @@ export type GlobalSettings = {
    *  user-customizable prompt suffix. Optional so existing profiles do not
    *  require a migration step before this feature lands. */
   commitMessageAi?: CommitMessageAiSettings
+  /** Source-control AI generation settings for commit messages and hosted-review drafts. */
+  sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences — pinned + recent project paths.
    *  Optional for backward compatibility with profiles saved before
    *  GitLab support; the persistence merge fills the empty default. */

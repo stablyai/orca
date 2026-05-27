@@ -35,6 +35,7 @@ type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'sourceControlAi'
   >
 >
 

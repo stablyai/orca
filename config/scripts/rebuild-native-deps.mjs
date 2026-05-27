@@ -22,7 +22,7 @@
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, globSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { platform as osPlatform } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -139,6 +139,7 @@ function ensureElectronPackageInstalled() {
   // Why: CI has observed Electron's postinstall exiting cleanly without
   // writing path.txt; native rebuild and tests both need the binary path.
   console.log('[rebuild] Electron package binary is missing; rerunning Electron install.')
+  resetPartialElectronInstall()
   try {
     execFileSync(process.execPath, [require.resolve('electron/install.js')], {
       cwd: projectDir,
@@ -182,6 +183,14 @@ function ensureElectronPackageInstalled() {
       process.exit(1)
     }
   }
+}
+
+function resetPartialElectronInstall() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  // Why: Electron's installer can leave a partial dist/ tree behind after
+  // skipped or interrupted postinstall runs; retry from a clean target.
+  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
+  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
 }
 
 function continuePostinstallWithoutElectron() {

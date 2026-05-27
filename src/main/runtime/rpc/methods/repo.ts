@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -28,6 +29,13 @@ const RepoSetBaseRef = z.object({
   ref: requiredString('Missing base ref')
 })
 
+const RepoSourceControlAiOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+  )
+
 const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
@@ -44,7 +52,8 @@ const RepoUpdate = RepoSelector.extend({
     externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
     externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
     projectGroupId: OptionalString.nullable().optional(),
-    projectGroupOrder: OptionalFiniteNumber
+    projectGroupOrder: OptionalFiniteNumber,
+    sourceControlAi: RepoSourceControlAiOverrides
   })
 })
 

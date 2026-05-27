@@ -174,7 +174,7 @@ async function runAutoRename(
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
-  const resolvedParams = resolveTextGenerationParams(settings, hostKey)
+  const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     return stop(`no generation agent: ${resolvedParams.error}`)
   }

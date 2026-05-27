@@ -29,10 +29,12 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByUpdatedAt
 } from '../../shared/work-items'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { getPRConflictSummary } from './conflict-summary'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   execFileAsync,
   ghExecFileAsync,
@@ -1391,6 +1393,41 @@ async function findOpenPRByHeadBase(args: {
   return { number: list[0].number, url: list[0].url }
 }
 
+async function readPullRequestTemplate(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<string> {
+  const relativeCandidates = [
+    '.github/pull_request_template.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+    'pull_request_template.md',
+    'PULL_REQUEST_TEMPLATE.md',
+    'docs/pull_request_template.md',
+    'docs/PULL_REQUEST_TEMPLATE.md'
+  ]
+  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+  if (connectionId && !remoteProvider) {
+    return ''
+  }
+  for (const relativeCandidate of relativeCandidates) {
+    try {
+      if (remoteProvider) {
+        const result = await remoteProvider.readFile(
+          joinWorktreeRelativePath(repoPath, relativeCandidate)
+        )
+        if (result.isBinary) {
+          continue
+        }
+        return result.content
+      }
+      return await readFile(join(repoPath, relativeCandidate), 'utf8')
+    } catch {
+      // Try the next conventional PR template path.
+    }
+  }
+  return ''
+}
+
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -1435,7 +1472,11 @@ export async function createGitHubPullRequest(
   await acquire()
   const bodyPath = join(tempDir, 'body.md')
   try {
-    await writeFile(bodyPath, input.body ?? '', 'utf8')
+    const body =
+      input.useTemplate && !input.body?.trim()
+        ? await readPullRequestTemplate(repoPath, connectionId)
+        : (input.body ?? '')
+    await writeFile(bodyPath, body, 'utf8')
     const createArgs = [
       'pr',
       'create',
