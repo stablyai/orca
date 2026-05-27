@@ -96,3 +96,18 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
 export function buildTerminalQuickCommandInput(command: TerminalQuickCommand): string {
   return command.appendEnter ? `${command.command}\r` : command.command
 }
+
+const LINE_BREAK_RE = /[\r\n]/
+
+/** Convert a multiline quick command into a single semicolon-separated line so
+ *  it executes sequentially in the shell. xterm’s bracketed-paste path converts
+ *  all newlines to `\r`, which breaks sequential execution; flattening avoids that. */
+export function flattenTerminalQuickCommand(command: TerminalQuickCommand): TerminalQuickCommand {
+  if (!LINE_BREAK_RE.test(command.command)) {
+    return command
+  }
+  return {
+    ...command,
+    command: command.command.replace(/[\r\n]+/g, '; ')
+  }
+}
