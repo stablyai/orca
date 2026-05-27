@@ -198,16 +198,24 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
 
 async function refreshLocalBaseRefForWorktreeCreate(
   repoPath: string,
-  baseBranch: string
+  baseBranch: string,
+  remoteTrackingRef: string
 ): Promise<LocalBaseRefRefreshResult | undefined> {
-  // Why: We split on '/' instead of matching a hardcoded 'origin/' prefix because
-  // callers may pass arbitrary remotes (e.g. 'upstream/main'), not just 'origin'.
-  const slashIndex = baseBranch.indexOf('/')
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
+    return undefined
+  }
+
+  // Why: Only refs proven to be remote-tracking refs get refresh status.
+  // Local branches can contain slashes (e.g. release/2026) and must not
+  // produce a fake "Local 2026 was not refreshed" warning.
+  const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
+  const slashIndex = shortRemoteRef.indexOf('/')
   if (slashIndex <= 0) {
     return undefined
   }
 
-  const localBranch = baseBranch.slice(slashIndex + 1)
+  const localBranch = shortRemoteRef.slice(slashIndex + 1)
   const fullRef = `refs/heads/${localBranch}`
   const resultBase = { baseRef: baseBranch, localBranch }
 
@@ -216,7 +224,7 @@ async function refreshLocalBaseRefForWorktreeCreate(
     // would silently destroy unpushed local commits if the branch has diverged from
     // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
     // ancestor of baseBranch — i.e. the update is a safe fast-forward.
-    await gitExecFileAsync(['merge-base', '--is-ancestor', localBranch, baseBranch], {
+    await gitExecFileAsync(['merge-base', '--is-ancestor', localBranch, remoteTrackingRef], {
       cwd: repoPath
     })
   } catch {
@@ -251,13 +259,13 @@ async function refreshLocalBaseRefForWorktreeCreate(
           ownerWorktreePath: ownerWorktree.path
         }
       }
-      await gitExecFileAsync(['reset', '--hard', baseBranch], { cwd: ownerWorktree.path })
+      await gitExecFileAsync(['reset', '--hard', remoteTrackingRef], { cwd: ownerWorktree.path })
       return { ...resultBase, status: 'updated', ownerWorktreePath: ownerWorktree.path }
     }
 
     // Why: localBranch is not checked out anywhere, so there is no working
     // tree to desync. `update-ref` is safe here.
-    await gitExecFileAsync(['update-ref', fullRef, baseBranch], { cwd: repoPath })
+    await gitExecFileAsync(['update-ref', fullRef, remoteTrackingRef], { cwd: repoPath })
     return { ...resultBase, status: 'updated' }
   } catch {
     // update-ref/reset can fail on locked refs, filesystem errors, or unusual
@@ -287,14 +295,6 @@ export async function addWorktree(
   options: { checkoutExistingBranch?: boolean } = {}
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
-  // Why: Some users want Orca-created worktrees to make plain commands like
-  // `git diff main...HEAD` work out of the box, while others do not want
-  // worktree creation to mutate their local main/master ref at all. Keep this
-  // behavior behind an explicit setting so the default stays conservative.
-  if (baseBranch && refreshLocalBaseRef && !options.checkoutExistingBranch) {
-    localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(repoPath, baseBranch)
-  }
-
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
@@ -314,6 +314,17 @@ export async function addWorktree(
       effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
         hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
       )
+      // Why: resolving the creation base first distinguishes real
+      // remote-tracking refs from slash-containing local branch names.
+      // The mutation stays behind the explicit setting so the default
+      // remains conservative.
+      if (refreshLocalBaseRef) {
+        localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
+          repoPath,
+          baseBranch,
+          effectiveBase
+        )
+      }
       args.push(effectiveBase)
     }
   }

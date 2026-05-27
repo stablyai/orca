@@ -16,11 +16,12 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   GitPushTarget,
+  LocalBaseRefRefreshResult,
   Repo,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
+import { listWorktrees, addWorktree, addSparseWorktree, parseWorktreeList } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -636,6 +637,57 @@ async function resolveRemoteTrackingBaseSsh(
   }
 }
 
+async function refreshLocalBaseRefForRemoteWorktreeCreate(
+  provider: SshGitProvider,
+  repoPath: string,
+  remoteTrackingBase: RemoteTrackingBase
+): Promise<LocalBaseRefRefreshResult> {
+  const resultBase = {
+    baseRef: remoteTrackingBase.base,
+    localBranch: remoteTrackingBase.branch
+  }
+  const fullRef = `refs/heads/${remoteTrackingBase.branch}`
+
+  try {
+    await provider.exec(
+      ['merge-base', '--is-ancestor', remoteTrackingBase.branch, remoteTrackingBase.ref],
+      repoPath
+    )
+  } catch {
+    return { ...resultBase, status: 'skipped_not_fast_forward' }
+  }
+
+  try {
+    const { stdout: worktreeListOutput } = await provider.exec(
+      ['worktree', 'list', '--porcelain'],
+      repoPath
+    )
+    const worktrees = parseWorktreeList(worktreeListOutput)
+    const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
+
+    if (ownerWorktree) {
+      const { stdout: status } = await provider.exec(
+        ['status', '--porcelain', '--untracked-files=no'],
+        ownerWorktree.path
+      )
+      if (status.trim()) {
+        return {
+          ...resultBase,
+          status: 'skipped_dirty_worktree',
+          ownerWorktreePath: ownerWorktree.path
+        }
+      }
+      await provider.exec(['reset', '--hard', remoteTrackingBase.ref], ownerWorktree.path)
+      return { ...resultBase, status: 'updated', ownerWorktreePath: ownerWorktree.path }
+    }
+
+    await provider.exec(['update-ref', fullRef, remoteTrackingBase.ref], repoPath)
+    return { ...resultBase, status: 'updated' }
+  } catch {
+    return { ...resultBase, status: 'skipped_error' }
+  }
+}
+
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
@@ -780,6 +832,10 @@ export async function createRemoteWorktree(
       /* best-effort */
     }
   }
+  const localBaseRefRefresh =
+    settings.refreshLocalBaseRefOnWorktreeCreate && !checkoutExistingBranch && remoteTrackingBase
+      ? await refreshLocalBaseRefForRemoteWorktreeCreate(provider, repo.path, remoteTrackingBase)
+      : undefined
 
   const fsProvider = getSshFilesystemProvider(repo.connectionId!)
   if (fsProvider) {
@@ -976,7 +1032,8 @@ export async function createRemoteWorktree(
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup ? { setup } : {})
+    ...(setup ? { setup } : {}),
+    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {})
   }
 }
 
