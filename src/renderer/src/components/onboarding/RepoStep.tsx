@@ -216,7 +216,7 @@ export function RepoStep({
             <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
               <Lightbulb className="size-3.5" />
             </span>
-            <span>Want to import many repos? Select the parent folder.</span>
+            <span>Want to import many repos at once? Select the parent folder.</span>
           </div>
         </button>
       )}

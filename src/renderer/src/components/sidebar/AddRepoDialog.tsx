@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, ArrowLeft, Globe, Monitor, FolderTree } from 'lucide-react'
+import { FolderOpen, ArrowLeft, Globe, Monitor, FolderTree, Lightbulb } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -702,10 +702,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Choose the parent folder to import every repo inside.
-            </div>
-
             <div className="grid grid-cols-3 gap-3 pt-2">
               <Button
                 onClick={handleBrowse}
@@ -749,6 +745,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   </p>
                 </div>
               </Button>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+                <Lightbulb className="size-3.5" />
+              </span>
+              <span>Want to import many repos at once? Select the parent folder.</span>
             </div>
 
             {/* Secondary link rather than a fourth card — create-from-scratch
