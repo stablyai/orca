@@ -53,7 +53,7 @@ import {
   getSshFilesystemProvider,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
-import { assertFileExplorerRenameDestinationAvailable } from '../file-explorer-rename-collision'
+import { assertFileExplorerRenameDestinationAvailable } from '../../shared/file-explorer-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 const MOBILE_FILE_LIST_LIMIT = 5000

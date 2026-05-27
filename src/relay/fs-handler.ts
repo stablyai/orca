@@ -23,6 +23,7 @@ import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
+import { assertFileExplorerRenameDestinationAvailable } from '../shared/file-explorer-rename-collision'
 
 type WatchState = {
   rootPath: string
@@ -205,6 +206,11 @@ export class FsHandler {
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
+    // Why: bare fs.rename clobbers an existing destination. Mirror the local
+    // file-explorer rename guard so remote renames can't silently destroy a
+    // file/folder that already occupies the target path (case-only renames on
+    // case-insensitive remote filesystems are still allowed).
+    await assertFileExplorerRenameDestinationAvailable(oldPath, newPath)
     await rename(oldPath, newPath)
   }
 

@@ -20,7 +20,7 @@ import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
-import { assertFileExplorerRenameDestinationAvailable } from '../file-explorer-rename-collision'
+import { assertFileExplorerRenameDestinationAvailable } from '../../shared/file-explorer-rename-collision'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.

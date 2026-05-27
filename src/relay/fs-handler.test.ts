@@ -362,6 +362,18 @@ describe('FsHandler', () => {
     expect(content).toBe('content')
   })
 
+  it('rename does not overwrite an existing destination', async () => {
+    const oldPath = path.join(tmpDir, 'old.txt')
+    const newPath = path.join(tmpDir, 'existing.txt')
+    writeFileSync(oldPath, 'new')
+    writeFileSync(newPath, 'keep')
+
+    await expect(dispatcher.callRequest('fs.rename', { oldPath, newPath })).rejects.toThrow()
+
+    expect(await fs.readFile(newPath, 'utf-8')).toBe('keep')
+    expect(await fs.readFile(oldPath, 'utf-8')).toBe('new')
+  })
+
   it('copy duplicates files', async () => {
     const src = path.join(tmpDir, 'src.txt')
     const dst = path.join(tmpDir, 'dst.txt')
