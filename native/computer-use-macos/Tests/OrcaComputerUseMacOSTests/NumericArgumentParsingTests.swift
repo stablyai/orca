@@ -32,4 +32,10 @@ final class NumericArgumentParsingTests: XCTestCase {
         XCTAssertNil(boundedInteger(-1.0, as: UInt32.self))
         XCTAssertNil(boundedInteger(1e300, as: UInt32.self))
     }
+
+    func testHonorsSignedFixedWidthDestinationBounds() {
+        XCTAssertEqual(boundedInteger(Double(Int32.max), as: Int32.self), Int32.max)
+        XCTAssertNil(boundedInteger(Double(Int32.max) + 1, as: Int32.self))
+        XCTAssertNil(boundedInteger(Double(Int32.min) - 1, as: Int32.self))
+    }
 }

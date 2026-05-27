@@ -196,7 +196,7 @@ final class Provider {
         var action = try runAction()
         do {
             return try renderActionResult(action: action, snapshot: observe(params: params))
-        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && (requestedWindowId(params) != nil || requestedWindowIndex(params) != nil) {
+        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
             fallbackParams.removeValue(forKey: "windowIndex")
@@ -209,6 +209,8 @@ final class Provider {
 
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
         let query = try requiredString(params, "app")
+        let windowId = try requestedWindowId(params)
+        let windowIndex = try requestedWindowIndex(params)
         let app = try resolveApp(query)
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
@@ -216,8 +218,8 @@ final class Provider {
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
-            windowId: requestedWindowId(params),
-            windowIndex: requestedWindowIndex(params),
+            windowId: windowId,
+            windowIndex: windowIndex,
             restoreWindow: params["restoreWindow"]?.bool == true
         )
         let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
@@ -226,13 +228,13 @@ final class Provider {
             if !isExplicitSnapshotNamespace(namespace) {
                 snapshots[key] = snapshot
                 snapshots[snapshotWindowKey(key, snapshot.windowId)] = snapshot
-                if let windowIndex = requestedWindowIndex(params) {
+                if let windowIndex {
                     snapshots[snapshotWindowIndexKey(key, windowIndex)] = snapshot
                 }
             }
             snapshots[namespacedSnapshotKey(namespace, key)] = snapshot
             snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = snapshot
-            if let windowIndex = requestedWindowIndex(params) {
+            if let windowIndex {
                 snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = snapshot
             }
         }
@@ -240,7 +242,7 @@ final class Provider {
     }
 
     private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let cached = cachedSnapshot(params: params)
+        let cached = try cachedSnapshot(params: params)
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
         let snapshot = try observe(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
@@ -256,15 +258,15 @@ final class Provider {
         return snapshot
     }
 
-    private func cachedSnapshot(params: [String: JSONValue]) -> Snapshot? {
+    private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
         guard let query = params["app"]?.string, !query.isEmpty else { return nil }
         let namespace = snapshotNamespace(params)
-        if let targetWindowId = requestedWindowId(params) {
+        if let targetWindowId = try requestedWindowId(params) {
             let windowKey = snapshotWindowKey(query.lowercased(), targetWindowId)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
         }
-        if let targetWindowIndex = requestedWindowIndex(params) {
+        if let targetWindowIndex = try requestedWindowIndex(params) {
             let windowKey = snapshotWindowIndexKey(query.lowercased(), targetWindowIndex)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
@@ -275,16 +277,15 @@ final class Provider {
     }
 
     private func validateRequestedElements(cached: Snapshot?, current: Snapshot, params: [String: JSONValue]) throws {
-        let requestedKeys = ["elementIndex", "fromElementIndex", "toElementIndex"].filter {
-            params[$0]?.number != nil
+        let requestedIndexes = try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
+            guard params[key]?.number != nil else { return nil }
+            return try optionalInteger(params, key)
         }
-        guard !requestedKeys.isEmpty else { return }
+        guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
-        for key in requestedKeys {
-            guard let value = params[key]?.number else { continue }
-            let index = Int(value)
+        for index in requestedIndexes {
             guard let expected = cached.elements[index], let actual = current.elements[index] else {
                 throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
             }
@@ -966,9 +967,15 @@ private func openBundle(_ bundleId: String) {
     process.waitUntilExit()
 }
 
-private func requestedWindowId(_ params: [String: JSONValue]) -> CGWindowID? {
-    guard let value = params["windowId"]?.number, value >= 0,
-          let id = boundedInteger(value, as: UInt32.self) else { return nil }
+private func hasRequestedWindowSelector(_ params: [String: JSONValue]) -> Bool {
+    params["windowId"] != nil || params["windowIndex"] != nil
+}
+
+private func requestedWindowId(_ params: [String: JSONValue]) throws -> CGWindowID? {
+    guard let raw = params["windowId"] else { return nil }
+    guard let value = raw.number, value >= 0, let id = boundedInteger(value, as: UInt32.self) else {
+        throw ProviderError.coded("invalid_argument", "windowId is out of range")
+    }
     return CGWindowID(id)
 }
 
@@ -998,9 +1005,11 @@ private func isExplicitSnapshotNamespace(_ namespace: String) -> Bool {
     namespace != "default"
 }
 
-private func requestedWindowIndex(_ params: [String: JSONValue]) -> Int? {
-    guard let value = params["windowIndex"]?.number, value >= 0,
-          let index = boundedInteger(value, as: Int.self) else { return nil }
+private func requestedWindowIndex(_ params: [String: JSONValue]) throws -> Int? {
+    guard let raw = params["windowIndex"] else { return nil }
+    guard let value = raw.number, value >= 0, let index = boundedInteger(value, as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "windowIndex is out of range")
+    }
     return index
 }
 
@@ -1807,7 +1816,9 @@ private enum Input {
     }
 
     static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
-        let delta = Int32(max(1, (12 * pages).rounded()))
+        guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
+            throw ProviderError.coded("invalid_argument", "pages is out of range")
+        }
         let wheel1: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
         let wheel2: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {
