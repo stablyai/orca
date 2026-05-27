@@ -5834,11 +5834,7 @@ export function ConflictSummaryCard({
             disabled={isResolvingWithAI || isAbortingMerge}
             onClick={onAbortMerge}
           >
-            {isAbortingMerge ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <GitMerge className="size-3.5" />
-            )}
+            {isAbortingMerge ? <RefreshCw className="size-3.5 animate-spin" /> : null}
             Abort merge
           </Button>
         ) : null}
@@ -5887,11 +5883,7 @@ function OperationBanner({
           disabled={isAbortingMerge}
           onClick={onAbortMerge}
         >
-          {isAbortingMerge ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <GitMerge className="size-3.5" />
-          )}
+          {isAbortingMerge ? <RefreshCw className="size-3.5 animate-spin" /> : null}
           Abort merge
         </Button>
       ) : null}
