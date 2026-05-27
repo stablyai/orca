@@ -7,7 +7,9 @@ import {
   createFilePathLinkProvider,
   getTerminalHtmlFileOpenHint,
   handleOscLink,
+  installFilePathLinkClickFallback,
   isTerminalLinkActivation,
+  openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -522,27 +524,65 @@ describe('handleOscLink', () => {
 })
 
 describe('createFilePathLinkProvider range bounds', () => {
-  function makePane(lineText: string): { id: number; terminal: unknown } {
+  type TestBufferLine = {
+    isWrapped: boolean
+    length: number
+    translateToString: (
+      trimRight?: boolean,
+      startColumn?: number,
+      endColumn?: number,
+      outColumns?: number[]
+    ) => string
+  }
+
+  function defaultColumnsForText(text: string): number[] {
+    return Array.from({ length: text.length + 1 }, (_value, index) => index)
+  }
+
+  function makeBufferLine(
+    text: string,
+    options: { isWrapped?: boolean; columns?: number[] } = {}
+  ): TestBufferLine {
+    const columns = options.columns ?? defaultColumnsForText(text)
+    return {
+      isWrapped: options.isWrapped ?? false,
+      length: text.length,
+      translateToString: (
+        _trimRight?: boolean,
+        startColumn = 0,
+        endColumn = text.length,
+        outColumns?: number[]
+      ) => {
+        if (outColumns) {
+          outColumns.length = 0
+          for (let index = startColumn; index <= endColumn; index++) {
+            outColumns.push(columns[index] ?? index)
+          }
+        }
+        return text.slice(startColumn, endColumn)
+      }
+    }
+  }
+
+  function makePane(rows: TestBufferLine[]): { id: number; terminal: unknown } {
     return {
       id: 1,
       terminal: {
         buffer: {
           active: {
-            getLine: (_y: number) => ({
-              translateToString: (_trim: boolean) => lineText
-            })
+            getLine: (y: number) => rows[y]
           }
         }
       }
     }
   }
 
-  function collectLinks(lineText: string): Promise<ILink[]> {
-    const pane = makePane(lineText)
+  function createProvider(rows: TestBufferLine[]) {
+    const pane = makePane(rows)
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
     }
-    const provider = createFilePathLinkProvider(
+    return createFilePathLinkProvider(
       1,
       {
         worktreeId: 'wt-1',
@@ -558,9 +598,92 @@ describe('createFilePathLinkProvider range bounds', () => {
       { textContent: '', style: { display: '' } } as unknown as HTMLElement,
       'hint'
     )
+  }
+
+  function collectLinks(
+    rowsOrText: TestBufferLine[] | string,
+    bufferLineNumber = 1
+  ): Promise<ILink[]> {
+    const rows = typeof rowsOrText === 'string' ? [makeBufferLine(rowsOrText)] : rowsOrText
+    const provider = createProvider(rows)
     return new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (links) => resolve(links ?? []))
+      provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
     })
+  }
+
+  function containsBufferPoint(link: ILink, x: number, y: number): boolean {
+    const { start, end } = link.range
+    if (y < start.y || y > end.y) {
+      return false
+    }
+    if (start.y === end.y) {
+      return x >= start.x && x <= end.x
+    }
+    if (y === start.y) {
+      return x >= start.x
+    }
+    if (y === end.y) {
+      return x <= end.x
+    }
+    return true
+  }
+
+  function makeBuffer(
+    rows: TestBufferLine[]
+  ): Parameters<typeof openFilePathLinkAtBufferPosition>[0] {
+    return { getLine: (y: number) => rows[y] } as Parameters<
+      typeof openFilePathLinkAtBufferPosition
+    >[0]
+  }
+
+  function makeFallbackTerminal(rows: TestBufferLine[]): {
+    terminal: Parameters<typeof installFilePathLinkClickFallback>[1]
+    element: {
+      addEventListener: ReturnType<typeof vi.fn>
+      removeEventListener: ReturnType<typeof vi.fn>
+      querySelector: ReturnType<typeof vi.fn>
+    }
+  } {
+    const screen = {
+      classList: { contains: vi.fn(() => true) },
+      getBoundingClientRect: () => ({
+        left: 10,
+        top: 20,
+        width: 800,
+        height: 400
+      })
+    }
+    const element = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      querySelector: vi.fn(() => screen)
+    }
+    return {
+      terminal: {
+        cols: 80,
+        rows: 40,
+        element,
+        buffer: {
+          active: {
+            viewportY: 0,
+            getLine: (y: number) => rows[y]
+          }
+        },
+        clearSelection: vi.fn()
+      } as unknown as Parameters<typeof installFilePathLinkClickFallback>[1],
+      element
+    }
+  }
+
+  function getRegisteredMouseUpHandler(element: {
+    addEventListener: ReturnType<typeof vi.fn>
+  }): (event: MouseEvent) => void {
+    const registration = element.addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseup'
+    )
+    expect(registration, 'mouseup handler should be registered').toBeDefined()
+    expect(registration![2]).toEqual({ capture: true })
+    return registration![1] as (event: MouseEvent) => void
   }
 
   it('underlines only the filename itself, not the column padding from `ls`', async () => {
@@ -584,5 +707,233 @@ describe('createFilePathLinkProvider range bounds', () => {
     const pkgStartIndex = line.indexOf('package.json')
     expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
     expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
+  })
+
+  it('opens a single-row file path from a direct modifier-click fallback', async () => {
+    setPlatform('Macintosh')
+    const pathExists = createDeferred<boolean>()
+    vi.mocked(window.api.shell.pathExists).mockImplementation(() => pathExists.promise)
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('package.json')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/tmp',
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    // Why: direct click fallback cannot wait for xterm's hover-time async
+    // existence probe; openDetectedFilePath still stats before routing.
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/package.json' })
+    )
+  })
+
+  it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('open mobile/mock-'),
+      makeBufferLine('homepage.html', { isWrapped: true })
+    ]
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer(rows),
+      { x: 'home'.length, y: 2 },
+      20,
+      {
+        startupCwd: '/tmp',
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///tmp/mobile/mock-homepage.html',
+      expect.objectContaining({ title: 'mock-homepage.html', activate: true })
+    )
+  })
+
+  it('retries a wrapped file click even when xterm already marked the link active', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/'),
+      makeBufferLine('packages/expo-two-way-audio/android/src/main/java/expo/modules/'),
+      makeBufferLine('twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installFilePathLinkClickFallback(1, terminal, {
+      startupCwd: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
+      worktreeId: 'wt-1',
+      worktreePath: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
+      runtimeEnvironmentId: null,
+      managerRef: { current: null },
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache: new Map<string, boolean>()
+    })
+    const mouseUp = getRegisteredMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      clientX: 20,
+      clientY: 45,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+    await flushAsyncWork()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath:
+          '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
+      })
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
+  })
+
+  it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('/private/tmp/or'),
+      makeBufferLine('ca-setup-e2e.hO'),
+      makeBufferLine('W01f/workspaces'),
+      makeBufferLine('/test-wt-5/mob'),
+      makeBufferLine('ile/packages/ex'),
+      makeBufferLine('po-two-way-aud'),
+      makeBufferLine('io/android/src/'),
+      makeBufferLine('main/java/expo'),
+      makeBufferLine('/modules/twoway'),
+      makeBufferLine('audio/ExpoTwoW'),
+      makeBufferLine('ayAudioLifeCyc'),
+      makeBufferLine('leListener.kt')
+    ]
+
+    const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), { x: 4, y: 12 }, 15, {
+      startupCwd: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
+      worktreeId: 'wt-1',
+      worktreePath: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
+      runtimeEnvironmentId: null
+    })
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath:
+          '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
+      })
+    )
+  })
+
+  it('returns a wrapped file link when hovering the first physical row', async () => {
+    const rows = [
+      makeBufferLine('open src/components/'),
+      makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
+    ]
+
+    const links = await collectLinks(rows, 1)
+    const link = links.find(
+      (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
+    )
+
+    expect(link, 'wrapped path should be linkified from the first row').toBeDefined()
+    expect(link!.range).toEqual({
+      start: { x: 'open '.length + 1, y: 1 },
+      end: { x: 'terminal-link-handlers.ts'.length, y: 2 }
+    })
+  })
+
+  it('returns the same wrapped file link when hovering the continuation row', async () => {
+    const rows = [
+      makeBufferLine('open src/components/'),
+      makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
+    ]
+
+    const firstRowLinks = await collectLinks(rows, 1)
+    const continuationLinks = await collectLinks(rows, 2)
+    const firstRowLink = firstRowLinks.find(
+      (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
+    )
+    const continuationLink = continuationLinks.find(
+      (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
+    )
+
+    expect(
+      continuationLink,
+      'wrapped path should be linkified from the continuation row'
+    ).toBeDefined()
+    expect(continuationLink!.text).toBe(firstRowLink!.text)
+    expect(continuationLink!.range).toEqual(firstRowLink!.range)
+  })
+
+  it('maps file link columns through multi-code-unit characters before the path', async () => {
+    const text = 'e\u0301 src/main.ts'
+    const columns = [0, 0, 1]
+    for (let index = 3; index < text.length; index++) {
+      columns[index] = index - 1
+    }
+    columns[text.length] = text.length - 1
+
+    const links = await collectLinks([makeBufferLine(text, { columns })])
+    const link = links.find((candidate) => candidate.text === 'src/main.ts')
+
+    expect(link, 'unicode-prefixed path should be linkified').toBeDefined()
+    expect(link!.range.start.x).toBe(3)
+    expect(link!.range.end.x).toBe(text.length - 1)
+  })
+
+  it('drops stale async file links when wrapped rows change before existence resolves', async () => {
+    const rows = [
+      makeBufferLine('open src/components/'),
+      makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
+    ]
+    const provider = createProvider(rows)
+    const exists = createDeferred<boolean>()
+    vi.mocked(window.api.shell.pathExists).mockImplementation(() => exists.promise)
+    const callback = vi.fn()
+
+    provider.provideLinks(1, callback)
+    rows[0] = makeBufferLine('changed src/other/')
+
+    exists.resolve(true)
+    await flushAsyncWork()
+    await flushAsyncWork()
+
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('reports multi-row ranges that hit-test at wrapped-link boundaries', async () => {
+    const rows = [
+      makeBufferLine('trace src/very/long/'),
+      makeBufferLine('nested/file.ts done', { isWrapped: true })
+    ]
+
+    const links = await collectLinks(rows, 2)
+    const link = links.find((candidate) => candidate.text === 'src/very/long/nested/file.ts')
+
+    expect(link, 'multi-row path should be linkified').toBeDefined()
+    expect(containsBufferPoint(link!, 'trace '.length, 1)).toBe(false)
+    expect(containsBufferPoint(link!, 'trace '.length + 1, 1)).toBe(true)
+    expect(containsBufferPoint(link!, 'nested/file.ts'.length, 2)).toBe(true)
+    expect(containsBufferPoint(link!, 'nested/file.ts'.length + 1, 2)).toBe(false)
   })
 })

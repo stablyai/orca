@@ -1808,12 +1808,18 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 
 /* Frame 2 — Orchestration: child cards flash as bubbles land along the
    dashed paths fanning down from the coordinator. */
+/* Why: bubbles use percent-based left/top so they always travel from the
+   root card's right edge (34%) to the child card's left edge (64%),
+   regardless of preview width. The previous offset-path used hardcoded
+   pixels and drifted off the dashed lines once the preview resized. */
 .feature-tour-orch-bubble {
   position: absolute;
-  top: 0;
-  left: 0;
+  left: 34%;
+  top: 50%;
   width: 12px;
   height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
   border-radius: 3px;
   background: var(--primary);
   color: var(--primary-foreground);
@@ -1821,57 +1827,123 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  offset-rotate: 0deg;
   z-index: 4;
-  animation: feature-tour-orch-travel var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+}
+.feature-tour-orch-bubble.top {
+  animation: feature-tour-orch-travel-top var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
     infinite;
-}
-.feature-tour-orch-bubble.left {
-  offset-path: path('M 168 36 C 132 56, 102 66, 72 86');
-  offset-anchor: center;
   animation-delay: 4s;
 }
-.feature-tour-orch-bubble.right {
-  offset-path: path('M 168 36 C 204 56, 234 66, 264 86');
-  offset-anchor: center;
-  animation-delay: 4s;
+.feature-tour-orch-bubble.mid {
+  animation: feature-tour-orch-travel-mid var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: calc(4s + 0.2s);
 }
-.feature-tour-orch-bubble.left.b2 {
-  animation-delay: calc(4s + 0.55s);
+.feature-tour-orch-bubble.bot {
+  animation: feature-tour-orch-travel-bot var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: calc(4s + 0.4s);
 }
-.feature-tour-orch-bubble.right.b2 {
-  animation-delay: calc(4s + 0.75s);
-}
-@keyframes feature-tour-orch-travel {
+@keyframes feature-tour-orch-travel-top {
   0% {
-    offset-distance: 0%;
+    left: 34%;
+    top: 50%;
     opacity: 0;
   }
   2% {
-    offset-distance: 0%;
+    opacity: 1;
+  }
+  3.5% {
+    left: 49%;
+    top: 50%;
     opacity: 1;
   }
   6.5% {
-    offset-distance: 100%;
+    left: 64%;
+    top: 18%;
     opacity: 1;
   }
   7.5% {
-    offset-distance: 100%;
+    left: 64%;
+    top: 18%;
     opacity: 0;
   }
   25%,
   100% {
-    offset-distance: 100%;
+    left: 64%;
+    top: 18%;
+    opacity: 0;
+  }
+}
+@keyframes feature-tour-orch-travel-mid {
+  0% {
+    left: 34%;
+    top: 50%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  6.5% {
+    left: 64%;
+    top: 50%;
+    opacity: 1;
+  }
+  7.5% {
+    left: 64%;
+    top: 50%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    left: 64%;
+    top: 50%;
+    opacity: 0;
+  }
+}
+@keyframes feature-tour-orch-travel-bot {
+  0% {
+    left: 34%;
+    top: 50%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  3.5% {
+    left: 49%;
+    top: 50%;
+    opacity: 1;
+  }
+  6.5% {
+    left: 64%;
+    top: 82%;
+    opacity: 1;
+  }
+  7.5% {
+    left: 64%;
+    top: 82%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    left: 64%;
+    top: 82%;
     opacity: 0;
   }
 }
 
 .feature-tour-orch-child {
   animation: feature-tour-orch-child-flash var(--feature-tour-cycle) linear infinite;
+}
+.feature-tour-orch-child.top {
   animation-delay: 4s;
 }
-.feature-tour-orch-child.right {
+.feature-tour-orch-child.mid {
   animation-delay: calc(4s + 0.2s);
+}
+.feature-tour-orch-child.bot {
+  animation-delay: calc(4s + 0.4s);
 }
 @keyframes feature-tour-orch-child-flash {
   0%,
@@ -1897,14 +1969,18 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 /* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
    to a dark "Start workspace →" pill, then a workspace card slides in. */
 .feature-tour-tasks-cursor {
+  /* Why: anchored from the row's right edge so the cursor sits just past the
+     pill's right edge (12px row padding + ~6px past pill end) instead of
+     covering the label text. The arrow tip (top-left of the SVG) lands on the
+     dark pill's trailing edge with the body of the cursor extending right. */
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 50%;
+  right: 14px;
   width: 14px;
   height: 14px;
   pointer-events: none;
   z-index: 8;
-  transform: translate(20px, 8px);
+  transform: translate(120px, -30%);
   opacity: 0;
   animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
     infinite;
@@ -1917,22 +1993,30 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 }
 @keyframes feature-tour-tasks-cursor {
   0% {
-    transform: translate(20px, 8px);
+    transform: translate(160px, -10%);
     opacity: 0;
   }
   2% {
     opacity: 1;
   }
   5% {
-    transform: translate(120px, 60px);
+    transform: translate(60px, -30%);
     opacity: 1;
   }
   8% {
-    transform: translate(238px, 60px);
+    transform: translate(0px, -30%);
+    opacity: 1;
+  }
+  9% {
+    transform: translate(0px, -10%);
+    opacity: 1;
+  }
+  10.5% {
+    transform: translate(0px, -30%);
     opacity: 1;
   }
   23.5% {
-    transform: translate(238px, 60px);
+    transform: translate(0px, -30%);
     opacity: 1;
   }
   24.5% {
@@ -1940,7 +2024,7 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   }
   25%,
   100% {
-    transform: translate(238px, 60px);
+    transform: translate(0px, -30%);
     opacity: 0;
   }
 }
@@ -1977,25 +2061,29 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 @keyframes feature-tour-tasks-pill-morph {
   0%,
   6% {
-    width: 36px;
+    width: 28px;
     background: rgb(34 197 94 / 0.14);
     border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
   }
   8% {
-    width: 110px;
+    width: 78px;
     background: var(--primary);
     border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   23.5% {
-    width: 110px;
+    width: 78px;
     background: var(--primary);
     border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   25%,
   100% {
-    width: 36px;
+    width: 28px;
     background: rgb(34 197 94 / 0.14);
     border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
   }
 }
 
@@ -2027,11 +2115,15 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 /* Click ring fires when the cursor "clicks" the morphed pill on the tasks
    row. Positioned to overlay the right-side pill of the second task. */
 .feature-tour-tasks-click-ring {
+  /* Why: ring is centered on the cursor tip (right=28 from row's right edge)
+     so the click feedback lands where the cursor is, on the arrow icon — not
+     centered on the pill, which would visually disconnect from the cursor. */
   position: absolute;
+  top: 50%;
   right: 14px;
-  top: 50px;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
   border-radius: 9999px;
   border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   opacity: 0;

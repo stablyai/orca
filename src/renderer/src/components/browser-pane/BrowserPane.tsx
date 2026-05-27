@@ -83,6 +83,7 @@ import {
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
+import { useBrowserAutomationVisiblePageIds } from './browser-automation-visibility'
 import type {
   BrowserDownloadRequestedEvent,
   BrowserDownloadProgressEvent,
@@ -784,6 +785,20 @@ export default function BrowserPane({
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
   const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
   const activeBrowserPageId = activeBrowserPage?.id ?? null
+  const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
+  const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
+  const renderedBrowserPages = useMemo(() => {
+    const pages: BrowserPageState[] = []
+    if (activeBrowserPage) {
+      pages.push(activeBrowserPage)
+    }
+    for (const page of browserPages) {
+      if (page.id !== activeBrowserPage?.id && automationVisiblePageIds.has(page.id)) {
+        pages.push(page)
+      }
+    }
+    return pages
+  }, [activeBrowserPage, automationVisiblePageIds, browserPages])
   const [activeBrowserDriver, setActiveBrowserDriver] = useState<BrowserDriverState>({
     kind: 'idle'
   })
@@ -834,19 +849,22 @@ export default function BrowserPane({
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
-      {activeBrowserPage ? (
+      {renderedBrowserPages.length > 0 ? (
         <div className="relative flex min-h-0 flex-1">
-          <BrowserPagePane
-            key={activeBrowserPage.id}
-            browserTab={activeBrowserPage}
-            workspaceId={browserTab.id}
-            worktreeId={browserTab.worktreeId}
-            sessionProfileId={browserTab.sessionProfileId ?? null}
-            isActive={isActive}
-            inputLocked={activeBrowserDriver.kind === 'mobile'}
-            onUpdatePageState={updateBrowserPageState}
-            onSetUrl={setBrowserPageUrl}
-          />
+          {renderedBrowserPages.map((page) => (
+            <BrowserPagePane
+              key={page.id}
+              browserTab={page}
+              workspaceId={browserTab.id}
+              worktreeId={browserTab.worktreeId}
+              sessionProfileId={browserTab.sessionProfileId ?? null}
+              isActive={isActive && page.id === activeBrowserPage?.id}
+              isAutomationVisible={automationVisiblePageIds.has(page.id)}
+              inputLocked={activeBrowserDriver.kind === 'mobile'}
+              onUpdatePageState={updateBrowserPageState}
+              onSetUrl={setBrowserPageUrl}
+            />
+          ))}
           <BrowserMobileDriverOverlay
             driver={activeBrowserDriver}
             onTakeBack={reclaimActiveBrowserForDesktop}
@@ -2502,6 +2520,7 @@ function BrowserPagePane({
   worktreeId,
   sessionProfileId,
   isActive,
+  isAutomationVisible,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -2511,10 +2530,12 @@ function BrowserPagePane({
   worktreeId: string
   sessionProfileId: string | null
   isActive: boolean
+  isAutomationVisible: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: (tabId: string, url: string) => void
 }): React.JSX.Element {
+  const isPaintable = isActive || isAutomationVisible
   const containerRef = useRef<HTMLDivElement | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -4171,8 +4192,16 @@ function BrowserPagePane({
     <div
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
-        isActive ? 'z-10' : 'pointer-events-none hidden'
+        isActive
+          ? 'z-10'
+          : isPaintable
+            ? 'pointer-events-none z-0 opacity-0'
+            : 'pointer-events-none hidden'
       )}
+      // Why: automation-visible webviews must remain mounted and paintable, but
+      // their hidden toolbar and guest content cannot stay keyboard-focusable.
+      inert={!isActive}
+      aria-hidden={!isActive}
     >
       {/* IPC-driven context menu — rendered in a Portal so position: fixed is
           relative to the viewport, not affected by ancestor backdrop-filter or

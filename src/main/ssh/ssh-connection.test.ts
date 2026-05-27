@@ -201,6 +201,23 @@ describe('SshConnection', () => {
     expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('forces a fresh SSH connection for an explicit reconnect', async () => {
+    const states: string[] = []
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => states.push(state.status))
+      })
+    )
+    await conn.connect()
+
+    await conn.reconnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(states).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected'])
+    expect(conn.getState().status).toBe('connected')
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({

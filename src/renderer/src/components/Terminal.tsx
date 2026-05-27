@@ -3,6 +3,7 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
@@ -36,6 +37,7 @@ import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
 import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -1788,15 +1790,28 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
+  const browserPageIds = useAppStore(
+    useShallow((state) =>
+      (state.browserTabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
+        tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
+      )
+    )
+  )
+  const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
+  const shouldKeepPaintable = shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser
+
   return (
     <div
       className={
         isVisible
           ? 'absolute inset-0 flex'
-          : shouldMeasureHiddenWorktree
+          : shouldKeepPaintable
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
+      // Why: automation-visible panes must stay paintable for webviews, but
+      // invisible controls cannot remain reachable by Tab or assistive tech.
+      inert={!isVisible}
       aria-hidden={!isVisible}
     >
       <CodexRestartChip worktreeId={worktreeId} />

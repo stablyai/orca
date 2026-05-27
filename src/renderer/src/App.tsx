@@ -1136,7 +1136,12 @@ function App(): React.JSX.Element {
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
       if (isFloatingWorkspacePanelFocused()) {
-        if (isFloatingWorkspacePanelShortcut(e, isMac)) {
+        if (
+          isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
+            context,
+            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          })
+        ) {
           return
         }
       }

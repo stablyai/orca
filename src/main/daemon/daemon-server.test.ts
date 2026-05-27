@@ -145,6 +145,15 @@ describe('DaemonServer', () => {
       expect(result).toEqual({ pong: true })
     })
 
+    it('handles systemResolverHealth', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const result = await c.request<{ health: unknown }>('systemResolverHealth', undefined)
+
+      expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
+    })
+
     it('handles write (fire-and-forget)', async () => {
       await startServer()
       const c = await connectClient()

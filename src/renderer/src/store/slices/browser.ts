@@ -514,7 +514,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       state.createUnifiedTab(worktreeId, 'browser', {
         entityId: workspaceId,
         label: browserTab.title,
-        targetGroupId: options?.targetGroupId
+        targetGroupId: options?.targetGroupId,
+        activate: options?.activate ?? true
       })
     }
     return browserTab

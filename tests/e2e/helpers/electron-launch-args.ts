@@ -4,6 +4,13 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
   }
 
   // Why: Ubuntu CI can fail headless Electron when Chromium's GPU subprocess
-  // cannot initialize; these switches keep rendering on a software-safe path.
-  return ['--disable-gpu', '--disable-dev-shm-usage', mainPath]
+  // cannot initialize; keep E2E on a low-process software path under Xvfb.
+  return [
+    '--disable-gpu',
+    '--disable-gpu-compositing',
+    '--disable-gpu-sandbox',
+    '--disable-dev-shm-usage',
+    '--in-process-gpu',
+    mainPath
+  ]
 }

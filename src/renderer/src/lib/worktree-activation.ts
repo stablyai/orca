@@ -1,4 +1,9 @@
-import type { SetupSplitDirection, Worktree, WorktreeSetupLaunch } from '../../../shared/types'
+import type {
+  SetupSplitDirection,
+  TuiAgent,
+  Worktree,
+  WorktreeSetupLaunch
+} from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
@@ -47,6 +52,7 @@ type WorktreeActivationStore = {
     startup: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -120,6 +126,7 @@ export function activateAndRevealWorktree(
     startup?: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
     setup?: WorktreeSetupLaunch
@@ -200,7 +207,12 @@ export function activateAndRevealWorktree(
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
-  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry },
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    telemetry?: AgentStartedTelemetry
+  },
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch
 ): string | null {

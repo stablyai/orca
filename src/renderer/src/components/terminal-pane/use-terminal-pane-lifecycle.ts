@@ -9,7 +9,8 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
-  handleOscLink
+  handleOscLink,
+  installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type {
@@ -33,7 +34,8 @@ import {
   installMode2031Handlers,
   mode2031SequenceFor
 } from './terminal-appearance'
-import { parseOsc52 } from './osc52-clipboard'
+import { handleOsc52ClipboardRequest } from './osc52-clipboard'
+import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
@@ -270,6 +272,7 @@ export function useTerminalPaneLifecycle({
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -337,6 +340,7 @@ export function useTerminalPaneLifecycle({
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
+    const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -348,6 +352,9 @@ export function useTerminalPaneLifecycle({
       cwd ??
       ''
     const startupCwd = cwd ?? worktreePath
+    // Why: existence probes can cross SSH/runtime boundaries. This cache is
+    // lifecycle-scoped, so external mutations and the initial 'active' runtime
+    // fallback can temporarily leave stale entries.
     const pathExistsCache = new Map<string, boolean>()
     const linkDeps: LinkHandlerDeps = {
       worktreeId,
@@ -463,22 +470,13 @@ export function useTerminalPaneLifecycle({
         // both the enabled and disabled paths so xterm doesn't fall
         // through to any other OSC 52 handler and so our intentional drop
         // in the disabled path is explicit.
-        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) => {
-          if (!settingsRef.current?.terminalAllowOsc52Clipboard) {
-            return true
-          }
-          const parsed = parseOsc52(data)
-          if (parsed.kind !== 'write') {
-            // Queries and malformed payloads are intentionally dropped —
-            // answering a query would leak the user's clipboard to any
-            // process writing to the PTY.
-            return true
-          }
-          void window.api.ui.writeClipboardText(parsed.text).catch(() => {
-            /* ignore clipboard write failures */
+        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
+          handleOsc52ClipboardRequest(data, {
+            allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
+            writeClipboardText: window.api.ui.writeClipboardText,
+            onBlockedWrite: showOsc52ClipboardBlockedToast
           })
-          return true
-        })
+        )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
         // OSC 7 — shell-reported current working directory. Drives split-pane
@@ -542,6 +540,12 @@ export function useTerminalPaneLifecycle({
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
+        const fileLinkClickFallbackDisposable = installFilePathLinkClickFallback(
+          pane.id,
+          pane.terminal,
+          linkDeps
+        )
+        fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -667,6 +671,12 @@ export function useTerminalPaneLifecycle({
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
           linkProviderDisposablesRef.current.delete(paneId)
+        }
+        const fileLinkClickFallbackDisposable =
+          fileLinkClickFallbackDisposablesRef.current.get(paneId)
+        if (fileLinkClickFallbackDisposable) {
+          fileLinkClickFallbackDisposable.dispose()
+          fileLinkClickFallbackDisposablesRef.current.delete(paneId)
         }
         const selectionDisposable = selectionDisposablesRef.current.get(paneId)
         if (selectionDisposable) {
@@ -1074,6 +1084,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       linkDisposables.clear()
+      for (const disposable of fileLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      fileLinkClickFallbackDisposables.clear()
       for (const disposable of selectionDisposables.values()) {
         disposable.dispose()
       }

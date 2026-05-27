@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: file CLI coverage shares one mocked runtime setup across command contracts. */
-import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -83,7 +82,7 @@ describe('orca file CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
@@ -160,20 +159,20 @@ describe('orca file CLI handlers', () => {
     await main(['file', 'open-changed'], '/tmp/repo/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'git.status', {
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
       staged: false
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'package.json',
       staged: true
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'docs/new.md',
       staged: false
     })

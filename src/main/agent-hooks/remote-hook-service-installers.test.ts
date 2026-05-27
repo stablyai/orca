@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
 
 import { CodexHookService } from '../codex/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
+import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
@@ -139,6 +140,11 @@ describe('remote hook service installers', () => {
           install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, '/home/dev')
         },
         {
+          path: '/home/dev/.orca/agent-hooks/command-code-hook.sh',
+          install: (sftp: SFTPWrapper) =>
+            new CommandCodeHookService().installRemote(sftp, '/home/dev')
+        },
+        {
           path: '/home/dev/.orca/agent-hooks/grok-hook.sh',
           install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, '/home/dev')
         },
@@ -206,15 +212,17 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini, Antigravity, Cursor, and Grok configs using their CLI-specific schemas', async () => {
+  it('installs remote Gemini, Antigravity, Cursor, Command Code, and Grok configs using their CLI-specific schemas', async () => {
     const gemini = createFakeSftp()
     const antigravity = createFakeSftp()
     const cursor = createFakeSftp()
+    const commandCode = createFakeSftp()
     const grok = createFakeSftp()
 
     await new GeminiHookService().installRemote(gemini.sftp, '/home/dev')
     await new AntigravityHookService().installRemote(antigravity.sftp, '/home/dev')
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
+    await new CommandCodeHookService().installRemote(commandCode.sftp, '/home/dev')
     await new GrokHookService().installRemote(grok.sftp, '/home/dev')
 
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
@@ -267,6 +275,21 @@ describe('remote hook service installers', () => {
       expect(definition?.command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
       expect(definition?.hooks).toBeUndefined()
     }
+
+    const commandCodeConfig = JSON.parse(
+      commandCode.fs.files.get('/home/dev/.commandcode/settings.json')!
+    ) as {
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    for (const eventName of ['PreToolUse', 'PostToolUse', 'Stop']) {
+      const definition = commandCodeConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
+    expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
+    expect(commandCodeConfig.hooks.Stop?.[0]?.matcher).toBeUndefined()
 
     const grokConfig = JSON.parse(grok.fs.files.get('/home/dev/.grok/hooks/orca-status.json')!) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>

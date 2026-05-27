@@ -44,6 +44,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -126,6 +127,80 @@ describe('shared agent-hook-listener', () => {
       toolName: 'bash',
       toolInput: 'pnpm test'
     })
+  })
+
+  it('normalizes Command Code hooks and reads turn text from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'Run pwd and report it' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'Need to run pwd.' },
+              { type: 'text', text: 'The output is /tmp/project.' }
+            ]
+          })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        toolName: 'shell_command',
+        toolInput: 'pwd'
+      })
+
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        lastAssistantMessage: 'The output is /tmp/project.'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
   it('trims surrounding whitespace from extracted prompt text', () => {

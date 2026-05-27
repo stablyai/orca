@@ -159,6 +159,20 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
   })
 
+  it('creates inactive browser unified tabs without stealing the visible tab', () => {
+    const store = createTestStore()
+
+    store.getState().createBrowserTab('wt-1', 'https://example.com', { activate: false })
+
+    expect(store.getState().createUnifiedTab).toHaveBeenCalledWith(
+      'wt-1',
+      'browser',
+      expect.objectContaining({ activate: false })
+    )
+    expect(store.getState().activeTabType).toBe('terminal')
+    expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBeNull()
+  })
+
   it('preserves browser map references when a page-state update is unchanged', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {

@@ -20,6 +20,7 @@ const {
   netConnectMock,
   forkMock,
   healthCheckDaemonMock,
+  getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
   killStaleDaemonMock,
   getProcessStartedAtMsMock,
@@ -58,6 +59,7 @@ const {
   })
 
   const healthCheckDaemonMock = vi.fn(async () => true)
+  const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn(() => 1_000_000)
@@ -87,6 +89,7 @@ const {
     netConnectMock,
     forkMock,
     healthCheckDaemonMock,
+    getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
     killStaleDaemonMock,
     getProcessStartedAtMsMock,
@@ -154,6 +157,7 @@ vi.mock('net', () => ({ connect: netConnectMock }))
 
 vi.mock('./daemon-health', () => ({
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
+  getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
   killStaleDaemon: killStaleDaemonMock,
   getProcessStartedAtMs: getProcessStartedAtMsMock
@@ -243,6 +247,8 @@ async function importFresh() {
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
   healthCheckDaemonMock.mockClear()
+  getMacDaemonSystemResolverHealthMock.mockReset()
+  getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
   killStaleDaemonMock.mockClear()
   getAppPathMock.mockReset()
@@ -663,6 +669,51 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       '/fake/app/out/main/daemon-entry.js'
     )
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token'
+    )
+    expect(forkMock).toHaveBeenCalledWith(
+      '/fake/app/out/main/daemon-entry.js',
+      ['--socket', '/fake/socket', '--token', '/fake/token'],
+      expect.objectContaining({ detached: true })
+    )
+  })
+
+  it('respawns instead of reusing a protocol-healthy daemon with broken macOS resolver state', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    getMacDaemonSystemResolverHealthMock.mockReturnValueOnce('unhealthy')
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 12345,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          if (event === 'message') {
+            queueMicrotask(() => cb({ type: 'ready' }))
+          }
+          return this
+        },
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
+    expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       '/fake/userData/daemon',
       '/fake/socket',

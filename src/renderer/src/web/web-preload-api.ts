@@ -1649,6 +1649,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'antigravity'
       | 'cursor'
       | 'droid'
+      | 'command-code'
       | 'grok'
       | 'copilot'
       | 'hermes'
@@ -1667,6 +1668,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     antigravityStatus: () => status('antigravity'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
+    commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes')
@@ -1809,6 +1811,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
+    getMainBufferSnapshot: () => Promise.resolve(null),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,

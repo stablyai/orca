@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: this file groups every CLI browser-command test (page targeting, profiles, waits, viewport) so test-fixture imports and the runtime-client mock stay shared in one place. */
-import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -90,7 +89,7 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'browser.snapshot', {
       page: 'page-1',
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
   })
 
@@ -124,7 +123,7 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabSwitch', {
       index: undefined,
       page: 'page-2',
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
   })
 

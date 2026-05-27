@@ -32,14 +32,14 @@ describe('OnboardingFlow', () => {
     )
 
     expect(html).toContain('Explore Orca')
-    expect(html).toContain('Preview the core workflow.')
-    expect(html).toContain('Run agents in isolated worktrees.')
-    expect(html).toContain('Orchestrate agents to finish larger tasks.')
-    expect(html).toContain('Start tasks from GitHub or Linear.')
-    expect(html).toContain('Send webpage elements to agents from the Orca browser.')
-    expect(html).not.toContain('Write and preview Markdown.')
-    expect(html).toContain('items-start')
-    expect(html).toContain('text-left')
+    expect(html).toContain('Take a 60-second tour of Orca&#x27;s advanced features.')
+    expect(html).toContain('Take the tour')
+    // Why: the prior intro carried a redundant lead, a four-item checklist, and
+    // a help-menu footnote. The tour animation already conveys all of that, so
+    // the body is now just the preview + a single CTA — guard against drift.
+    expect(html).not.toContain('Preview the core workflow.')
+    expect(html).not.toContain('Run agents in isolated worktrees.')
+    expect(html).not.toContain('Available later under Help')
     expect(html).toContain('Continue')
     expect(html).toContain('Skip to project setup')
     expect(html).not.toContain('Skip the tour')
