@@ -75,8 +75,20 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     vi.unstubAllGlobals()
   })
 
-  it('reports not-ready when newer tags exist but their manifest assets are unavailable', async () => {
-    respondWithAtom(['v1.4.27'], [], ['v1.4.27'])
+  it('reports not-ready with a verified last-good tag when the newest assets are unavailable', async () => {
+    respondWithAtom(['v1.4.27', 'v1.4.26'], [], ['v1.4.27'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.26'
+    })
+  })
+
+  it('does not return a last-good tag whose manifest asset is unavailable', async () => {
+    respondWithAtom(['v1.4.27', 'v1.4.26'], [], ['v1.4.27', 'v1.4.26'])
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
@@ -142,9 +154,15 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
     })
 
-    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTag('1.4.26')).toBe('v1.4.27')
+    expect(await fetchNewerReleaseTag('1.4.26')).toBeNull()
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.27'
+    })
   })
 
   it('accepts absolute manifest asset URLs without rewriting them to release asset paths', async () => {
@@ -210,8 +228,60 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
     })
 
-    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTag('1.4.26')).toBe('v1.4.27')
+    expect(await fetchNewerReleaseTag('1.4.26')).toBeNull()
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.27'
+    })
+  })
+
+  it('returns not-ready with an older ready update as last-good while newest is publishing', async () => {
+    respondWithAtom(['v1.4.27', 'v1.4.26'], ['v1.4.27'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.25', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.26'
+    })
+  })
+
+  it('uses prerelease last-good tags only for prerelease-aware checks', async () => {
+    respondWithAtom(['v1.4.27-rc.2', 'v1.4.27-rc.1', 'v1.4.26'], ['v1.4.27-rc.2'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.27-rc.1', 1, { includePrerelease: true })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.27-rc.1'
+    })
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.26', 1, { includePrerelease: false })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'no-newer'
+    })
+  })
+
+  it('does not guess a last-good tag outside the bounded probe window', async () => {
+    respondWithAtom(
+      ['v1.4.33', 'v1.4.32', 'v1.4.31', 'v1.4.30', 'v1.4.29', 'v1.4.28', 'v1.4.27'],
+      ['v1.4.33', 'v1.4.32', 'v1.4.31', 'v1.4.30', 'v1.4.29', 'v1.4.28']
+    )
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
   })
 })

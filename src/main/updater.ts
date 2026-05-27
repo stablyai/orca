@@ -59,6 +59,7 @@ let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
 let lastNudgeCheckAt = 0
+let publishingWindowLastGoodCheck: { lastGoodTag: string } | null = null
 let pendingPrereleaseFallback: {
   primaryTag: string
   fallbackTag: string
@@ -114,6 +115,14 @@ function deferPendingUpdateNudgeUntilRetry(): void {
   awaitingNudgeCheckOutcome = false
 }
 
+function clearPublishingWindowLastGoodCheck(): void {
+  publishingWindowLastGoodCheck = null
+}
+
+function getPublishingWindowLastGoodCheck(): { lastGoodTag: string } | null {
+  return publishingWindowLastGoodCheck
+}
+
 function getPersistedPendingUpdateNudgeId(): string | null {
   return _getPendingUpdateNudgeId?.() ?? null
 }
@@ -132,6 +141,9 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
 }
 
 function sendStatus(status: UpdateStatus): void {
+  const shouldPreserveNudgeForPublishingWindow =
+    publishingWindowLastGoodCheck !== null &&
+    (status.state === 'idle' || status.state === 'not-available' || status.state === 'error')
   if (awaitingNudgeCheckOutcome) {
     if (status.state === 'available') {
       awaitingNudgeCheckOutcome = false
@@ -140,20 +152,35 @@ function sendStatus(status: UpdateStatus): void {
       status.state === 'not-available' ||
       status.state === 'error'
     ) {
-      // Why: when a nudge-triggered check finds no update (or errors out),
-      // move the campaign to dismissed so it doesn't re-fire on the next
-      // poll cycle. Without this, a nudge whose version range includes
-      // already-up-to-date users would loop every 30 minutes, each time
-      // triggering a redundant checkForUpdates() and clearing the persisted
-      // dismissedUpdateVersion.
-      if (activeUpdateNudgeId) {
-        _setDismissedUpdateNudgeId?.(activeUpdateNudgeId)
+      if (shouldPreserveNudgeForPublishingWindow) {
+        // Why: last-good checks can legitimately say "not available" while
+        // the campaign's newest release is still publishing.
+        deferPendingUpdateNudgeUntilRetry()
+      } else {
+        // Why: when a nudge-triggered check finds no update (or errors out),
+        // move the campaign to dismissed so it doesn't re-fire on the next
+        // poll cycle. Without this, a nudge whose version range includes
+        // already-up-to-date users would loop every 30 minutes, each time
+        // triggering a redundant checkForUpdates() and clearing the persisted
+        // dismissedUpdateVersion.
+        if (activeUpdateNudgeId) {
+          _setDismissedUpdateNudgeId?.(activeUpdateNudgeId)
+        }
+        clearPendingUpdateNudge()
       }
-      clearPendingUpdateNudge()
     }
   }
 
   const decoratedStatus = decorateStatusWithActiveNudge(status)
+
+  if (
+    status.state === 'idle' ||
+    status.state === 'not-available' ||
+    status.state === 'available' ||
+    status.state === 'error'
+  ) {
+    clearPublishingWindowLastGoodCheck()
+  }
 
   // Why: reset the in-flight guard when the status moves past the
   // window where duplicate download() calls are possible.
@@ -480,6 +507,7 @@ async function pinDefaultReleaseFeed(): Promise<void> {
   // the updater on a user's machine when something goes wrong. Cheap to keep,
   // invaluable when triaging.
   if (newerTag) {
+    clearPublishingWindowLastGoodCheck()
     const url = getReleaseDownloadUrl(newerTag)
     console.info(
       `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
@@ -487,12 +515,25 @@ async function pinDefaultReleaseFeed(): Promise<void> {
     autoUpdater.setFeedURL({ provider: 'generic', url })
   } else if (releaseTagsResult.state === 'not-ready') {
     clearPrereleaseFallbackContext()
+    if (releaseTagsResult.lastGoodTag) {
+      // Why: during a publish window the newest tag is unsafe, but a verified
+      // last-good concrete feed lets electron-updater emit a real result.
+      const url = getReleaseDownloadUrl(releaseTagsResult.lastGoodTag)
+      console.info(
+        `[updater] release feed pinned to last-good: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+      )
+      publishingWindowLastGoodCheck = { lastGoodTag: releaseTagsResult.lastGoodTag }
+      autoUpdater.setFeedURL({ provider: 'generic', url })
+      return
+    }
+    clearPublishingWindowLastGoodCheck()
     console.info(
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
     throw new Error('Latest release assets are still publishing')
   } else {
     clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
     const url = 'https://github.com/stablyai/orca/releases/latest/download'
     console.info(
       `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
@@ -821,6 +862,7 @@ export function setupAutoUpdater(
     clearAvailableUpdateContext,
     consumeMissingManifestPrereleaseFallbackResult,
     getMissingManifestPrereleaseFallbackUserInitiated,
+    getPublishingWindowLastGoodCheck,
     getCurrentStatus: () => currentStatus,
     getKnownReleaseUrl,
     getPendingInstallVersion,
