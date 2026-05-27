@@ -2024,6 +2024,8 @@ const api = {
     check: (options?: { includePrerelease?: boolean }): Promise<void> =>
       ipcRenderer.invoke('updater:check', options),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
+    scheduleIdleInstall: (): Promise<void> => ipcRenderer.invoke('updater:scheduleIdleInstall'),
+    cancelIdleInstall: (): Promise<void> => ipcRenderer.invoke('updater:cancelIdleInstall'),
     dismissNudge: (): Promise<void> => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
       // Why: update installs must proceed even when a dirty-file auto-save
@@ -2052,6 +2054,13 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('updater:clearDismissal', listener)
       return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
+    },
+    // Why: fired by main when a deferred ("update when idle") install is ready to
+    // go — the renderer runs its full quitAndInstall flush in response.
+    onIdleInstallReady: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('updater:idleInstallReady', listener)
+      return () => ipcRenderer.removeListener('updater:idleInstallReady', listener)
     }
   },
 

@@ -17,13 +17,16 @@ import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
+  cancelIdleInstall,
   checkForUpdatesFromMenu,
   downloadUpdate,
   getUpdateStatus,
   quitAndInstall,
+  scheduleIdleInstall,
   setupAutoUpdater,
   dismissNudge
 } from '../updater'
+import { agentHookServer } from '../agent-hooks/server'
 import { scheduleHistoryGc } from '../terminal-history'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -106,7 +109,10 @@ export function attachMainWindowServices(
     },
     setDismissedUpdateNudgeId: (id) => {
       store.updateUI({ dismissedUpdateNudgeId: id })
-    }
+    },
+    // Why: lets "Update when idle" gate the restart on live agent activity.
+    getActiveAgentStatuses: () => agentHookServer.getStatusChangeSnapshot(),
+    subscribeAgentStatusChanges: (listener) => agentHookServer.subscribeStatusChanges(listener)
   })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
@@ -395,6 +401,8 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:getVersion')
   ipcMain.removeHandler('updater:check')
   ipcMain.removeHandler('updater:download')
+  ipcMain.removeHandler('updater:scheduleIdleInstall')
+  ipcMain.removeHandler('updater:cancelIdleInstall')
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
 
@@ -404,6 +412,8 @@ export function registerUpdaterHandlers(_store: Store): void {
     checkForUpdatesFromMenu(options)
   )
   ipcMain.handle('updater:download', () => downloadUpdate())
+  ipcMain.handle('updater:scheduleIdleInstall', () => scheduleIdleInstall())
+  ipcMain.handle('updater:cancelIdleInstall', () => cancelIdleInstall())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
 }

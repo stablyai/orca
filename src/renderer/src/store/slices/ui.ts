@@ -595,8 +595,6 @@ export type UISlice = {
   // Resets every session and on every phase transition (see setUpdateStatus).
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
-  updateReassuranceSeen: boolean
-  markUpdateReassuranceSeen: () => void
   isFullScreen: boolean
   setIsFullScreen: (v: boolean) => void
   /** URL opened when a new browser tab is created. Null = blank tab (default). */
@@ -1298,7 +1296,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
-        updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
@@ -1389,11 +1386,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
   updateCardCollapsed: false,
   setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),
-  updateReassuranceSeen: false,
-  markUpdateReassuranceSeen: () => {
-    void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)
-    set({ updateReassuranceSeen: true })
-  },
   isFullScreen: false,
   setIsFullScreen: (v) => set({ isFullScreen: v }),
   browserDefaultUrl: null,
