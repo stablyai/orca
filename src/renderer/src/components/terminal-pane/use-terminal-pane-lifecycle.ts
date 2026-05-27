@@ -9,10 +9,11 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
-  handleOscLink,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -273,6 +274,7 @@ export function useTerminalPaneLifecycle({
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -341,6 +343,7 @@ export function useTerminalPaneLifecycle({
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
+    const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -546,6 +549,11 @@ export function useTerminalPaneLifecycle({
           linkDeps
         )
         fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
+        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(
+          pane.terminal,
+          linkDeps
+        )
+        httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -677,6 +685,11 @@ export function useTerminalPaneLifecycle({
         if (fileLinkClickFallbackDisposable) {
           fileLinkClickFallbackDisposable.dispose()
           fileLinkClickFallbackDisposablesRef.current.delete(paneId)
+        }
+        const httpLinkClickFallbackDisposable = httpLinkClickFallbackDisposables.get(paneId)
+        if (httpLinkClickFallbackDisposable) {
+          httpLinkClickFallbackDisposable.dispose()
+          httpLinkClickFallbackDisposables.delete(paneId)
         }
         const selectionDisposable = selectionDisposablesRef.current.get(paneId)
         if (selectionDisposable) {
@@ -1088,6 +1101,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       fileLinkClickFallbackDisposables.clear()
+      for (const disposable of httpLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      httpLinkClickFallbackDisposables.clear()
       for (const disposable of selectionDisposables.values()) {
         disposable.dispose()
       }

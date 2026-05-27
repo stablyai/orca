@@ -6,12 +6,13 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   createFilePathLinkProvider,
   getTerminalHtmlFileOpenHint,
-  handleOscLink,
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -637,7 +638,8 @@ describe('createFilePathLinkProvider range bounds', () => {
   }
 
   function makeFallbackTerminal(rows: TestBufferLine[]): {
-    terminal: Parameters<typeof installFilePathLinkClickFallback>[1]
+    terminal: Parameters<typeof installFilePathLinkClickFallback>[1] &
+      Parameters<typeof installHttpLinkClickFallback>[0]
     element: {
       addEventListener: ReturnType<typeof vi.fn>
       removeEventListener: ReturnType<typeof vi.fn>
@@ -683,6 +685,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
     expect(registration, 'mouseup handler should be registered').toBeDefined()
     expect(registration![2]).toEqual({ capture: true })
+    return registration![1] as (event: MouseEvent) => void
+  }
+
+  function getRegisteredBubbleMouseUpHandler(element: {
+    addEventListener: ReturnType<typeof vi.fn>
+  }): (event: MouseEvent) => void {
+    const registration = element.addEventListener.mock.calls.find(
+      ([eventName, _handler, options]) => eventName === 'mouseup' && options === undefined
+    )
+    expect(registration, 'bubble mouseup handler should be registered').toBeDefined()
     return registration![1] as (event: MouseEvent) => void
   }
 
@@ -843,6 +855,65 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(preventDefault).not.toHaveBeenCalled()
     expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+  })
+
+  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-marketing-website/pull/82'
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('does not double-open URLs when xterm already handled the mouseup', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      defaultPrevented: true,
+      clientX: 90,
+      clientY: 25,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(terminal.clearSelection).not.toHaveBeenCalled()
 
     disposable.dispose()
