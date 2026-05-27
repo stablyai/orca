@@ -402,7 +402,7 @@ export class AgentHookServer {
         // listener is the bare AgentHookEventPayload because the shared module
         // never reads from this map; only this class does, and only enriched
         // values are ever inserted.
-        listener(payload as EnrichedAgentHookEventPayload)
+        listener({ ...(payload as EnrichedAgentHookEventPayload), isReplay: true })
       } catch (err) {
         console.error('[agent-hooks] replay listener threw', err)
       }

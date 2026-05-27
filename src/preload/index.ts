@@ -2161,6 +2161,8 @@ const api = {
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
+    abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:abortMerge', args),
     diff: (args: {
       worktreePath: string
       filePath: string

@@ -51,6 +51,7 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
+import { detectRepoIcon } from '../repo-icon-autodetect'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -440,11 +441,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
+      const repoIcon = await detectRepoIcon({ repoPath: args.path, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -545,11 +548,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
+      const repoIcon = await detectRepoIcon({
+        repoPath: resolvedPath,
+        kind: repoKind,
+        connectionId: args.connectionId
+      })
       const repo: Repo = {
         id: randomUUID(),
         path: resolvedPath,
         displayName,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId,
@@ -750,11 +759,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: raceWinner }
       }
 
+      const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -1066,11 +1077,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return existing
       }
 
+      const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
       const repo: Repo = {
         id: randomUUID(),
         path: clonePath,
         displayName: getRepoName(clonePath),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: 'git',
         externalWorktreeVisibility: 'hide',

@@ -1063,6 +1063,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
     },
+    abortMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortMerge', { worktree: worktree.id })
+    },
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {

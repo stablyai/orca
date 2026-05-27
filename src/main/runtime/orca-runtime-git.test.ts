@@ -8,6 +8,7 @@ import type * as CommitMessageTextGenerationModule from '../text-generation/comm
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
 
 const mocks = vi.hoisted(() => ({
+  abortMerge: vi.fn(),
   getStagedCommitContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../git/status', async () => ({
   ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
+  abortMerge: mocks.abortMerge,
   getStagedCommitContext: mocks.getStagedCommitContext
 }))
 
@@ -57,6 +59,7 @@ function makeCommands(worktreePath: string): RuntimeGitCommands {
 
 describe('RuntimeGitCommands', () => {
   beforeEach(() => {
+    mocks.abortMerge.mockReset()
     mocks.getStagedCommitContext.mockReset()
     mocks.generateCommitMessageFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
@@ -67,6 +70,34 @@ describe('RuntimeGitCommands', () => {
     while (tempDirs.length > 0) {
       rmSync(tempDirs.pop()!, { recursive: true, force: true })
     }
+  })
+
+  it('aborts a local merge through the resolved worktree', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+    mocks.abortMerge.mockResolvedValue(undefined)
+
+    await expect(commands.abortRuntimeGitMerge('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(mocks.abortMerge).toHaveBeenCalledWith(worktreePath)
+  })
+
+  it('aborts a remote merge through the SSH git provider', async () => {
+    const provider = { abortMerge: vi.fn().mockResolvedValue(undefined) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.abortRuntimeGitMerge('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(provider.abortMerge).toHaveBeenCalledWith('/remote/repo')
+    expect(mocks.abortMerge).not.toHaveBeenCalled()
   })
 
   it('rejects slash-only git mutation paths before they can target the worktree root', async () => {

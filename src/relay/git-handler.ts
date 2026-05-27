@@ -16,7 +16,12 @@ import {
   validateGitExecArgs
 } from './git-handler-ops'
 import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
-import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import {
+  commitChangesRelay,
+  addWorktreeOp,
+  removeWorktreeOp,
+  worktreeIsCleanOp
+} from './git-handler-worktree-ops'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
@@ -56,6 +61,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
+    this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -72,6 +78,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
     this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
@@ -174,6 +182,11 @@ export class GitHandler {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
       await this.git(['restore', '--staged', '--', ...chunk], worktreePath)
     }
+  }
+
+  private async abortMerge(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    await this.git(['merge', '--abort'], worktreePath)
   }
 
   private normalizeGitPathForCompare(filePath: string): string {
@@ -502,6 +515,25 @@ export class GitHandler {
     return { stdout, stderr }
   }
 
+  private async renameCurrentBranch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath
+    const newBranch = params.newBranch
+    if (typeof worktreePath !== 'string' || typeof newBranch !== 'string') {
+      throw new Error('Invalid branch rename request.')
+    }
+    if (newBranch.startsWith('-')) {
+      throw new Error('Branch name must not start with "-".')
+    }
+    try {
+      // Why: generic git.exec intentionally blocks destructive branch flags.
+      // This narrow RPC permits only the already-checked current-branch rename.
+      await this.git(['check-ref-format', '--branch', newBranch], worktreePath)
+      await this.git(['branch', '-m', newBranch], worktreePath)
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error))
+    }
+  }
+
   private async isGitRepo(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
     try {
@@ -528,5 +560,9 @@ export class GitHandler {
 
   private async removeWorktree(params: Record<string, unknown>) {
     return removeWorktreeOp(this.git.bind(this), params)
+  }
+
+  private async worktreeIsClean(params: Record<string, unknown>) {
+    return worktreeIsCleanOp(this.git.bind(this), params)
   }
 }

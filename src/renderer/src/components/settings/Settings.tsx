@@ -675,7 +675,12 @@ function Settings(): React.JSX.Element {
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
       const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
-      return { ...section, badgeColor: repo?.badgeColor, isRemote: !!repo?.connectionId }
+      return {
+        ...section,
+        badgeColor: repo?.badgeColor,
+        isRemote: !!repo?.connectionId,
+        repoIcon: repo?.repoIcon
+      }
     })
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =

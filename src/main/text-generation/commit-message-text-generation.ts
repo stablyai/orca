@@ -20,6 +20,11 @@ import {
   extractAgentErrorMessage
 } from '../../shared/commit-message-prompt'
 import {
+  buildBranchNamePrompt,
+  sanitizeBranchSlug,
+  type BranchNameWorkContext
+} from '../../shared/branch-name-from-work'
+import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
@@ -114,9 +119,24 @@ export function resolveCommitMessageSettings(
   settings: GlobalSettings,
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
 ): ResolveCommitMessageSettingsResult {
-  const config = settings.commitMessageAi
-  if (!config?.enabled) {
+  if (!settings.commitMessageAi?.enabled) {
     return { ok: false, error: 'Enable AI commit messages in Settings -> Git.' }
+  }
+  return resolveTextGenerationParams(settings, discoveryHostKey)
+}
+
+/**
+ * Resolve the agent/model generation parameters from the user's AI-commit-message
+ * configuration, without requiring that feature to be enabled. Other text-gen
+ * features (e.g. auto-rename branch from work) reuse the same configured agent.
+ */
+export function resolveTextGenerationParams(
+  settings: GlobalSettings,
+  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
+): ResolveCommitMessageSettingsResult {
+  const config = settings.commitMessageAi
+  if (!config) {
+    return { ok: false, error: 'No text-generation agent is configured.' }
   }
 
   const agentChoice = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
@@ -485,7 +505,7 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
-type LocalGenerationOperation = 'commit-message' | 'pull-request-fields'
+type LocalGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
@@ -821,4 +841,38 @@ export async function generatePullRequestFieldsFromContext(
       ? await runRemotePlan(planned.plan, target)
       : await runLocalPlan(planned.plan, target.cwd, target.env, 'details', 'pull-request-fields')
   return formatPullRequestFieldsGenerationResult(internalResult, context)
+}
+
+export type GenerateBranchNameResult =
+  | { success: true; slug: string; agentLabel?: string }
+  | { success: false; error: string; canceled?: boolean }
+
+/**
+ * Generate a short kebab-case branch name from the work the agent is starting.
+ * Reuses the commit-message generation plan + spawn machinery; only the prompt
+ * and the post-processing (slug sanitization) differ.
+ */
+export async function generateBranchNameFromContext(
+  context: BranchNameWorkContext,
+  params: GenerateCommitMessageParams,
+  target: CommitMessageGenerationTarget
+): Promise<GenerateBranchNameResult> {
+  const prompt = buildBranchNamePrompt(context)
+  const planned = planCommitMessageGeneration(params, prompt)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+
+  const internalResult =
+    target.kind === 'remote'
+      ? await runRemotePlan(planned.plan, target, 'branch name')
+      : await runLocalPlan(planned.plan, target.cwd, target.env, 'branch name', 'branch-name')
+  if (!internalResult.success) {
+    return internalResult
+  }
+  const slug = sanitizeBranchSlug(internalResult.rawOutput)
+  if (!slug) {
+    return { success: false, error: 'Generated branch name was empty after sanitization.' }
+  }
+  return { success: true, slug, agentLabel: internalResult.agentLabel }
 }

@@ -21,6 +21,11 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Auto-Rename Branch From Work',
+    description: 'Rename the auto-generated branch based on the work once an agent starts.',
+    keywords: ['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']
+  },
+  {
     title: 'GitHub API Budget',
     description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',
     keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']

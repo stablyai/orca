@@ -368,6 +368,7 @@ import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from '../ipc/ssh'
+import { detectRepoIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
@@ -2066,6 +2067,8 @@ export class OrcaRuntimeService {
     this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
     this.gitCommands.getRuntimeGitConflictOperation.bind(this.gitCommands)
+  abortRuntimeGitMerge: RuntimeGitCommands['abortRuntimeGitMerge'] =
+    this.gitCommands.abortRuntimeGitMerge.bind(this.gitCommands)
   getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff'] =
     this.gitCommands.getRuntimeGitDiff.bind(this.gitCommands)
   getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare'] =
@@ -2781,6 +2784,10 @@ export class OrcaRuntimeService {
     resolvers: CommitMessageAgentEnvironmentResolvers
   ): void {
     this.commitMessageAgentEnv = resolvers
+  }
+
+  getCommitMessageAgentEnvironmentResolvers(): CommitMessageAgentEnvironmentResolvers | undefined {
+    return this.commitMessageAgentEnv ?? undefined
   }
 
   async startMobileDictation(params: {
@@ -5299,11 +5306,13 @@ export class OrcaRuntimeService {
       return existing
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: path, kind })
     const repo: Repo = {
       id: randomUUID(),
       path,
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind,
       ...(kind === 'git'
@@ -5413,11 +5422,13 @@ export class OrcaRuntimeService {
       return { repo: raceWinner }
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
     const repo: Repo = {
       id: randomUUID(),
       path: targetPath,
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind: repoKind,
       ...(repoKind === 'git'
@@ -5486,11 +5497,13 @@ export class OrcaRuntimeService {
       return existing
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
     const repo: Repo = {
       id: randomUUID(),
       path: clonePath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind: 'git',
       externalWorktreeVisibility: 'hide',
@@ -10357,6 +10370,14 @@ export class OrcaRuntimeService {
   private invalidateResolvedWorktreeCache(): void {
     this.resolvedWorktreeGeneration += 1
     this.resolvedWorktreeCache = null
+  }
+
+  /** Invalidate the worktree cache and tell the renderer to re-list, after an
+   *  out-of-band branch change (e.g. auto-rename-from-work) so the new branch
+   *  name surfaces without waiting for the next ambient refresh. */
+  notifyBranchRenamed(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.worktreesChanged(repoId)
   }
 
   private recordPtyWorktree(

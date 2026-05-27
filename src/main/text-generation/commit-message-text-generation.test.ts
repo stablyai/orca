@@ -10,6 +10,7 @@ import {
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote,
+  generateBranchNameFromContext,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
@@ -972,6 +973,63 @@ describe('generateCommitMessageFromContext', () => {
           'C:/tools/agent.cmd cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.'
       })
       expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('generateBranchNameFromContext', () => {
+  it('sanitizes remote agent output into a short branch slug', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '"Fix/Login Flow now please"\n',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: true,
+      slug: 'fix-login-flow-now',
+      agentLabel: 'agent'
+    })
+  })
+
+  it('fails when remote agent output sanitizes to an empty branch slug', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '!!! ___\n',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Generated branch name was empty after sanitization.'
     })
   })
 })
