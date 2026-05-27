@@ -333,4 +333,30 @@ describe('ConflictSummaryCard', () => {
 
     expect(markup.indexOf('Resolve with AI')).toBeLessThan(markup.indexOf('Review conflicts'))
   })
+
+  it('shows Abort merge only for merge conflicts', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortMerge={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="rebase"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortMerge={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(mergeMarkup).toContain('Abort merge')
+    expect(rebaseMarkup).not.toContain('Abort merge')
+  })
 })

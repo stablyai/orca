@@ -3989,6 +3989,8 @@ function SourceControlInner(): React.JSX.Element {
                 conflictOperation={conflictOperation}
                 unresolvedCount={unresolvedConflictReviewEntries.length}
                 isResolvingWithAI={isLaunchingConflictAgent}
+                isAbortingMerge={isAbortingMerge}
+                onAbortMerge={() => void handleAbortMerge()}
                 onResolveWithAI={() => {
                   void handleResolveConflictsWithAI()
                 }}
@@ -4012,7 +4014,11 @@ function SourceControlInner(): React.JSX.Element {
               ConflictSummaryCard handles the "has conflicts" case above. */}
           {unresolvedConflictReviewEntries.length === 0 && conflictOperation !== 'unknown' && (
             <div className="px-3 pb-2">
-              <OperationBanner conflictOperation={conflictOperation} />
+              <OperationBanner
+                conflictOperation={conflictOperation}
+                isAbortingMerge={isAbortingMerge}
+                onAbortMerge={() => void handleAbortMerge()}
+              />
             </div>
           )}
 
@@ -5757,12 +5763,16 @@ export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
   isResolvingWithAI,
+  isAbortingMerge = false,
+  onAbortMerge,
   onResolveWithAI,
   onReview
 }: {
   conflictOperation: GitConflictOperation
   unresolvedCount: number
   isResolvingWithAI: boolean
+  isAbortingMerge?: boolean
+  onAbortMerge?: () => void
   onResolveWithAI: () => void
   onReview: () => void
 }): React.JSX.Element {
@@ -5815,6 +5825,23 @@ export function ConflictSummaryCard({
           <GitMerge className="size-3.5" />
           Review conflicts
         </Button>
+        {conflictOperation === 'merge' && onAbortMerge ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="mt-1.5 h-7 w-full text-xs"
+            disabled={isResolvingWithAI || isAbortingMerge}
+            onClick={onAbortMerge}
+          >
+            {isAbortingMerge ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <GitMerge className="size-3.5" />
+            )}
+            Abort merge
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -5826,9 +5853,13 @@ export function ConflictSummaryCard({
 // user needs to see the operation state so they know the worktree is mid-rebase
 // and that they should run `git rebase --continue` or `--abort`.
 function OperationBanner({
-  conflictOperation
+  conflictOperation,
+  isAbortingMerge = false,
+  onAbortMerge
 }: {
   conflictOperation: GitConflictOperation
+  isAbortingMerge?: boolean
+  onAbortMerge?: () => void
 }): React.JSX.Element {
   const label =
     conflictOperation === 'merge'
@@ -5847,6 +5878,23 @@ function OperationBanner({
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
+      {conflictOperation === 'merge' && onAbortMerge ? (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="mt-2 h-7 w-full text-xs"
+          disabled={isAbortingMerge}
+          onClick={onAbortMerge}
+        >
+          {isAbortingMerge ? (
+            <RefreshCw className="size-3.5 animate-spin" />
+          ) : (
+            <GitMerge className="size-3.5" />
+          )}
+          Abort merge
+        </Button>
+      ) : null}
     </div>
   )
 }
