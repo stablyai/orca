@@ -1,4 +1,12 @@
-import { ArrowLeft, ArrowRight, FolderOpen, FolderTree, GitBranch, Server } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  FolderOpen,
+  FolderTree,
+  GitBranch,
+  Lightbulb,
+  Server
+} from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
 import type { NestedRepoScanResult } from '../../../../shared/types'
@@ -186,25 +194,30 @@ export function RepoStep({
       ) : (
         <button
           type="button"
-          className="group flex w-full items-center gap-4 rounded-xl border border-border bg-muted/30 p-5 text-left transition hover:border-foreground/40 hover:bg-muted/60 disabled:opacity-60"
+          className="group w-full rounded-xl border border-border bg-muted/30 p-5 text-left transition hover:border-foreground/40 hover:bg-muted/60 disabled:opacity-60"
           disabled={disabled}
           onClick={onOpenFolder}
         >
-          <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
-            <FolderOpen className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold text-foreground">Open a folder</div>
-            <div className="mt-0.5 text-[13px] text-muted-foreground">
-              Choose any local directory, git repo or not.
+          <div className="flex items-center gap-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+              <FolderOpen className="size-5" />
             </div>
-            <div className="mt-1 text-[12px] text-muted-foreground">
-              Working with microservices? Choose the parent folder and Orca will find each repo.
+            <div className="min-w-0 flex-1">
+              <div className="text-base font-semibold text-foreground">Open a folder</div>
+              <div className="mt-0.5 text-[13px] text-muted-foreground">
+                Choose any local directory, git repo or not.
+              </div>
             </div>
+            <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">
+              Browse...
+            </span>
           </div>
-          <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">
-            Browse...
-          </span>
+          <div className="ml-[3.75rem] mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-[12px] text-muted-foreground">
+            <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+              <Lightbulb className="size-3.5" />
+            </span>
+            <span>Want to import many repos? Select the parent folder.</span>
+          </div>
         </button>
       )}
 
