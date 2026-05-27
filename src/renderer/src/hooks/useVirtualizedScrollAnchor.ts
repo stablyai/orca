@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, type MutableRefObject, type RefObject } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type MutableRefObject,
+  type RefObject
+} from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 
 export type VirtualizedScrollAnchor = {
@@ -145,6 +152,15 @@ export function useVirtualizedScrollAnchor<
     [anchorRef, findDomAnchor, recordVirtualScrollAnchor, scrollElementRef]
   )
 
+  // Why: row changes must not re-register the scroll listener; cleanup records
+  // an anchor and would overwrite the pre-delete anchor after the row is gone.
+  const recordScrollAnchorRef = useRef(recordScrollAnchor)
+  recordScrollAnchorRef.current = recordScrollAnchor
+  const recordVirtualScrollAnchorRef = useRef(recordVirtualScrollAnchor)
+  recordVirtualScrollAnchorRef.current = recordVirtualScrollAnchor
+  const hasDirectScrollInputRef = useRef(hasDirectScrollInput)
+  hasDirectScrollInputRef.current = hasDirectScrollInput
+
   useLayoutEffect(() => {
     const el = scrollElementRef.current
     if (!el) {
@@ -177,19 +193,19 @@ export function useVirtualizedScrollAnchor<
         // is idle, then do the read on the next frame instead of the input path.
         frameId = window.requestAnimationFrame(() => {
           frameId = null
-          recordScrollAnchor(el.scrollTop)
+          recordScrollAnchorRef.current(el.scrollTop)
         })
       }, RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS)
     }
     const recordCurrentAnchor = (): void => {
       cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
+      recordScrollAnchorRef.current(el.scrollTop)
     }
     const onScroll = (): void => {
       if (
         shouldCancelVirtualizedScrollOffsetRestore({
-          hasDirectScrollInput,
+          hasDirectScrollInput: hasDirectScrollInputRef.current,
           restoring
         })
       ) {
@@ -219,7 +235,7 @@ export function useVirtualizedScrollAnchor<
         return
       }
       scrollOffsetRef.current = el.scrollTop
-      recordVirtualScrollAnchor(el.scrollTop)
+      recordVirtualScrollAnchorRef.current(el.scrollTop)
       scheduleRecordAnchor()
     }
 
@@ -228,17 +244,11 @@ export function useVirtualizedScrollAnchor<
     return () => {
       cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
+      recordScrollAnchorRef.current(el.scrollTop)
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [
-    recordScrollAnchor,
-    recordVirtualScrollAnchor,
-    scrollElementRef,
-    scrollOffsetRef,
-    hasDirectScrollInput
-  ])
+  }, [scrollElementRef, scrollOffsetRef])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
