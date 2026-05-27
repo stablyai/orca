@@ -166,6 +166,25 @@ function TabBarInner({
   // clicks, so it misses webview clicks entirely. Listening for window blur
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
+  const queueActiveTerminalFocusAfterNewTabMenuClose = (): void => {
+    pendingNewTabMenuFocusRef.current = () => {
+      const state = useAppStore.getState()
+      if (state.activeTabType === 'terminal' && state.activeTabId) {
+        focusTerminalTabSurface(state.activeTabId)
+      }
+    }
+  }
+  const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
+    pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
+  }
+  const runPendingNewTabMenuFocusAfterClose = (): void => {
+    const pendingFocus = pendingNewTabMenuFocusRef.current
+    pendingNewTabMenuFocusRef.current = null
+    if (pendingFocus) {
+      requestAnimationFrame(pendingFocus)
+    }
+  }
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
@@ -463,11 +482,11 @@ function TabBarInner({
           sideOffset={6}
           className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
-            // Why: selecting "New Terminal" activates a freshly-mounted xterm on
-            // the next frame. Radix's default focus restore sends focus back to
-            // the "+" trigger after close, which steals it from the new tab and
-            // makes the terminal look unfocused until the user clicks again.
+            // Why: terminal-producing menu actions activate a freshly-mounted
+            // xterm. Radix's default focus restore sends focus back to the "+"
+            // trigger after close, stealing it from the new terminal.
             e.preventDefault()
+            runPendingNewTabMenuFocusAfterClose()
           }}
         >
           {isWindows && onNewTerminalWithShell ? (
@@ -510,6 +529,7 @@ function TabBarInner({
                       // picked PowerShell 7+ in advanced settings, launching the
                       // "PowerShell" menu item must preserve that implementation
                       // instead of forcing inbox powershell.exe.
+                      queueActiveTerminalFocusAfterNewTabMenuClose()
                       onNewTerminalWithShell(
                         resolveWindowsShellLaunchTarget(
                           entry.shell,
@@ -532,6 +552,7 @@ function TabBarInner({
           ) : (
             <DropdownMenuItem
               onSelect={() => {
+                queueActiveTerminalFocusAfterNewTabMenuClose()
                 onNewTerminalTab()
               }}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -576,7 +597,7 @@ function TabBarInner({
               <QuickLaunchAgentMenuItems
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
-                onFocusTerminal={focusTerminalTabSurface}
+                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
               />
             </>
           ) : null}

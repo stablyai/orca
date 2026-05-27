@@ -74,13 +74,17 @@ test.describe('Tabs', () => {
   test('clicking "+" then "New Terminal" creates a new terminal tab', async ({ orcaPage }) => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
-    await orcaPage.getByRole('button', { name: 'New tab' }).click()
+    // Why: hidden-window Electron can keep the animated terminal surface
+    // invalidating Playwright's "stable" actionability check even though the
+    // tab-bar button is visible and enabled.
+    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
     await orcaPage
       .getByRole('menuitem', { name: /New Terminal/i })
       .first()
-      .click()
+      .click({ force: true })
+    await orcaPage.keyboard.press('Escape')
 
     // Final assertion is on the rendered tab count — the tab bar itself must
     // gain an element, not just the store.
@@ -90,6 +94,13 @@ test.describe('Tabs', () => {
         message: 'Clicking + → New Terminal did not render a new tab in the tab bar'
       })
       .toBe(tabsBefore + 1)
+
+    const activeType = await getActiveTabType(orcaPage)
+    expect(activeType).toBe('terminal')
+
+    const storeActiveId = await getActiveTabId(orcaPage)
+    expect(storeActiveId).not.toBeNull()
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(storeActiveId)
   })
 
   /**
