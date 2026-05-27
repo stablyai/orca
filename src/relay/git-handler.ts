@@ -16,7 +16,12 @@ import {
   validateGitExecArgs
 } from './git-handler-ops'
 import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
-import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import {
+  commitChangesRelay,
+  addWorktreeOp,
+  removeWorktreeOp,
+  worktreeIsCleanOp
+} from './git-handler-worktree-ops'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
@@ -72,6 +77,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
@@ -528,5 +534,9 @@ export class GitHandler {
 
   private async removeWorktree(params: Record<string, unknown>) {
     return removeWorktreeOp(this.git.bind(this), params)
+  }
+
+  private async worktreeIsClean(params: Record<string, unknown>) {
+    return worktreeIsCleanOp(this.git.bind(this), params)
   }
 }

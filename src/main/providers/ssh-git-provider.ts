@@ -402,6 +402,13 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.removeWorktree', { worktreePath, force, ...options })
   }
 
+  async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
+    return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
+      clean: boolean
+      stdout?: string
+    }
+  }
+
   async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
     return (await this.mux.request('git.exec', { args, cwd })) as {
       stdout: string

@@ -209,6 +209,7 @@ export type IGitProvider = {
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }>
 }
 
 // ─── Provider Registry ──────────────────────────────────────────────

@@ -1065,6 +1065,19 @@ export function registerWorktreeHandlers(
           }
         }
 
+        // Why: for SSH repos, run a preflight check BEFORE archive hooks so we
+        // fail fast if the worktree has changes. The preflight runs git status --porcelain
+        // which is a lightweight operation, avoiding a 20-30 second delay from running
+        // archive hooks before discovering the worktree is dirty.
+        if (repo.connectionId && !args.force) {
+          const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+          if (!clean) {
+            const error = new Error('Worktree has uncommitted or untracked changes.')
+            ;(error as Error & { stdout?: string }).stdout = stdout
+            throw error
+          }
+        }
+
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {

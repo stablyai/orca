@@ -208,6 +208,16 @@ function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolea
   return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
+export async function worktreeIsCleanOp(
+  git: GitExec,
+  params: Record<string, unknown>
+): Promise<{ clean: boolean; stdout?: string }> {
+  const worktreePath = params.worktreePath as string
+  const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+  const clean = !stdout.trim()
+  return { clean, stdout: clean ? undefined : stdout }
+}
+
 // ─── Commit ──────────────────────────────────────────────────────────
 
 export async function commitChangesRelay(

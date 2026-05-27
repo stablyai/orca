@@ -2779,6 +2779,7 @@ describe('registerWorktreeHandlers', () => {
       removeWorktree: vi.fn().mockImplementation(async () => {
         callOrder.push('remove')
       }),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
       execNonInteractive: vi.fn().mockImplementation(async () => {
         callOrder.push('archive')
         return { stdout: '', stderr: '', exitCode: 0, timedOut: false }
@@ -2846,6 +2847,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
       execNonInteractive: vi.fn().mockResolvedValue({
         stdout: '',
         stderr: 'cleanup failed',
@@ -2908,6 +2910,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
       execNonInteractive: vi.fn().mockRejectedValue(new Error('relay disconnected'))
     }
     const fsProvider = {
@@ -2964,6 +2967,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
       execNonInteractive: vi.fn().mockResolvedValue({
         stdout: '',
         stderr: '',
@@ -3029,6 +3033,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
       execNonInteractive: vi.fn()
     }
     const fsProvider = {
@@ -3310,7 +3315,8 @@ describe('registerWorktreeHandlers', () => {
           isBare: false,
           isMainWorktree: true
         }
-      ])
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
     store.getRepo.mockReturnValue(repo)
     store.getWorktreeMeta.mockReturnValue(
@@ -3354,7 +3360,8 @@ describe('registerWorktreeHandlers', () => {
           isBare: false,
           isMainWorktree: true
         }
-      ])
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
     const fsProvider = {
       lstat: vi.fn().mockResolvedValue({ type: 'symlink' }),
