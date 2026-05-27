@@ -78,6 +78,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
     this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
@@ -506,6 +507,25 @@ export class GitHandler {
     validateGitExecArgs(args)
     const { stdout, stderr } = await this.git(args, cwd)
     return { stdout, stderr }
+  }
+
+  private async renameCurrentBranch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath
+    const newBranch = params.newBranch
+    if (typeof worktreePath !== 'string' || typeof newBranch !== 'string') {
+      throw new Error('Invalid branch rename request.')
+    }
+    if (newBranch.startsWith('-')) {
+      throw new Error('Branch name must not start with "-".')
+    }
+    try {
+      // Why: generic git.exec intentionally blocks destructive branch flags.
+      // This narrow RPC permits only the already-checked current-branch rename.
+      await this.git(['check-ref-format', '--branch', newBranch], worktreePath)
+      await this.git(['branch', '-m', newBranch], worktreePath)
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error))
+    }
   }
 
   private async isGitRepo(params: Record<string, unknown>) {

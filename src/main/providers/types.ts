@@ -205,6 +205,7 @@ export type IGitProvider = {
     force?: boolean,
     options?: { deleteBranch?: boolean }
   ): Promise<void>
+  renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>

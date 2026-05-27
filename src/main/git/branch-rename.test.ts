@@ -14,13 +14,48 @@ const noUpstreamError = new Error(
 
 describe('branchHasUpstream', () => {
   it('is true when @{u} resolves to a tracking ref', async () => {
-    const exec: GitExec = vi.fn().mockResolvedValue({ stdout: 'origin/feature\n', stderr: '' })
+    const exec: GitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        return { stdout: 'origin/feature\n', stderr: '' }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
     expect(await branchHasUpstream(exec)).toBe(true)
   })
 
   it('is false when there is no upstream', async () => {
-    const exec: GitExec = vi.fn().mockRejectedValue(noUpstreamError)
+    const exec: GitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw noUpstreamError
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
+        throw new Error('not found')
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
     expect(await branchHasUpstream(exec)).toBe(false)
+  })
+
+  it('is true when a same-name origin tracking ref exists without configured upstream', async () => {
+    const exec: GitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw noUpstreamError
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
+        return { stdout: '', stderr: '' }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+    expect(await branchHasUpstream(exec)).toBe(true)
   })
 
   it('is conservatively true on an unexpected failure', async () => {

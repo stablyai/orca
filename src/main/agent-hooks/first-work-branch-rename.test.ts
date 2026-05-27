@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the orchestrator tests cover local, SSH,
+   retry, and post-generation race guards; splitting would duplicate mocks. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
@@ -5,6 +7,7 @@ import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
 const {
   gitExecFileAsyncMock,
   getGitUsernameMock,
+  getSshGitUsernameMock,
   getSshGitProviderMock,
   generateBranchNameMock,
   resolveTextGenerationParamsMock,
@@ -13,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   getGitUsernameMock: vi.fn(() => 'you'),
+  getSshGitUsernameMock: vi.fn(async () => 'you'),
   getSshGitProviderMock: vi.fn(() => undefined),
   generateBranchNameMock: vi.fn(),
   resolveTextGenerationParamsMock: vi.fn(),
@@ -22,7 +26,7 @@ const {
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 vi.mock('../git/repo', () => ({ getGitUsername: getGitUsernameMock }))
-vi.mock('../git/git-username', () => ({ getSshGitUsername: vi.fn(async () => 'you') }))
+vi.mock('../git/git-username', () => ({ getSshGitUsername: getSshGitUsernameMock }))
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
@@ -53,7 +57,7 @@ function gitResponder(opts: {
   existingRefs?: string[]
 }) {
   return async (args: string[]) => {
-    if (args[0] === 'rev-parse' && args.includes('@{u}')) {
+    if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
       if (opts.hasUpstream) {
         return { stdout: 'origin/x\n', stderr: '' }
       }
@@ -93,6 +97,7 @@ function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}): {
       getRepo: () => repo,
       getAgentEnvResolvers: () => undefined,
       getCurrentDisplayName: () => 'Nautilus-8',
+      canRenameOrcaCreatedBranch: () => true,
       setDisplayName,
       resolveWorktreeIdForTab: () => WORKTREE_ID,
       onRenamed,
@@ -121,6 +126,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     resetFirstWorkBranchRenameState()
     vi.clearAllMocks()
     getGitUsernameMock.mockReturnValue('you')
+    getSshGitUsernameMock.mockResolvedValue('you')
     getSshGitProviderMock.mockReturnValue(undefined)
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)
     prepareLocalEnvMock.mockResolvedValue({ ok: true })
@@ -225,6 +231,13 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(onRenamed).not.toHaveBeenCalled()
   })
 
+  it('leaves ineligible branches untouched even when their leaf is a creature name', async () => {
+    const { deps, onRenamed } = makeDeps({ canRenameOrcaCreatedBranch: () => false })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
   it('suffixes when the generated branch name already exists', async () => {
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({
@@ -239,5 +252,109 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth-2'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
+  })
+
+  it('does not rename when the branch changes while generation is running', async () => {
+    let branchReadCount = 0
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
+        branchReadCount += 1
+        return { stdout: `${branchReadCount === 1 ? 'you/Nautilus' : 'you/manual'}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
+        throw noUpstreamError
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'you/Nautilus\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/you/Nautilus')) {
+        throw new Error('not found')
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+    const { deps, onRenamed } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.anything()
+    )
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('does not rename when the branch gains an upstream while generation is running', async () => {
+    let upstreamReadCount = 0
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
+        return { stdout: 'you/Nautilus\n', stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'you/Nautilus\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
+        upstreamReadCount += 1
+        if (upstreamReadCount === 1) {
+          throw noUpstreamError
+        }
+        return { stdout: 'origin/you/Nautilus\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/you/Nautilus')) {
+        throw new Error('not found')
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+    const { deps, onRenamed } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.anything()
+    )
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('uses the SSH git provider and remote generation target for remote worktrees', async () => {
+    getSshGitUsernameMock.mockResolvedValue('remote-user')
+    const provider = {
+      exec: vi.fn(gitResponder({ currentBranch: 'remote-user/Nautilus', hasUpstream: false })),
+      renameCurrentBranch: vi.fn(async () => undefined),
+      executeCommitMessagePlan: vi.fn()
+    }
+    getSshGitProviderMock.mockReturnValue(provider as never)
+    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
+    const { deps } = makeDeps({ getRepo: () => repo })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(prepareLocalEnvMock).not.toHaveBeenCalled()
+    expect(generateBranchNameMock).toHaveBeenCalledWith(
+      { firstPrompt: 'Fix the auth bug', assistantMessage: undefined },
+      { agentId: 'claude', model: 'm' },
+      expect.objectContaining({
+        kind: 'remote',
+        cwd: '/repo/wt',
+        missingBinaryLocation: 'remote PATH'
+      })
+    )
+    expect(computeBranchNameMock).toHaveBeenCalledWith('fix-auth', expect.anything(), 'remote-user')
+    expect(provider.exec).not.toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'], '/repo/wt')
+    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
+  })
+
+  it('retries when the SSH provider is unavailable on the first working event', async () => {
+    const provider = {
+      exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
+      renameCurrentBranch: vi.fn(async () => undefined),
+      executeCommitMessagePlan: vi.fn()
+    }
+    getSshGitProviderMock.mockReturnValueOnce(undefined).mockReturnValue(provider as never)
+    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
+    const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(onRenamed).not.toHaveBeenCalled()
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 })

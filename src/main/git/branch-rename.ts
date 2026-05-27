@@ -1,5 +1,8 @@
 import { isNoUpstreamError } from '../../shared/git-remote-error'
-import type { GitCommandRunner } from '../../shared/git-effective-upstream'
+import {
+  resolveEffectiveGitUpstream,
+  type GitCommandRunner
+} from '../../shared/git-effective-upstream'
 
 /**
  * Git runner so branch-rename logic works identically for local worktrees
@@ -15,8 +18,7 @@ export type GitExec = GitCommandRunner
  */
 export async function branchHasUpstream(exec: GitExec): Promise<boolean> {
   try {
-    const { stdout } = await exec(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
-    return stdout.trim().length > 0
+    return (await resolveEffectiveGitUpstream(exec)) !== null
   } catch (error) {
     if (isNoUpstreamError(error)) {
       return false

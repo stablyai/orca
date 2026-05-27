@@ -59,8 +59,39 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
     expect(methods).toContain('git.removeWorktree')
+    expect(methods).toContain('git.renameCurrentBranch')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  describe('renameCurrentBranch', () => {
+    it('renames only the checked-out branch through the narrow RPC', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['checkout', '-b', 'you/Nautilus'], { cwd: tmpDir })
+
+      await dispatcher.callRequest('git.renameCurrentBranch', {
+        worktreePath: tmpDir,
+        newBranch: 'you/fix-auth'
+      })
+
+      const current = execFileSync('git', ['branch', '--show-current'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(current).toBe('you/fix-auth')
+    })
+
+    it('rejects branch names that look like flags', async () => {
+      gitInit(tmpDir)
+      await expect(
+        dispatcher.callRequest('git.renameCurrentBranch', {
+          worktreePath: tmpDir,
+          newBranch: '-bad'
+        })
+      ).rejects.toThrow('Branch name must not start with "-"')
+    })
   })
 
   describe('history', () => {
