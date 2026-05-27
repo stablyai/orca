@@ -9,8 +9,8 @@ export type PtyConnectionDeps = {
   cwd?: string
   startup?: {
     command: string
-    /** Renderer-delivered startup input. Used when terminal paste semantics
-     *  matter, such as multiline quick commands. */
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
     delivery?: 'terminal-paste'
     env?: Record<string, string>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`

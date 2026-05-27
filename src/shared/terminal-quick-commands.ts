@@ -96,3 +96,21 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
 export function buildTerminalQuickCommandInput(command: TerminalQuickCommand): string {
   return command.appendEnter ? `${command.command}\r` : command.command
 }
+
+const LINE_BREAK_RE = /\r\n|\r|\n/
+
+// Why: quick-command lines are independent shell commands; one shell command
+// list prevents foreground programs from reading later lines as stdin.
+export function flattenTerminalQuickCommand(command: TerminalQuickCommand): TerminalQuickCommand {
+  if (!LINE_BREAK_RE.test(command.command)) {
+    return command
+  }
+  return {
+    ...command,
+    command: command.command
+      .split(LINE_BREAK_RE)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .join('; ')
+  }
+}

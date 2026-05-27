@@ -1698,8 +1698,8 @@ export function connectPanePty(
               return
             }
             if (shouldDeliverStartupViaTerminalPaste) {
-              // Why: multiline quick commands must be delivered as terminal paste
-              // before Enter, otherwise foreground commands can read later lines.
+              // Why: this mode must pass through xterm so bracketed-paste
+              // wrapping is applied before the submit Enter.
               pasteTerminalText(pane.terminal, command)
               transport.sendInput('\r')
             } else {

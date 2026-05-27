@@ -194,8 +194,8 @@ export type TerminalSlice = {
     string,
     {
       command: string
-      /** Renderer-delivered startup input. Used by multiline quick commands so
-       *  xterm can use bracketed paste before the submit Enter is sent. */
+      /** Renderer-delivered startup input for callers that need xterm paste
+       *  semantics before the submit Enter. */
       delivery?: 'terminal-paste'
       env?: Record<string, string>
       /** Initial prompt-start status for agents that lack native prompt hooks. */
