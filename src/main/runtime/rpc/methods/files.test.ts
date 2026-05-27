@@ -330,6 +330,51 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it('rejects a write with missing content instead of truncating the file', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.write', { worktree: 'id:wt-1', relativePath: 'src/index.ts' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.writeFileExplorerFile).not.toHaveBeenCalled()
+  })
+
+  it('still allows writing an explicit empty string (empty file)', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.write', { worktree: 'id:wt-1', relativePath: 'src/index.ts', content: '' })
+    )
+
+    expect(runtime.writeFileExplorerFile).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', '')
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('rejects a base64 write with missing content', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.writeBase64', { worktree: 'id:wt-1', relativePath: 'assets/logo.png' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.writeFileExplorerFileBase64).not.toHaveBeenCalled()
+  })
+
   it('commits staged runtime uploads without clobbering the final destination', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
