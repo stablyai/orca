@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: mobile dictation keeps permission, recording,
+/* oxlint-disable max-lines -- Why: mobile dictation keeps permission, recording,
  * chunk upload, completion, and cancellation in one hook so native audio state
  * cannot drift from the runtime RPC lifecycle. */
 import { useCallback, useEffect, useRef, useState } from 'react'
