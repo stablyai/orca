@@ -35,6 +35,11 @@ vi.mock('ssh2', () => {
     on(event: string, handler: (...args: unknown[]) => void) {
       eventHandlers?.set(event, handler)
     }
+    off(event: string, handler: (...args: unknown[]) => void) {
+      if (eventHandlers?.get(event) === handler) {
+        eventHandlers.delete(event)
+      }
+    }
     connect(config?: unknown) {
       this.lastConnectConfig = config
       setTimeout(() => {
@@ -174,6 +179,16 @@ describe('SshConnection', () => {
 
     expect(clientInstances).toHaveLength(1)
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('removes startup listeners after ssh2 connect succeeds', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect()
+
+    expect(eventHandlers.has('ready')).toBe(false)
+    // The remaining error listener is the steady-state disconnect handler.
+    expect(eventHandlers.has('error')).toBe(true)
   })
 
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {

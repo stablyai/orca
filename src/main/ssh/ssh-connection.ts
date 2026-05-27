@@ -446,10 +446,17 @@ export class SshConnection {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
-      client.on('ready', () => {
+
+      const cleanupStartupListeners = (): void => {
+        client.off('ready', onReady)
+        client.off('error', onStartupError)
+      }
+
+      const onReady = (): void => {
         if (settled) {
           return
         }
+        cleanupStartupListeners()
         // Why: connect() completion races with explicit disconnect(). Once a
         // newer connect attempt or disconnect bumps the generation/disposed
         // state, this late ready event must not resurrect the torn-down client.
@@ -482,15 +489,20 @@ export class SshConnection {
         this.setState('connected')
         this.setupDisconnectHandler(client)
         resolve()
-      })
-      client.on('error', (err) => {
+      }
+
+      const onStartupError = (err: Error): void => {
         if (settled) {
           return
         }
+        cleanupStartupListeners()
         settled = true
         client.destroy()
         reject(err)
-      })
+      }
+
+      client.on('ready', onReady)
+      client.on('error', onStartupError)
       client.connect(config)
     })
   }
