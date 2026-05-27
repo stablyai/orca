@@ -467,7 +467,7 @@ jobs:
               ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always'
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
