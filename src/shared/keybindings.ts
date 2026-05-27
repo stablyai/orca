@@ -1252,12 +1252,36 @@ function modifierStateMatches(
   )
 }
 
-function letterKeyMatches(input: KeybindingInput, letter: string): boolean {
+function shouldUseMacOptionLetterPhysicalFallback(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+letter can report composed characters (Option+A -> å),
+  // leaving no logical Latin key for app shortcuts that intentionally use Alt.
+  return (
+    getKeybindingPlatform(platform) === 'darwin' &&
+    parsed.alt &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  )
+}
+
+function letterKeyMatches(
+  input: KeybindingInput,
+  letter: string,
+  parsed: ParsedKeybinding,
+  platform: NodeJS.Platform
+): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
   if (logicalKey && logicalKey.length === 1 && logicalKey >= 'A' && logicalKey <= 'Z') {
     return logicalKey === letter.toUpperCase()
   }
-  return canUsePhysicalCodeFallback(input) && input.code === `Key${letter.toUpperCase()}`
+  return (
+    (canUsePhysicalCodeFallback(input) ||
+      shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
+    input.code === `Key${letter.toUpperCase()}`
+  )
 }
 
 function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
@@ -1310,7 +1334,7 @@ function keyMatches(
   platform: NodeJS.Platform
 ): boolean {
   if (parsedKey.length === 1 && parsedKey >= 'A' && parsedKey <= 'Z') {
-    return letterKeyMatches(input, parsedKey)
+    return letterKeyMatches(input, parsedKey, parsed, platform)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
     return digitKeyMatches(input, parsedKey)
