@@ -143,10 +143,19 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
 function sendStatus(status: UpdateStatus): void {
   const shouldPreserveNudgeForPublishingWindow =
     publishingWindowLastGoodCheck !== null &&
-    (status.state === 'idle' || status.state === 'not-available' || status.state === 'error')
+    (status.state === 'idle' ||
+      status.state === 'not-available' ||
+      status.state === 'available' ||
+      status.state === 'error')
   if (awaitingNudgeCheckOutcome) {
     if (status.state === 'available') {
-      awaitingNudgeCheckOutcome = false
+      if (shouldPreserveNudgeForPublishingWindow) {
+        // Why: a last-good available update is only a temporary fallback; don't
+        // let dismissing that card consume the newest-release nudge campaign.
+        deferPendingUpdateNudgeUntilRetry()
+      } else {
+        awaitingNudgeCheckOutcome = false
+      }
     } else if (
       status.state === 'idle' ||
       status.state === 'not-available' ||
