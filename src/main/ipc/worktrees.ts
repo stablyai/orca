@@ -1046,6 +1046,25 @@ export function registerWorktreeHandlers(
         const canonicalWorktreePath = registeredWorktree.path
         const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
+        let shouldTearDownPtys = true
+
+        // Why: run the preflight check FIRST for local repos so we fail fast if
+        // the worktree has changes — without running archive hooks or removing
+        // symlinks first. Archive hooks are expensive (arbitrary user scripts) and
+        // should only run when deletion is actually possible.
+        if (!repo.connectionId) {
+          try {
+            await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
+          } catch (error) {
+            if (!isOrphanCompatiblePreflightError(error)) {
+              throw new Error(
+                formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+              )
+            }
+            shouldTearDownPtys = false
+          }
+        }
+
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {
@@ -1085,20 +1104,6 @@ export function registerWorktreeHandlers(
         // deletion would require the Force Delete toast once the feature is on.
         if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
           await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
-        }
-
-        let shouldTearDownPtys = true
-        try {
-          await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
-        } catch (error) {
-          if (!isOrphanCompatiblePreflightError(error)) {
-            throw new Error(
-              formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
-            )
-          }
-          // Why: orphan cleanup does not need live shells to be killed first,
-          // and preflight did not prove the worktree is cleanly removable.
-          shouldTearDownPtys = false
         }
 
         if (shouldTearDownPtys) {
