@@ -2,14 +2,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 
-const { gitExecFileAsyncMock, gitExecFileAsyncBufferMock, readFileMock, rmMock, existsSyncMock } =
-  vi.hoisted(() => ({
-    gitExecFileAsyncMock: vi.fn(),
-    gitExecFileAsyncBufferMock: vi.fn(),
-    readFileMock: vi.fn(),
-    rmMock: vi.fn(),
-    existsSyncMock: vi.fn()
-  }))
+const {
+  gitExecFileAsyncMock,
+  gitExecFileAsyncBufferMock,
+  lstatMock,
+  readFileMock,
+  rmMock,
+  existsSyncMock
+} = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  gitExecFileAsyncBufferMock: vi.fn(),
+  lstatMock: vi.fn(),
+  readFileMock: vi.fn(),
+  rmMock: vi.fn(),
+  existsSyncMock: vi.fn()
+}))
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
@@ -21,6 +28,7 @@ vi.mock('./runner', () => ({
 }))
 
 vi.mock('fs/promises', () => ({
+  lstat: lstatMock,
   readFile: readFileMock,
   rm: rmMock
 }))
@@ -193,6 +201,7 @@ describe('getDiff', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
+    lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
   })
@@ -283,6 +292,7 @@ describe('getStatus', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
+    lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
     // Why: after the status call, getStatus may issue `git diff --numstat`
@@ -551,8 +561,44 @@ describe('getStatus', () => {
     ])
   })
 
+  it('attaches staged rename counts to the new path', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout: '2 R. N... 100644 100644 100644 aaaa bbbb R100 src/new name.ts\tsrc/old name.ts\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '2\t1\tsrc/old name.ts => src/new name.ts\n' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      {
+        path: 'src/new name.ts',
+        oldPath: 'src/old name.ts',
+        status: 'renamed',
+        area: 'staged',
+        added: 2,
+        removed: 1
+      }
+    ])
+  })
+
   it('counts untracked file contents as additions', async () => {
     existsSyncMock.mockReturnValue(false)
+    lstatMock.mockResolvedValue({
+      size: 14,
+      mtimeMs: 1,
+      ctimeMs: 1,
+      isFile: () => true,
+      isSymbolicLink: () => false
+    })
     readFileMock.mockImplementation((target: string) =>
       String(target).endsWith('.git')
         ? Promise.resolve('gitdir: /repo/.git/worktrees/feature\n')

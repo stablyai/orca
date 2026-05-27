@@ -5919,9 +5919,9 @@ function SourceControlBranchTreeDirectoryRow({
   )
 }
 
-// Why: a compact +added/-removed magnitude lets users gauge the size of a
-// change at a glance, the way GitHub Desktop and VS Code do. Colors match the
-// diff viewer's hunk header (DiffSectionHeader) for consistency.
+// Why: a compact +added/-removed magnitude lets users gauge change size at a
+// glance. Use git decoration tokens so the source-control sidebar follows the
+// documented light/dark status palette.
 function DiffLineCounts({
   added,
   removed
@@ -5936,9 +5936,9 @@ function DiffLineCounts({
   }
   return (
     <span className="shrink-0 tabular-nums text-[10px]">
-      {hasAdded && <span className="text-green-600 dark:text-green-500">+{added}</span>}
+      {hasAdded && <span style={{ color: 'var(--git-decoration-added)' }}>+{added}</span>}
       {hasAdded && hasRemoved && <span> </span>}
-      {hasRemoved && <span className="text-red-500">-{removed}</span>}
+      {hasRemoved && <span style={{ color: 'var(--git-decoration-deleted)' }}>-{removed}</span>}
     </span>
   )
 }

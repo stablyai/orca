@@ -122,10 +122,12 @@ export async function getStatus(
         const worktreeStatus = xy[1]
 
         if (line.startsWith('2 ')) {
-          // Rename entry - tab separated at the end
+          // Why: porcelain v2 type-2 records put the new path after 9 fixed
+          // space-delimited fields and the old path after the tab. Preserving
+          // spaces here keeps row actions and numstat counts keyed correctly.
           const tabParts = line.split('\t')
-          const path = tabParts[1]
-          const oldPath = tabParts[2]
+          const path = tabParts[0].split(' ').slice(9).join(' ')
+          const oldPath = tabParts.slice(1).join('\t')
           if (indexStatus !== '.') {
             entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
           }

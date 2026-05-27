@@ -115,12 +115,20 @@ describe('GitHandler', () => {
       writeFileSync(path.join(tmpDir, 'new.txt'), 'new')
 
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
-        entries: Record<string, unknown>[]
+        entries: {
+          path?: unknown
+          status?: unknown
+          area?: unknown
+          added?: unknown
+          removed?: unknown
+        }[]
       }
       const untracked = result.entries.find((e) => e.path === 'new.txt')
       expect(untracked).toBeDefined()
       expect(untracked!.status).toBe('untracked')
       expect(untracked!.area).toBe('untracked')
+      expect(untracked!.added).toBe(1)
+      expect(untracked!.removed).toBeUndefined()
     })
 
     it('returns ignored paths only when requested', async () => {
@@ -171,12 +179,20 @@ describe('GitHandler', () => {
       writeFileSync(path.join(tmpDir, 'file.txt'), 'modified')
 
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
-        entries: Record<string, unknown>[]
+        entries: {
+          path?: unknown
+          status?: unknown
+          area?: unknown
+          added?: unknown
+          removed?: unknown
+        }[]
       }
       const modified = result.entries.find((e) => e.path === 'file.txt')
       expect(modified).toBeDefined()
       expect(modified!.status).toBe('modified')
       expect(modified!.area).toBe('unstaged')
+      expect(modified!.added).toBe(1)
+      expect(modified!.removed).toBe(1)
     })
 
     it('detects staged files', async () => {
@@ -187,11 +203,19 @@ describe('GitHandler', () => {
       execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
 
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
-        entries: Record<string, unknown>[]
+        entries: {
+          path?: unknown
+          status?: unknown
+          area?: unknown
+          added?: unknown
+          removed?: unknown
+        }[]
       }
       const staged = result.entries.find((e) => e.area === 'staged')
       expect(staged).toBeDefined()
       expect(staged!.status).toBe('modified')
+      expect(staged!.added).toBe(1)
+      expect(staged!.removed).toBe(1)
     })
 
     // Why: regression for issue #1503 — git's default core.quotePath=true
