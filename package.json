@@ -203,6 +203,7 @@
       "@parcel/watcher",
       "better-sqlite3",
       "cpu-features",
+      "electron",
       "esbuild",
       "node-pty",
       "sherpa-onnx"
