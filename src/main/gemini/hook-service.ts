@@ -25,12 +25,10 @@ import {
 // (approvals flow through inline UI), so Orca cannot surface a waiting state
 // for Gemini — that is an upstream limitation, not an Orca bug.
 //
-// Gemini's PreToolUse hook is not safe to install here: some CLI environments
-// reject the forwarded hook payload outright, which blocks tool execution
-// instead of merely enriching the dashboard. Keep the integration to the
-// turn-safe lifecycle events until Gemini exposes a stable pre-tool hook
-// contract Orca can consume without interfering with the agent.
-const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool'] as const
+// Gemini's native pre-tool event is BeforeTool, not Claude/Codex's PreToolUse.
+// Keep installing the pre-tool status hook, but sweep stale PreToolUse entries
+// below so current Gemini CLI no longer warns about an invalid event bucket.
+const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool'] as const
 
 function getConfigPath(): string {
   return join(homedir(), '.gemini', 'settings.json')

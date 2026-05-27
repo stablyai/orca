@@ -82,12 +82,18 @@ describe('GeminiHookService', () => {
     const config = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))
 
     expect(status.state).toBe('installed')
-    expect(Object.keys(config.hooks).sort()).toEqual(['AfterAgent', 'AfterTool', 'BeforeAgent'])
+    expect(Object.keys(config.hooks).sort()).toEqual([
+      'AfterAgent',
+      'AfterTool',
+      'BeforeAgent',
+      'BeforeTool'
+    ])
     expect(config.hooks.PreToolUse).toBeUndefined()
     expect(config.hooks.BeforeAgent).toHaveLength(2)
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
     expect(config.hooks.BeforeAgent[1].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
     expect(config.hooks.AfterAgent[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
     expect(config.hooks.AfterTool[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
   })
 })

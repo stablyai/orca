@@ -971,7 +971,12 @@ function extractGeminiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse' || eventName === 'AfterTool') {
+  if (
+    eventName === 'BeforeTool' ||
+    eventName === 'AfterTool' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse'
+  ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
@@ -1756,8 +1761,11 @@ function normalizeGeminiEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: Gemini CLI's native pre-tool event is BeforeTool. PreToolUse/PostToolUse
+  // remain accepted for legacy Antigravity-compatible payloads on this endpoint.
   const stateName =
     eventName === 'BeforeAgent' ||
+    eventName === 'BeforeTool' ||
     eventName === 'AfterTool' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'

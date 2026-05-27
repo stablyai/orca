@@ -80,6 +80,27 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('normalizes Gemini BeforeTool to working with tool fields', () => {
+    const event = normalizeHookPayload(
+      state,
+      'gemini',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'BeforeTool',
+          tool_name: 'read_file',
+          args: { file_path: 'src/index.ts' }
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.agentType).toBe('gemini')
+    expect(event?.payload.toolName).toBe('read_file')
+    expect(event?.payload.toolInput).toBe('src/index.ts')
+  })
+
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(
       state,
