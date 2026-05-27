@@ -209,6 +209,16 @@ describe('TabsSlice', () => {
       expect(group.tabOrder).toEqual([tab1.id, tab2.id])
     })
 
+    it('can create a tab without activating it', () => {
+      const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const tab2 = store.getState().createUnifiedTab(WT, 'browser', { activate: false })
+
+      const group = store.getState().groupsByWorktree[WT][0]
+      expect(group.activeTabId).toBe(tab1.id)
+      expect(group.tabOrder).toEqual([tab1.id, tab2.id])
+      expect(group.recentTabIds).toEqual([tab1.id])
+    })
+
     it('replaces existing preview tab when creating a new preview', () => {
       const preview1 = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',

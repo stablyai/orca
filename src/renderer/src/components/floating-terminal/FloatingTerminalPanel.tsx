@@ -55,7 +55,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
-  type KeybindingContext
+  type KeybindingContext,
+  type KeybindingMatchOptions
 } from '../../../../shared/keybindings'
 import type {
   BrowserTab as BrowserTabState,
@@ -719,38 +720,57 @@ export function FloatingTerminalPanel({
         return
       }
 
+      const state = useAppStore.getState()
+      const platform = getShortcutPlatform()
+      const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
+        ? 'terminal'
+        : 'app'
+      const matchOptions: KeybindingMatchOptions = {
+        context,
+        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+      }
+      const matches = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(
+          actionId,
+          event.nativeEvent,
+          platform,
+          state.keybindings,
+          matchOptions
+        )
+
       if (
         !isFloatingWorkspacePanelShortcut(
-          event,
-          navigator.userAgent.includes('Mac'),
-          panelRef.current
+          event.nativeEvent,
+          platform,
+          panelRef.current,
+          state.keybindings,
+          matchOptions
         )
       ) {
         return
       }
 
-      const key = event.key.toLowerCase()
-      if (!event.shiftKey && key === 't') {
+      if (matches('tab.newTerminal')) {
         event.preventDefault()
         createFloatingTerminalTab()
         return
       }
-      if (event.shiftKey && key === 'b') {
+      if (matches('tab.newBrowser')) {
         event.preventDefault()
         createFloatingBrowserTab()
         return
       }
-      if (event.shiftKey && key === 'm') {
+      if (matches('tab.newMarkdown')) {
         event.preventDefault()
         createFloatingMarkdownTab()
         return
       }
-      if (event.shiftKey && key === 'o') {
+      if (matches('tab.openMarkdown')) {
         event.preventDefault()
         openFloatingMarkdownTab()
         return
       }
-      if (!event.shiftKey && key === 'w') {
+      if (matches('tab.close')) {
         event.preventDefault()
         if (activeClosableTab) {
           closeFloatingItem(activeClosableTab.id)

@@ -785,10 +785,13 @@ export class SshRelaySession {
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     const getWin = this.getMainWindow
     ptyProvider.onData((payload) => {
-      this.runtime?.onPtyData(payload.id, payload.data, Date.now())
+      const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
       const win = getWin()
       if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:data', payload)
+        win.webContents.send('pty:data', {
+          ...payload,
+          ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})
+        })
       }
     })
     ptyProvider.onReplay((payload) => {

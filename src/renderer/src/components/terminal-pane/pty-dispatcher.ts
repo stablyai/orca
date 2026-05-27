@@ -13,7 +13,12 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 // PTY ID. Eliminates the N-listener problem that triggers
 // MaxListenersExceededWarning with many panes/tabs.
 
-export const ptyDataHandlers = new Map<string, (data: string) => void>()
+export type PtyDataMeta = {
+  seq?: number
+  rawLength?: number
+}
+
+export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
  *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
@@ -81,7 +86,16 @@ export function ensurePtyDispatcher(): void {
   }
   ptyDispatcherAttached = true
   window.api.pty.onData((payload) => {
-    ptyDataHandlers.get(payload.id)?.(payload.data)
+    let meta: PtyDataMeta | undefined
+    if (typeof payload.seq === 'number') {
+      meta ??= {}
+      meta.seq = payload.seq
+    }
+    if (typeof payload.rawLength === 'number') {
+      meta ??= {}
+      meta.rawLength = payload.rawLength
+    }
+    ptyDataHandlers.get(payload.id)?.(payload.data, meta)
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
       // Why: snapshot the Set before iterating because watchers commonly
@@ -230,7 +244,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** Replay bytes from a prior session (eager buffers, attach-time screen
        *  clears). Routed separately from onData so the renderer can engage
        *  the replay guard — otherwise xterm auto-replies to embedded query
@@ -254,7 +268,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** See note on connect.callbacks.onReplayData. */
       onReplayData?: (data: string) => void
       onStatus?: (shell: string) => void

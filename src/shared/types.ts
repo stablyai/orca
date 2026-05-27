@@ -1316,6 +1316,14 @@ export type CreateWorktreeResult = {
   setup?: WorktreeSetupLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
+  localBaseRefRefresh?: LocalBaseRefRefreshResult
+}
+
+export type LocalBaseRefRefreshResult = {
+  status: 'updated' | 'skipped_dirty_worktree' | 'skipped_not_fast_forward' | 'skipped_error'
+  baseRef: string
+  localBranch: string
+  ownerWorktreePath?: string
 }
 
 export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'

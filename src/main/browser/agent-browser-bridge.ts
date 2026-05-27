@@ -86,6 +86,11 @@ type AgentBrowserExecOptions = {
   timeoutError?: BrowserError
 }
 
+type EnqueueTargetedCommandOptions = {
+  ensureSession?: boolean
+  ensureVisible?: boolean
+}
+
 type AgentBrowserBridgeOptions = {
   onTabsChanged?: (worktreeId?: string) => void
 }
@@ -388,10 +393,10 @@ export class AgentBrowserBridge {
   private readonly sessions = new Map<string, SessionState>()
   private readonly commandQueues = new Map<string, QueuedCommand[]>()
   private readonly processingQueues = new Set<string>()
-  // Why: screenshot prep temporarily changes shared renderer visibility/focus
-  // state. Per-session queues only serialize commands within one browser tab, so
-  // concurrent screenshots on different tabs can otherwise interleave
-  // ensureWebviewVisible()/restore and blank each other's capture.
+  // Why: screenshot prep temporarily changes shared renderer paintability state.
+  // Per-session queues only serialize commands within one browser tab, so
+  // concurrent screenshots on different tabs can otherwise interleave hidden
+  // surface leases and blank each other's capture.
   private screenshotTurn: Promise<void> = Promise.resolve()
   private readonly agentBrowserBin: string
   // Why: when a process swap destroys a session that had active intercept patterns,
@@ -1139,9 +1144,14 @@ export class AgentBrowserBridge {
   ): Promise<BrowserScreenshotResult> {
     // Why: agent-browser writes the screenshot to a temp file and returns
     // { "path": "/tmp/screenshot-xxx.png" }. We read the file and return base64.
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return this.captureScreenshotCommand(sessionName, ['screenshot'], 300, format)
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return this.captureScreenshotCommand(sessionName, ['screenshot'], 300, format)
+      },
+      { ensureVisible: false }
+    )
   }
 
   async fullPageScreenshot(
@@ -1149,14 +1159,19 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
-      return this.captureFullPageScreenshotCommand(
-        sessionName,
-        target.webContentsId,
-        500,
-        format === 'jpeg' ? 'jpeg' : 'png'
-      )
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName, target) => {
+        return this.captureFullPageScreenshotCommand(
+          sessionName,
+          target.webContentsId,
+          500,
+          format === 'jpeg' ? 'jpeg' : 'png'
+        )
+      },
+      { ensureVisible: false }
+    )
   }
 
   private readScreenshotFromResult(raw: unknown, format?: string): BrowserScreenshotResult {
@@ -1180,12 +1195,12 @@ export class AgentBrowserBridge {
     return this.withSerializedScreenshotAccess(async () => {
       const session = this.sessions.get(sessionName)
       const restore = session
-        ? await this.browserManager.ensureWebviewVisible(session.webContentsId)
+        ? await this.browserManager.acquireAutomationVisibility(session.webContentsId)
         : () => {}
       try {
-        // Why: after focusing the window and unhiding the webview, the compositor
+        // Why: after acquiring the hidden paintability lease, the compositor
         // needs a short settle period to produce a painted frame. Waiting inside
-        // the global screenshot lock prevents another tab from stealing visible
+        // the global screenshot lock prevents another tab from changing lease
         // state before the current capture actually hits CDP.
         await new Promise((r) => setTimeout(r, settleMs))
         const raw = await this.execAgentBrowser(sessionName, commandArgs)
@@ -1205,11 +1220,11 @@ export class AgentBrowserBridge {
     return this.withSerializedScreenshotAccess(async () => {
       const session = this.sessions.get(sessionName)
       const restore = session
-        ? await this.browserManager.ensureWebviewVisible(session.webContentsId)
+        ? await this.browserManager.acquireAutomationVisibility(session.webContentsId)
         : () => {}
       try {
         // Why: full-page capture still depends on the guest compositor producing
-        // a fresh frame. Wait after activating the target webview so the direct
+        // a fresh frame. Wait after the target webview is paintable so the direct
         // CDP capture sees the live page instead of a stale surface.
         await new Promise((r) => setTimeout(r, settleMs))
         const wc = this.getWebContents(webContentsId)
@@ -1691,8 +1706,11 @@ export class AgentBrowserBridge {
     worktreeId: string | undefined,
     execute: (sessionName: string) => Promise<T>
   ): Promise<T> {
-    return this.enqueueTargetedCommand(worktreeId, undefined, async (sessionName) =>
-      execute(sessionName)
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      undefined,
+      async (sessionName) => execute(sessionName),
+      { ensureVisible: false }
     )
   }
 
@@ -1700,7 +1718,7 @@ export class AgentBrowserBridge {
     worktreeId: string | undefined,
     browserPageId: string | undefined,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
-    options: { ensureSession?: boolean } = {}
+    options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
     const sessionName = `orca-tab-${target.browserPageId}`
@@ -1716,12 +1734,38 @@ export class AgentBrowserBridge {
         this.commandQueues.set(sessionName, queue)
       }
       queue.push({
-        execute: (() => execute(sessionName, target)) as () => Promise<unknown>,
+        execute: (() =>
+          this.executeWithVisibleTarget(
+            sessionName,
+            target,
+            execute,
+            options
+          )) as () => Promise<unknown>,
         resolve: resolve as (value: unknown) => void,
         reject
       })
       this.processQueue(sessionName)
     })
+  }
+
+  private async executeWithVisibleTarget<T>(
+    sessionName: string,
+    target: ResolvedBrowserCommandTarget,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<T> {
+    if (options.ensureVisible === false) {
+      return execute(sessionName, target)
+    }
+
+    // Why: inactive browser panes are display:none in the renderer; the
+    // automation lease makes only this target paintable without selecting it.
+    const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
+    try {
+      return await execute(sessionName, target)
+    } finally {
+      restore()
+    }
   }
 
   private async processQueue(sessionName: string): Promise<void> {

@@ -69,6 +69,8 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
+  | 'fileExplorer.undo'
+  | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
@@ -542,6 +544,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Alt+C'])
   },
   {
+    id: 'fileExplorer.undo',
+    title: 'Undo file operation',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'undo'],
+    defaultBindings: platformBindings(['Mod+Z'])
+  },
+  {
+    id: 'fileExplorer.redo',
+    title: 'Redo file operation',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'redo'],
+    defaultBindings: {
+      darwin: ['Mod+Shift+Z'],
+      linux: ['Mod+Shift+Z', 'Ctrl+Y'],
+      win32: ['Mod+Shift+Z', 'Ctrl+Y']
+    }
+  },
+  {
     id: 'fileExplorer.copyPath',
     title: 'Copy file path',
     group: 'File Explorer',
@@ -725,6 +747,9 @@ function hasModifier(
 }
 
 function normalizeKeyToken(token: string): string | null {
+  if (token === ' ') {
+    return 'Space'
+  }
   const trimmed = token.trim()
   if (!trimmed) {
     return null
@@ -785,6 +810,8 @@ function normalizeKeyToken(token: string): string | null {
     BRACKETRIGHT: 'BracketRight',
     NUMPADADD: 'NumpadAdd',
     NUMPADSUBTRACT: 'NumpadSubtract',
+    ADD: 'NumpadAdd',
+    SUBTRACT: 'NumpadSubtract',
     COMMA: 'Comma',
     PERIOD: 'Period',
     SLASH: 'Slash',
@@ -1005,13 +1032,57 @@ const MODIFIER_KEYS = new Set([
   'SymbolLock'
 ])
 
-function keyTokenFromInput(input: KeybindingInput): string | null {
-  const code = input.code ?? ''
-  const key = input.key ?? ''
+const PUNCTUATION_KEY_TOKENS = new Set([
+  'BracketLeft',
+  'BracketRight',
+  'Minus',
+  'Underscore',
+  'Equal',
+  'Plus',
+  'Comma',
+  'Period',
+  'Slash',
+  'Backslash',
+  'Semicolon',
+  'Quote',
+  'Backquote'
+])
 
+const PHYSICAL_CODE_FALLBACK_KEYS = new Set(['', 'Dead', 'Unidentified'])
+
+const SHIFTED_PUNCTUATION_KEY_TOKENS: Record<string, string> = {
+  '<': 'Comma',
+  '>': 'Period',
+  '?': 'Slash',
+  '|': 'Backslash',
+  ':': 'Semicolon',
+  '"': 'Quote',
+  '~': 'Backquote'
+}
+
+function logicalKeyTokenFromInput(input: KeybindingInput): string | null {
+  const key = input.key ?? ''
   if (MODIFIER_KEYS.has(key)) {
     return null
   }
+  const normalizedKey = normalizeKeyToken(key)
+  if (normalizedKey) {
+    return normalizedKey
+  }
+  if (hasModifier(input, 'shift')) {
+    return SHIFTED_PUNCTUATION_KEY_TOKENS[key] ?? null
+  }
+  return null
+}
+
+function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
+  // Why: layout-aware shortcuts must trust real logical keys; physical code is
+  // only a fallback when the platform cannot report the produced key.
+  return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
+}
+
+function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | null {
+  const code = input.code ?? ''
   if (code.startsWith('Key') && code.length === 4) {
     return code.slice(3).toUpperCase()
   }
@@ -1019,7 +1090,27 @@ function keyTokenFromInput(input: KeybindingInput): string | null {
     return code.slice(5)
   }
 
-  return normalizeKeyToken(key) ?? normalizeKeyToken(code)
+  return normalizeKeyToken(code)
+}
+
+function numpadCodeKeyTokenFromInput(input: KeybindingInput): string | null {
+  const code = input.code ?? ''
+  return code === 'NumpadAdd' || code === 'NumpadSubtract' ? normalizeKeyToken(code) : null
+}
+
+function keyTokenFromInput(input: KeybindingInput): string | null {
+  const numpadKey = numpadCodeKeyTokenFromInput(input)
+  if (numpadKey) {
+    return numpadKey
+  }
+  const logicalKey = logicalKeyTokenFromInput(input)
+  if (logicalKey) {
+    return logicalKey
+  }
+  if (!canUsePhysicalCodeFallback(input)) {
+    return null
+  }
+  return physicalCodeKeyTokenFromInput(input)
 }
 
 function keybindingFromInputWithOptions(
@@ -1162,38 +1253,33 @@ function modifierStateMatches(
 }
 
 function letterKeyMatches(input: KeybindingInput, letter: string): boolean {
-  const key = (input.key ?? '').toLowerCase()
-  if (key.length === 1 && key >= 'a' && key <= 'z') {
-    return key === letter.toLowerCase()
+  const logicalKey = logicalKeyTokenFromInput(input)
+  if (logicalKey && logicalKey.length === 1 && logicalKey >= 'A' && logicalKey <= 'Z') {
+    return logicalKey === letter.toUpperCase()
   }
-  return input.code === `Key${letter.toUpperCase()}`
+  return canUsePhysicalCodeFallback(input) && input.code === `Key${letter.toUpperCase()}`
+}
+
+function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
+  const logicalKey = logicalKeyTokenFromInput(input)
+  if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
+    return logicalKey === digit
+  }
+  return canUsePhysicalCodeFallback(input) && input.code === `Digit${digit}`
+}
+
+function isPunctuationKeyToken(token: string | null): token is string {
+  return token !== null && PUNCTUATION_KEY_TOKENS.has(token)
 }
 
 function semanticPunctuationKey(input: KeybindingInput): string | null {
-  switch (input.key) {
-    case '[':
-    case '{':
-      return 'BracketLeft'
-    case ']':
-    case '}':
-      return 'BracketRight'
-    case '\\':
-    case '|':
-      return 'Backslash'
-    default:
-      return null
-  }
+  const logicalKey = logicalKeyTokenFromInput(input)
+  return isPunctuationKeyToken(logicalKey) ? logicalKey : null
 }
 
 function physicalPunctuationKey(input: KeybindingInput): string | null {
-  switch (input.code) {
-    case 'BracketLeft':
-    case 'BracketRight':
-    case 'Backslash':
-      return input.code
-    default:
-      return null
-  }
+  const physicalKey = physicalCodeKeyTokenFromInput(input)
+  return isPunctuationKeyToken(physicalKey) ? physicalKey : null
 }
 
 function shouldUseSemanticPunctuation(
@@ -1227,42 +1313,34 @@ function keyMatches(
     return letterKeyMatches(input, parsedKey)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
-    return input.key === parsedKey || input.code === `Digit${parsedKey}`
+    return digitKeyMatches(input, parsedKey)
   }
 
-  const key = input.key ?? ''
-  const code = input.code ?? ''
-  switch (parsedKey) {
-    case 'BracketLeft':
-    case 'BracketRight':
-    case 'Backslash': {
-      // Why: shortcut labels name logical punctuation, but international
-      // layouts can report the same character from different physical codes.
-      const semanticKey = semanticPunctuationKey(input)
-      if (semanticKey !== null && shouldUseSemanticPunctuation(parsed, input, platform)) {
-        return semanticKey === parsedKey
-      }
-      return code === parsedKey
-    }
-    case 'Minus':
-      // Why: shifted "_" is terminal undo/readline input. Users who want it
-      // as zoom-out can bind it explicitly instead of having the default steal it.
-      return key === '-' || key === 'Minus' || code === 'Minus'
-    case 'Underscore':
-      return key === '_' || key === 'Underscore'
-    case 'Equal':
-      return key === '=' || key === 'Equal' || code === 'Equal'
-    case 'Plus':
-      return key === '+' || key === 'Plus'
-    case 'NumpadAdd':
-      return code === 'NumpadAdd' || key === 'Add'
-    case 'NumpadSubtract':
-      return code === 'NumpadSubtract' || key === 'Subtract'
-    case 'Enter':
-      return key === 'Enter' && (code === 'Enter' || code === 'NumpadEnter' || code === '')
-    default:
-      return key === parsedKey || code === parsedKey
+  if (parsedKey === 'NumpadAdd' || parsedKey === 'NumpadSubtract') {
+    return (
+      numpadCodeKeyTokenFromInput(input) === parsedKey ||
+      logicalKeyTokenFromInput(input) === parsedKey
+    )
   }
+
+  if (isPunctuationKeyToken(parsedKey)) {
+    // Why: shortcut labels name logical punctuation, but international
+    // layouts can report the same character from different physical codes.
+    const semanticKey = semanticPunctuationKey(input)
+    if (semanticKey !== null) {
+      if (!shouldUseSemanticPunctuation(parsed, input, platform)) {
+        return false
+      }
+      return semanticKey === parsedKey
+    }
+    return canUsePhysicalCodeFallback(input) && physicalPunctuationKey(input) === parsedKey
+  }
+
+  const logicalKey = logicalKeyTokenFromInput(input)
+  if (logicalKey !== null) {
+    return logicalKey === parsedKey
+  }
+  return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
 }
 
 export function keybindingMatchesInput(

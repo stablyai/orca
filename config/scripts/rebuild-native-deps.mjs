@@ -45,6 +45,8 @@ const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild = process.env.ORCA_FORCE_NATIVE_REBUILD === '1'
 
+ensureElectronPackageInstalled()
+
 if (!forceRebuild) {
   // Why: Windows cannot unlink a loaded .node DLL, so avoid @electron/rebuild
   // when the current install already works with Electron's ABI.
@@ -121,6 +123,37 @@ try {
     }
   }
   process.exit(1)
+}
+
+function ensureElectronPackageInstalled() {
+  try {
+    require('electron')
+    return
+  } catch (/** @type {any} */ err) {
+    if (!isElectronPackageInstallError(err)) {
+      throw err
+    }
+  }
+
+  // Why: CI has observed Electron's postinstall exiting cleanly without
+  // writing path.txt; native rebuild and tests both need the binary path.
+  console.log('[rebuild] Electron package binary is missing; rerunning Electron install.')
+  try {
+    execFileSync(process.execPath, [require.resolve('electron/install.js')], {
+      cwd: projectDir,
+      stdio: 'inherit'
+    })
+  } catch (/** @type {any} */ err) {
+    console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
+    process.exit(1)
+  }
+
+  try {
+    require('electron')
+  } catch (/** @type {any} */ err) {
+    console.error('[rebuild] Electron package is still unavailable after retry:', err?.message ?? err)
+    process.exit(1)
+  }
 }
 
 function probeElectronNativeModules(moduleNames) {
@@ -215,6 +248,10 @@ function isWindowsNativeLockError(error) {
 
 function isPostinstall() {
   return process.env.npm_lifecycle_event === 'postinstall'
+}
+
+function isElectronPackageInstallError(error) {
+  return /Electron failed to install correctly/i.test(formatError(error))
 }
 
 function formatError(error) {

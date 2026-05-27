@@ -304,6 +304,7 @@ import {
   assertWorktreeCleanForRemoval,
   removeWorktree
 } from '../git/worktree'
+import type { AddWorktreeResult } from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
@@ -537,6 +538,9 @@ type RuntimePtyWorktreeRecord = {
 
 type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
+  // Why: serialize can race with newer writes appended to writeChain; return
+  // the seq actually painted into this emulator, not the latest PTY seq.
+  outputSequence: number
   writeChain: Promise<void>
 }
 
@@ -1038,6 +1042,7 @@ export class OrcaRuntimeService {
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
+  private ptyOutputSequenceById = new Map<string, number>()
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
   //   'done'     → hydration completed (success or skip); never run again
@@ -2151,7 +2156,9 @@ export class OrcaRuntimeService {
     this.recordPtyWorktree(ptyId, worktreeId, { connected: true })
   }
 
-  onPtyData(ptyId: string, data: string, at: number): void {
+  onPtyData(ptyId: string, data: string, at: number): number {
+    const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + data.length
+    this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.recentPtyOutputById.set(
       ptyId,
       `${this.recentPtyOutputById.get(ptyId) ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
@@ -2171,7 +2178,7 @@ export class OrcaRuntimeService {
     // that the later seed-resolve would overwrite, dropping the live byte.
     // See docs/mobile-prefer-renderer-scrollback.md.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
-    this.trackHeadlessTerminalData(ptyId, data)
+    this.trackHeadlessTerminalData(ptyId, data, outputSequence)
 
     // Why: extract OSC title from raw PTY data before tail-buffer processing
     // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
@@ -2300,6 +2307,11 @@ export class OrcaRuntimeService {
         listener(data)
       }
     }
+    return outputSequence
+  }
+
+  getPtyOutputSequence(ptyId: string): number {
+    return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
   subscribeToTerminalData(ptyId: string, listener: (data: string) => void): () => void {
@@ -2368,8 +2380,15 @@ export class OrcaRuntimeService {
   serializeTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
+  }
+
+  serializeMainTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+    return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
@@ -2411,6 +2430,7 @@ export class OrcaRuntimeService {
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2451,6 +2471,7 @@ export class OrcaRuntimeService {
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2516,10 +2537,13 @@ export class OrcaRuntimeService {
     }
   }
 
-  private trackHeadlessTerminalData(ptyId: string, data: string): void {
+  private trackHeadlessTerminalData(ptyId: string, data: string, outputSequence: number): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     state.writeChain = state.writeChain
-      .then(() => state.emulator.write(data))
+      .then(async () => {
+        await state.emulator.write(data)
+        state.outputSequence = outputSequence
+      })
       .catch(() => {
         // Best-effort state tracking; live streaming must continue even if
         // xterm rejects a malformed or raced write during shutdown.
@@ -2534,6 +2558,7 @@ export class OrcaRuntimeService {
     const size = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: size.cols, rows: size.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2559,7 +2584,7 @@ export class OrcaRuntimeService {
   private async serializeTerminalBufferFromAvailableState(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
@@ -2593,8 +2618,8 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null
@@ -2611,7 +2636,9 @@ export class OrcaRuntimeService {
     const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
-    return data.length > 0 ? { data, cols: snapshot.cols, rows: snapshot.rows } : null
+    return data.length > 0 || opts.includeEmpty === true
+      ? { data, cols: snapshot.cols, rows: snapshot.rows, seq: state.outputSequence }
+      : null
   }
 
   private disposeHeadlessTerminal(ptyId: string): void {
@@ -3314,6 +3341,7 @@ export class OrcaRuntimeService {
     this.resizeListeners.delete(ptyId)
     this.lastRendererSizes.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.ptyOutputSequenceById.delete(ptyId)
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
     // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
@@ -7265,44 +7293,43 @@ export class OrcaRuntimeService {
     }
 
     const existingBranchOption = { checkoutExistingBranch }
-    if (sparseDirectories.length > 0) {
-      await (checkoutExistingBranch
-        ? addSparseWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            sparseDirectories,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            existingBranchOption
-          )
-        : addSparseWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            sparseDirectories,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate
-          ))
-    } else {
-      await (checkoutExistingBranch
-        ? addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            false,
-            existingBranchOption
-          )
-        : addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate
-          ))
-    }
+    const addResult: AddWorktreeResult =
+      (await (sparseDirectories.length > 0
+        ? checkoutExistingBranch
+          ? addSparseWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              sparseDirectories,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate,
+              existingBranchOption
+            )
+          : addSparseWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              sparseDirectories,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate
+            )
+        : checkoutExistingBranch
+          ? addWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate,
+              false,
+              existingBranchOption
+            )
+          : addWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate
+            ))) ?? {}
 
     let configuredPushTarget: GitPushTarget | undefined
     if (preparedPushTarget) {
@@ -7575,7 +7602,10 @@ export class OrcaRuntimeService {
       },
       ...(lineageInput ? { lineage, warnings: lineageWarnings } : {}),
       ...(setup ? { setup } : {}),
-      ...(warning ? { warning } : {})
+      ...(warning ? { warning } : {}),
+      ...(addResult.localBaseRefRefresh
+        ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+        : {})
     }
   }
 
@@ -9464,6 +9494,13 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
+      if (candidates.length > 1) {
+        // Why: registering another worktree from the same Git repo makes git
+        // report the same physical worktree path under multiple repo IDs.
+        // A path selector is already exact, so prefer the first resolved row
+        // instead of surfacing a duplicate-registration ambiguity.
+        candidates = [candidates[0]]
+      }
     } else if (selector.startsWith('branch:')) {
       const branchSelector = selector.slice(7)
       candidates = worktrees.filter((worktree) =>
