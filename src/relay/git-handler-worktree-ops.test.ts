@@ -155,7 +155,7 @@ describe('removeWorktreeOp', () => {
       '/repo$ worktree remove /repo-feature',
       '/repo$ worktree prune',
       '/repo$ worktree list --porcelain',
-      '/repo$ branch -D feature/test'
+      '/repo$ branch -d feature/test'
     ])
   })
 
@@ -215,6 +215,7 @@ describe('removeWorktreeOp', () => {
 
     await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
 
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', 'feature/test'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
   })
 })

@@ -490,10 +490,15 @@ export async function removeWorktree(
     // Why: `git worktree remove` only detaches the filesystem entry. Orca also
     // drops the now-unused local branch here so delete-worktree does not leave
     // behind orphaned feature branches unless another worktree still points at it.
-    await gitExecFileAsync(['branch', '-D', branchName], { cwd: repoPath })
+    // Use `-d` (not `-D`): Git refuses to delete a branch with commits not merged
+    // into its upstream or HEAD, so unpublished work is preserved instead of
+    // force-deleted.
+    await gitExecFileAsync(['branch', '-d', branchName], { cwd: repoPath })
   } catch (error) {
+    // Expected when the branch still has unmerged/unpublished commits: keep it.
+    // Deleting a worktree must never silently discard commits.
     console.warn(
-      `[git] Failed to delete local branch "${branchName}" after removing worktree`,
+      `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
     )
   }

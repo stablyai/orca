@@ -170,10 +170,15 @@ export async function removeWorktreeOp(
   }
 
   try {
-    await git(['branch', '-D', branchName], repoPath)
+    // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix — Git
+    // refuses to delete a branch with commits not merged into its upstream or
+    // HEAD, so unpublished work on a remote worktree is preserved rather than
+    // force-deleted.
+    await git(['branch', '-d', branchName], repoPath)
   } catch (error) {
+    // Expected when the branch still has unmerged/unpublished commits: keep it.
     console.warn(
-      `relay removeWorktree: failed to delete local branch "${branchName}" after removing worktree`,
+      `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
     )
   }
