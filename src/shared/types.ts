@@ -1216,6 +1216,7 @@ export type LinearTeam = {
   workspaceName?: string
   name: string
   key: string
+  url?: string
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────

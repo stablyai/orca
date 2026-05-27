@@ -88,8 +88,12 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
+import {
+  buildLinearTeamUrl,
+  getLinearOrganizationUrlKeyFromIssueUrl
+} from '../../../shared/linear-links'
 import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
 import PullRequestPage from '@/components/PullRequestPage'
@@ -2832,7 +2836,12 @@ export default function TaskPage(): React.JSX.Element {
         workspaceId: issue.workspaceId,
         workspaceName: issue.workspaceName,
         name: issue.team.name,
-        key: issue.team.key
+        key: issue.team.key,
+        url:
+          buildLinearTeamUrl({
+            organizationUrlKey: getLinearOrganizationUrlKeyFromIssueUrl(issue.url),
+            teamKey: issue.team.key
+          }) ?? undefined
       })
     }
     return teams.sort((a, b) => a.name.localeCompare(b.name))
@@ -2840,7 +2849,21 @@ export default function TaskPage(): React.JSX.Element {
 
   // Why: the full Linear team fetch is async and can temporarily be empty.
   // Keep the selector usable from issue metadata until the complete list lands.
-  const linearTeamOptions = availableTeams.length > 0 ? availableTeams : linearIssueTeams
+  const linearTeamOptions = useMemo(() => {
+    if (availableTeams.length === 0) {
+      return linearIssueTeams
+    }
+    const issueTeamById = new Map(linearIssueTeams.map((team) => [team.id, team]))
+    return availableTeams.map((team) => {
+      if (team.url) {
+        return team
+      }
+      return {
+        ...team,
+        url: issueTeamById.get(team.id)?.url
+      }
+    })
+  }, [availableTeams, linearIssueTeams])
 
   // Why: team IDs belong to one Linear workspace. Switching workspaces while a
   // saved subset exists must not leave the task list filtered by stale team IDs.
@@ -2861,6 +2884,14 @@ export default function TaskPage(): React.JSX.Element {
     }
     return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
   }, [displayedLinearIssues, linearTeamSelection])
+
+  const selectedLinearTeamForExternalLink = useMemo(() => {
+    if (linearTeamSelection.size !== 1) {
+      return null
+    }
+    const [teamId] = linearTeamSelection
+    return linearTeamOptions.find((team) => team.id === teamId && team.url) ?? null
+  }, [linearTeamOptions, linearTeamSelection])
 
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
@@ -3073,6 +3104,20 @@ export default function TaskPage(): React.JSX.Element {
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
   const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
+  const selectedGitHubRepoExternalLink = useMemo(() => {
+    if (selectedRepos.length !== 1) {
+      return null
+    }
+    const [repo] = selectedRepos
+    const sourceState = perRepoSourceState.find((state) => state.repoId === repo.id)
+    const sources = sourceState?.sources
+    const slug =
+      activeGithubTaskKind === 'issues'
+        ? (sources?.issues ?? sources?.prs)
+        : (sources?.prs ?? sources?.issues)
+    const url = buildGitHubRepoUrl(slug)
+    return url ? { url, label: slug ? `${slug.owner}/${slug.repo}` : repo.displayName } : null
+  }, [activeGithubTaskKind, perRepoSourceState, selectedRepos])
 
   // Why: defense-in-depth safety net applied to the current page's items.
   // The active tab scopes requests to issues or PRs, and this keeps stale
@@ -4231,6 +4276,34 @@ export default function TaskPage(): React.JSX.Element {
                           </SelectContent>
                         </Select>
                       ) : null}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            onClick={() => {
+                              if (!selectedLinearTeamForExternalLink?.url) {
+                                return
+                              }
+                              void window.api.shell.openUrl(selectedLinearTeamForExternalLink.url)
+                            }}
+                            aria-label={
+                              selectedLinearTeamForExternalLink
+                                ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
+                                : 'Select one Linear team to open in Linear'
+                            }
+                            className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
+                          >
+                            <ExternalLink className="size-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          {selectedLinearTeamForExternalLink
+                            ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
+                            : 'Select one team to open in Linear'}
+                        </TooltipContent>
+                      </Tooltip>
                       <div className="min-w-0 w-full sm:w-[200px]">
                         <TeamMultiCombobox
                           teams={linearTeamOptions}
@@ -4298,26 +4371,56 @@ export default function TaskPage(): React.JSX.Element {
                         inert — hide it to avoid suggesting it does
                         something. */}
                     {githubMode !== 'project' && (
-                      <div className="min-w-0 max-w-[220px] shrink-0">
-                        <RepoMultiCombobox
-                          repos={eligibleRepos}
-                          selected={repoSelection}
-                          onChange={(next) => {
-                            setRepoSelection(next)
-                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save project selection.')
-                            })
-                          }}
-                          onSelectAll={() => {
-                            const allIds = new Set(eligibleRepos.map((r) => r.id))
-                            setRepoSelection(allIds)
-                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save project selection.')
-                            })
-                          }}
-                          triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                        />
-                      </div>
+                      <>
+                        <div className="min-w-0 max-w-[220px] shrink-0">
+                          <RepoMultiCombobox
+                            repos={eligibleRepos}
+                            selected={repoSelection}
+                            onChange={(next) => {
+                              setRepoSelection(next)
+                              void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                                toast.error('Failed to save project selection.')
+                              })
+                            }}
+                            onSelectAll={() => {
+                              const allIds = new Set(eligibleRepos.map((r) => r.id))
+                              setRepoSelection(allIds)
+                              void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                                toast.error('Failed to save project selection.')
+                              })
+                            }}
+                            triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                          />
+                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              onClick={() => {
+                                if (!selectedGitHubRepoExternalLink?.url) {
+                                  return
+                                }
+                                void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
+                              }}
+                              aria-label={
+                                selectedGitHubRepoExternalLink
+                                  ? `Open ${selectedGitHubRepoExternalLink.label} in GitHub`
+                                  : 'Select one GitHub project to open in GitHub'
+                              }
+                              className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {selectedGitHubRepoExternalLink
+                              ? `Open ${selectedGitHubRepoExternalLink.label} in GitHub`
+                              : 'Select one project to open in GitHub'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </>
                     )}
                   </div>
                 ) : null}
