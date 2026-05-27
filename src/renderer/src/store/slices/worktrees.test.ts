@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { LocalBaseRefRefreshResult, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -784,7 +784,23 @@ describe('createWorktree base status merge', () => {
     })
   })
 
-  it('warns when the local base ref cannot refresh because its worktree is dirty', async () => {
+  it.each([
+    {
+      status: 'skipped_dirty_worktree',
+      expectedReason: 'uncommitted changes'
+    },
+    {
+      status: 'skipped_not_fast_forward',
+      expectedReason: 'cannot be fast-forwarded cleanly'
+    },
+    {
+      status: 'skipped_error',
+      expectedReason: 'Git returned an error'
+    }
+  ] satisfies {
+    status: LocalBaseRefRefreshResult['status']
+    expectedReason: string
+  }[])('warns when local base ref refresh returns $status', async ({ status, expectedReason }) => {
     const store = createTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
@@ -794,7 +810,7 @@ describe('createWorktree base status merge', () => {
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefRefresh: {
-        status: 'skipped_dirty_worktree',
+        status,
         baseRef: 'origin/main',
         localBranch: 'main',
         ownerWorktreePath: '/repo'
@@ -804,8 +820,32 @@ describe('createWorktree base status merge', () => {
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
     expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed', {
-      description: expect.stringContaining('uncommitted changes')
+      description: expect.stringContaining(expectedReason)
     })
+    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).not.toContain('AI tools')
+    expect(description).not.toContain('git diff')
+  })
+
+  it('does not warn when the local base ref refresh succeeds', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'updated',
+        baseRef: 'origin/main',
+        localBranch: 'main'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('stamps manualOrder on create while Manual sort is active', async () => {

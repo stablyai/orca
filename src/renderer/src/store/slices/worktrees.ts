@@ -28,12 +28,28 @@ export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 
 function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
-  if (result?.status !== 'skipped_dirty_worktree') {
+  if (!result || result.status === 'updated') {
     return
   }
 
+  let reason: string
+  switch (result.status) {
+    case 'skipped_dirty_worktree':
+      reason =
+        'the worktree where it is checked out has uncommitted changes. Commit, stash, or discard those changes, then try again.'
+      break
+    case 'skipped_not_fast_forward':
+      reason =
+        'the local branch does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.'
+      break
+    case 'skipped_error':
+      reason =
+        'Git returned an error while updating the local ref. Check the repo for locked refs or unusual worktree state, then try again.'
+      break
+  }
+
   toast.warning(`Local ${result.localBranch} was not refreshed`, {
-    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because the worktree where it is checked out has uncommitted changes. AI tools using git diff ${result.localBranch}...HEAD may see stale results.`
+    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
   })
 }
 
