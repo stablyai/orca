@@ -656,6 +656,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           }
           return this
         },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
         disconnect: vi.fn(),
         unref: vi.fn()
       }
@@ -705,6 +709,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           }
           return this
         },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
         disconnect: vi.fn(),
         unref: vi.fn()
       }
@@ -752,6 +760,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           if (event === 'message') {
             queueMicrotask(() => cb({ type: 'ready' }))
           }
+          return this
+        },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
         },
         disconnect: vi.fn(),

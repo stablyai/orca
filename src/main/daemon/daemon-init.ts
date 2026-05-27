@@ -157,8 +157,22 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
-      const fail = (error: Error): void => {
-        clearTimeout(timer)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let settled = false
+      function cleanupStartupListeners(): void {
+        if (timer) {
+          clearTimeout(timer)
+        }
+        child.off('message', onReadyMessage)
+        child.off('error', onStartupError)
+        child.off('exit', onStartupExit)
+      }
+      function fail(error: Error): void {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupStartupListeners()
         if (child.pid) {
           try {
             process.kill(child.pid, 'SIGTERM')
@@ -168,13 +182,15 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         reject(error)
       }
-      const timer = setTimeout(() => {
-        fail(new Error('Daemon startup timed out'))
-      }, 10000)
-
-      child.on('message', (msg: unknown) => {
+      function onReadyMessage(msg: unknown): void {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
-          clearTimeout(timer)
+          if (settled) {
+            return
+          }
+          settled = true
+          // Why: the daemon process is detached after readiness; leaving
+          // startup listeners attached retains this launch promise closure.
+          cleanupStartupListeners()
           if (child.pid) {
             // Why: JSON pid file carries pid + process start time so later
             // killStaleDaemon() can verify the pid still belongs to the daemon
@@ -196,15 +212,23 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           child.unref()
           resolve()
         }
-      })
+      }
 
-      child.on('error', (err) => {
+      function onStartupError(err: Error): void {
         fail(err)
-      })
+      }
 
-      child.on('exit', (code) => {
+      function onStartupExit(code: number | null): void {
         fail(new Error(`Daemon exited during startup with code ${code}`))
-      })
+      }
+
+      timer = setTimeout(() => {
+        fail(new Error('Daemon startup timed out'))
+      }, 10000)
+
+      child.on('message', onReadyMessage)
+      child.on('error', onStartupError)
+      child.on('exit', onStartupExit)
     })
 
     return {
