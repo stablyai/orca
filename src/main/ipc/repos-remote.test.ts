@@ -497,6 +497,27 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('badgeColor', '#8b5cf6')
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
+
+  it('rejects a clone whose derived directory name resolves to the destination', async () => {
+    // basename(...) === '.', so clonePath would be the destination itself; abort
+    // cleanup must never be able to rm the user's chosen directory.
+    await expect(
+      handlers.get('repos:clone')!(null, { url: 'file:///tmp/source/.', destination: '/tmp' })
+    ).rejects.toThrow('valid repository directory name')
+
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('rejects a clone whose derived directory name escapes the destination', async () => {
+    // basename(...) === '..', so clonePath would be the destination's parent.
+    await expect(
+      handlers.get('repos:clone')!(null, { url: 'https://example.com/..', destination: '/tmp' })
+    ).rejects.toThrow('valid repository directory name')
+
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
 })
 
 describe('repos:getBaseRefDefault envelope', () => {

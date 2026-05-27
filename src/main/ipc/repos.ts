@@ -19,7 +19,7 @@ import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
-import { basename, isAbsolute, join } from 'path'
+import { basename, dirname, isAbsolute, join, resolve } from 'path'
 import {
   isGitRepo,
   getGitUsername,
@@ -67,7 +67,10 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
 // registerRepoHandlers is called again when a new BrowserWindow is created,
 // and a function-scoped variable would lose the reference to an in-flight clone.
 let activeCloneProc: ChildProcess | null = null
-let activeClonePath: string | null = null
+// Why: only a directory THIS clone created may be removed on abort — never a
+// pre-existing directory the user owns. Set only when the clone target did not
+// exist before the clone started.
+let activeCloneRemovablePath: string | null = null
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove any previously registered handlers so we can re-register them
@@ -646,10 +649,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('repos:cloneAbort', async () => {
     if (activeCloneProc) {
-      const pathToClean = activeClonePath
+      // Why: only remove a directory this clone created — never a pre-existing
+      // path the user owns (e.g. when the derived name collided with an existing
+      // empty dir). The strict-child validation in repos:clone already prevents
+      // the destination itself or a parent from ever becoming the clone target.
+      const pathToClean = activeCloneRemovablePath
       activeCloneProc.kill()
       activeCloneProc = null
-      activeClonePath = null
+      activeCloneRemovablePath = null
       // Why: git clone creates the target directory before it finishes.
       // Without cleanup, retrying the same URL/destination fails with
       // "destination path already exists and is not an empty directory".
@@ -672,11 +679,31 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!repoName) {
         throw new Error('Could not determine repository name from URL')
       }
+      const clonePath = join(args.destination, repoName)
+      // Why: a URL whose basename is '.', '..', or contains separators could make
+      // clonePath resolve to the destination itself or escape it. Abort cleanup
+      // would then rm a directory the user owns. Require a strict child directory.
+      const resolvedDestination = resolve(args.destination)
+      const resolvedClonePath = resolve(clonePath)
+      if (
+        resolvedClonePath === resolvedDestination ||
+        dirname(resolvedClonePath) !== resolvedDestination
+      ) {
+        throw new Error('Could not determine a valid repository directory name from URL')
+      }
       // Why: gitSpawn uses args.destination as cwd, so it must exist before
       // spawn — fresh installs may have a defaulted parent dir that does not
       // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
       await mkdir(args.destination, { recursive: true })
-      const clonePath = join(args.destination, repoName)
+
+      // Why: record whether the clone target already existed so abort cleanup
+      // never removes a pre-existing user directory (only one this clone made).
+      let cloneCreatedDir = false
+      try {
+        await access(clonePath)
+      } catch {
+        cloneCreatedDir = true
+      }
 
       // Why: use spawn instead of execFile so there is no maxBuffer limit.
       // git clone writes progress to stderr which can exceed Node's default
@@ -695,7 +722,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           stdio: ['ignore', 'ignore', 'pipe']
         })
         activeCloneProc = proc
-        activeClonePath = clonePath
+        activeCloneRemovablePath = cloneCreatedDir ? clonePath : null
 
         let stderrTail = ''
         proc.stderr!.on('data', (chunk: Buffer) => {
@@ -726,7 +753,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           // new clone unabortable.
           if (activeCloneProc === proc) {
             activeCloneProc = null
-            activeClonePath = null
+            activeCloneRemovablePath = null
           }
           if (signal === 'SIGTERM') {
             reject(new Error('Clone aborted'))
