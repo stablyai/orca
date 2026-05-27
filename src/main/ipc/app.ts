@@ -26,6 +26,40 @@ type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void
 }
 
+function parseDevRelaunchArgs(value: string | undefined): string[] | null {
+  if (!value) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) && parsed.every((arg) => typeof arg === 'string') ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function getDevRunnerRelaunchOptions(): Electron.RelaunchOptions | undefined {
+  if (!is.dev) {
+    return undefined
+  }
+
+  const execPath = process.env.ORCA_DEV_RELAUNCH_EXEC_PATH
+  const runnerScript = process.env.ORCA_DEV_RELAUNCH_SCRIPT
+  if (!execPath || !runnerScript) {
+    return undefined
+  }
+
+  const forwardedArgs = parseDevRelaunchArgs(process.env.ORCA_DEV_RELAUNCH_ARGS)
+  if (!forwardedArgs) {
+    return undefined
+  }
+
+  // Why: in pn dev, Electron is a child of the Vite runner; relaunching only
+  // Electron drops the renderer server and leaves a blank native shell.
+  return { execPath, args: [runnerScript, ...forwardedArgs] }
+}
+
 async function pickFloatingMarkdownDocument(
   event: IpcMainInvokeEvent
 ): Promise<MarkdownDocument | null> {
@@ -172,8 +206,13 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // before-quit handlers that could block on confirmation dialogs.
     // Mark shutdown first because app.exit() can bypass the usual quit latch.
     options.onBeforeRelaunch?.()
+    const relaunchOptions = getDevRunnerRelaunchOptions()
     setTimeout(() => {
-      app.relaunch()
+      if (relaunchOptions) {
+        app.relaunch(relaunchOptions)
+      } else {
+        app.relaunch()
+      }
       app.exit(0)
     }, 150)
   })
