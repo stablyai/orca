@@ -9,6 +9,7 @@ import { join } from 'path'
 let eventHandlers: Map<string, (...args: unknown[]) => void>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
 
 type MockSshClient = {
@@ -60,7 +61,17 @@ vi.mock('ssh2', () => {
       }, 0)
     }
     end() {}
-    destroy() {}
+    destroy() {
+      if (!destroyErrorMessage) {
+        return
+      }
+      const handler = eventHandlers?.get('error')
+      if (handler) {
+        handler(new Error(destroyErrorMessage))
+        return
+      }
+      throw new Error(destroyErrorMessage)
+    }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
       cb(undefined, {})
@@ -151,6 +162,7 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    destroyErrorMessage = ''
     connectSequence = []
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
@@ -254,6 +266,18 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), callbacks)
 
     await expect(conn.connect()).rejects.toThrow('Connection refused')
+    expect(conn.getState().status).toBe('error')
+  })
+
+  it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    destroyErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    await expect(conn.connect()).rejects.toThrow('Connection lost before handshake')
+
     expect(conn.getState().status).toBe('error')
   })
 
