@@ -72,6 +72,60 @@ export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
   return true
 }
 
+export function deleteFromEmptyDetailsBodyIntoSummary(editor: Editor): boolean {
+  const { state, view } = editor
+  const { selection } = state
+  const { $from, empty } = selection
+
+  if (!empty || !$from.parent.isTextblock || $from.parent.content.size !== 0) {
+    return false
+  }
+
+  if ($from.parentOffset !== 0) {
+    return false
+  }
+
+  const detailsContentDepth = $from.depth - 1
+  if (detailsContentDepth < 1) {
+    return false
+  }
+
+  const detailsContentNode = $from.node(detailsContentDepth)
+  if (detailsContentNode.type.name !== 'detailsContent' || $from.index(detailsContentDepth) !== 0) {
+    return false
+  }
+
+  const detailsDepth = detailsContentDepth - 1
+  const detailsNode = $from.node(detailsDepth)
+  if (detailsNode.type.name !== 'details' || detailsNode.childCount < 2) {
+    return false
+  }
+
+  const summaryNode = detailsNode.child(0)
+  if (summaryNode.type.name !== 'detailsSummary') {
+    return false
+  }
+
+  const detailsStart = $from.before(detailsDepth)
+  const summaryStart = detailsStart + 1
+  const summaryTextEnd = summaryStart + summaryNode.nodeSize - 1
+
+  if (summaryNode.content.size === 0) {
+    const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(summaryTextEnd), -1))
+    tr.scrollIntoView()
+    view.dispatch(tr)
+    return true
+  }
+
+  const deleteFrom = summaryTextEnd - 1
+  const tr = state.tr.delete(deleteFrom, summaryTextEnd)
+  tr.setSelection(TextSelection.near(tr.doc.resolve(deleteFrom), -1))
+  tr.scrollIntoView()
+  view.dispatch(tr)
+
+  return true
+}
+
 const OrcaDetails = Details.extend({
   // Why: details summary Enter must run before StarterKit's generic paragraph
   // splitting so typing a toggle title then pressing Enter moves into the body.
@@ -162,7 +216,19 @@ const OrcaDetails = Details.extend({
 const OrcaDetailsContent = DetailsContent.extend({
   // Why: detailsContent's double-Enter escape must run before StarterKit's
   // generic paragraph split, otherwise users can get stuck inside a toggle.
-  priority: 1000
+  priority: 1000,
+
+  addKeyboardShortcuts() {
+    const parentShortcuts = this.parent?.() ?? {}
+
+    return {
+      ...parentShortcuts,
+      Backspace: ({ editor }) =>
+        deleteFromEmptyDetailsBodyIntoSummary(editor) ||
+        parentShortcuts.Backspace?.({ editor }) ||
+        false
+    }
+  }
 })
 
 export function createOrcaDetailsExtensions(): AnyExtension[] {

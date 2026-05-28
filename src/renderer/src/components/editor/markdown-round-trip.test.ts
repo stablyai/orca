@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
+import { deleteFromEmptyDetailsBodyIntoSummary } from './rich-markdown-details-extension'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import type { SlashCommandId } from './rich-markdown-commands'
 import { slashCommands } from './rich-markdown-commands'
@@ -60,6 +61,27 @@ function slashCommandSelectionParent(commandId: SlashCommandId): string {
   } finally {
     editor.destroy()
   }
+}
+
+function firstDetailsBodyCursorPosition(editor: Editor): number {
+  let position: number | null = null
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'paragraph' && node.content.size === 0) {
+      const parent = editor.state.doc.resolve(pos).parent
+      if (parent.type.name === 'detailsContent') {
+        position = pos + 1
+        return false
+      }
+    }
+
+    return true
+  })
+
+  if (position === null) {
+    throw new Error('Expected an empty details body paragraph')
+  }
+
+  return position
 }
 
 describe('rich markdown round trip', () => {
@@ -146,6 +168,36 @@ describe('rich markdown round trip', () => {
       '<details class="orca-details" data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
     )
     expect(slashCommandSelectionParent('toggle-h1')).toBe('detailsSummary')
+  })
+
+  it.each([
+    [
+      'text toggle',
+      '<details><summary>Toggle</summary><p></p></details>',
+      '<details class="orca-details">\n<summary>Toggl</summary>\n\n\n\n</details>'
+    ],
+    [
+      'heading toggle',
+      '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p></p></details>',
+      '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggl</summary>\n\n\n\n</details>'
+    ]
+  ])('backspaces from an empty %s body into the summary', (_name, content, expected) => {
+    const editor = new Editor({
+      element: null,
+      extensions: createRichMarkdownExtensions(),
+      content,
+      contentType: 'markdown'
+    })
+
+    try {
+      editor.commands.setTextSelection(firstDetailsBodyCursorPosition(editor))
+
+      expect(deleteFromEmptyDetailsBodyIntoSummary(editor)).toBe(true)
+      expect(editor.getMarkdown().trimEnd()).toBe(expected)
+      expect(editor.state.selection.$from.parent.type.name).toBe('detailsSummary')
+    } finally {
+      editor.destroy()
+    }
   })
 
   it('preserves markdown tables', () => {
