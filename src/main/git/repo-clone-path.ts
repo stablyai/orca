@@ -9,8 +9,10 @@ import {
 
 export type ClaimedCloneTarget = {
   canCleanup: boolean
-  ownedDirectoryIdentity: Pick<Stats, 'dev' | 'ino'> | null
+  ownedDirectoryIdentity: CloneDirectoryIdentity | null
 }
+
+type CloneDirectoryIdentity = Pick<Stats, 'dev' | 'ino' | 'birthtimeMs'>
 
 export function deriveValidatedClonePath(args: { url: string; destination: string }): string {
   if (
@@ -107,15 +109,17 @@ export async function cleanupClaimedCloneTarget(
   })
 }
 
-function cloneDirectoryIdentity(stats: Stats): Pick<Stats, 'dev' | 'ino'> {
-  return { dev: stats.dev, ino: stats.ino }
+function cloneDirectoryIdentity(stats: Stats): CloneDirectoryIdentity {
+  // Why: fast remove/recreate cycles can reuse an inode; birthtime keeps us
+  // from treating a replacement directory as the clone target we created.
+  return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs }
 }
 
 function isSameCloneDirectoryIdentity(
-  a: Pick<Stats, 'dev' | 'ino'>,
-  b: Pick<Stats, 'dev' | 'ino'>
+  a: CloneDirectoryIdentity,
+  b: CloneDirectoryIdentity
 ): boolean {
-  return a.dev === b.dev && a.ino === b.ino
+  return a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs
 }
 
 function isErrnoCode(error: unknown, code: string): boolean {
