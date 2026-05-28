@@ -49,6 +49,44 @@ function isBlankBrowserTab(tab: BrowserTabState): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
+type FailedFavicon = {
+  tabId: string
+  faviconUrl: string
+}
+
+function BrowserTabFavicon({
+  tabId,
+  faviconUrl
+}: {
+  tabId: string
+  faviconUrl: string | null
+}): React.JSX.Element {
+  const displayFaviconUrl = faviconUrl?.trim() ? faviconUrl : null
+  const [failedFavicon, setFailedFavicon] = useState<FailedFavicon | null>(null)
+
+  useEffect(() => {
+    setFailedFavicon(null)
+  }, [tabId, displayFaviconUrl])
+
+  const currentFaviconFailed =
+    failedFavicon?.tabId === tabId && failedFavicon.faviconUrl === displayFaviconUrl
+
+  if (displayFaviconUrl && !currentFaviconFailed) {
+    return (
+      <img
+        src={displayFaviconUrl}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="size-3 mr-1 shrink-0 rounded-sm object-contain"
+        onError={() => setFailedFavicon({ tabId, faviconUrl: displayFaviconUrl })}
+      />
+    )
+  }
+
+  return <Globe className="size-3 mr-1 shrink-0 text-blue-500" />
+}
+
 export default function BrowserTab({
   tab,
   isActive,
@@ -159,7 +197,7 @@ export default function BrowserTab({
               browser tabs at a glance even when the strip is saturated. We
               keep full color on both active and inactive tabs — dimming to
               muted-foreground made the icon read as "disabled" in practice. */}
-          <Globe className="w-3 h-3 mr-1 shrink-0 text-blue-500" />
+          <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
           <span className="truncate max-w-[100px] mr-1">{getBrowserTabLabel(tab)}</span>
           {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
             <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
