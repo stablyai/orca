@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile, rm } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -29,7 +29,10 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
-import { resolveSafeUntrackedDiscardTarget } from '../../shared/git-discard-path-safety'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../../shared/git-discard-path-safety'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -1113,8 +1116,7 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
     return
   }
 
-  const safeTarget = await resolveSafeUntrackedDiscardTarget(worktreePath, filePath)
-  await rm(safeTarget, { force: true, recursive: true })
+  await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
 }
 
 function normalizeGitPathForCompare(filePath: string): string {
@@ -1165,18 +1167,14 @@ export async function bulkDiscardChanges(worktreePath: string, filePaths: string
   const untrackedPaths = filePaths.filter(
     (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
   )
-  const untrackedTargets = await Promise.all(
-    untrackedPaths.map((filePath) => resolveSafeUntrackedDiscardTarget(worktreePath, filePath))
-  )
-
-  for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
-      cwd: worktreePath
-    })
-  }
-
-  await Promise.all(untrackedTargets.map((target) => rm(target, { force: true, recursive: true })))
+  await removeSafeUntrackedDiscardTargets(worktreePath, untrackedPaths, async () => {
+    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+      await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
+        cwd: worktreePath
+      })
+    }
+  })
 }
 
 export function isWithinWorktree(

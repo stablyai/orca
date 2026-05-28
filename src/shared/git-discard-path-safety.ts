@@ -1,4 +1,4 @@
-import { lstat, realpath } from 'fs/promises'
+import { lstat, realpath, rm } from 'fs/promises'
 import * as path from 'path'
 
 function isENOENT(error: unknown): boolean {
@@ -49,11 +49,33 @@ async function assertNearestExistingParentInsideWorktree(
   throw new Error(`Path "${originalFilePath}" resolves outside the worktree`)
 }
 
-export async function resolveSafeUntrackedDiscardTarget(
+function assertTargetIsWorktreeChild(
+  resolvedWorktreePath: string,
+  resolvedTarget: string,
+  originalFilePath: string
+): void {
+  const relativeTarget = path.relative(resolvedWorktreePath, resolvedTarget)
+  // Why: force-removing the worktree root is never a valid untracked discard,
+  // even when callers accidentally pass an empty or self-referential path.
+  if (
+    relativeTarget === '' ||
+    relativeTarget === '.' ||
+    relativeTarget === '..' ||
+    relativeTarget.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeTarget)
+  ) {
+    throw new Error(`Path "${originalFilePath}" resolves outside the worktree`)
+  }
+}
+
+async function validateUntrackedDiscardTarget(
   worktreePath: string,
   filePath: string
 ): Promise<string> {
+  const resolvedWorktreePath = path.resolve(worktreePath)
   const resolvedTarget = path.resolve(worktreePath, filePath)
+  assertTargetIsWorktreeChild(resolvedWorktreePath, resolvedTarget, filePath)
+
   const realWorktreePath = path.resolve(await realpath(worktreePath))
 
   try {
@@ -72,4 +94,30 @@ export async function resolveSafeUntrackedDiscardTarget(
   }
 
   return resolvedTarget
+}
+
+export async function removeSafeUntrackedDiscardTarget(
+  worktreePath: string,
+  filePath: string
+): Promise<void> {
+  const target = await validateUntrackedDiscardTarget(worktreePath, filePath)
+  await rm(target, { force: true, recursive: true })
+}
+
+export async function removeSafeUntrackedDiscardTargets(
+  worktreePath: string,
+  filePaths: readonly string[],
+  beforeRemove?: () => Promise<void>
+): Promise<void> {
+  await Promise.all(
+    filePaths.map((filePath) => validateUntrackedDiscardTarget(worktreePath, filePath))
+  )
+
+  // Why: bulk discard must validate every untracked path before mutating
+  // tracked files, while this module still owns the eventual recursive rm.
+  await beforeRemove?.()
+
+  for (const filePath of filePaths) {
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
+  }
 }

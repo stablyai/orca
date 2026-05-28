@@ -2,7 +2,6 @@
 protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { rm } from 'fs/promises'
 import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
@@ -36,7 +35,10 @@ import {
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { buildRelayCommandEnv } from './relay-command-env'
-import { resolveSafeUntrackedDiscardTarget } from '../shared/git-discard-path-safety'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../shared/git-discard-path-safety'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -238,8 +240,7 @@ export class GitHandler {
       return
     }
 
-    const safeTarget = await resolveSafeUntrackedDiscardTarget(worktreePath, filePath)
-    await rm(safeTarget, { force: true, recursive: true })
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
   }
 
   private async bulkDiscard(params: Record<string, unknown>) {
@@ -266,18 +267,12 @@ export class GitHandler {
     const untrackedPaths = filePaths.filter(
       (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
     )
-    const untrackedTargets = await Promise.all(
-      untrackedPaths.map((filePath) => resolveSafeUntrackedDiscardTarget(worktreePath, filePath))
-    )
-
-    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-      await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
-    }
-
-    await Promise.all(
-      untrackedTargets.map((target) => rm(target, { force: true, recursive: true }))
-    )
+    await removeSafeUntrackedDiscardTargets(worktreePath, untrackedPaths, async () => {
+      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+        await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+      }
+    })
   }
 
   private async conflictOperation(params: Record<string, unknown>) {
