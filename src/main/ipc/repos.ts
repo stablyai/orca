@@ -698,11 +698,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
       // Why: record whether the clone target already existed so abort cleanup
       // never removes a pre-existing user directory (only one this clone made).
+      // Only ENOENT proves the path is absent; any other error (e.g. EACCES) is
+      // treated as "not ours to remove" so abort never deletes an unowned path.
       let cloneCreatedDir = false
       try {
         await access(clonePath)
-      } catch {
-        cloneCreatedDir = true
+      } catch (err) {
+        cloneCreatedDir = (err as NodeJS.ErrnoException).code === 'ENOENT'
       }
 
       // Why: use spawn instead of execFile so there is no maxBuffer limit.

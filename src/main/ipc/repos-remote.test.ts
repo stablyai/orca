@@ -5,6 +5,10 @@ duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'events'
+import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises'
+import { existsSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
@@ -517,6 +521,50 @@ describe('repos:add + repos:clone', () => {
 
     expect(gitSpawnMock).not.toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('cloneAbort does not delete a pre-existing destination directory', async () => {
+    // Real filesystem: a directory the user already owns must survive an abort.
+    const parent = await mkdtemp(join(tmpdir(), 'orca-clone-abort-'))
+    try {
+      const existingRepoDir = join(parent, 'orca')
+      await mkdir(existingRepoDir)
+      const sentinel = join(existingRepoDir, 'keep.txt')
+      await writeFile(sentinel, 'precious')
+
+      // A clone process that stays alive until killed; kill settles the clone
+      // promise the way git does on SIGTERM. Signal when spawn is reached so the
+      // abort only fires once activeCloneProc is set (no setImmediate race).
+      let signalSpawned: () => void
+      const spawned = new Promise<void>((resolve) => {
+        signalSpawned = resolve
+      })
+      gitSpawnMock.mockImplementation(() => {
+        const proc = new EventEmitter() as EventEmitter & {
+          stderr: EventEmitter
+          kill: () => void
+        }
+        proc.stderr = new EventEmitter()
+        proc.kill = () => proc.emit('close', null, 'SIGTERM')
+        signalSpawned()
+        return proc
+      })
+
+      const clonePromise = handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/orca.git',
+        destination: parent
+      })
+      const settled = expect(clonePromise).rejects.toThrow('Clone aborted')
+      await spawned
+
+      await handlers.get('repos:cloneAbort')!(null, undefined)
+      await settled
+
+      // The pre-existing directory and its contents must be untouched.
+      expect(existsSync(sentinel)).toBe(true)
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+    }
   })
 })
 
