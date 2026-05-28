@@ -1614,13 +1614,27 @@ export type TerminalQuickCommandScope =
       repoId: string
     }
 
-export type TerminalQuickCommand = {
+export type TerminalQuickCommandAction = 'terminal-command' | 'agent-prompt'
+
+export type TerminalQuickCommandBase = {
   id: string
   label: string
-  command: string
-  appendEnter: boolean
   scope?: TerminalQuickCommandScope
 }
+
+export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {
+  action?: 'terminal-command'
+  command: string
+  appendEnter: boolean
+}
+
+export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {
+  action: 'agent-prompt'
+  agent: TuiAgent
+  prompt: string
+}
+
+export type TerminalQuickCommand = TerminalCommandQuickCommand | TerminalAgentQuickCommand
 
 export type OpenInApplication = {
   id: string

@@ -153,7 +153,36 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
-  it('can force paste and submit for native-prefill agents', async () => {
+  it('submits in a separate write after force-pasting native-prefill agents', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'claude',
+      submit: true,
+      forcePaste: true
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks()
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    await vi.advanceTimersByTimeAsync(49)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
+  })
+
+  it('does not submit when the verified paste write fails', async () => {
+    testState.sendRuntimePtyInputVerified.mockResolvedValueOnce(false)
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -166,12 +195,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await vi.advanceTimersByTimeAsync(1500)
 
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      `${PASTED_ISSUE_URL}\r`
-    )
+    await expect(promise).resolves.toBe(false)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
   })
 
   it('reports false when verified input delivery fails', async () => {
