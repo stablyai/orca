@@ -240,7 +240,9 @@ export class GitHandler {
       return
     }
 
-    await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+      this.cleanUntrackedPaths(worktreePath, [targetPath])
+    )
   }
 
   private async bulkDiscard(params: Record<string, unknown>) {
@@ -267,12 +269,27 @@ export class GitHandler {
     const untrackedPaths = filePaths.filter(
       (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
     )
-    await removeSafeUntrackedDiscardTargets(worktreePath, untrackedPaths, async () => {
-      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+    await removeSafeUntrackedDiscardTargets(
+      worktreePath,
+      untrackedPaths,
+      (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+      async () => {
+        for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+        }
       }
-    })
+    )
+  }
+
+  private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      if (chunk.length > 0) {
+        // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+        await this.git(['clean', '-ffdx', '--', ...chunk], worktreePath)
+      }
+    }
   }
 
   private async conflictOperation(params: Record<string, unknown>) {

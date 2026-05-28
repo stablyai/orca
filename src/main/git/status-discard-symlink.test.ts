@@ -76,4 +76,30 @@ describe('discardChanges symlink safety', () => {
     await expect(access(linkPath)).rejects.toThrow()
     await expect(access(outsideFile)).resolves.toBeUndefined()
   })
+
+  it('removes ignored paths selected for discard', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '.gitignore'), 'ignored/\n')
+    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'ignore ignored dir'], { cwd: repo })
+    const ignoredFile = path.join(repo, 'ignored', 'file.txt')
+    await mkdir(path.dirname(ignoredFile))
+    await writeFile(ignoredFile, 'ignored')
+
+    await discardChanges(repo, 'ignored')
+
+    await expect(access(path.join(repo, 'ignored'))).rejects.toThrow()
+  })
+
+  it('removes untracked nested git repos selected for discard', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    const nestedRepo = path.join(repo, 'nested')
+    await mkdir(nestedRepo)
+    execFileSync('git', ['init', '-q'], { cwd: nestedRepo })
+    await writeFile(path.join(nestedRepo, 'file.txt'), 'nested')
+
+    await discardChanges(repo, 'nested')
+
+    await expect(access(nestedRepo)).rejects.toThrow()
+  })
 })

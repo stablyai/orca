@@ -94,13 +94,15 @@ describe('discardChanges', () => {
 
     await discardChanges('/repo', 'src/new-file.ts')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    // Why: discardChanges uses path.resolve(worktreePath, filePath) to build
-    // the absolute rm target, which on Windows prepends a drive letter.
-    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'src', 'new-file.ts'), {
-      force: true,
-      recursive: true
-    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['clean', '-ffdx', '--', 'src/new-file.ts'],
+      {
+        cwd: '/repo'
+      }
+    )
+    expect(rmMock).not.toHaveBeenCalled()
   })
 
   it('rejects paths that traverse outside the worktree', async () => {
@@ -189,14 +191,14 @@ describe('bulk git helpers', () => {
         cwd: '/repo'
       }
     )
-    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'src', 'new-file.ts'), {
-      force: true,
-      recursive: true
-    })
-    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'scratch'), {
-      force: true,
-      recursive: true
-    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['clean', '-ffdx', '--', 'src/new-file.ts', 'scratch'],
+      {
+        cwd: '/repo'
+      }
+    )
+    expect(rmMock).not.toHaveBeenCalled()
   })
 
   it('rejects bulk discard paths that traverse outside the worktree', async () => {

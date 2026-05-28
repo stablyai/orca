@@ -1,4 +1,4 @@
-import { lstat, realpath, rm } from 'fs/promises'
+import { lstat, realpath } from 'fs/promises'
 import * as path from 'path'
 
 function isENOENT(error: unknown): boolean {
@@ -98,15 +98,17 @@ async function validateUntrackedDiscardTarget(
 
 export async function removeSafeUntrackedDiscardTarget(
   worktreePath: string,
-  filePath: string
+  filePath: string,
+  removePath: (filePath: string) => Promise<void>
 ): Promise<void> {
-  const target = await validateUntrackedDiscardTarget(worktreePath, filePath)
-  await rm(target, { force: true, recursive: true })
+  await validateUntrackedDiscardTarget(worktreePath, filePath)
+  await removePath(filePath)
 }
 
 export async function removeSafeUntrackedDiscardTargets(
   worktreePath: string,
   filePaths: readonly string[],
+  removePaths: (filePaths: readonly string[]) => Promise<void>,
   beforeRemove?: () => Promise<void>
 ): Promise<void> {
   await Promise.all(
@@ -114,10 +116,11 @@ export async function removeSafeUntrackedDiscardTargets(
   )
 
   // Why: bulk discard must validate every untracked path before mutating
-  // tracked files, while this module still owns the eventual recursive rm.
+  // tracked files, then recheck before the caller's Git-bounded cleanup runs.
   await beforeRemove?.()
 
-  for (const filePath of filePaths) {
-    await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
-  }
+  await Promise.all(
+    filePaths.map((filePath) => validateUntrackedDiscardTarget(worktreePath, filePath))
+  )
+  await removePaths(filePaths)
 }

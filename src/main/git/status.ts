@@ -1116,7 +1116,9 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
     return
   }
 
-  await removeSafeUntrackedDiscardTarget(worktreePath, filePath)
+  await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+    cleanUntrackedPaths(worktreePath, [targetPath])
+  )
 }
 
 function normalizeGitPathForCompare(filePath: string): string {
@@ -1146,6 +1148,19 @@ async function listTrackedPathSpecs(
   return trackedPaths
 }
 
+async function cleanUntrackedPaths(
+  worktreePath: string,
+  filePaths: readonly string[]
+): Promise<void> {
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    if (chunk.length > 0) {
+      // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk], { cwd: worktreePath })
+    }
+  }
+}
+
 /**
  * Discard working tree changes for many paths in a small number of subprocesses.
  */
@@ -1167,14 +1182,19 @@ export async function bulkDiscardChanges(worktreePath: string, filePaths: string
   const untrackedPaths = filePaths.filter(
     (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
   )
-  await removeSafeUntrackedDiscardTargets(worktreePath, untrackedPaths, async () => {
-    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-      await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
-        cwd: worktreePath
-      })
+  await removeSafeUntrackedDiscardTargets(
+    worktreePath,
+    untrackedPaths,
+    (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths),
+    async () => {
+      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+        await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
+          cwd: worktreePath
+        })
+      }
     }
-  })
+  )
 }
 
 export function isWithinWorktree(
