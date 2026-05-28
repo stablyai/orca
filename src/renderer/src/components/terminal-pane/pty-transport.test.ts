@@ -124,6 +124,113 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('limits deferred PTY side-effect work per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('title-199', 'title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('limits coalesced OSC titles in one PTY chunk per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+      const titles = Array.from({ length: 200 }, (_, i) => `\x1b]0;chunk-title-${i}\x07`).join('')
+
+      processor.processData(titles, callbacks)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('chunk-title-199', 'chunk-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes all remaining PTY side effects after a partial bounded drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;flush-title-${i}\x07`, callbacks)
+      }
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      processor.flushPendingSideEffects()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('flush-title-199', 'flush-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still runs stale-title detection when an OSC status chunk has no title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentStatus = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentStatus,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      processor.processData(
+        '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07plain output\r\n',
+        callbacks
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onAgentStatus).toHaveBeenCalledWith({
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'codex'
+      })
+
+      vi.advanceTimersByTime(3_000)
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses acknowledged writes only for local IPC PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const localTransport = createIpcPtyTransport({})
