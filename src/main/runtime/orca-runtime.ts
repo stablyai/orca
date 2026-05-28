@@ -43,11 +43,16 @@ import type {
   WorktreeStartupLaunch,
   LinearIssueUpdate,
   LinearWorkspaceSelection,
+  NestedRepoScanResult,
+  ProjectGroup,
+  ProjectGroupImportMode,
+  ProjectGroupImportResult,
   TabGroupLayoutNode,
   TuiAgent
 } from '../../shared/types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
@@ -304,6 +309,7 @@ import {
   assertWorktreeCleanForRemoval,
   removeWorktree
 } from '../git/worktree'
+import type { AddWorktreeResult } from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
@@ -346,9 +352,13 @@ import {
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
 import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
-  isWorktreePathMissing
+  isWorktreePathMissing,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
+  stripOrcaProvenanceMetaUpdates
 } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -358,6 +368,7 @@ import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from '../ipc/ssh'
+import { detectRepoIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
@@ -366,6 +377,16 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
+import {
+  createNestedProjectGroupResolver,
+  resolveNestedRepoSelection
+} from '../project-groups/nested-repo-import'
+
+function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
+  console.warn(`[project-groups] ${context}`, error)
+  return 'Repository could not be imported'
+}
 
 type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -393,7 +414,12 @@ type RuntimeStore = {
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
-  removeRepo?: Store['removeRepo']
+  getProjectGroups?: Store['getProjectGroups']
+  createProjectGroup?: Store['createProjectGroup']
+  updateProjectGroup?: Store['updateProjectGroup']
+  deleteProjectGroup?: Store['deleteProjectGroup']
+  moveProjectToGroup?: Store['moveProjectToGroup']
+  removeProject?: Store['removeProject']
   reorderRepos?: Store['reorderRepos']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   getWorktreeMeta: Store['getWorktreeMeta']
@@ -537,6 +563,9 @@ type RuntimePtyWorktreeRecord = {
 
 type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
+  // Why: serialize can race with newer writes appended to writeChain; return
+  // the seq actually painted into this emulator, not the latest PTY seq.
+  outputSequence: number
   writeChain: Promise<void>
 }
 
@@ -1038,6 +1067,7 @@ export class OrcaRuntimeService {
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
+  private ptyOutputSequenceById = new Map<string, number>()
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
   //   'done'     → hydration completed (success or skip); never run again
@@ -2037,6 +2067,8 @@ export class OrcaRuntimeService {
     this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
     this.gitCommands.getRuntimeGitConflictOperation.bind(this.gitCommands)
+  abortRuntimeGitMerge: RuntimeGitCommands['abortRuntimeGitMerge'] =
+    this.gitCommands.abortRuntimeGitMerge.bind(this.gitCommands)
   getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff'] =
     this.gitCommands.getRuntimeGitDiff.bind(this.gitCommands)
   getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare'] =
@@ -2090,11 +2122,11 @@ export class OrcaRuntimeService {
 
   private async resolveRuntimeGitTarget(
     worktreeSelector: string
-  ): Promise<{ worktree: ResolvedWorktree; connectionId?: string }> {
+  ): Promise<{ worktree: ResolvedWorktree; repo?: Repo; connectionId?: string }> {
     const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = store.getRepo(worktree.repoId)
-    return { worktree, connectionId: repo?.connectionId ?? undefined }
+    return { worktree, repo, connectionId: repo?.connectionId ?? undefined }
   }
 
   onMobileSessionTabsChanged(
@@ -2151,7 +2183,9 @@ export class OrcaRuntimeService {
     this.recordPtyWorktree(ptyId, worktreeId, { connected: true })
   }
 
-  onPtyData(ptyId: string, data: string, at: number): void {
+  onPtyData(ptyId: string, data: string, at: number): number {
+    const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + data.length
+    this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.recentPtyOutputById.set(
       ptyId,
       `${this.recentPtyOutputById.get(ptyId) ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
@@ -2171,7 +2205,7 @@ export class OrcaRuntimeService {
     // that the later seed-resolve would overwrite, dropping the live byte.
     // See docs/mobile-prefer-renderer-scrollback.md.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
-    this.trackHeadlessTerminalData(ptyId, data)
+    this.trackHeadlessTerminalData(ptyId, data, outputSequence)
 
     // Why: extract OSC title from raw PTY data before tail-buffer processing
     // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
@@ -2300,6 +2334,11 @@ export class OrcaRuntimeService {
         listener(data)
       }
     }
+    return outputSequence
+  }
+
+  getPtyOutputSequence(ptyId: string): number {
+    return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
   subscribeToTerminalData(ptyId: string, listener: (data: string) => void): () => void {
@@ -2368,8 +2407,15 @@ export class OrcaRuntimeService {
   serializeTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
+  }
+
+  serializeMainTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+    return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
@@ -2411,6 +2457,7 @@ export class OrcaRuntimeService {
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2451,6 +2498,7 @@ export class OrcaRuntimeService {
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: dims.cols, rows: dims.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2516,10 +2564,13 @@ export class OrcaRuntimeService {
     }
   }
 
-  private trackHeadlessTerminalData(ptyId: string, data: string): void {
+  private trackHeadlessTerminalData(ptyId: string, data: string, outputSequence: number): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     state.writeChain = state.writeChain
-      .then(() => state.emulator.write(data))
+      .then(async () => {
+        await state.emulator.write(data)
+        state.outputSequence = outputSequence
+      })
       .catch(() => {
         // Best-effort state tracking; live streaming must continue even if
         // xterm rejects a malformed or raced write during shutdown.
@@ -2534,6 +2585,7 @@ export class OrcaRuntimeService {
     const size = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state: RuntimeHeadlessTerminal = {
       emulator: new HeadlessEmulator({ cols: size.cols, rows: size.rows }),
+      outputSequence: 0,
       writeChain: Promise.resolve()
     }
     this.headlessTerminals.set(ptyId, state)
@@ -2559,7 +2611,7 @@ export class OrcaRuntimeService {
   private async serializeTerminalBufferFromAvailableState(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
@@ -2593,8 +2645,8 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number } | null> {
+    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null
@@ -2611,7 +2663,9 @@ export class OrcaRuntimeService {
     const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
-    return data.length > 0 ? { data, cols: snapshot.cols, rows: snapshot.rows } : null
+    return data.length > 0 || opts.includeEmpty === true
+      ? { data, cols: snapshot.cols, rows: snapshot.rows, seq: state.outputSequence }
+      : null
   }
 
   private disposeHeadlessTerminal(ptyId: string): void {
@@ -2730,6 +2784,10 @@ export class OrcaRuntimeService {
     resolvers: CommitMessageAgentEnvironmentResolvers
   ): void {
     this.commitMessageAgentEnv = resolvers
+  }
+
+  getCommitMessageAgentEnvironmentResolvers(): CommitMessageAgentEnvironmentResolvers | undefined {
+    return this.commitMessageAgentEnv ?? undefined
   }
 
   async startMobileDictation(params: {
@@ -3314,6 +3372,7 @@ export class OrcaRuntimeService {
     this.resizeListeners.delete(ptyId)
     this.lastRendererSizes.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.ptyOutputSequenceById.delete(ptyId)
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
     // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
@@ -5032,6 +5091,171 @@ export class OrcaRuntimeService {
     return this.store?.getRepos() ?? []
   }
 
+  listProjectGroups(): ProjectGroup[] {
+    return this.store?.getProjectGroups?.() ?? []
+  }
+
+  async createProjectGroup(input: {
+    name: string
+    parentPath?: string | null
+    parentGroupId?: string | null
+    createdFrom?: ProjectGroup['createdFrom']
+  }): Promise<ProjectGroup> {
+    if (!this.store?.createProjectGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    const group = this.store.createProjectGroup({
+      name: input.name,
+      parentPath: input.parentPath ?? null,
+      parentGroupId: input.parentGroupId ?? null,
+      createdFrom: input.createdFrom ?? 'manual'
+    })
+    this.notifier?.reposChanged()
+    return group
+  }
+
+  async updateProjectGroup(
+    groupId: string,
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+  ): Promise<ProjectGroup | null> {
+    if (!this.store?.updateProjectGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    const updated = this.store.updateProjectGroup(groupId, updates)
+    if (updated) {
+      this.notifier?.reposChanged()
+    }
+    return updated
+  }
+
+  async deleteProjectGroup(groupId: string): Promise<{ deleted: boolean }> {
+    if (!this.store?.deleteProjectGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    const deleted = this.store.deleteProjectGroup(groupId)
+    if (deleted) {
+      this.notifier?.reposChanged()
+    }
+    return { deleted }
+  }
+
+  async moveProjectToGroup(
+    repoSelector: string,
+    groupId: string | null,
+    order?: number
+  ): Promise<Repo> {
+    if (!this.store?.moveProjectToGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const moved = this.store.moveProjectToGroup(repo.id, groupId, order)
+    if (!moved) {
+      throw new Error('repo_not_found')
+    }
+    this.notifier?.reposChanged()
+    return moved
+  }
+
+  async scanNestedRepos(path: string): Promise<NestedRepoScanResult> {
+    if (!isAbsolute(path)) {
+      throw new Error('Project path must be an absolute path')
+    }
+    return scanNestedRepos({ path })
+  }
+
+  async importNestedRepos(args: {
+    parentPath: string
+    groupName: string
+    projectPaths: string[]
+    mode: ProjectGroupImportMode
+  }): Promise<ProjectGroupImportResult> {
+    if (!this.store?.createProjectGroup || !this.store?.moveProjectToGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    if (!isAbsolute(args.parentPath)) {
+      throw new Error('Project path must be an absolute path')
+    }
+    const scan = await scanNestedRepos({ path: args.parentPath })
+    const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
+    const groupResolver = createNestedProjectGroupResolver({
+      parentPath: scan.selectedPath,
+      groupName: args.groupName,
+      mode: args.mode,
+      createGroup: (input) => this.store!.createProjectGroup!(input)
+    })
+    const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
+      (repoPath) => ({
+        path: repoPath,
+        status: 'failed',
+        error: 'Repository was not found in the nested repo scan result'
+      })
+    )
+    for (const repoPath of selection.selectedPaths) {
+      try {
+        if (!isGitRepo(repoPath)) {
+          results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+          continue
+        }
+        const existing = this.store
+          .getRepos()
+          .find((repo) => runtimePathsEqual(repo.path, repoPath))
+        const group = groupResolver.getGroupForRepo(repoPath)
+        if (existing) {
+          if (group) {
+            this.store.moveProjectToGroup(existing.id, group.id)
+          }
+          results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
+          continue
+        }
+        const repo: Repo = {
+          id: randomUUID(),
+          path: repoPath,
+          displayName: getRepoName(repoPath),
+          badgeColor: DEFAULT_REPO_BADGE_COLOR,
+          addedAt: Date.now(),
+          kind: 'git',
+          externalWorktreeVisibility: 'hide',
+          externalWorktreeVisibilityLegacy: false,
+          ...(group
+            ? {
+                projectGroupId: group.id,
+                projectGroupOrder: getNextProjectGroupOrder(this.store.getRepos(), group.id)
+              }
+            : {})
+        }
+        this.store.addRepo(repo)
+        results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
+      } catch (error) {
+        results.push({
+          path: repoPath,
+          status: 'failed',
+          error: sanitizeNestedRepoRuntimeImportError(
+            'Failed to import nested repository in runtime',
+            error
+          )
+        })
+      }
+    }
+    const importedCount = results.filter((entry) => entry.status === 'imported').length
+    const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
+    const failedCount = results.filter((entry) => entry.status === 'failed').length
+    if (importedCount + alreadyKnownCount === 0) {
+      for (const group of groupResolver.getCreatedGroups().reverse()) {
+        this.store.deleteProjectGroup?.(group.id)
+      }
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    const rootGroup = groupResolver.getRootGroup()
+    return {
+      ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
+      projects: results,
+      importedCount,
+      alreadyKnownCount,
+      failedCount
+    }
+  }
+
   async listSparsePresets(repoSelector: string) {
     if (!this.store?.getSparsePresets) {
       throw new Error('runtime_unavailable')
@@ -5071,7 +5295,7 @@ export class OrcaRuntimeService {
     if (!isAbsolute(path)) {
       // Why: remote clients may run in a different cwd than the server. Require
       // server-side repo paths to be explicit so `orca serve` cwd is irrelevant.
-      throw new Error('Repo path must be an absolute path')
+      throw new Error('Project path must be an absolute path')
     }
     if (kind === 'git' && !isGitRepo(path)) {
       throw new Error(`Not a valid git repository: ${path}`)
@@ -5082,11 +5306,13 @@ export class OrcaRuntimeService {
       return existing
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: path, kind })
     const repo: Repo = {
       id: randomUUID(),
       path,
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind,
       ...(kind === 'git'
@@ -5196,11 +5422,13 @@ export class OrcaRuntimeService {
       return { repo: raceWinner }
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
     const repo: Repo = {
       id: randomUUID(),
       path: targetPath,
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind: repoKind,
       ...(repoKind === 'git'
@@ -5269,11 +5497,13 @@ export class OrcaRuntimeService {
       return existing
     }
 
+    const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
     const repo: Repo = {
       id: randomUUID(),
       path: clonePath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(repoIcon ? { repoIcon } : {}),
       addedAt: Date.now(),
       kind: 'git',
       externalWorktreeVisibility: 'hide',
@@ -5322,6 +5552,9 @@ export class OrcaRuntimeService {
         | 'issueSourcePreference'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
+        | 'projectGroupId'
+        | 'projectGroupOrder'
+        | 'sourceControlAi'
       >
     >
   ): Promise<Repo> {
@@ -5338,12 +5571,12 @@ export class OrcaRuntimeService {
     return updated
   }
 
-  async removeRepo(repoSelector: string): Promise<{ removed: true }> {
-    if (!this.store?.removeRepo) {
+  async removeProject(repoSelector: string): Promise<{ removed: true }> {
+    if (!this.store?.removeProject) {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.store.removeRepo(repo.id)
+    this.store.removeProject(repo.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
     this.notifier?.reposChanged()
@@ -5677,7 +5910,8 @@ export class OrcaRuntimeService {
         head: args.head,
         title: args.title,
         body: args.body,
-        draft: args.draft
+        draft: args.draft,
+        useTemplate: args.useTemplate
       },
       repo.connectionId ?? null
     )
@@ -6730,9 +6964,7 @@ export class OrcaRuntimeService {
       agent,
       draft: content,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      platform: agentLaunchPlatform,
-      useOrcaClaudeAgentStatusSettings: settings.agentStatusHooksEnabled !== false,
-      useOrcaCodexAgentStatusProfile: settings.agentStatusHooksEnabled !== false
+      platform: agentLaunchPlatform
     })
     if (draftLaunchPlan) {
       return {
@@ -6749,9 +6981,7 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       platform: agentLaunchPlatform,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: settings.agentStatusHooksEnabled !== false,
-      useOrcaCodexAgentStatusProfile: settings.agentStatusHooksEnabled !== false
+      allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
       return null
@@ -7269,44 +7499,43 @@ export class OrcaRuntimeService {
     }
 
     const existingBranchOption = { checkoutExistingBranch }
-    if (sparseDirectories.length > 0) {
-      await (checkoutExistingBranch
-        ? addSparseWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            sparseDirectories,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            existingBranchOption
-          )
-        : addSparseWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            sparseDirectories,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate
-          ))
-    } else {
-      await (checkoutExistingBranch
-        ? addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            false,
-            existingBranchOption
-          )
-        : addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate
-          ))
-    }
+    const addResult: AddWorktreeResult =
+      (await (sparseDirectories.length > 0
+        ? checkoutExistingBranch
+          ? addSparseWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              sparseDirectories,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate,
+              existingBranchOption
+            )
+          : addSparseWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              sparseDirectories,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate
+            )
+        : checkoutExistingBranch
+          ? addWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate,
+              false,
+              existingBranchOption
+            )
+          : addWorktree(
+              repo.path,
+              worktreePath,
+              branchName,
+              baseBranch,
+              settings.refreshLocalBaseRefOnWorktreeCreate
+            ))) ?? {}
 
     let configuredPushTarget: GitPushTarget | undefined
     if (preparedPushTarget) {
@@ -7579,7 +7808,10 @@ export class OrcaRuntimeService {
       },
       ...(lineageInput ? { lineage, warnings: lineageWarnings } : {}),
       ...(setup ? { setup } : {}),
-      ...(warning ? { warning } : {})
+      ...(warning ? { warning } : {}),
+      ...(addResult.localBaseRefRefresh
+        ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+        : {})
     }
   }
 
@@ -8166,7 +8398,10 @@ export class OrcaRuntimeService {
         createdAt: Date.now()
       })
     }
-    this.store.setWorktreeMeta(worktree.id, omitUndefinedProperties(metaUpdates))
+    this.store.setWorktreeMeta(
+      worktree.id,
+      stripOrcaProvenanceMetaUpdates(omitUndefinedProperties(metaUpdates))
+    )
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
@@ -8469,6 +8704,13 @@ export class OrcaRuntimeService {
     }
   }
 
+  private removeWorktreeMetadataAndHistory(store: RuntimeStore, worktreeId: string): void {
+    // Why: terminal history is keyed by worktree ID, so metadata cleanup must
+    // also purge history before the same path-derived ID can be recreated.
+    store.removeWorktreeMeta(worktreeId)
+    deleteWorktreeHistoryDir(worktreeId)
+  }
+
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
@@ -8512,13 +8754,13 @@ export class OrcaRuntimeService {
             console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
           })
         }
-        store.removeWorktreeMeta(removalTarget.id)
-        deleteWorktreeHistoryDir(removalTarget.id)
+        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         this.notifier?.worktreesChanged(repo.id)
         return {}
       }
       const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
+      const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
       const registeredWorktrees = repo.connectionId
         ? await provider!.listWorktrees(repo.path)
         : await listWorktrees(repo.path)
@@ -8530,6 +8772,68 @@ export class OrcaRuntimeService {
         registeredWorktrees
       )
       if (!registeredWorktree) {
+        let canCleanOrphanedDirectory = false
+        const knownOrcaLayouts = repo.connectionId
+          ? []
+          : buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
+        if (
+          canCleanupUnregisteredOrcaWorktreeDirectory({
+            meta: removedMeta,
+            worktreePath: removalTarget.path,
+            repo,
+            knownOrcaLayouts
+          })
+        ) {
+          if (repo.connectionId) {
+            if (!fsProvider) {
+              throw new Error('SSH filesystem provider unavailable')
+            }
+            if (!fsProvider.lstat) {
+              throw new Error('SSH filesystem provider lstat unavailable')
+            }
+            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+              removalTarget.path,
+              repo.path,
+              (path) => fsProvider.lstat!(path),
+              (path) => fsProvider.readFile(path)
+            )
+          } else {
+            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+              removalTarget.path,
+              repo.path
+            )
+          }
+        }
+        if (canCleanOrphanedDirectory) {
+          assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
+          if (!force) {
+            throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+          }
+          if (repo.connectionId) {
+            await fsProvider!.deletePath(removalTarget.path, true)
+            await cleanupUnusedWorktreePushTargetRemoteSsh(
+              provider!,
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store
+            )
+          } else {
+            await rm(removalTarget.path, { recursive: true, force: true })
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store
+            )
+          }
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifier?.worktreesChanged(repo.id)
+          return {}
+        }
         if (force && (await isRuntimeWorktreePathMissing(repo, removalTarget.path))) {
           // Why: runtime clients can retry a force delete after another surface
           // already removed the worktree. Finish Orca cleanup without touching
@@ -8549,7 +8853,7 @@ export class OrcaRuntimeService {
                 store
               ))
           this.clearOptimisticReconcileToken(removalTarget.id)
-          store.removeWorktreeMeta(removalTarget.id)
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
           this.notifier?.worktreesChanged(repo.id)
@@ -8571,7 +8875,7 @@ export class OrcaRuntimeService {
           store
         )
         this.clearOptimisticReconcileToken(removalTarget.id)
-        store.removeWorktreeMeta(removalTarget.id)
+        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
         this.notifier?.worktreesChanged(repo.id)
@@ -8655,7 +8959,7 @@ export class OrcaRuntimeService {
             store
           )
           this.clearOptimisticReconcileToken(removalTarget.id)
-          store.removeWorktreeMeta(removalTarget.id)
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
           this.notifier?.worktreesChanged(repo.id)
@@ -8673,7 +8977,7 @@ export class OrcaRuntimeService {
         store
       )
       this.clearOptimisticReconcileToken(removalTarget.id)
-      store.removeWorktreeMeta(removalTarget.id)
+      this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
       this.invalidateResolvedWorktreeCache()
       invalidateAuthorizedRootsCache()
       this.notifier?.worktreesChanged(repo.id)
@@ -9468,6 +9772,13 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
+      if (candidates.length > 1) {
+        // Why: registering another worktree from the same Git repo makes git
+        // report the same physical worktree path under multiple repo IDs.
+        // A path selector is already exact, so prefer the first resolved row
+        // instead of surfacing a duplicate-registration ambiguity.
+        candidates = [candidates[0]]
+      }
     } else if (selector.startsWith('branch:')) {
       const branchSelector = selector.slice(7)
       candidates = worktrees.filter((worktree) =>
@@ -10063,6 +10374,14 @@ export class OrcaRuntimeService {
     this.resolvedWorktreeCache = null
   }
 
+  /** Invalidate the worktree cache and tell the renderer to re-list, after an
+   *  out-of-band branch change (e.g. auto-rename-from-work) so the new branch
+   *  name surfaces without waiting for the next ambient refresh. */
+  notifyBranchRenamed(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.worktreesChanged(repoId)
+  }
+
   private recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -10472,6 +10791,7 @@ export class OrcaRuntimeService {
         leafId: tab.leafId,
         title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
         ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
+        ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
         ...(tab.agentStatus ? { agentStatus: tab.agentStatus } : {}),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         isActive: tab.isActive,
@@ -11389,11 +11709,18 @@ export class OrcaRuntimeService {
     description?: string,
     workspaceId?: string,
     parentIssueId?: string,
-    projectId?: string | null
+    projectId?: string | null,
+    options?: {
+      stateId?: string
+      priority?: number
+      assigneeId?: string | null
+      labelIds?: string[]
+    }
   ): ReturnType<typeof createLinearIssue> {
     return createLinearIssue(teamId, title, description, workspaceId, {
       parentId: parentIssueId,
-      projectId
+      projectId,
+      ...options
     })
   }
 

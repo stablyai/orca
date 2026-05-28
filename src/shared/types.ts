@@ -16,6 +16,10 @@ import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
+import type {
+  RepoSourceControlAiOverrides,
+  SourceControlAiSettings
+} from './source-control-ai-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -100,6 +104,66 @@ export type Repo = {
    *  "what to link", the global flag is the "whether to link at all" switch.
    *  Undefined/empty means no symlinks are created for this repo. */
   symlinkPaths?: string[]
+  /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
+  projectGroupId?: string | null
+  /** User-authored ordering inside the project group or ungrouped bucket. */
+  projectGroupOrder?: number
+  /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
+  sourceControlAi?: RepoSourceControlAiOverrides
+}
+
+export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
+
+export type ProjectGroup = {
+  id: string
+  name: string
+  parentPath: string | null
+  parentGroupId: string | null
+  createdFrom: ProjectGroupCreatedFrom
+  tabOrder: number
+  isCollapsed: boolean
+  color: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type NestedRepoScanOptions = {
+  maxDepth?: number
+  maxRepos?: number
+  timeoutMs?: number
+}
+
+export type NestedRepoCandidate = {
+  path: string
+  displayName: string
+  depth: number
+}
+
+export type NestedRepoScanResult = {
+  selectedPath: string
+  selectedPathKind: 'git_repo' | 'non_git_folder'
+  repos: NestedRepoCandidate[]
+  truncated: boolean
+  timedOut: boolean
+  durationMs: number
+  maxDepth: number
+}
+
+export type ProjectGroupImportMode = 'group' | 'separate'
+
+export type ProjectGroupImportProjectResult = {
+  path: string
+  projectId?: string
+  status: 'imported' | 'already-known' | 'failed'
+  error?: string
+}
+
+export type ProjectGroupImportResult = {
+  group?: ProjectGroup
+  projects: ProjectGroupImportProjectResult[]
+  importedCount: number
+  alreadyKnownCount: number
+  failedCount: number
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -1069,6 +1133,7 @@ export type GitHubPullRequestStateUpdate = {
 export type LinearIssueUpdate = {
   stateId?: string
   title?: string
+  description?: string
   assigneeId?: string | null
   estimate?: number | null
   priority?: number
@@ -1216,6 +1281,7 @@ export type LinearTeam = {
   workspaceName?: string
   name: string
   key: string
+  url?: string
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
@@ -1316,6 +1382,14 @@ export type CreateWorktreeResult = {
   setup?: WorktreeSetupLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
+  localBaseRefRefresh?: LocalBaseRefRefreshResult
+}
+
+export type LocalBaseRefRefreshResult = {
+  status: 'updated' | 'skipped_dirty_worktree' | 'skipped_not_fast_forward' | 'skipped_error'
+  baseRef: string
+  localBranch: string
+  ownerWorktreePath?: string
 }
 
 export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
@@ -1465,6 +1539,7 @@ export type TuiAgent =
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
   | 'pi' // Pi (pi.dev)
+  | 'omp' // OMP (omp.sh)
   | 'gemini' // Gemini CLI
   | 'antigravity' // Google Antigravity CLI
   | 'aider' // Aider
@@ -1476,6 +1551,7 @@ export type TuiAgent =
   | 'aug' // Augment/Auggie
   | 'cline' // Cline
   | 'codebuff' // Codebuff
+  | 'command-code' // Command Code
   | 'continue' // Continue
   | 'cursor' // Cursor
   | 'droid' // Factory Droid
@@ -1563,6 +1639,10 @@ export type GlobalSettings = {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** When enabled, Orca renames a workspace's auto-generated creature branch to
+   *  a short name derived from the first prompt once work begins. Opt-in;
+   *  uses the same agent configured for AI commit messages. */
+  autoRenameBranchFromWork: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
@@ -1658,6 +1738,7 @@ export type GlobalSettings = {
   openLinksInApp: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
@@ -1795,6 +1876,9 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
+  /** Controls whether macOS terminal input translates the physical JIS Yen (¥)
+   *  key to a backslash, matching the common terminal expectation for that key. */
+  terminalJISYenToBackslash: boolean
   experimentalMobile: boolean
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size
@@ -1836,6 +1920,8 @@ export type GlobalSettings = {
    *  user-customizable prompt suffix. Optional so existing profiles do not
    *  require a migration step before this feature lands. */
   commitMessageAi?: CommitMessageAiSettings
+  /** Source-control AI generation settings for commit messages and hosted-review drafts. */
+  sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences — pinned + recent project paths.
    *  Optional for backward compatibility with profiles saved before
    *  GitLab support; the persistence merge fills the empty default. */
@@ -2064,10 +2150,14 @@ export type TaskResumeState = {
   linearQuery?: string
 }
 
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   sidebarWidth: number
+  rightSidebarOpen: boolean
+  rightSidebarTab: RightSidebarTab
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
@@ -2292,6 +2382,7 @@ export type LegacyPaneKeyAliasEntry = {
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
+  projectGroups: ProjectGroup[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>

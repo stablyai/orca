@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname } from 'path'
+import { extname, resolve } from 'path'
 import type { ChildProcess } from 'child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -18,6 +18,7 @@ import type {
   MarkdownDocument,
   SearchOptions,
   SearchResult,
+  Repo,
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
@@ -31,6 +32,7 @@ import {
 } from '../../shared/text-search'
 import {
   getStatus,
+  abortMerge,
   detectConflictOperation,
   getDiff,
   commitChanges,
@@ -91,6 +93,8 @@ import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
+import { listRepoWorktrees } from '../repo-worktrees'
+import { splitWorktreeId } from '../../shared/worktree-id'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -115,6 +119,133 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+function comparableLocalPath(value: string): string {
+  const normalized = resolve(value)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+function comparableRemotePath(value: string): string {
+  return value.replace(/[/\\]+$/g, '')
+}
+
+function getCandidateLocalWorktreePaths(
+  worktreePath: string,
+  resolvedWorktreePath: string
+): Set<string> {
+  return new Set([worktreePath, resolvedWorktreePath].map(comparableLocalPath))
+}
+
+function hasRegisteredWorktreeMetaForRepo(
+  store: Store,
+  repoId: string,
+  candidatePaths: Set<string>
+): boolean {
+  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+    const parsed = splitWorktreeId(worktreeId)
+    if (parsed?.repoId === repoId && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
+      return true
+    }
+  }
+  return false
+}
+
+function hasRegisteredRemoteWorktreeMetaForRepo(
+  store: Store,
+  repoId: string,
+  worktreePath: string
+): boolean {
+  const comparableWorktreePath = comparableRemotePath(worktreePath)
+  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+    const parsed = splitWorktreeId(worktreeId)
+    if (
+      parsed?.repoId === repoId &&
+      comparableRemotePath(parsed.worktreePath) === comparableWorktreePath
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+async function localRepoOwnsWorktree(
+  store: Store,
+  repo: Repo,
+  worktreePath: string
+): Promise<boolean> {
+  let resolvedWorktreePath: string
+  try {
+    resolvedWorktreePath = await resolveRegisteredWorktreePath(worktreePath, store)
+  } catch {
+    return false
+  }
+  const candidatePaths = getCandidateLocalWorktreePaths(worktreePath, resolvedWorktreePath)
+  if (candidatePaths.has(comparableLocalPath(repo.path))) {
+    return true
+  }
+  if (hasRegisteredWorktreeMetaForRepo(store, repo.id, candidatePaths)) {
+    return true
+  }
+  try {
+    const worktrees = await listRepoWorktrees(repo)
+    return worktrees.some((worktree) => candidatePaths.has(comparableLocalPath(worktree.path)))
+  } catch {
+    return false
+  }
+}
+
+async function remoteRepoOwnsWorktree(
+  store: Store,
+  repo: Repo,
+  worktreePath: string,
+  connectionId: string
+): Promise<boolean> {
+  const comparableWorktreePath = comparableRemotePath(worktreePath)
+  if (comparableRemotePath(repo.path) === comparableWorktreePath) {
+    return true
+  }
+  const provider = getSshGitProvider(connectionId)
+  if (!provider) {
+    return hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
+  }
+  try {
+    const worktrees = await provider.listWorktrees(repo.path)
+    return worktrees.some(
+      (worktree) => comparableRemotePath(worktree.path) === comparableWorktreePath
+    )
+  } catch {
+    return false
+  }
+}
+
+async function getRepoForSourceControlAi(
+  store: Store,
+  args: { repoId?: string; worktreePath: string; connectionId?: string }
+): Promise<Repo | null> {
+  if (!args.repoId) {
+    return null
+  }
+  const repo = store.getRepo(args.repoId)
+  if (!repo) {
+    return null
+  }
+  if (args.connectionId) {
+    if (repo.connectionId !== args.connectionId) {
+      return null
+    }
+    // Why: a single SSH connection can host several repos; repo-scoped AI
+    // overrides only apply when the requested worktree belongs to that repo.
+    return (await remoteRepoOwnsWorktree(store, repo, args.worktreePath, args.connectionId))
+      ? repo
+      : null
+  }
+  if (repo.connectionId) {
+    return null
+  }
+  // Why: renderer-supplied repoId is advisory; only apply repo overrides when
+  // the requested local worktree is known to belong to that repo.
+  return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
 
 function validateFullGitObjectId(value: string, label: string): string {
@@ -563,6 +694,21 @@ export function registerFilesystemHandlers(
   )
 
   ipcMain.handle(
+    'git:abortMerge',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.abortMerge(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await abortMerge(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
     'git:diff',
     async (
       _event,
@@ -620,11 +766,17 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        repoId?: string
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
+      const resolvedSettings = resolveCommitMessageSettings(
+        store.getSettings(),
+        discoveryHostKey,
+        'commitMessage',
+        await getRepoForSourceControlAi(store, args)
+      )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -746,6 +898,7 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        repoId?: string
         base: string
         title: string
         body: string
@@ -754,7 +907,12 @@ export function registerFilesystemHandlers(
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
+      const resolvedSettings = resolveCommitMessageSettings(
+        store.getSettings(),
+        discoveryHostKey,
+        'pullRequest',
+        await getRepoForSourceControlAi(store, args)
+      )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }

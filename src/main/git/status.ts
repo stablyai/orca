@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile, rm } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -21,7 +21,18 @@ import {
   getEffectiveGitUpstreamStatus,
   splitRemoteBranchName
 } from '../../shared/git-effective-upstream'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
+import {
+  applyLineStats,
+  collectUntrackedAdditions,
+  parseNumstat,
+  type GitLineStats
+} from '../../shared/git-uncommitted-line-stats'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../../shared/git-discard-path-safety'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -115,10 +126,12 @@ export async function getStatus(
         const worktreeStatus = xy[1]
 
         if (line.startsWith('2 ')) {
-          // Rename entry - tab separated at the end
+          // Why: porcelain v2 type-2 records put the new path after 9 fixed
+          // space-delimited fields and the old path after the tab. Preserving
+          // spaces here keeps row actions and numstat counts keyed correctly.
           const tabParts = line.split('\t')
-          const path = tabParts[1]
-          const oldPath = tabParts[2]
+          const path = tabParts[0].split(' ').slice(9).join(' ')
+          const oldPath = tabParts.slice(1).join('\t')
           if (indexStatus !== '.') {
             entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
           }
@@ -170,6 +183,13 @@ export async function getStatus(
     // Not a git repo or git not available
   }
 
+  // Why: attach per-area line counts for the sidebar. Diffs run after status
+  // (we need the entry list first) and only for areas that have entries, so a
+  // clean tree costs zero extra git calls. Staged and unstaged are diffed
+  // separately so each row reflects only its own staging area; untracked files
+  // have no baseline and count their full contents as additions.
+  await attachLineStats(worktreePath, entries)
+
   return {
     entries,
     conflictOperation,
@@ -190,6 +210,50 @@ export async function getStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+async function runNumstat(
+  worktreePath: string,
+  cached: boolean
+): Promise<Map<string, GitLineStats>> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      { cwd: worktreePath, env: gitOptionalLocksDisabledEnv() }
+    )
+    return parseNumstat(stdout)
+  } catch {
+    // Why: a numstat failure (e.g. transient lock) should leave rows without
+    // counts rather than break the whole status refresh.
+    return new Map()
+  }
+}
+
+async function attachLineStats(worktreePath: string, entries: GitStatusEntry[]): Promise<void> {
+  if (entries.length === 0) {
+    return
+  }
+  const hasStaged = entries.some((entry) => entry.area === 'staged')
+  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
+  const untrackedPaths = entries
+    .filter((entry) => entry.area === 'untracked')
+    .map((entry) => entry.path)
+  const emptyStats = new Map<string, GitLineStats>()
+  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
+    hasStaged ? runNumstat(worktreePath, true) : Promise.resolve(emptyStats),
+    hasUnstaged ? runNumstat(worktreePath, false) : Promise.resolve(emptyStats),
+    collectUntrackedAdditions(worktreePath, untrackedPaths)
+  ])
+  for (const entry of entries) {
+    applyLineStats(
+      entry,
+      entry.area === 'staged'
+        ? stagedStats.get(entry.path)
+        : entry.area === 'unstaged'
+          ? unstagedStats.get(entry.path)
+          : untrackedStats.get(entry.path)
+    )
   }
 }
 
@@ -397,6 +461,10 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
     return 'cherry-pick'
   }
   return 'unknown'
+}
+
+export async function abortMerge(worktreePath: string): Promise<void> {
+  await gitExecFileAsync(['merge', '--abort'], { cwd: worktreePath })
 }
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -678,7 +746,7 @@ async function loadBranchChanges(
       gitOptions
     )
   ])
-  const statsByPath = parseBranchChangeNumstat(numstat)
+  const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
   // [Fix]: Split by /\r?\n/ instead of '\n' to handle Git CRLF output on Windows,
@@ -737,7 +805,7 @@ async function loadCommitChanges(
     gitExecFileAsync(args, gitOptions),
     gitExecFileAsync(numstatArgs, gitOptions)
   ])
-  const statsByPath = parseBranchChangeNumstat(numstat)
+  const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
   for (const line of stdout.split(/\r?\n/)) {
@@ -750,45 +818,6 @@ async function loadCommitChanges(
     }
   }
   return entries
-}
-
-function parseBranchChangeCount(value: string): number | undefined {
-  if (value === '-') {
-    return undefined
-  }
-  const count = Number.parseInt(value, 10)
-  return Number.isFinite(count) ? count : undefined
-}
-
-function normalizeBranchNumstatPath(path: string): string {
-  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
-  if (bracedRename) {
-    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
-  }
-  const renameMarker = ' => '
-  const markerIndex = path.lastIndexOf(renameMarker)
-  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
-}
-
-function parseBranchChangeNumstat(
-  stdout: string
-): Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>> {
-  const stats = new Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>>()
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const parts = line.split('\t')
-    const rawPath = parts.slice(2).join('\t')
-    if (!rawPath) {
-      continue
-    }
-    stats.set(normalizeBranchNumstatPath(rawPath), {
-      added: parseBranchChangeCount(parts[0] ?? ''),
-      removed: parseBranchChangeCount(parts[1] ?? '')
-    })
-  }
-  return stats
 }
 
 function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
@@ -930,16 +959,6 @@ function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
     isBinary,
     exists: true
   }
-}
-
-function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i += 1) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
 }
 
 function buildDiffResult(
@@ -1090,11 +1109,16 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
     // File is not tracked by git
   }
 
-  await (tracked
-    ? gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
-        cwd: worktreePath
-      })
-    : rm(resolvedTarget, { force: true, recursive: true }))
+  if (tracked) {
+    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
+      cwd: worktreePath
+    })
+    return
+  }
+
+  await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+    cleanUntrackedPaths(worktreePath, [targetPath])
+  )
 }
 
 function normalizeGitPathForCompare(filePath: string): string {
@@ -1124,6 +1148,19 @@ async function listTrackedPathSpecs(
   return trackedPaths
 }
 
+async function cleanUntrackedPaths(
+  worktreePath: string,
+  filePaths: readonly string[]
+): Promise<void> {
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    if (chunk.length > 0) {
+      // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk], { cwd: worktreePath })
+    }
+  }
+}
+
 /**
  * Discard working tree changes for many paths in a small number of subprocesses.
  */
@@ -1145,18 +1182,18 @@ export async function bulkDiscardChanges(worktreePath: string, filePaths: string
   const untrackedPaths = filePaths.filter(
     (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
   )
-
-  for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
-      cwd: worktreePath
-    })
-  }
-
-  await Promise.all(
-    untrackedPaths.map((filePath) =>
-      rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
-    )
+  await removeSafeUntrackedDiscardTargets(
+    worktreePath,
+    untrackedPaths,
+    (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths),
+    async () => {
+      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+        await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
+          cwd: worktreePath
+        })
+      }
+    }
   )
 }
 

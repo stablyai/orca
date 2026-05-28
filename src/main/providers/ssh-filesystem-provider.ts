@@ -5,7 +5,7 @@ import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
-import type { SFTPWrapper } from 'ssh2'
+import type { SFTPWrapper, Stats } from 'ssh2'
 
 type SftpFactory = () => Promise<SFTPWrapper>
 type WatchRegistration = {
@@ -14,6 +14,28 @@ type WatchRegistration = {
 }
 
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
+
+function fileStatFromSftpStats(stats: Stats): FileStat {
+  let type: FileStat['type'] = 'file'
+  if (stats.isDirectory()) {
+    type = 'directory'
+  } else if (stats.isSymbolicLink()) {
+    type = 'symlink'
+  }
+  return { size: stats.size, type, mtime: stats.mtime * 1000 }
+}
+
+function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
+  return new Promise((resolve, reject) => {
+    sftp.lstat(filePath, (err, stats) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve(fileStatFromSftpStats(stats))
+    })
+  })
+}
 
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -138,6 +160,27 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async stat(filePath: string): Promise<FileStat> {
     return (await this.mux.request('fs.stat', { filePath })) as FileStat
+  }
+
+  async lstat(filePath: string): Promise<FileStat> {
+    try {
+      return (await this.mux.request('fs.lstat', { filePath })) as FileStat
+    } catch (err) {
+      if (!isMethodNotFoundError(err)) {
+        throw err
+      }
+      if (!this.createSftp) {
+        throw new Error('remote_lstat_unavailable')
+      }
+      const sftp = await this.createSftp()
+      try {
+        // Why: older relays predate fs.lstat, but SFTP can still preserve
+        // symlink identity for orphaned-worktree safety checks.
+        return await lstatViaSftp(sftp, filePath)
+      } finally {
+        sftp.end()
+      }
+    }
   }
 
   async scanWorkspaceSpace(

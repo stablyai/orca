@@ -180,6 +180,41 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('lstat', () => {
+    it('sends fs.lstat request', async () => {
+      const statResult = { size: 12, type: 'symlink', mtime: 1234567890 }
+      mux.request.mockResolvedValue(statResult)
+
+      const result = await provider.lstat('/home/user/link.txt')
+      expect(mux.request).toHaveBeenCalledWith('fs.lstat', { filePath: '/home/user/link.txt' })
+      expect(result).toEqual(statResult)
+    })
+
+    it('falls back to SFTP lstat when connected to an older relay', async () => {
+      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      const sftp = {
+        lstat: vi.fn((_path: string, callback: (err: Error | undefined, stats: unknown) => void) =>
+          callback(undefined, {
+            size: 12,
+            mtime: 1234567,
+            isDirectory: () => false,
+            isSymbolicLink: () => true
+          })
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(provider.lstat('/home/user/link.txt')).resolves.toEqual({
+        size: 12,
+        type: 'symlink',
+        mtime: 1234567000
+      })
+      expect(sftp.lstat).toHaveBeenCalledWith('/home/user/link.txt', expect.any(Function))
+      expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
   it('scanWorkspaceSpace sends an abortable bulk scan request', async () => {
     const result = {
       sizeBytes: 1024,

@@ -18,7 +18,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
-type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'setup'
+type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
@@ -145,7 +145,7 @@ export function useCreateRepo(
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id)
+          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
         closeModal()
       }

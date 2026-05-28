@@ -34,6 +34,7 @@ import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
+  getWorktreePaletteSelectionItemIds,
   getWorktreePaletteCreateActionState
 } from '@/lib/worktree-palette-create-action'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
@@ -571,16 +572,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [paletteSections]
   )
 
-  const selectableItemIds = useMemo(() => selectableItems.map((item) => item.id), [selectableItems])
-
   const { createWorktreeName, showCreateAction } = useMemo(
     () =>
       getWorktreePaletteCreateActionState({
         canCreateWorktree,
-        query: deferredQuery,
-        selectableItemIds
+        query: deferredQuery
       }),
-    [canCreateWorktree, deferredQuery, selectableItemIds]
+    [canCreateWorktree, deferredQuery]
   )
 
   const listEntries = useMemo<PaletteListEntry[]>(() => {
@@ -650,6 +648,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
+
+  const selectionItemIds = useMemo(
+    () => getWorktreePaletteSelectionItemIds(listEntries),
+    [listEntries]
+  )
 
   // Why: empty-state / "has any worktrees?" uses the full visible list
   // (including current) so the palette never claims to be empty just
@@ -721,7 +724,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const nextSelectedItemId = getNextWorktreePaletteSelection({
       currentSelectedItemId: selectedItemId,
       queryChanged,
-      selectableItemIds,
+      selectableItemIds: selectionItemIds,
       showCreateAction
     })
     if (queryChanged) {
@@ -733,7 +736,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if (nextSelectedItemId !== selectedItemId) {
       setSelectedItemId(nextSelectedItemId)
     }
-  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectableItemIds])
+  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectionItemIds])
 
   const focusFallbackSurface = useCallback(() => {
     requestAnimationFrame(() => {

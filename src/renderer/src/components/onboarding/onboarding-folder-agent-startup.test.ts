@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { appendOrcaCodexAgentStatusProfile } from '../../../../shared/codex-profile'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import {
   buildDismissedOnboardingFolderAgentStartup,
@@ -15,7 +14,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
 
     expect(startup).toEqual({
-      command: appendOrcaCodexAgentStatusProfile('codex'),
+      command: 'codex',
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'onboarding',

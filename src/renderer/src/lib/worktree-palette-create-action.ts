@@ -3,25 +3,55 @@ export const CREATE_WORKTREE_ITEM_ID = '__create_worktree__'
 export type WorktreePaletteCreateActionState = {
   createWorktreeName: string
   showCreateAction: boolean
-  shouldDefaultToCreate: boolean
 }
 
 export function getWorktreePaletteCreateActionState({
   canCreateWorktree,
-  query,
-  selectableItemIds
+  query
 }: {
   canCreateWorktree: boolean
   query: string
-  selectableItemIds: readonly string[]
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
   const showCreateAction = canCreateWorktree && createWorktreeName.length > 0
   return {
     createWorktreeName,
-    showCreateAction,
-    shouldDefaultToCreate: showCreateAction && selectableItemIds.length === 0
+    showCreateAction
   }
+}
+
+type WorktreePaletteSelectionCandidateEntry = {
+  id: string
+  type: string
+}
+
+type WorktreePaletteSelectableEntryType =
+  | 'worktree'
+  | 'create-worktree'
+  | 'settings'
+  | 'quick-action'
+  | 'browser-page'
+
+export function isSelectableWorktreePaletteEntry(
+  entry: WorktreePaletteSelectionCandidateEntry
+): entry is WorktreePaletteSelectionCandidateEntry & {
+  type: WorktreePaletteSelectableEntryType
+} {
+  return (
+    entry.type === 'worktree' ||
+    entry.type === 'create-worktree' ||
+    entry.type === 'settings' ||
+    entry.type === 'quick-action' ||
+    entry.type === 'browser-page'
+  )
+}
+
+export function getWorktreePaletteSelectionItemIds<
+  T extends WorktreePaletteSelectionCandidateEntry
+>(entries: readonly T[]): string[] {
+  // Why: keyboard focus should mirror rendered order, including synthetic
+  // action rows, while skipping headers and explanatory hint rows.
+  return entries.filter(isSelectableWorktreePaletteEntry).map((entry) => entry.id)
 }
 
 export function getNextWorktreePaletteSelection({

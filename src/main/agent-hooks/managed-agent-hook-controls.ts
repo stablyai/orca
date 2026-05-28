@@ -7,6 +7,7 @@ import { codexHookService } from '../codex/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
@@ -17,19 +18,12 @@ type ManagedHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstal
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', () => claudeHookService.install()],
-  [
-    'codex',
-    () => {
-      // Why: the Orca-specific Codex profile keeps normal external `codex`
-      // runs from loading Orca hooks; remove legacy global entries after it is ready.
-      codexHookService.installProfile()
-      codexHookService.remove()
-    }
-  ],
+  ['codex', () => codexHookService.install()],
   ['gemini', () => geminiHookService.install()],
   ['antigravity', () => antigravityHookService.install()],
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
+  ['command-code', () => commandCodeHookService.install()],
   ['grok', () => grokHookService.install()],
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()]
@@ -37,18 +31,12 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
 
 const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
   ['claude', () => claudeHookService.remove()],
-  [
-    'codex',
-    () => {
-      const globalStatus = codexHookService.remove()
-      const profileStatus = codexHookService.removeProfile()
-      return profileStatus.state === 'error' ? profileStatus : globalStatus
-    }
-  ],
+  ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
   ['antigravity', () => antigravityHookService.remove()],
   ['cursor', () => cursorHookService.remove()],
   ['droid', () => droidHookService.remove()],
+  ['command-code', () => commandCodeHookService.remove()],
   ['grok', () => grokHookService.remove()],
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()]
@@ -56,11 +44,12 @@ const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
 
 const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
   ['claude', () => claudeHookService.getStatus()],
-  ['codex', () => codexHookService.getProfileStatus()],
+  ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],
   ['antigravity', () => antigravityHookService.getStatus()],
   ['cursor', () => cursorHookService.getStatus()],
   ['droid', () => droidHookService.getStatus()],
+  ['command-code', () => commandCodeHookService.getStatus()],
   ['grok', () => grokHookService.getStatus()],
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()]

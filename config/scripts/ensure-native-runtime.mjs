@@ -49,7 +49,7 @@ function readRuntimeArg() {
 }
 
 function ensureNodeRuntime() {
-  const initial = runCurrentProcessCheck()
+  const initial = runNodeCheck()
   if (initial.ok) {
     return
   }
@@ -61,7 +61,7 @@ function ensureNodeRuntime() {
   printCheckError(initial)
   runPnpm(['rebuild', ...failedModules])
 
-  const final = runCurrentProcessCheck()
+  const final = runNodeCheck()
   if (!final.ok) {
     console.error(
       `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('node')}.`
@@ -93,12 +93,16 @@ function ensureElectronRuntime() {
   }
 }
 
-function runCurrentProcessCheck() {
-  const failures = collectNativeModuleFailures()
-  if (failures.length === 0) {
-    return { ok: true, failures }
-  }
-  return { ok: false, failures }
+function runNodeCheck() {
+  // Why: a failed native addon load can poison the current process, so the
+  // post-rebuild verification must happen in a fresh Node process.
+  const result = spawnSync(process.execPath, [scriptPath, CHILD_CHECK_FLAG], {
+    cwd: projectDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  return parseChildCheckResult(result)
 }
 
 function runElectronCheck() {
@@ -119,13 +123,31 @@ function runElectronCheck() {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
+  return parseChildCheckResult(result)
+}
+
+function parseChildCheckResult(result) {
+  const failures = parseCheckFailures(result.stderr)
+
   return {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout,
     stderr: result.stderr,
-    error: result.error
+    error: result.error,
+    failures
   }
+}
+
+function parseCheckFailures(stderr) {
+  const failures = []
+  for (const line of (stderr ?? '').split(/\r?\n/)) {
+    const match = /^([^:]+):\s*(.*)$/.exec(line)
+    if (match && NATIVE_MODULES.includes(match[1])) {
+      failures.push({ moduleName: match[1], message: match[2] })
+    }
+  }
+  return failures
 }
 
 function collectNativeModuleFailures() {

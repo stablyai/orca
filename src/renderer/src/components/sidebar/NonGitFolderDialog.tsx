@@ -28,7 +28,6 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       void (async () => {
         try {
           const stateBeforeAdd = useAppStore.getState()
-          const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
@@ -39,6 +38,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           }
           const repo = result.repo
           const state = useAppStore.getState()
+          const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           if (!state.repos.some((r) => r.id === repo.id)) {
             useAppStore.setState({ repos: [...state.repos, repo] })
           }
@@ -57,7 +57,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               onboarding,
               hadProjectBeforeAdd
             )
-            activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
+            activateAndRevealWorktree(folderWorktree.id, {
+              sidebarRevealBehavior: 'auto',
+              ...(startup ? { startup } : {})
+            })
           }
         } catch (err) {
           // This code path calls addRemote directly (not through the store),

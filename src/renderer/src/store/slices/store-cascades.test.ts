@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -42,6 +44,9 @@ const mockApi = {
     get: vi.fn().mockResolvedValue({}),
     set: vi.fn().mockResolvedValue(undefined)
   },
+  runtimeEnvironments: {
+    call: vi.fn()
+  },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
     setGitHub: vi.fn().mockResolvedValue(undefined)
@@ -68,7 +73,19 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buff
 describe('removeWorktree cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
+    mockApi.runtimeEnvironments.call.mockReset()
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
   })
 
   it('cleans up all associated state on successful removal', async () => {
@@ -139,11 +156,12 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
   })
 
-  it('sets delete state with error and canForceDelete=true on failure', async () => {
+  it('sets delete state with dirty/untracked error and canForceDelete=true on failure', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+    const error = 'Worktree has uncommitted or untracked changes.'
 
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error('branch has changes'))
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
 
     seedStore(store, {
       worktreesByRepo: {
@@ -159,10 +177,10 @@ describe('removeWorktree cascade', () => {
     const result = await store.getState().removeWorktree(worktreeId)
     const s = store.getState()
 
-    expect(result).toEqual({ ok: false, error: 'branch has changes' })
+    expect(result).toEqual({ ok: false, error })
     expect(s.deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error: 'branch has changes',
+      error,
       canForceDelete: true
     })
     // State NOT cleaned up
@@ -171,6 +189,60 @@ describe('removeWorktree cascade', () => {
     expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(s.activeWorktreeId).toBe(worktreeId)
+  })
+
+  it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/workspace/feature-wt'
+    const error =
+      "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: true
+    })
+  })
+
+  it('offers force delete for SSH raw Git dirty removal errors', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/workspace/feature-wt'
+    const error =
+      "fatal: '/workspace/feature-wt' contains modified or untracked files, use --force to delete it"
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: true
+    })
   })
 
   it('sets canForceDelete=false when force=true removal fails', async () => {
@@ -256,6 +328,107 @@ describe('removeWorktree cascade', () => {
 
     expect(result.ok).toBe(false)
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
+  })
+
+  it('does not offer force delete when Electron wraps SSH filesystem provider failures', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const error =
+      "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: false
+    })
+  })
+
+  it.each([
+    'Could not connect to the remote Orca runtime.',
+    'Remote Orca runtime closed the connection.',
+    'Timed out waiting for the remote Orca runtime to respond.'
+  ])(
+    'does not offer force delete for wrapped remote runtime failure: %s',
+    async (runtimeFailure) => {
+      const store = createTestStore()
+      const worktreeId = 'repo1::/path/wt1'
+      const error = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+
+      mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+        const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatibility) {
+          return Promise.resolve(compatibility)
+        }
+        if (args.method === 'repo.hooksCheck') {
+          return Promise.resolve({
+            id: 'rpc-hooks',
+            ok: true,
+            result: { hasHooks: false, hooks: null, mayNeedUpdate: false },
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+        }
+        return Promise.reject(new Error(error))
+      })
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+        },
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        terminalLayoutsByTabId: {}
+      })
+
+      const result = await store.getState().removeWorktree(worktreeId)
+
+      expect(result).toEqual({ ok: false, error })
+      expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+        isDeleting: false,
+        error,
+        canForceDelete: false
+      })
+      expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    }
+  )
+
+  it('offers force delete for orphaned Orca worktree directories', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git but its directory remains."
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(true)
   })
 
   it('does NOT affect other worktrees', async () => {
@@ -471,7 +644,7 @@ describe('setActiveWorktree', () => {
     expect(worktrees.map((worktree) => worktree.id)).toEqual([backgroundId, focusedId])
   })
 
-  it('restores the remembered right sidebar tab per worktree', () => {
+  it('keeps the current right sidebar tab when switching worktrees', () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
     const wt2 = 'repo1::/path/wt2'
@@ -483,20 +656,21 @@ describe('setActiveWorktree', () => {
           makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
         ]
       },
-      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'checks' }
+      rightSidebarTab: 'checks',
+      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'explorer' }
     })
 
     store.getState().setActiveWorktree(wt1)
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
 
     store.getState().setActiveWorktree(wt2)
     expect(store.getState().rightSidebarTab).toBe('checks')
 
     store.getState().setActiveWorktree(wt1)
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
-  it('defaults new worktrees without remembered right sidebar state to explorer', () => {
+  it('does not reset the right sidebar tab for worktrees without remembered sidebar state', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -509,7 +683,7 @@ describe('setActiveWorktree', () => {
 
     store.getState().setActiveWorktree(wt)
 
-    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
   it('does not clobber the current right sidebar tab when clearing the active worktree', () => {

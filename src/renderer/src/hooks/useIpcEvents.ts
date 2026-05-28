@@ -32,6 +32,7 @@ import type {
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import {
   handleSwitchRecentTab,
@@ -55,6 +56,10 @@ import {
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
+import {
+  acquireBrowserAutomationVisibility,
+  releaseBrowserAutomationVisibility
+} from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -71,7 +76,8 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelVisible
+  isFloatingWorkspacePanelFocused,
+  switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
   observeAgentHookCompletionForNotification,
@@ -88,6 +94,54 @@ function getShortcutPlatform(): NodeJS.Platform {
     return 'win32'
   }
   return 'linux'
+}
+
+const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
+const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
+
+function releaseBrowserAutomationBootstrapLease(browserPageId: string): void {
+  const existing = browserAutomationBootstrapLeaseByPageId.get(browserPageId)
+  if (!existing) {
+    return
+  }
+  window.clearTimeout(existing.timer)
+  releaseBrowserAutomationVisibility(existing.token)
+  browserAutomationBootstrapLeaseByPageId.delete(browserPageId)
+}
+
+function acquireBrowserAutomationBootstrapLease(
+  worktreeId: string | null | undefined,
+  browserPageId?: string | null
+): void {
+  const store = useAppStore.getState()
+  const targetWorktreeId = worktreeId ?? store.activeWorktreeId
+  if (!targetWorktreeId) {
+    return
+  }
+  window.dispatchEvent(
+    new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
+      detail: { worktreeId: targetWorktreeId }
+    })
+  )
+  let targetBrowserPageId = browserPageId ?? null
+  if (!targetBrowserPageId) {
+    const browserTabs = store.browserTabsByWorktree[targetWorktreeId] ?? []
+    const activeWorkspaceId = store.activeBrowserTabIdByWorktree[targetWorktreeId] ?? null
+    const workspace =
+      browserTabs.find((tab) => tab.id === activeWorkspaceId) ?? browserTabs[0] ?? null
+    targetBrowserPageId =
+      workspace?.activePageId ?? workspace?.pageIds?.[0] ?? workspace?.id ?? null
+  }
+  if (!targetBrowserPageId) {
+    return
+  }
+
+  releaseBrowserAutomationBootstrapLease(targetBrowserPageId)
+  const token = acquireBrowserAutomationVisibility(targetBrowserPageId)
+  const timer = window.setTimeout(() => {
+    releaseBrowserAutomationBootstrapLease(targetBrowserPageId)
+  }, BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS)
+  browserAutomationBootstrapLeaseByPageId.set(targetBrowserPageId, { token, timer })
 }
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -538,7 +592,9 @@ export function useIpcEvents(): void {
           // selected server instead of local-disk changes.
           return
         }
-        useAppStore.getState().fetchRepos()
+        const state = useAppStore.getState()
+        void state.fetchProjectGroups()
+        void state.fetchRepos()
       })
     )
 
@@ -661,7 +717,11 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
-        useAppStore.getState().toggleRightSidebar()
+        const store = useAppStore.getState()
+        if (!canShowRightSidebarForView(store.activeView)) {
+          return
+        }
+        store.toggleRightSidebar()
       })
     )
 
@@ -775,16 +835,24 @@ export function useIpcEvents(): void {
             // not this local Electron event.
             return
           }
+          const existedBeforeFetch = Boolean(
+            useAppStore.getState().getKnownWorktreeById(worktreeId)
+          )
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
           // the main process and is not yet in the renderer state.
           await useAppStore.getState().fetchWorktrees(repoId)
+          const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
           // Why: route through activateAndRevealWorktree so CLI-created
           // worktrees share the canonical activation path with UI-created
           // ones. This records the visit in the back/forward history stack
           // (recordWorktreeVisit), without which the nav buttons would
           // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, { setup, startup })
+          activateAndRevealWorktree(worktreeId, {
+            ...(setup ? { setup } : {}),
+            ...(startup ? { startup } : {}),
+            ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
+          })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
@@ -1268,15 +1336,14 @@ export function useIpcEvents(): void {
     )
 
     // Why: browser webviews only start their guest process when the container
-    // has display != none. After app restart, activeTabType defaults to 'terminal'
-    // so persisted browser tabs never mount. The main process sends this IPC
-    // before browser commands so the webview can start and registerGuest fires.
+    // has display != none. Main sends this before browser automation commands
+    // so persisted hidden tabs mount without changing the user's active pane.
     unsubs.push(
-      window.api.browser.onActivateView(() => {
+      window.api.browser.onActivateView(({ worktreeId }) => {
         if (isRuntimeEnvironmentActive()) {
           return
         }
-        useAppStore.getState().setActiveTabType('browser')
+        acquireBrowserAutomationBootstrapLease(worktreeId)
       })
     )
 
@@ -1364,7 +1431,7 @@ export function useIpcEvents(): void {
     )
 
     // Why: CLI-driven tab creation sends a request with a specific worktreeId and
-    // url. The renderer creates the tab and replies with the workspace ID so the
+    // url. The renderer creates the tab and replies with the page ID so the
     // main process can wait for registerGuest before returning to the CLI.
     unsubs.push(
       window.api.ui.onRequestTabCreate((data) => {
@@ -1397,13 +1464,15 @@ export function useIpcEvents(): void {
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
             targetGroupId: activeBrowserUnifiedTab?.groupId,
-            sessionProfileId: data.sessionProfileId
+            sessionProfileId: data.sessionProfileId,
+            activate: false
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
           // browserPageId. Return the page ID so waitForTabRegistration can
           // correlate correctly.
           const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
           const browserPageId = pages[0]?.id ?? workspace.id
+          acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
           window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
         } catch (err) {
           window.api.ui.replyTabCreate({
@@ -1530,7 +1599,7 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onNewTerminalTab(() => {
         const store = useAppStore.getState()
-        if (isFloatingWorkspacePanelVisible()) {
+        if (isFloatingWorkspacePanelFocused()) {
           void createFloatingWorkspaceTerminalTab(store)
           return
         }
@@ -1600,10 +1669,37 @@ export function useIpcEvents(): void {
       })
     )
 
-    unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
-    unsubs.push(window.api.ui.onSwitchTabAcrossAllTypes(handleSwitchTabAcrossAllTypes))
+    unsubs.push(
+      window.api.ui.onSwitchTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'same-type')
+          return
+        }
+        handleSwitchTab(direction)
+      })
+    )
+    unsubs.push(
+      window.api.ui.onSwitchTabAcrossAllTypes((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'all-types')
+          return
+        }
+        handleSwitchTabAcrossAllTypes(direction)
+      })
+    )
     unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
-    unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
+    unsubs.push(
+      window.api.ui.onSwitchTerminalTab((direction) => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          switchFloatingWorkspaceTab(store, direction, 'terminal')
+          return
+        }
+        handleSwitchTerminalTab(direction)
+      })
+    )
 
     // Hydrate initial rate limit state then subscribe to push updates
     window.api.rateLimits.get().then((state) => {
@@ -2327,7 +2423,10 @@ function resolvePaneKey(
       owningWorktreeId
     }
   }
-  const leafExists = layout ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
+  // Why: inactive worktree switches can leave the tab's layout at the empty
+  // snapshot while the tab and PTY are still live. Treat that like missing
+  // layout metadata; a non-empty layout that lacks the leaf still means closed.
+  const leafExists = layout?.root ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
   if (!leafExists) {
     return {
       exists: false,

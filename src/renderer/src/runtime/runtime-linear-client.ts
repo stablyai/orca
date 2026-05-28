@@ -154,6 +154,10 @@ export async function linearCreateIssue(
     workspaceId?: string
     parentIssueId?: string
     projectId?: string | null
+    stateId?: string
+    priority?: number
+    assigneeId?: string | null
+    labelIds?: string[]
   }
 ): Promise<LinearCreateIssueResult> {
   const target = getActiveRuntimeTarget(settings)

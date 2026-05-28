@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, ArrowLeft, Globe, Monitor } from 'lucide-react'
+import { FolderOpen, ArrowLeft, Globe, Monitor, FolderTree, Lightbulb } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
 import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
@@ -24,7 +25,7 @@ import type {
   AddRepoExistingWorkspaceSource,
   AddRepoSetupStepAction
 } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import {
   buildAddRepoExistingWorkspacesTelemetry,
@@ -35,11 +36,22 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
 
+function defaultProjectGroupNameForPath(path: string): string {
+  return (
+    path
+      .replace(/[\\/]+$/g, '')
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .at(-1) ?? path
+  )
+}
+
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
-  const addRepo = useAppStore((s) => s.addRepo)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
+  const importNestedRepos = useAppStore((s) => s.importNestedRepos)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -51,7 +63,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
 
-  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
+  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'>(
+    'add'
+  )
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [existingWorkspaceSource, setExistingWorkspaceSource] =
     useState<AddRepoExistingWorkspaceSource | null>(null)
@@ -65,6 +79,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
+  const [nestedScan, setNestedScan] = useState<NestedRepoScanResult | null>(null)
+  const [nestedSelectedPaths, setNestedSelectedPaths] = useState<Set<string>>(new Set())
+  const [nestedGroupName, setNestedGroupName] = useState('')
+  const [nestedConnectionId, setNestedConnectionId] = useState<string | null>(null)
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
@@ -85,7 +103,21 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     handleOpenRemoteStep,
     handleAddRemoteRepo,
     handleConnectTarget
-  } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo, closeModal, setExistingWorkspaceSource)
+  } = useRemoteRepo(
+    fetchWorktrees,
+    setStep,
+    setAddedRepo,
+    closeModal,
+    setExistingWorkspaceSource,
+    scanNestedRepos,
+    (scan, selectedPath, connectionId) => {
+      setNestedScan(scan)
+      setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
+      setNestedGroupName(defaultProjectGroupNameForPath(scan.selectedPath || selectedPath))
+      setNestedConnectionId(connectionId)
+      setStep('nested')
+    }
+  )
 
   const {
     createName,
@@ -130,13 +162,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   }, [step, cloneDestination, settings?.activeRuntimeEnvironmentId, settings?.workspaceDir])
 
   const isOpen = activeModal === 'add-repo'
-  const repoId = addedRepo?.id ?? ''
+  const projectId = addedRepo?.id ?? ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
   const worktrees = useMemo(() => {
-    return worktreesByRepo[repoId] ?? []
-  }, [worktreesByRepo, repoId])
-  const detectedResult = repoId ? detectedWorktreesByRepo[repoId] : undefined
+    return worktreesByRepo[projectId] ?? []
+  }, [worktreesByRepo, projectId])
+  const detectedResult = projectId ? detectedWorktreesByRepo[projectId] : undefined
   const hiddenWorktreeCount =
     detectedResult?.authoritative === true
       ? detectedResult.worktrees.filter(
@@ -181,6 +213,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsCloning(false)
     setCloneError(null)
     setCloneProgress(null)
+    setNestedScan(null)
+    setNestedSelectedPaths(new Set())
+    setNestedGroupName('')
+    setNestedConnectionId(null)
     resetCreateState()
     resetRemoteState()
   }, [resetRemoteState, resetCreateState])
@@ -192,12 +228,30 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [isOpen, resetState])
 
-  const isInputStep = step === 'add' || step === 'clone' || step === 'remote' || step === 'create'
+  const isInputStep =
+    step === 'add' ||
+    step === 'clone' ||
+    step === 'remote' ||
+    step === 'create' ||
+    step === 'nested'
 
   const handleBrowse = useCallback(async () => {
     setIsAdding(true)
     try {
-      const repo = await addRepo()
+      const path = await window.api.repos.pickFolder()
+      if (!path) {
+        return
+      }
+      const scan = await scanNestedRepos(path)
+      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+        setNestedScan(scan)
+        setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
+        setNestedGroupName(defaultProjectGroupNameForPath(path))
+        setNestedConnectionId(null)
+        setStep('nested')
+        return
+      }
+      const repo = await addRepoPath(path)
       if (repo && isGitRepoKind(repo)) {
         setAddedRepo(repo)
         setExistingWorkspaceSource('local_folder_picker')
@@ -211,7 +265,67 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     } finally {
       setIsAdding(false)
     }
-  }, [addRepo, fetchWorktrees, closeModal])
+  }, [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos])
+
+  const handleImportNestedRepos = useCallback(
+    async (mode: 'group' | 'separate') => {
+      if (!nestedScan || nestedSelectedPaths.size === 0) {
+        return
+      }
+      setIsAdding(true)
+      try {
+        const result = await importNestedRepos({
+          parentPath: nestedScan.selectedPath,
+          groupName: nestedGroupName,
+          projectPaths: [...nestedSelectedPaths],
+          ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
+          mode
+        })
+        if (!result) {
+          return
+        }
+        const importedRepoIds = result.projects
+          .map((entry) => entry.projectId)
+          .filter((projectId): projectId is string => typeof projectId === 'string')
+        const firstRepoId = importedRepoIds[0]
+        if (!firstRepoId) {
+          toast.error('No repositories imported')
+          return
+        }
+        for (const projectId of importedRepoIds) {
+          await fetchWorktrees(projectId)
+        }
+        const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
+        if (repo) {
+          setAddedRepo(repo)
+          setExistingWorkspaceSource(
+            nestedConnectionId
+              ? 'ssh_remote_path'
+              : settings?.activeRuntimeEnvironmentId?.trim()
+                ? 'runtime_server_path'
+                : 'local_folder_picker'
+          )
+          setStep('setup')
+        }
+        if (result.failedCount > 0) {
+          toast.warning('Some repositories could not be imported', {
+            description: `${result.failedCount} failed`
+          })
+        }
+      } finally {
+        setIsAdding(false)
+      }
+    },
+    [
+      fetchWorktrees,
+      importNestedRepos,
+      nestedGroupName,
+      nestedScan,
+      nestedSelectedPaths,
+      nestedConnectionId,
+      settings?.activeRuntimeEnvironmentId
+    ]
+  )
 
   const handleAddServerPath = useCallback(
     async (kind: 'git' | 'folder') => {
@@ -221,6 +335,17 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       }
       setIsAddingServerPath(true)
       try {
+        if (kind === 'git') {
+          const scan = await scanNestedRepos(path)
+          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+            setNestedScan(scan)
+            setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
+            setNestedGroupName(defaultProjectGroupNameForPath(path))
+            setNestedConnectionId(null)
+            setStep('nested')
+            return
+          }
+        }
         const repo = await addRepoPath(path, kind)
         if (repo && isGitRepoKind(repo)) {
           setAddedRepo(repo)
@@ -236,7 +361,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         setIsAddingServerPath(false)
       }
     },
-    [addRepoPath, closeModal, fetchWorktrees, serverPath]
+    [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos, serverPath]
   )
 
   const handlePickDestination = useCallback(async () => {
@@ -323,16 +448,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   useEffect(() => {
     if (
       step !== 'setup' ||
-      !repoId ||
+      !projectId ||
       !existingWorkspaceTelemetry ||
       !shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) ||
-      detectedTelemetryTrackedRef.current.has(repoId)
+      detectedTelemetryTrackedRef.current.has(projectId)
     ) {
       return
     }
-    detectedTelemetryTrackedRef.current.add(repoId)
+    detectedTelemetryTrackedRef.current.add(projectId)
     track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
-  }, [existingWorkspaceSource, existingWorkspaceTelemetry, repoId, step])
+  }, [existingWorkspaceSource, existingWorkspaceTelemetry, projectId, step])
 
   const trackSetupAction = useCallback(
     (action: AddRepoSetupStepAction): void => {
@@ -361,13 +486,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       closeModal()
       setTimeout(() => {
         openModal('new-workspace-composer', {
-          initialRepoId: repoId,
+          initialRepoId: projectId,
           ...(name ? { prefilledName: name } : {}),
           telemetrySource: 'sidebar'
         })
       }, 150)
     },
-    [closeModal, openModal, repoId, trackSetupAction]
+    [closeModal, openModal, projectId, trackSetupAction]
   )
 
   const handleStartPrimaryWorktree = useCallback(() => {
@@ -385,12 +510,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const handleConfigureRepo = useCallback(() => {
     trackSetupAction('configure')
     closeModal()
-    openSettingsTarget({ pane: 'repo', repoId })
+    openSettingsTarget({ pane: 'repo', repoId: projectId })
     openSettingsPage()
-  }, [closeModal, openSettingsTarget, openSettingsPage, repoId, trackSetupAction])
+  }, [closeModal, openSettingsTarget, openSettingsPage, projectId, trackSetupAction])
 
   const finishImportedRepoWithoutOpening = useCallback(async () => {
-    const importedRepoId = repoId
+    const importedRepoId = projectId
     closeModal()
     resetState()
     if (!importedRepoId) {
@@ -400,19 +525,19 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     await fetchWorktrees(importedRepoId)
     const state = useAppStore.getState()
     finalizeImportedRepoAfterSkip(state, importedRepoId)
-  }, [closeModal, fetchWorktrees, repoId, resetState])
+  }, [closeModal, fetchWorktrees, projectId, resetState])
 
   const handleUseExistingWorktrees = useCallback(async () => {
-    if (!repoId) {
+    if (!projectId) {
       return
     }
     trackSetupAction('open_existing')
     if (!otherWorktreesVisible) {
-      const updated = await updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+      const updated = await updateRepo(projectId, { externalWorktreeVisibility: 'show' })
       if (updated && addedRepo) {
         setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
       }
-      await fetchWorktrees(repoId)
+      await fetchWorktrees(projectId)
     }
     await finishImportedRepoWithoutOpening()
   }, [
@@ -420,7 +545,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     fetchWorktrees,
     finishImportedRepoWithoutOpening,
     otherWorktreesVisible,
-    repoId,
+    projectId,
     trackSetupAction,
     updateRepo
   ])
@@ -462,6 +587,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           {(step === 'clone' || step === 'remote' || step === 'create') && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              onClick={handleBack}
+            >
+              <ArrowLeft className="size-3" />
+              Back
+            </button>
+          )}
+          {step === 'nested' && (
+            <button
+              className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40"
+              disabled={isAdding}
               onClick={handleBack}
             >
               <ArrowLeft className="size-3" />
@@ -612,6 +747,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               </Button>
             </div>
 
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+                <Lightbulb className="size-3.5" />
+              </span>
+              <span>Want to import many repos at once? Select the parent folder.</span>
+            </div>
+
             {/* Secondary link rather than a fourth card — create-from-scratch
                is a less common path than importing. See orca#763. */}
             <div className="flex items-center justify-center pt-1">
@@ -669,6 +811,75 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             onPickDestination={handlePickDestination}
             onClone={handleClone}
           />
+        ) : step === 'nested' && nestedScan ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Import as project group</DialogTitle>
+              <DialogDescription>
+                {`Found ${nestedScan.repos.length} git ${
+                  nestedScan.repos.length === 1 ? 'repository' : 'repositories'
+                } in this folder.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+                <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                  <FolderTree className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-foreground">
+                    Group under {nestedGroupName}
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {nestedScan.selectedPath}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
+                <Input
+                  value={nestedGroupName}
+                  onChange={(event) => setNestedGroupName(event.target.value)}
+                  className="h-9"
+                />
+              </div>
+
+              <NestedRepoTreePreview
+                scan={nestedScan}
+                selectedPaths={nestedSelectedPaths}
+                onSelectedPathsChange={setNestedSelectedPaths}
+                disabled={isAdding}
+              />
+              {nestedScan.truncated || nestedScan.timedOut ? (
+                <div className="text-[11px] text-muted-foreground">
+                  Showing partial results from a bounded scan.
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <Button onClick={handleBack} disabled={isAdding} variant="ghost">
+                  <ArrowLeft className="size-3.5" />
+                  Back
+                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    onClick={() => void handleImportNestedRepos('separate')}
+                    disabled={isAdding || nestedSelectedPaths.size === 0}
+                    variant="outline"
+                  >
+                    Import separately
+                  </Button>
+                  <Button
+                    onClick={() => void handleImportNestedRepos('group')}
+                    disabled={isAdding || nestedSelectedPaths.size === 0 || !nestedGroupName.trim()}
+                  >
+                    Import as project group
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
         ) : step === 'create' ? (
           <CreateStep
             createName={createName}

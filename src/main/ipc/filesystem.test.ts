@@ -15,6 +15,7 @@ const {
   lstatMock,
   commitChangesMock,
   getStatusMock,
+  abortMergeMock,
   getDiffMock,
   getBranchCompareMock,
   getBranchDiffMock,
@@ -46,6 +47,7 @@ const {
   lstatMock: vi.fn(),
   commitChangesMock: vi.fn(),
   getStatusMock: vi.fn(),
+  abortMergeMock: vi.fn(),
   getDiffMock: vi.fn(),
   getBranchCompareMock: vi.fn(),
   getBranchDiffMock: vi.fn(),
@@ -89,6 +91,7 @@ vi.mock('fs/promises', () => ({
 vi.mock('../git/status', () => ({
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
+  abortMerge: abortMergeMock,
   getDiff: getDiffMock,
   getBranchCompare: getBranchCompareMock,
   getBranchDiff: getBranchDiffMock,
@@ -580,6 +583,26 @@ describe('registerFilesystemHandlers', () => {
     ])
   })
 
+  it('routes abort merge through local and SSH git providers', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    abortMergeMock.mockResolvedValue(undefined)
+    const sshProvider = {
+      abortMerge: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:abortMerge')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    await handlers.get('git:abortMerge')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })
+
+    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(sshProvider.abortMerge).toHaveBeenCalledWith('/remote/repo')
+  })
+
   it('rejects git file paths that escape the selected worktree', async () => {
     registerFilesystemHandlers(store as never)
 
@@ -908,9 +931,7 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  it('preserves the inherited Codex environment when no managed account is selected', async () => {
-    const previousCodexHome = process.env.CODEX_HOME
-    process.env.CODEX_HOME = '/system/codex-home'
+  it('prepares the Orca-managed Codex home for the default system selection', async () => {
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
@@ -924,26 +945,23 @@ describe('registerFilesystemHandlers', () => {
       message: 'Update README'
     })
 
-    try {
-      registerFilesystemHandlers(store as never, {
-        prepareForCodexLaunch: () => null
-      })
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => '/orca-managed/codex-home'
+    })
 
-      await handlers.get('git:generateCommitMessage')!(null, {
-        worktreePath: WORKTREE_FEATURE_PATH
-      })
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
 
-      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
         kind: 'local',
-        cwd: WORKTREE_FEATURE_PATH
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: '/orca-managed/codex-home' })
       })
-    } finally {
-      if (previousCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = previousCodexHome
-      }
-    }
+    )
   })
 
   it('returns a sanitized error when local agent account preparation fails', async () => {

@@ -650,6 +650,68 @@ function readLastUserPromptFromTranscript(transcriptPath: unknown): string | und
   return readLastTextFromTranscriptOnce(transcriptPath, extractUserPromptTextFromLine)
 }
 
+function extractCommandCodeUserPromptFromLine(line: string): string | undefined {
+  let entry: unknown
+  try {
+    entry = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  if (typeof entry !== 'object' || entry === null) {
+    return undefined
+  }
+  const record = entry as Record<string, unknown>
+  return record.role === 'user' ? extractAssistantContentText(record.content) : undefined
+}
+
+function extractCommandCodeAssistantTextFromLine(line: string): string | undefined {
+  let entry: unknown
+  try {
+    entry = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  if (typeof entry !== 'object' || entry === null) {
+    return undefined
+  }
+  const record = entry as Record<string, unknown>
+  if (record.role !== 'assistant') {
+    return undefined
+  }
+  const content = record.content
+  if (typeof content === 'string' && content.trim().length > 0) {
+    return content
+  }
+  if (Array.isArray(content)) {
+    const textPart = content.find(
+      (part) =>
+        typeof part === 'object' &&
+        part !== null &&
+        (part as Record<string, unknown>).type === 'text' &&
+        typeof (part as Record<string, unknown>).text === 'string' &&
+        ((part as Record<string, unknown>).text as string).trim().length > 0
+    ) as Record<string, unknown> | undefined
+    if (typeof textPart?.text === 'string') {
+      return textPart.text
+    }
+  }
+  return extractAssistantContentText(content)
+}
+
+function readLastCommandCodeUserPromptFromTranscript(transcriptPath: unknown): string | undefined {
+  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+    return undefined
+  }
+  return readLastTextFromTranscriptOnce(transcriptPath, extractCommandCodeUserPromptFromLine)
+}
+
+function readLastCommandCodeAssistantFromTranscript(transcriptPath: unknown): string | undefined {
+  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+    return undefined
+  }
+  return readLastTextFromTranscriptOnce(transcriptPath, extractCommandCodeAssistantTextFromLine)
+}
+
 function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
   if (typeof body !== 'object' || body === null) {
     return null
@@ -739,6 +801,9 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     record.hook_event_name ??
     record.hookEventName
   if (source === 'antigravity' && eventName === 'Stop') {
+    if (isAntigravityStopStillBusy(record)) {
+      return false
+    }
     const transcriptPath = record.transcriptPath ?? record.transcript_path
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
@@ -957,6 +1022,9 @@ function extractAntigravityToolFields(
     )
   }
   if (eventName === 'Stop') {
+    if (isAntigravityStopStillBusy(hookPayload)) {
+      return {}
+    }
     const message =
       readString(hookPayload, 'last_assistant_message') ??
       readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
@@ -1342,6 +1410,47 @@ function extractDroidToolFields(
   return {}
 }
 
+function extractCommandCodeToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+    const toolName =
+      readString(hookPayload, 'tool_name') ??
+      readString(hookPayload, 'toolName') ??
+      readString(hookPayload, 'tool_display_name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveFallbackToolInputPreview(hookPayload.tool_input)
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
+    if (eventName === 'PostToolUse') {
+      const responseText =
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.tool_output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'Stop') {
+    const direct = readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastCommandCodeAssistantFromTranscript(
+      hookPayload.transcript_path ?? hookPayload.transcriptPath
+    )
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+  }
+  return {}
+}
+
 function normalizeHookEventName(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
@@ -1529,9 +1638,12 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
+    case 'omp':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
+    case 'command-code':
+      return false
     case 'grok':
       return isGrokEvent(eventName, 'user_prompt_submit')
     case 'copilot': {
@@ -1569,9 +1681,12 @@ function extractToolFields(
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
+    case 'omp':
       return extractPiToolFields(eventName, hookPayload)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
+    case 'command-code':
+      return extractCommandCodeToolFields(eventName, hookPayload)
     case 'grok':
       return extractGrokToolFields(eventName, hookPayload)
     case 'copilot':
@@ -1680,6 +1795,10 @@ function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+function isAntigravityStopStillBusy(hookPayload: Record<string, unknown>): boolean {
+  return hookPayload.fullyIdle === false || hookPayload.fully_idle === false
+}
+
 function normalizeAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -1701,11 +1820,14 @@ function normalizeAntigravityEvent(
   }
 
   const toolName = readAntigravityToolCall(hookPayload).toolName
+  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
       : eventName === 'Stop'
-        ? 'done'
+        ? stopStillBusy
+          ? 'working'
+          : 'done'
         : eventName === 'PreInvocation' ||
             eventName === 'PostInvocation' ||
             eventName === 'PreToolUse' ||
@@ -1742,7 +1864,10 @@ function normalizeAntigravityEvent(
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
-  if (eventName === 'Stop' && transcriptPath) {
+  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps.
+  // Only a fully idle Stop is terminal; otherwise the sidebar would bounce
+  // done -> working during tool-heavy turns and ignore later tool updates.
+  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }
   return payload
@@ -1956,8 +2081,9 @@ function normalizeCopilotEvent(
   )
 }
 
-function normalizePiEvent(
+function normalizePiCompatibleEvent(
   state: HookListenerState,
+  agentType: 'pi' | 'omp',
   eventName: unknown,
   promptText: string,
   paneKey: string,
@@ -1982,17 +2108,17 @@ function normalizePiEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('pi', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('pi', eventName) }
+    extractToolFields(agentType, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
   )
 
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('pi', eventName)
+        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
       }),
-      agentType: 'pi',
+      agentType,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage
@@ -2064,6 +2190,50 @@ function normalizeDroidEvent(
         resetOnNewTurn: isNewTurnEvent('droid', eventName)
       }),
       agentType: 'droid',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
+function normalizeCommandCodeEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const stateName =
+    eventName === 'PreToolUse' || eventName === 'PostToolUse'
+      ? 'working'
+      : eventName === 'Stop'
+        ? 'done'
+        : null
+  if (!stateName) {
+    return null
+  }
+
+  const effectivePrompt =
+    promptText ||
+    readLastCommandCodeUserPromptFromTranscript(
+      hookPayload.transcript_path ?? hookPayload.transcriptPath
+    ) ||
+    ''
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('command-code', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('command-code', eventName) }
+  )
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('command-code', eventName)
+      }),
+      agentType: 'command-code',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage
@@ -2274,10 +2444,30 @@ export function normalizeHookPayload(
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'pi':
-      payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizePiCompatibleEvent(
+        state,
+        'pi',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
+    case 'omp':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'omp',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'command-code':
+      payload = normalizeCommandCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'grok':
       payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
@@ -2325,7 +2515,9 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
+  '/hook/omp': 'omp',
   '/hook/droid': 'droid',
+  '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes'

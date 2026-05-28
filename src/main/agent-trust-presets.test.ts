@@ -13,8 +13,21 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const testState = {
-  fakeHomeDir: ''
+  fakeHomeDir: '',
+  userDataDir: '',
+  previousUserDataPath: undefined as string | undefined
 }
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: (name: string) => {
+      if (name === 'userData') {
+        return testState.userDataDir
+      }
+      throw new Error(`unexpected app.getPath(${name})`)
+    }
+  }
+}))
 
 vi.mock('node:os', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -30,11 +43,22 @@ const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTr
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
+  testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-user-data-'))
+  testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  process.env.ORCA_USER_DATA_PATH = testState.userDataDir
 })
 
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+  rmSync(testState.userDataDir, { recursive: true, force: true })
+  if (testState.previousUserDataPath === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+  }
   testState.fakeHomeDir = ''
+  testState.userDataDir = ''
+  testState.previousUserDataPath = undefined
 })
 
 describe('markCursorWorkspaceTrusted', () => {
@@ -119,10 +143,20 @@ describe('markCodexProjectTrusted', () => {
       const realpath = realpathSync(workspace)
       markCodexProjectTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+      const runtimeConfigPath = join(
+        testState.userDataDir,
+        'codex-runtime-home',
+        'home',
+        'config.toml'
+      )
       expect(existsSync(configPath)).toBe(true)
+      expect(existsSync(runtimeConfigPath)).toBe(true)
       const written = readFileSync(configPath, 'utf-8')
+      const runtimeWritten = readFileSync(runtimeConfigPath, 'utf-8')
       expect(written).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
       expect(written).toContain('trust_level = "trusted"')
+      expect(runtimeWritten).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
+      expect(runtimeWritten).toContain('trust_level = "trusted"')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }
@@ -133,7 +167,9 @@ describe('markCodexProjectTrusted', () => {
     const realpath = realpathSync(workspace)
     try {
       const codexDir = join(testState.fakeHomeDir, '.codex')
+      const runtimeCodexDir = join(testState.userDataDir, 'codex-runtime-home', 'home')
       mkdirSync(codexDir, { recursive: true })
+      mkdirSync(runtimeCodexDir, { recursive: true })
       writeFileSync(
         join(codexDir, 'config.toml'),
         [
@@ -146,14 +182,31 @@ describe('markCodexProjectTrusted', () => {
         ].join('\n'),
         'utf-8'
       )
+      writeFileSync(
+        join(runtimeCodexDir, 'config.toml'),
+        [
+          'sandbox_mode = "workspace-write"',
+          '',
+          `[projects."${escapeTomlBasicString(realpath)}"]`,
+          'notes = "keep-runtime"',
+          'trust_level = "untrusted"',
+          ''
+        ].join('\n'),
+        'utf-8'
+      )
 
       markCodexProjectTrusted(workspace)
 
       const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
+      const runtimeWritten = readFileSync(join(runtimeCodexDir, 'config.toml'), 'utf-8')
       expect(written).toContain('model = "gpt-5.5"')
       expect(written).toContain('notes = "keep"')
       expect(written).toContain('trust_level = "trusted"')
       expect(written).not.toContain('trust_level = "untrusted"')
+      expect(runtimeWritten).toContain('sandbox_mode = "workspace-write"')
+      expect(runtimeWritten).toContain('notes = "keep-runtime"')
+      expect(runtimeWritten).toContain('trust_level = "trusted"')
+      expect(runtimeWritten).not.toContain('trust_level = "untrusted"')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

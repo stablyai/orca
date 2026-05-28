@@ -3,6 +3,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  LocalBaseRefRefreshResult,
   Worktree,
   WorkspaceVisibleTabType,
   GitPushTarget,
@@ -26,11 +27,39 @@ import {
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
+import { toast } from 'sonner'
+import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
+function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
+  if (!result || result.status === 'updated') {
+    return
+  }
+
+  let reason: string
+  switch (result.status) {
+    case 'skipped_dirty_worktree':
+      reason =
+        'the worktree where it is checked out has uncommitted changes. Commit, stash, or discard those changes, then try again.'
+      break
+    case 'skipped_not_fast_forward':
+      reason =
+        'the local branch does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.'
+      break
+    case 'skipped_error':
+      reason =
+        'Git returned an error while updating the local ref. Check the repo for locked refs or unusual worktree state, then try again.'
+      break
+  }
+
+  toast.warning(`Local ${result.localBranch} was not refreshed`, {
+    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
+  })
+}
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
@@ -145,16 +174,27 @@ function toRuntimeWorktreeIdSelector(worktreeId: string): string {
   return `id:${worktreeId}`
 }
 
+const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
+  'Worktree has uncommitted or untracked changes',
+  'contains modified or untracked files',
+  'Worktree is no longer registered with Git but its directory remains'
+] as const
+
+// Why: local preflight formatting can surface raw git porcelain instead of the
+// friendly dirty-worktree message; only those status prefixes are forceable.
+const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
+  /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
+
 function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
   if (force) {
     return false
   }
-  const protectedRemovalMessages = [
-    'Refusing to delete unregistered worktree path:',
-    'Refusing to delete protected worktree path:',
-    'Refusing to delete worktree because it contains another registered worktree:'
-  ]
-  return !protectedRemovalMessages.some((message) => error.includes(message))
+  // Why: force only helps backend safety refusals that are explicitly safe to
+  // retry with user confirmation; transport/provider errors need recovery first.
+  return (
+    FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES.some((message) => error.includes(message)) ||
+    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
+  )
 }
 
 type WorktreeWithLineage = Worktree & {
@@ -944,6 +984,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               sortEpoch: s.sortEpoch + 1
             }
           })
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -1020,6 +1061,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await get().shutdownWorktreeTerminals(worktreeId)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
+
+      // Why: deletion is async (backend + terminal/browser teardown awaited
+      // above), so snapshot the sidebar's current top-row anchor in the same
+      // tick we remove the row. Recording at click time goes stale across the
+      // await, and this covers every delete entry point (modal, card, SSH,
+      // batch) rather than only the context menu.
+      requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
       set((s) => {
         const next = { ...s.worktreesByRepo }
@@ -1232,7 +1280,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreeMeta: async (worktreeId, updates) => {
     const existingWorktree = get().getKnownWorktreeById(worktreeId)
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
-    // branch here so Push targets the review branch, not the checkout mirror.
+    // branch here so Push targets the review branch, but don't repeat that
+    // network lookup for no-op linkedPR metadata saves.
     const linkedPrForPushTarget =
       typeof updates.linkedPR === 'number' && Number.isFinite(updates.linkedPR)
         ? updates.linkedPR
@@ -1241,6 +1290,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       linkedPrForPushTarget !== null &&
       updates.pushTarget === undefined &&
       existingWorktree &&
+      existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
         ? await resolveLinkedPrPushTarget(
             get().settings,
@@ -1673,7 +1723,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const restoredFileId = s.activeFileIdByWorktree[worktreeId] ?? null
       const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[worktreeId] ?? null
       const restoredTabType = s.activeTabTypeByWorktree[worktreeId] ?? 'terminal'
-      const restoredRightSidebarTab = s.rightSidebarTabByWorktree[worktreeId] ?? 'explorer'
       const activeGroupId =
         s.activeGroupIdByWorktree[worktreeId] ?? s.groupsByWorktree[worktreeId]?.[0]?.id ?? null
       const activeGroup = activeGroupId
@@ -1841,7 +1890,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeFileId,
         activeBrowserTabId,
         activeTabType,
-        rightSidebarTab: restoredRightSidebarTab,
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,

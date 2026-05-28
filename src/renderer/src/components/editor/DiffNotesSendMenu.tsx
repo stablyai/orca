@@ -42,19 +42,14 @@ export function DiffNotesSendMenu({
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
 }): React.JSX.Element {
-  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
+  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
-  const unsentNoteIds = useMemo(() => unsentNotes.map((comment) => comment.id), [unsentNotes])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
     () => (filePath ? comments.filter((comment) => comment.filePath === filePath) : []),
     [comments, filePath]
   )
   const unsentFileNotes = useMemo(() => fileNotes.filter((comment) => !comment.sentAt), [fileNotes])
-  const unsentFileNoteIds = useMemo(
-    () => unsentFileNotes.map((comment) => comment.id),
-    [unsentFileNotes]
-  )
   const unsentFilePrompt = useMemo(() => formatDiffComments(unsentFileNotes), [unsentFileNotes])
   const hasUnsentNotes = unsentNotes.length > 0
   const canSendFileScope = showFileScope && Boolean(filePath)
@@ -116,7 +111,9 @@ export function DiffNotesSendMenu({
                   prompt={unsentFilePrompt}
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
-                  onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentFileNoteIds)}
+                  onPromptDelivered={() =>
+                    void clearDeliveredDiffComments(worktreeId, unsentFileNotes)
+                  }
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -135,7 +132,7 @@ export function DiffNotesSendMenu({
                   prompt={unsentPrompt}
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
-                  onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
+                  onPromptDelivered={() => void clearDeliveredDiffComments(worktreeId, unsentNotes)}
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -148,7 +145,7 @@ export function DiffNotesSendMenu({
             prompt={unsentPrompt}
             promptDelivery="submit-after-ready"
             launchSource="notes_send"
-            onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
+            onPromptDelivered={() => void clearDeliveredDiffComments(worktreeId, unsentNotes)}
           />
         )}
       </DropdownMenuContent>

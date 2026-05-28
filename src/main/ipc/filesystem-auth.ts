@@ -94,7 +94,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // destructive or read/write operation, so the security boundary remains
   // enforced where it matters.
   const repos = getLocalRepos(store)
-  const perRepoResults = await Promise.all(
+  const perProjectResults = await Promise.all(
     repos.map(async (repo) => {
       const roots: string[] = []
       try {
@@ -117,7 +117,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
   registeredWorktreeRootRepoIds.clear()
-  for (const { repoId, roots } of perRepoResults) {
+  for (const { repoId, roots } of perProjectResults) {
     const normalizedRoots = new Set<string>()
     for (const root of roots) {
       normalizedRoots.add(root)

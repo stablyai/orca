@@ -16,6 +16,7 @@ import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { getDefaultSourceControlAiSettings } from './source-control-ai'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -153,6 +154,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
+    autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
@@ -260,6 +262,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     // Why: indefinite hold by default — the desktop "Restore" banner is the
     // explicit return-to-desktop-size action, no wall-clock guess.
@@ -299,6 +302,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customPrompt: '',
       customAgentCommand: ''
     },
+    sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: getDefaultVoiceSettings()
   }
 }
@@ -330,6 +334,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
     repos: [],
+    projectGroups: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},
     worktreeLineageById: {},
@@ -352,6 +357,8 @@ export function getDefaultUIState(): PersistedUIState {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
+    rightSidebarOpen: true,
+    rightSidebarTab: 'explorer',
     rightSidebarWidth: 350,
     groupBy: 'repo',
     sortBy: 'recent',

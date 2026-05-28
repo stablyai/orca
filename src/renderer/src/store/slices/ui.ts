@@ -58,6 +58,7 @@ import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
+  highlight?: boolean
 }
 
 function clampPetSize(size: number): number {
@@ -102,6 +103,21 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
     }
   }
   return out as StatusBarItem[]
+}
+
+function normalizePersistedRightSidebarTab(
+  tab: PersistedUIState['rightSidebarTab'] | unknown
+): PersistedUIState['rightSidebarTab'] {
+  if (
+    tab === 'explorer' ||
+    tab === 'search' ||
+    tab === 'source-control' ||
+    tab === 'checks' ||
+    tab === 'ports'
+  ) {
+    return tab
+  }
+  return 'explorer'
 }
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -515,7 +531,10 @@ export type UISlice = {
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   revealWorktreeInSidebar: (
     worktreeId: string,
-    options?: { behavior?: PendingSidebarWorktreeReveal['behavior'] }
+    options?: {
+      behavior?: PendingSidebarWorktreeReveal['behavior']
+      highlight?: boolean
+    }
   ) => void
   clearPendingRevealWorktreeId: () => void
   // Why: lets the SourceControl sidebar request that the diff editor scroll
@@ -1106,7 +1125,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
-        behavior: options?.behavior ?? 'smooth'
+        behavior: options?.behavior ?? 'smooth',
+        ...(options?.highlight ? { highlight: true } : {})
       }
     }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
@@ -1164,6 +1184,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           s.rightSidebarWidth,
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
+        rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
+        rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: Active-only was retired. Force the old persisted flag off so an

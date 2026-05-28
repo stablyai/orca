@@ -4,6 +4,7 @@ import { CORE_HANDLERS } from './handlers/core'
 import { AUTOMATION_HANDLERS } from './handlers/automations'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
+import { FILE_HANDLERS } from './handlers/file'
 import { TERMINAL_HANDLERS } from './handlers/terminal'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
 import { BROWSER_INTERACT_HANDLERS } from './handlers/browser-interact'
@@ -34,6 +35,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     AUTOMATION_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
+    FILE_HANDLERS,
     TERMINAL_HANDLERS,
     BROWSER_NAV_HANDLERS,
     BROWSER_INTERACT_HANDLERS,

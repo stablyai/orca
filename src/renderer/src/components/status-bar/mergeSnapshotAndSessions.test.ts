@@ -303,7 +303,7 @@ describe('mergeSnapshotAndSessions', () => {
     })
   })
 
-  it('uses repoDisplayNameById to humanize new repo groups when available', () => {
+  it('uses repoDisplayNameById to humanize new project groups when available', () => {
     const ds: DaemonSession[] = [{ id: 'stably-ai/orca::/remote/Wt@@1', cwd: '', title: '' }]
     const ctx = baseCtx({
       repoDisplayNameById: new Map([['stably-ai/orca', 'ORCA']])

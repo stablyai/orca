@@ -72,6 +72,7 @@ module.exports = {
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
+    'node_modules/yaml/**',
     'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {

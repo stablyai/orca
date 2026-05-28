@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { appendOrcaCodexAgentStatusProfile } from '../../../../shared/codex-profile'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
@@ -57,8 +56,9 @@ describe('repo slice skipped-onboarding folder startup', () => {
       1,
       'folder-1::/folder',
       {
+        sidebarRevealBehavior: 'auto',
         startup: {
-          command: appendOrcaCodexAgentStatusProfile('codex'),
+          command: 'codex',
           telemetry: {
             agent_kind: 'codex',
             launch_source: 'onboarding',
@@ -70,7 +70,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,
       'folder-2::/folder',
-      undefined
+      { sidebarRevealBehavior: 'auto' }
     )
   })
 })

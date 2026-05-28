@@ -49,7 +49,8 @@ import {
   installDevParentDisconnectQuit,
   installDevParentWatchdog,
   installUncaughtPipeErrorGuard,
-  patchPackagedProcessPath
+  patchPackagedProcessPath,
+  shouldInstallManagedHooks
 } from './startup/configure-process'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
@@ -60,10 +61,12 @@ import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
   getPtyIdForPaneKey,
@@ -121,6 +124,51 @@ let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
 const isServeMode = process.argv.includes('--serve')
+
+// Why: the store/runtime singletons live here in index.ts; injecting them keeps
+// the rename orchestrator free of module-level state and unit-testable.
+function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
+  paneKey: string
+  tabId: string | undefined
+  worktreeId: string | undefined
+  payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+  isReplay: boolean | undefined
+}): void {
+  const currentStore = store
+  const currentRuntime = runtime
+  if (!currentStore || !currentRuntime) {
+    return
+  }
+  void maybeAutoRenameBranchOnFirstWork(
+    {
+      paneKey: event.paneKey,
+      tabId: event.tabId,
+      worktreeId: event.worktreeId,
+      state: event.payload.state,
+      prompt: event.payload.prompt,
+      assistantMessage: event.payload.lastAssistantMessage,
+      isReplay: event.isReplay
+    },
+    {
+      getSettings: () => currentStore.getSettings(),
+      getRepo: (repoId) => currentStore.getRepo(repoId),
+      getAgentEnvResolvers: () => currentRuntime.getCommitMessageAgentEnvironmentResolvers(),
+      getCurrentDisplayName: (worktreeId) => currentStore.getWorktreeMeta(worktreeId)?.displayName,
+      canRenameOrcaCreatedBranch: (worktreeId) => {
+        const meta = currentStore.getWorktreeMeta(worktreeId)
+        // Why: a user/imported branch can coincidentally be named after a creature.
+        // Only worktrees Orca stamped at creation are safe to auto-rename.
+        return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
+      },
+      setDisplayName: (worktreeId, displayName) => {
+        currentStore.setWorktreeMeta(worktreeId, { displayName })
+      },
+      resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
+      onRenamed: (repoId) => currentRuntime.notifyBranchRenamed(repoId)
+    }
+  )
+}
+
 const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
@@ -149,6 +197,9 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
+// Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
+// app userData path once Electron has applied dev/e2e overrides.
+process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
 
 function focusExistingWindow(): void {
   // Why: the second-instance event fires on the *primary* Electron process
@@ -254,6 +305,36 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   enableMainProcessGpuFeatures()
+}
+
+function prepareCodexRuntimeHomeForLaunch(): string {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch()
+  const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
+  try {
+    // Why: launch prep is reachable after startup via PTY/runtime paths; honor
+    // the persisted off switch so those launches cannot reinstall removed hooks.
+    const status = hooksEnabled
+      ? codexHookService.install()
+      : codexHookService.refreshRuntimeUserHooks()
+    if (status.state === 'error') {
+      console.warn(
+        `[codex-hook-service] failed to ${
+          hooksEnabled ? 'refresh' : 'refresh user'
+        } runtime hooks before launch`,
+        status.detail
+      )
+    }
+  } catch (error) {
+    // Why: hook install/removal is best-effort launch prep. A malformed hooks file
+    // should not block the Codex process from starting with its prepared auth.
+    console.warn(
+      `[codex-hook-service] failed to ${
+        hooksEnabled ? 'refresh' : 'refresh user'
+      } runtime hooks before launch`,
+      error
+    )
+  }
+  return runtimeHomePath
 }
 
 function openMainWindow(): BrowserWindow {
@@ -387,10 +468,7 @@ function openMainWindow(): BrowserWindow {
     rendererWebContentsId,
     automations,
     {
-      prepareForCodexLaunch: () =>
-        store!.getSettings().activeCodexManagedAccountId
-          ? codexRuntimeHome!.prepareForCodexLaunch()
-          : null,
+      prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
       prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
     },
     agentAwakeService ?? undefined,
@@ -408,10 +486,7 @@ function openMainWindow(): BrowserWindow {
     window,
     store,
     runtime,
-    () =>
-      store!.getSettings().activeCodexManagedAccountId
-        ? codexRuntimeHome!.prepareForCodexLaunch()
-        : null,
+    prepareCodexRuntimeHomeForLaunch,
     () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -449,10 +524,20 @@ function openMainWindow(): BrowserWindow {
   window.on('hide', stopSyntheticTitleSpinnerTimer)
   window.on('minimize', stopSyntheticTitleSpinnerTimer)
   agentHookServer.setListener(
-    ({ paneKey, tabId, worktreeId, connectionId, payload, receivedAt, stateStartedAt }) => {
+    ({
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId,
+      payload,
+      receivedAt,
+      stateStartedAt,
+      isReplay
+    }) => {
       if (mainWindow?.isDestroyed()) {
         return
       }
+      maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
@@ -996,10 +1081,10 @@ app.whenReady().then(async () => {
   runtimeService.setAutomationService(automations)
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
-    prepareForCodexLaunch: () =>
-      store!.getSettings().activeCodexManagedAccountId
-        ? codexRuntimeHome!.prepareForCodexLaunch()
-        : null,
+    // Why: local Codex hooks and auth now live in Orca's managed runtime home
+    // even for the system-default path, so every Orca-launched Codex process
+    // must resolve CODEX_HOME through the runtime-home service.
+    prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
   })
   starNag = new StarNagService(store, stats)
@@ -1011,12 +1096,14 @@ app.whenReady().then(async () => {
     })
   )
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why: the persisted off switch must run before any auto-install path so
-  // users who removed Orca-managed hooks do not see them silently reappear on launch.
-  if (isAgentStatusHooksEnabled(store.getSettings())) {
-    runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
-  } else {
-    removeManagedAgentHooks()
+  if (shouldInstallManagedHooks(is.dev)) {
+    // Why: the persisted off switch must run before any auto-install path so
+    // users who removed Orca-managed hooks do not see them silently reappear on launch.
+    if (isAgentStatusHooksEnabled(store.getSettings())) {
+      runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
+    } else {
+      removeManagedAgentHooks()
+    }
   }
 
   app.on('child-process-gone', (_event, details) => {
@@ -1164,7 +1251,7 @@ app.whenReady().then(async () => {
   if (serveOptions) {
     registerHeadlessPtyRuntime(
       runtime,
-      () => codexRuntimeHome!.prepareForCodexLaunch(),
+      prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
       () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
       store

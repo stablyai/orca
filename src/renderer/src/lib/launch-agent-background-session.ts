@@ -63,7 +63,6 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const useOrcaAgentStatusHooks = store.settings?.agentStatusHooksEnabled !== false
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -76,9 +75,7 @@ export async function launchAgentBackgroundSession(
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
   } else {
@@ -87,9 +84,7 @@ export async function launchAgentBackgroundSession(
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: !hasPrompt,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: !hasPrompt
     })
   }
   if (!startupPlan) {
@@ -189,6 +184,15 @@ export async function launchAgentBackgroundSession(
   }
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
+  if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    // Why: Command Code does not expose a prompt-start hook; seed working for
+    // hidden prompt launches so sidebar/activity surfaces do not stay idle.
+    store.setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: trimmedPrompt,
+      agentType: agent
+    })
+  }
   let exitHandled = false
   let unsubscribeExit = (): void => {}
   let unsubscribeData = (): void => {}

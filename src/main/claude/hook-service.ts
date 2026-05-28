@@ -1,7 +1,5 @@
-import { existsSync, unlinkSync } from 'fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV } from '../../shared/claude-settings'
 import {
   buildWindowsAgentHookPostCommand,
   readHooksJson,
@@ -16,13 +14,11 @@ import {
 import {
   applyManagedHooks,
   CLAUDE_EVENTS,
-  getLegacyConfigPath,
+  getConfigPath,
   getManagedCommand,
   getManagedScriptPath,
-  getRemoteLegacyConfigPath,
+  getRemoteConfigPath,
   getRemoteManagedCommand,
-  getRemoteScopedSettingsPath,
-  getScopedSettingsPath,
   removeManagedHooks
 } from './hook-settings'
 
@@ -92,7 +88,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
 export class ClaudeHookService {
   getStatus(): AgentHookInstallStatus {
-    const configPath = getScopedSettingsPath()
+    const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
@@ -101,7 +97,7 @@ export class ClaudeHookService {
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Orca Claude settings file'
+        detail: 'Could not parse Claude settings.json'
       }
     }
 
@@ -142,41 +138,18 @@ export class ClaudeHookService {
   }
 
   install(): AgentHookInstallStatus {
-    const scopedStatus = this.installScopedSettings()
-    if (scopedStatus.state === 'error') {
-      return scopedStatus
-    }
-    const legacyStatus = this.removeLegacyGlobalHooks()
-    if (legacyStatus.state === 'error') {
-      return {
-        ...legacyStatus,
-        managedHooksPresent: scopedStatus.managedHooksPresent,
-        detail: scopedStatus.managedHooksPresent
-          ? `Scoped Claude hooks installed, but ${legacyStatus.detail}`
-          : legacyStatus.detail
-      }
-    }
-    return scopedStatus
-  }
-
-  buildPtyEnv(): Record<string, string> {
-    try {
-      const status = this.installScopedSettings()
-      if (status.state === 'error') {
-        console.warn(`[agent-hooks] Failed to prepare Claude scoped settings: ${status.detail}`)
-      }
-    } catch (error) {
-      console.warn('[agent-hooks] Failed to prepare Claude scoped settings:', error)
-    }
-    return {
-      [ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV]: getScopedSettingsPath()
-    }
-  }
-
-  private installScopedSettings(): AgentHookInstallStatus {
-    const configPath = getScopedSettingsPath()
+    const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath) ?? {}
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: 'claude',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not parse Claude settings.json'
+      }
+    }
 
     const command = getManagedCommand(scriptPath)
     const nextConfig = applyManagedHooks(config, command)
@@ -185,37 +158,15 @@ export class ClaudeHookService {
     return this.getStatus()
   }
 
-  private removeLegacyGlobalHooks(): AgentHookInstallStatus {
-    const configPath = getLegacyConfigPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'claude',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json to remove legacy global hooks'
-      }
-    }
-    const { config: nextConfig, changed } = removeManagedHooks(config)
-    if (changed) {
-      writeHooksJson(configPath, nextConfig)
-    }
-    return this.getStatus()
-  }
-
-  // Why: install Orca's scoped Claude hook settings on the remote box rather
-  // than the local Mac/Linux machine. Caller passes the user's SFTP handle
-  // from the SshConnection plus the resolved remote `$HOME` used to compute
-  // the Orca-owned settings path. POSIX-only by design — see
-  // docs/design/agent-status-over-ssh.md §3 / §6 (Windows-remote deferred).
+  // Why: install Orca's Claude hook settings on the remote box rather than the
+  // local machine. Caller passes the user's SFTP handle plus the resolved
+  // remote `$HOME`; POSIX-only by design (Windows-remote deferred).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     // Why: remote-Windows is out of scope for v1 — we ship POSIX-shaped paths
     // and a `.sh` managed script body. The remote platform is gated by the
     // relay's capability RPC at a higher layer; we cannot detect it from
     // `process.platform` here (that's the local box).
-    const remoteConfigPath = getRemoteScopedSettingsPath(remoteHome)
-    const remoteLegacyConfigPath = getRemoteLegacyConfigPath(remoteHome)
+    const remoteConfigPath = getRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/claude-hook.sh`
     // Why: SFTP reads/writes fail far more often than local fs (network drops,
     // EACCES on remote dirs, disk full, channel closed). Wrap the entire
@@ -225,7 +176,16 @@ export class ClaudeHookService {
     // specifically means "file present but unparseable" — keep that branch
     // distinct so the user sees an actionable message.
     try {
-      const config = (await readHooksJsonRemote(sftp, remoteConfigPath)) ?? {}
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'claude',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Claude settings.json'
+        }
+      }
 
       // Why: the POSIX wrapper is identical regardless of where the script
       // lands; only the path differs. Reuse the same wrapper helper.
@@ -242,25 +202,6 @@ export class ClaudeHookService {
       // running on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
-
-      const legacyConfig = await readHooksJsonRemote(sftp, remoteLegacyConfigPath)
-      if (!legacyConfig) {
-        return {
-          agent: 'claude',
-          state: 'error',
-          configPath: remoteLegacyConfigPath,
-          managedHooksPresent: true,
-          detail:
-            'Scoped Claude hooks installed, but could not parse remote Claude settings.json to remove legacy global hooks'
-        }
-      }
-      const { config: nextLegacyConfig, changed } = removeManagedHooks(
-        legacyConfig,
-        'claude-hook.sh'
-      )
-      if (changed) {
-        await writeHooksJsonRemote(sftp, remoteLegacyConfigPath, nextLegacyConfig)
-      }
 
       return {
         agent: 'claude',
@@ -281,13 +222,20 @@ export class ClaudeHookService {
   }
 
   remove(): AgentHookInstallStatus {
-    const scopedSettingsPath = getScopedSettingsPath()
-    if (existsSync(scopedSettingsPath)) {
-      unlinkSync(scopedSettingsPath)
+    const configPath = getConfigPath()
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: 'claude',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not parse Claude settings.json'
+      }
     }
-    const legacyStatus = this.removeLegacyGlobalHooks()
-    if (legacyStatus.state === 'error') {
-      return legacyStatus
+    const { config: nextConfig, changed } = removeManagedHooks(config)
+    if (changed) {
+      writeHooksJson(configPath, nextConfig)
     }
     return this.getStatus()
   }

@@ -10,6 +10,7 @@ import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
@@ -37,6 +38,23 @@ export type LaunchAgentInNewTabResult = {
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
 } | null
+
+function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
+  const state = useAppStore.getState()
+  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+  if (!leafId) {
+    return
+  }
+  try {
+    state.setAgentStatus(makePaneKey(tabId, leafId), {
+      state: 'working',
+      prompt,
+      agentType: 'command-code'
+    })
+  } catch {
+    // Best-effort UI seed. Real hooks still own refinement/completion.
+  }
+}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -72,7 +90,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const useOrcaAgentStatusHooks = store.settings?.agentStatusHooksEnabled !== false
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -96,9 +113,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
     submitPastedPrompt = true
@@ -108,9 +123,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      platform: CLIENT_PLATFORM
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -126,9 +139,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: CLIENT_PLATFORM,
-        allowEmptyPromptLaunch: true,
-        useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-        useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+        allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
     }
@@ -138,9 +149,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
   } else {
@@ -149,9 +158,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: !hasPrompt,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks,
-      useOrcaCodexAgentStatusProfile: useOrcaAgentStatusHooks
+      allowEmptyPromptLaunch: !hasPrompt
     })
   }
 
@@ -173,6 +180,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
+      ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
@@ -224,6 +234,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       }
     }).then((delivered) => {
       if (delivered) {
+        if (agent === 'command-code' && submitPastedPrompt) {
+          // Why: Command Code has no prompt-submit hook; when Orca submits a
+          // generated prompt after readiness, seed working at delivery time.
+          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
+        }
         onPromptDelivered?.()
       }
     })

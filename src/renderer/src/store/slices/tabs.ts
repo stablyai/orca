@@ -46,6 +46,7 @@ export type TabsSlice = {
         'id' | 'entityId' | 'label' | 'customLabel' | 'color' | 'isPreview' | 'isPinned'
       > & {
         targetGroupId: string
+        activate: boolean
       }
     >
   ) => Tab
@@ -436,14 +437,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
-      // Why: creating a tab implicitly activates it, so extend the group's MRU
-      // stack with the new id. Keeping MRU updates colocated with activation
-      // writes preserves the invariant that `activeTabId` equals the tail of
-      // `recentTabIds` for any tab we've actually seen.
-      const nextRecent = pushRecentTabId(
-        sanitizeRecentTabIds(group.recentTabIds, nextOrder),
-        created.id
-      )
+      const shouldActivate = init?.activate ?? true
+      const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+      const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
+      // Why: automation-created browser tabs need to exist and paint without
+      // stealing the visible group selection from the user's current tab.
+      const nextRecent = shouldActivate
+        ? pushRecentTabId(sanitizedRecent, created.id)
+        : sanitizedRecent
       return {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
@@ -453,7 +454,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...groupsByWorktree,
           [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
             ...group,
-            activeTabId: created.id,
+            activeTabId: nextActiveTabId,
             tabOrder: nextOrder,
             recentTabIds: nextRecent
           })

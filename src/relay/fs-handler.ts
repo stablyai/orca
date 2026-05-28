@@ -50,6 +50,16 @@ async function isDirectoryEntry(
   }
 }
 
+function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
+  let type: 'file' | 'directory' | 'symlink' = 'file'
+  if (stats.isDirectory()) {
+    type = 'directory'
+  } else if (stats.isSymbolicLink()) {
+    type = 'symlink'
+  }
+  return { size: stats.size, type, mtime: stats.mtimeMs }
+}
+
 export class FsHandler {
   private dispatcher: RelayDispatcher
   private watches = new Map<string, WatchState>()
@@ -68,6 +78,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
+    this.dispatcher.onRequest('fs.lstat', (p) => this.lstat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
     this.dispatcher.onRequest('fs.createFile', (p) => this.createFile(p))
     this.dispatcher.onRequest('fs.createDir', (p) => this.createDir(p))
@@ -156,11 +167,12 @@ export class FsHandler {
         return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
       }
     }
-    let type: 'file' | 'directory' | 'symlink' = 'file'
-    if (stats.isDirectory()) {
-      type = 'directory'
-    }
-    return { size: stats.size, type, mtime: stats.mtimeMs }
+    return fileStatFromLstat(stats)
+  }
+
+  private async lstat(params: Record<string, unknown>) {
+    const filePath = expandTilde(params.filePath as string)
+    return fileStatFromLstat(await lstat(filePath))
   }
 
   private async deletePath(params: Record<string, unknown>) {

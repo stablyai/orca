@@ -71,22 +71,42 @@ export function GitPane({
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: 'Refresh Local Base Ref',
-      description: 'Optionally fast-forward local main or master when creating worktrees.',
-      keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
+      description:
+        'Safely fast-forward local main or master so AI tools and diffs use a fresh base.',
+      keywords: [
+        'main',
+        'master',
+        'origin/main',
+        'git diff',
+        'base ref',
+        'fresh base',
+        'safely',
+        'worktree'
+      ]
     }) ? (
       <SearchableSetting
         key="refresh-base-ref"
         title="Refresh Local Base Ref"
-        description="Optionally fast-forward local main or master when creating worktrees."
-        keywords={['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']}
+        description="Safely fast-forward local main or master so AI tools and diffs use a fresh base."
+        keywords={[
+          'main',
+          'master',
+          'origin/main',
+          'git diff',
+          'base ref',
+          'fresh base',
+          'safely',
+          'worktree'
+        ]}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Refresh Local Base Ref</Label>
           <p className="text-xs text-muted-foreground">
-            When enabled, Orca updates your local <code>main</code> or <code>master</code> before
-            creating a worktree. This helps AI tools and diffs compare your branch against the
-            latest base branch. Orca only does this when it is safe.
+            Turn this on if you or AI tools use commands like <code>git diff main...HEAD</code>.
+            Orca first refreshes the remote base, then safely fast-forwards the matching local{' '}
+            <code>main</code> or <code>master</code> so those commands do not compare against stale
+            history. Orca skips the update if the local branch is dirty or diverged.
           </p>
         </div>
         <button
@@ -106,6 +126,47 @@ export function GitPane({
           <span
             className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
               settings.refreshLocalBaseRefOnWorktreeCreate ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'Auto-Rename Branch From Work',
+      description: 'Rename the auto-generated branch based on the work once an agent starts.',
+      keywords: ['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']
+    }) ? (
+      <SearchableSetting
+        key="auto-rename-branch-from-work"
+        title="Auto-Rename Branch From Work"
+        description="Rename the auto-generated branch based on the work once an agent starts."
+        keywords={['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Auto-Rename Branch From Work</Label>
+          <p className="text-xs text-muted-foreground">
+            When an agent starts working in a new workspace, Orca renames its auto-generated branch
+            (e.g. <code>Nautilus</code>) to a short name summarizing the task. Only branches Orca
+            named itself are renamed, and never after they have been pushed. Uses the agent
+            configured for AI commit messages.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.autoRenameBranchFromWork}
+          onClick={() =>
+            updateSettings({
+              autoRenameBranchFromWork: !settings.autoRenameBranchFromWork
+            })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
             }`}
           />
         </button>

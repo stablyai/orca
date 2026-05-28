@@ -182,7 +182,7 @@ describe('repo slice runtime routing', () => {
       activeRepoId: remoteRepo.id
     })
 
-    await store.getState().removeRepo(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id)
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
@@ -212,7 +212,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeRepo(localRepo.id)
+    await store.getState().removeProject(localRepo.id)
 
     expect(Object.keys(store.getState().workItemsCache)).toEqual([
       workItemsCacheKey('other-repo', 20, '')
@@ -244,7 +244,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeRepo(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id)
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -290,7 +290,7 @@ describe('repo slice runtime routing', () => {
       activeWorktreeId: hiddenWorktree.id
     })
 
-    await store.getState().removeRepo(localRepo.id)
+    await store.getState().removeProject(localRepo.id)
 
     expect(store.getState().detectedWorktreesByRepo[localRepo.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[hiddenWorktree.id]).toBeUndefined()

@@ -28,9 +28,14 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
-  /** Daemon session ID for reattach. When provided, the daemon reconnects
-   *  to an existing session instead of creating a new one. */
+  /** Daemon session ID. A caller-provided ID is treated as an attach request;
+   *  daemon hosts also pass minted IDs for fresh sessions that need stable
+   *  per-PTY state before provider.spawn returns. */
   sessionId?: string
+  /** True when the caller minted this daemon session for a fresh terminal.
+   *  Existing-session attach paths must stay false so recovery checks do not
+   *  replace the daemon out from under a still-live PTY. */
+  isNewSession?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on
@@ -129,6 +134,7 @@ export type IFilesystemProvider = {
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
+  lstat?(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>
   createFile(filePath: string): Promise<void>
   createDir(dirPath: string): Promise<void>
@@ -166,6 +172,7 @@ export type IGitProvider = {
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
+  abortMerge(worktreePath: string): Promise<void>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
@@ -199,10 +206,12 @@ export type IGitProvider = {
     force?: boolean,
     options?: { deleteBranch?: boolean }
   ): Promise<void>
+  renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }>
 }
 
 // ─── Provider Registry ──────────────────────────────────────────────

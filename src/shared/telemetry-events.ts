@@ -43,6 +43,7 @@ export const AGENT_KIND_VALUES = [
   'autohand',
   'opencode',
   'pi',
+  'omp',
   'gemini',
   'antigravity',
   'aider',
@@ -54,6 +55,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'command-code',
   'continue',
   'cursor',
   'droid',
@@ -579,10 +581,9 @@ void _onboardingChecklistItemSyncCheck
 const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()
 
 // `'button' | 'keyboard'` records whether the user advanced via a footer
-// button click or via Cmd/Ctrl+Enter. Skip and dismiss don't have a keyboard
-// path today (the field will only ever be `'button'` for those events) but
-// the uniform shape lets a future keyboard skip arrive without a schema
-// migration.
+// button click, Cmd/Ctrl+Enter, or an equivalent keyboard exit like Escape.
+// The uniform shape lets keyboard skip/dismiss paths arrive without a
+// schema migration.
 const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 
 const onboardingStartedSchema = z

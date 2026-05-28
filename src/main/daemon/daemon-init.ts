@@ -28,6 +28,7 @@ import {
   type ListSessionsResult
 } from './types'
 import {
+  getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
@@ -103,22 +104,28 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     const entryPath = getDaemonEntryPath()
     const healthy = await healthCheckDaemon(socketPath, tokenPath)
     if (healthy) {
-      // Why: dev worktrees share the same orca-dev userData, so a daemon from
-      // a deleted sibling checkout can pass protocol health checks while still
-      // pointing at missing native modules. Packaged app paths are stable and
-      // should preserve existing warm daemon reuse semantics.
-      const identity = app.isPackaged
-        ? 'match'
-        : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
-      if (identity === 'mismatch') {
-        console.warn('[daemon] Replacing daemon launched from a different app path')
+      const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+      if (resolverHealth === 'unhealthy') {
+        console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
-        // Why: daemon is already running from a previous app session and
-        // responded to a protocol-level ping. Safe to reuse.
-        return {
-          shutdown: async () => {
-            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        // Why: dev worktrees share the same orca-dev userData, so a daemon from
+        // a deleted sibling checkout can pass protocol health checks while still
+        // pointing at missing native modules. Packaged app paths are stable and
+        // should preserve existing warm daemon reuse semantics.
+        const identity = app.isPackaged
+          ? 'match'
+          : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+        if (identity === 'mismatch') {
+          console.warn('[daemon] Replacing daemon launched from a different app path')
+          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        } else {
+          // Why: daemon is already running from a previous app session and
+          // responded to a protocol-level ping. Safe to reuse.
+          return {
+            shutdown: async () => {
+              await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+            }
           }
         }
       }
@@ -150,8 +157,22 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
-      const fail = (error: Error): void => {
-        clearTimeout(timer)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let settled = false
+      function cleanupStartupListeners(): void {
+        if (timer) {
+          clearTimeout(timer)
+        }
+        child.off('message', onReadyMessage)
+        child.off('error', onStartupError)
+        child.off('exit', onStartupExit)
+      }
+      function fail(error: Error): void {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupStartupListeners()
         if (child.pid) {
           try {
             process.kill(child.pid, 'SIGTERM')
@@ -161,13 +182,15 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         reject(error)
       }
-      const timer = setTimeout(() => {
-        fail(new Error('Daemon startup timed out'))
-      }, 10000)
-
-      child.on('message', (msg: unknown) => {
+      function onReadyMessage(msg: unknown): void {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
-          clearTimeout(timer)
+          if (settled) {
+            return
+          }
+          settled = true
+          // Why: the daemon process is detached after readiness; leaving
+          // startup listeners attached retains this launch promise closure.
+          cleanupStartupListeners()
           if (child.pid) {
             // Why: JSON pid file carries pid + process start time so later
             // killStaleDaemon() can verify the pid still belongs to the daemon
@@ -189,15 +212,23 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           child.unref()
           resolve()
         }
-      })
+      }
 
-      child.on('error', (err) => {
+      function onStartupError(err: Error): void {
         fail(err)
-      })
+      }
 
-      child.on('exit', (code) => {
+      function onStartupExit(code: number | null): void {
         fail(new Error(`Daemon exited during startup with code ${code}`))
-      })
+      }
+
+      timer = setTimeout(() => {
+        fail(new Error('Daemon startup timed out'))
+      }, 10000)
+
+      child.on('message', onReadyMessage)
+      child.on('error', onStartupError)
+      child.on('exit', onStartupExit)
     })
 
     return {

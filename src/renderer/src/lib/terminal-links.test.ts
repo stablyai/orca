@@ -14,6 +14,14 @@ describe('terminal path helpers', () => {
   })
 
   describe('extractTerminalFileLinks bare-filename tokens', () => {
+    it('does not treat regular URL hosts as local file paths', () => {
+      expect(
+        extractTerminalFileLinks(
+          'PR opened: https://github.com/stablyai/orca-marketing-website/pull/82'
+        )
+      ).toEqual([])
+    })
+
     it('emits tentative link candidates for each token in ls-style output', () => {
       const line = 'CLAUDE.md    package.json    pnpm-lock.yaml    README.md'
       const links = extractTerminalFileLinks(line)

@@ -35,6 +35,7 @@ function createOpenInApplicationId(): string {
 function runtimeScopedStateReset(): Partial<AppState> {
   return {
     repos: [],
+    projectGroups: [],
     activeRepoId: null,
     sparsePresetsByRepo: {},
     sparsePresetsLoadingByRepo: {},
@@ -309,6 +310,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       // terminal, browser, and issue IDs cannot be used against the new server
       // while the new environment is loading.
       await get().fetchRepos()
+      await get().fetchProjectGroups()
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()

@@ -1,7 +1,8 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
+import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
@@ -19,6 +20,8 @@ export type TerminalKeyboardAvoidanceMetrics = {
   rows: number
   altScreen: boolean
 }
+
+export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
@@ -48,18 +51,52 @@ export type TerminalWebViewHandle = {
 
 type Props = {
   style?: StyleProp<ViewStyle>
+  terminalTheme?: MobileTerminalTheme
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
 type TerminalMessage =
   | { type: 'write'; id?: number; data: string }
-  | { type: 'init'; id?: number; cols: number; rows: number; initialData?: string }
+  | {
+      type: 'init'
+      id?: number
+      cols: number
+      rows: number
+      initialData?: string
+      terminalTheme?: MobileTerminalTheme
+    }
   | { type: 'resize'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
   | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
+  | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
+
+const DEFAULT_TERMINAL_THEME: MobileTerminalTheme['theme'] = {
+  background: colors.terminalBg,
+  foreground: '#c0caf5',
+  cursor: '#c0caf5',
+  cursorAccent: colors.terminalBg,
+  selectionBackground: '#33467c',
+  selectionForeground: '#c0caf5',
+  black: '#15161e',
+  red: '#f7768e',
+  green: '#9ece6a',
+  yellow: '#e0af68',
+  blue: '#7aa2f7',
+  magenta: '#bb9af7',
+  cyan: '#7dcfff',
+  white: '#a9b1d6',
+  brightBlack: '#414868',
+  brightRed: '#f7768e',
+  brightGreen: '#9ece6a',
+  brightYellow: '#e0af68',
+  brightBlue: '#7aa2f7',
+  brightMagenta: '#bb9af7',
+  brightCyan: '#7dcfff',
+  brightWhite: '#c0caf5'
+}
 
 // Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
 // positioning designed for the desktop's terminal dimensions (~150+ cols).
@@ -95,6 +132,46 @@ const XTERM_HTML = `<!DOCTYPE html>
     display: inline-block;
   }
   .xterm { -webkit-user-select: none; user-select: none; }
+  .xterm .xterm-viewport {
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+  }
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+  .xterm .xterm-scrollable-element > .xterm-scrollbar,
+  .xterm .xterm-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  #scroll-indicator {
+    position: fixed;
+    top: 4px;
+    right: 3px;
+    bottom: 4px;
+    width: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms linear;
+    z-index: 7;
+  }
+  #scroll-indicator.visible { opacity: 0.72; }
+  #scroll-thumb {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    min-height: 24px;
+    border-radius: 999px;
+    background: ${colors.textSecondary};
+    will-change: transform, height;
+  }
   /* Why: selection overlay sits in unscaled viewport coords, above the
      transformed surface, so handle hit areas and Copy menu positions
      don't depend on getTotalScale() for their on-screen size. */
@@ -171,6 +248,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 <div id="terminal-container">
   <div id="terminal-surface"></div>
 </div>
+<div id="scroll-indicator"><div id="scroll-thumb"></div></div>
 <div id="selection-overlay">
   <div id="sel-handle-start" class="sel-handle start"></div>
   <div id="sel-handle-end" class="sel-handle end"></div>
@@ -187,6 +265,9 @@ const XTERM_HTML = `<!DOCTYPE html>
   var C1_CSI = String.fromCharCode(155);
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null;
+  var scrollIndicator = document.getElementById('scroll-indicator');
+  var scrollThumb = document.getElementById('scroll-thumb');
+  var scrollIndicatorHideTimer = null;
   var writeQueue = [];
   var writesDraining = false;
   var afterDrainCallbacks = [];
@@ -195,8 +276,13 @@ const XTERM_HTML = `<!DOCTYPE html>
   var userScale = 1;
   var panX = 0;
   var panY = 0;
+  var smoothScrollOffsetY = 0;
+  var pendingNormalScrollDeltaY = 0;
+  var normalScrollFrameId = null;
   var initRows = 24;
   var terminalGeneration = 0;
+  var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalTheme = defaultTheme;
   var activeAltScreenSnapshot = false;
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
@@ -253,7 +339,55 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function updateTransform() {
     surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';
+    updateScrollIndicator(false);
     if (selMode === 'select') repositionOverlay();
+  }
+
+  function updateScrollIndicator(reveal) {
+    if (!scrollIndicator || !scrollThumb || !term || !term.buffer || !term.buffer.active) return;
+    var buffer = term.buffer.active;
+    var maxViewportY = buffer.baseY || 0;
+    if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput()) {
+      scrollIndicator.classList.remove('visible');
+      return;
+    }
+    var trackHeight = Math.max(0, window.innerHeight - 8);
+    var totalRows = maxViewportY + (term.rows || 0);
+    if (trackHeight <= 0 || totalRows <= 0) return;
+    var thumbHeight = Math.max(24, trackHeight * (term.rows || 0) / totalRows);
+    var maxTop = Math.max(0, trackHeight - thumbHeight);
+    var top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0;
+    scrollThumb.style.height = thumbHeight + 'px';
+    scrollThumb.style.transform = 'translateY(' + top + 'px)';
+    if (!reveal) return;
+    scrollIndicator.classList.add('visible');
+    if (scrollIndicatorHideTimer) clearTimeout(scrollIndicatorHideTimer);
+    scrollIndicatorHideTimer = setTimeout(function() {
+      scrollIndicator.classList.remove('visible');
+      scrollIndicatorHideTimer = null;
+    }, 550);
+  }
+
+  function normalizeTerminalTheme(input) {
+    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
+      ? input.theme
+      : null;
+    if (!source) return defaultTheme;
+    var next = {};
+    var keys = Object.keys(defaultTheme);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (typeof source[key] === 'string') next[key] = source[key];
+    }
+    return Object.assign({}, defaultTheme, next);
+  }
+
+  function applyTerminalTheme(input) {
+    terminalTheme = normalizeTerminalTheme(input);
+    var background = terminalTheme.background || '${colors.terminalBg}';
+    document.documentElement.style.background = background;
+    document.body.style.background = background;
+    if (term) term.options.theme = terminalTheme;
   }
 
   function getCellHeight() {
@@ -376,6 +510,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     userScale = 1;
     panX = 0;
     panY = 0;
+    smoothScrollOffsetY = 0;
     updateTransform();
     adjustRowsForViewport();
 
@@ -494,7 +629,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     pumpWrites(terminalGeneration);
   }
 
-  function init(cols, rows, initialData) {
+  function init(cols, rows, initialData, nextTheme) {
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
@@ -503,6 +638,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
+    smoothScrollOffsetY = 0;
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';
     sgrMouseMode = false;
@@ -535,32 +671,11 @@ const XTERM_HTML = `<!DOCTYPE html>
       oldSurface.removeAttribute('id');
     }
 
+    applyTerminalTheme(nextTheme);
     term = new Terminal({
       cols: cols || 80,
       rows: rows || 24,
-      theme: {
-        background: '${colors.terminalBg}',
-        foreground: '#c0caf5',
-        cursor: '#c0caf5',
-        cursorAccent: '${colors.terminalBg}',
-        selectionBackground: '#33467c',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#a9b1d6',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5'
-      },
+      theme: terminalTheme,
       fontFamily: '"Menlo", "Consolas", "DejaVu Sans Mono", monospace',
       fontSize: 13,
       scrollback: 5000,
@@ -693,7 +808,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme);
     } else if (msg.type === 'resize') {
       resize(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
@@ -718,6 +833,8 @@ const XTERM_HTML = `<!DOCTYPE html>
       measureFitDimensions(msg.containerHeight);
     } else if (msg.type === 'reset-zoom') {
       applyFitScale('reset-zoom-msg');
+    } else if (msg.type === 'set-theme') {
+      applyTerminalTheme(msg.terminalTheme);
     } else if (msg.type === 'cancel-select') {
       if (selMode === 'select') cancelSelect();
     } else if (msg.type === 'do-select-all') {
@@ -849,6 +966,7 @@ const XTERM_HTML = `<!DOCTYPE html>
   function attachTermObservers() {
     if (!term) return;
     try { term.onLineFeed(logFeedAndEvict); } catch (e) {}
+    try { term.onScroll(function() { updateScrollIndicator(false); }); } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
     try {
@@ -975,6 +1093,10 @@ const XTERM_HTML = `<!DOCTYPE html>
     return mode !== 'none' && mode !== 'x10';
   }
 
+  function shouldRouteScrollToTerminalInput() {
+    return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();
+  }
+
   function buildMouseWheelScrollInput(lines, clientX, clientY) {
     var count = Math.min(Math.abs(lines), 32);
     if (count === 0) return '';
@@ -1022,6 +1144,83 @@ const XTERM_HTML = `<!DOCTYPE html>
       return;
     }
     term.scrollLines(lines);
+  }
+
+  function clampNormalScrollLines(lines) {
+    if (!term || !term.buffer || !term.buffer.active || lines === 0) return 0;
+    var buffer = term.buffer.active;
+    if (lines > 0) {
+      return Math.min(lines, Math.max(0, buffer.baseY - buffer.viewportY));
+    }
+    return Math.max(lines, -buffer.viewportY);
+  }
+
+  function canScrollNormalBufferDelta(deltaY) {
+    if (!term || !term.buffer || !term.buffer.active || deltaY === 0) return false;
+    var buffer = term.buffer.active;
+    if (deltaY > 0) return buffer.viewportY < buffer.baseY;
+    return buffer.viewportY > 0;
+  }
+
+  function applyNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    var effectiveCellH = getCellHeight() * getTotalScale();
+    if (effectiveCellH <= 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    smoothScrollOffsetY -= deltaY;
+    var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);
+    if (lines !== 0) {
+      var applied = clampNormalScrollLines(lines);
+      if (applied !== 0) {
+        term.scrollLines(applied);
+        // Why: xterm's renderer is row-based. Buffer touch pixels and only
+        // commit whole rows so TUI canvas layers do not shimmer between
+        // fractional transforms and xterm repaints.
+        smoothScrollOffsetY += applied * effectiveCellH;
+      }
+      if (applied !== lines) smoothScrollOffsetY = 0;
+    }
+    var limit = effectiveCellH - 1;
+    if (smoothScrollOffsetY > limit) smoothScrollOffsetY = limit;
+    if (smoothScrollOffsetY < -limit) smoothScrollOffsetY = -limit;
+    updateScrollIndicator(true);
+    return true;
+  }
+
+  function enqueueNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    pendingNormalScrollDeltaY += deltaY;
+    if (normalScrollFrameId !== null) return true;
+    // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
+    // deltas into one xterm row-scroll per frame instead of repainting from
+    // the input event stream.
+    normalScrollFrameId = requestAnimationFrame(function() {
+      normalScrollFrameId = null;
+      var delta = pendingNormalScrollDeltaY;
+      pendingNormalScrollDeltaY = 0;
+      if (!applyNormalBufferScrollDelta(delta)) {
+        resetSmoothScrollOffset();
+      }
+    });
+    return true;
+  }
+
+  function resetSmoothScrollOffset() {
+    pendingNormalScrollDeltaY = 0;
+    if (normalScrollFrameId !== null) {
+      cancelAnimationFrame(normalScrollFrameId);
+      normalScrollFrameId = null;
+    }
+    if (smoothScrollOffsetY === 0) return;
+    smoothScrollOffsetY = 0;
+    updateScrollIndicator(false);
   }
 
   function cellToViewportPx(col, absRow) {
@@ -1392,6 +1591,15 @@ const XTERM_HTML = `<!DOCTYPE html>
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
 
+  function updateTouchVelocity(deltaY, dt) {
+    if (dt <= 0) return;
+    var instantVelocity = deltaY / dt;
+    if (!isFinite(instantVelocity)) return;
+    // Why: touchmove cadence is uneven in WebView. Blend recent samples so
+    // momentum launch doesn't inherit a one-frame spike or stall.
+    ts.velY = ts.velY === 0 ? instantVelocity : ts.velY * 0.55 + instantVelocity * 0.45;
+  }
+
   function getDistance(a, b) {
     var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
     return Math.sqrt(dx * dx + dy * dy);
@@ -1413,6 +1621,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       }
       if (e.touches.length === 2) {
         ts.isPinching = true;
+        smoothScrollOffsetY = 0;
         ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
         ts.pinchScale = userScale;
         var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -1458,20 +1667,30 @@ const XTERM_HTML = `<!DOCTYPE html>
         var dt = now - ts.lastTime;
 
         if (userScale > 1.05) {
+          smoothScrollOffsetY = 0;
           panX += x - ts.lastX;
           panY += y - ts.lastY;
           clampPan();
           updateTransform();
         } else {
           var deltaY = ts.lastY - y;
-          if (dt > 0) ts.velY = deltaY / dt;
           ts.lastTime = now;
-          var effectiveCellH = getCellHeight() * currentScale;
-          ts.accumDelta += deltaY;
-          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-          if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH;
-            routeScrollLines(lines, x, y);
+          if (shouldRouteScrollToTerminalInput()) {
+            updateTouchVelocity(deltaY, dt);
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += deltaY;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, x, y);
+            }
+          } else {
+            if (enqueueNormalBufferScrollDelta(deltaY)) {
+              updateTouchVelocity(deltaY, dt);
+            } else {
+              ts.velY = 0;
+            }
           }
         }
         ts.lastX = x;
@@ -1501,17 +1720,26 @@ const XTERM_HTML = `<!DOCTYPE html>
 
       if (e.touches.length === 0 && userScale <= 1.05) {
         var vel = ts.velY;
-        var FRICTION = 0.95;
-        var MIN_VEL = 0.02;
+        var FRICTION = 0.972;
+        var MIN_VEL = 0.012;
         function momentumStep() {
           vel *= FRICTION;
           if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-          var effectiveCellH = getCellHeight() * currentScale;
-          ts.accumDelta += vel * 16;
-          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-          if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH;
-            routeScrollLines(lines, ts.lastX, ts.lastY);
+          var delta = vel * 16;
+          if (shouldRouteScrollToTerminalInput()) {
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += delta;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, ts.lastX, ts.lastY);
+            }
+          } else {
+            if (!applyNormalBufferScrollDelta(delta)) {
+              ts.momentumId = null;
+              return;
+            }
           }
           ts.momentumId = requestAnimationFrame(momentumStep);
         }
@@ -1561,6 +1789,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
     style,
+    terminalTheme,
     onWebReady,
     onSelectionMode,
     onSelectionCopy,
@@ -1576,6 +1805,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const isWebReadyRef = useRef(false)
   const pendingMessagesRef = useRef<TerminalMessage[]>([])
   const messageIdRef = useRef(0)
+  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
   >(null)
@@ -1710,6 +1940,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     isWebReadyRef.current = false
   }, [])
 
+  useEffect(() => {
+    postMessage({ type: 'set-theme', terminalTheme })
+  }, [postMessage, terminalThemeKey, terminalTheme])
+
   useImperativeHandle(
     ref,
     () => ({
@@ -1733,7 +1967,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
-        postMessage({ type: 'init', cols, rows, initialData })
+        postMessage({ type: 'init', cols, rows, initialData, terminalTheme })
       },
       resize(cols: number, rows: number) {
         postMessage({ type: 'resize', cols, rows })
@@ -1778,7 +2012,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         await Promise.race([p, new Promise<void>((resolve) => setTimeout(resolve, 3000))])
       }
     }),
-    [postMessage, sendToWebView]
+    [postMessage, sendToWebView, terminalTheme]
   )
 
   return (
@@ -1788,7 +2022,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       style={[styles.webview, style]}
       originWhitelist={['*']}
       javaScriptEnabled
-      scrollEnabled={true}
+      scrollEnabled={false}
       scalesPageToFit={false}
       onLoadStart={handleLoadStart}
       onMessage={handleMessage}

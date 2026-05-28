@@ -29,9 +29,7 @@ export function buildOnboardingFolderAgentStartup(
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
     platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true,
-    useOrcaClaudeAgentStatusSettings: settings.agentStatusHooksEnabled !== false,
-    useOrcaCodexAgentStatusProfile: settings.agentStatusHooksEnabled !== false
+    allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
     return undefined

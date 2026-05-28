@@ -171,7 +171,6 @@ export default function TabGroupPanel({
   const actionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
-
   return (
     <div
       // Why: vertical borders are always `border-border` so the focus

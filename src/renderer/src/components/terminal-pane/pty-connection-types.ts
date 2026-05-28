@@ -1,6 +1,7 @@
 import type { PtyTransport } from './pty-transport'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TuiAgent } from '../../../../shared/types'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -8,13 +9,15 @@ export type PtyConnectionDeps = {
   cwd?: string
   startup?: {
     command: string
-    /** Renderer-delivered startup input. Used when terminal paste semantics
-     *  matter, such as multiline quick commands. */
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
     delivery?: 'terminal-paste'
     env?: Record<string, string>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
+    /** Initial prompt-start status for agents that lack native prompt hooks. */
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
   } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>

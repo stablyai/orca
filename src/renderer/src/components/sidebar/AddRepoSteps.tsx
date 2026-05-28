@@ -15,17 +15,23 @@ import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void,
+  scanNestedRepos?: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>,
+  showNestedRepoReview?: (
+    scan: NestedRepoScanResult,
+    selectedPath: string,
+    connectionId: string
+  ) => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -101,12 +107,18 @@ export function useRemoteRepo(
       return
     }
 
+    const trimmedRemotePath = remotePath.trim()
     setIsAddingRemote(true)
     setRemoteError(null)
     try {
+      const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId)
+      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId)
+        return
+      }
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
-        remotePath: remotePath.trim()
+        remotePath: trimmedRemotePath
       })
       if ('error' in result) {
         throw new Error(result.error)
@@ -139,7 +151,7 @@ export function useRemoteRepo(
         // silently adding as a folder.
         closeModal()
         useAppStore.getState().openModal('confirm-non-git-folder', {
-          folderPath: remotePath.trim(),
+          folderPath: trimmedRemotePath,
           connectionId: selectedTargetId
         })
         return
@@ -151,6 +163,8 @@ export function useRemoteRepo(
   }, [
     selectedTargetId,
     remotePath,
+    scanNestedRepos,
+    showNestedRepoReview,
     fetchWorktrees,
     setStep,
     setAddedRepo,

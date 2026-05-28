@@ -13,7 +13,7 @@ import {
   Check,
   MessageSquare,
   ChevronDown,
-  Sparkle,
+  Sparkles,
   RefreshCw,
   Wrench
 } from 'lucide-react'
@@ -95,7 +95,7 @@ function ResolveConflictsWithAIButton({
       {isResolvingWithAI ? (
         <RefreshCw className="size-3.5 animate-spin" />
       ) : (
-        <Sparkle className="size-3.5" />
+        <Sparkles className="size-3.5" />
       )}
       Resolve with AI
     </Button>

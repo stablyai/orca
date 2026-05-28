@@ -287,6 +287,19 @@ describe('FsHandler', () => {
     expect(result.type).toBe('directory')
   })
 
+  it('lstat returns symlink type without following links', async () => {
+    const targetFile = path.join(tmpDir, 'target.txt')
+    const linkPath = path.join(tmpDir, 'link.txt')
+    writeFileSync(targetFile, 'target')
+    symlinkSync(targetFile, linkPath)
+
+    const result = (await dispatcher.callRequest('fs.lstat', { filePath: linkPath })) as {
+      type: string
+    }
+
+    expect(result.type).toBe('symlink')
+  })
+
   it('workspaceSpaceScan returns bounded top-level size details', async () => {
     mkdirSync(path.join(tmpDir, 'node_modules'))
     writeFileSync(path.join(tmpDir, 'node_modules', 'pkg.js'), Buffer.alloc(512))

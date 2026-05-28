@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 export type RuntimeGenerateCommitMessageResult =
@@ -33,7 +34,12 @@ export type RuntimeGeneratePullRequestFieldsResult =
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
-  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>>
+  Partial<
+    Pick<
+      GlobalSettings,
+      'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
+    >
+  >
 
 type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -55,7 +61,10 @@ function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
   connectionId?: string
 ): Partial<
-  Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>
+  Pick<
+    GlobalSettings,
+    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
+  >
 > & {
   commitMessageDiscoveryHostKey?: string
 } {
@@ -66,6 +75,9 @@ function getRuntimeCommitMessageSettings(
   return {
     ...(settings.commitMessageAi !== undefined
       ? { commitMessageAi: settings.commitMessageAi }
+      : {}),
+    ...(settings.sourceControlAi !== undefined
+      ? { sourceControlAi: settings.sourceControlAi }
       : {}),
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
@@ -164,6 +176,23 @@ export async function getRuntimeGitConflictOperation(
     'git.conflictOperation',
     { worktree: context.worktreeId },
     { timeoutMs: 15_000 }
+  )
+}
+
+export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.abortMerge({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.abortMerge',
+    { worktree: context.worktreeId },
+    { timeoutMs: 30_000 }
   )
 }
 
@@ -421,6 +450,7 @@ export async function generateRuntimeCommitMessage(
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.generateCommitMessage({
       worktreePath: context.worktreePath,
+      repoId: context.worktreeId ? getRepoIdFromWorktreeId(context.worktreeId) : undefined,
       connectionId: context.connectionId
     }) as Promise<RuntimeGenerateCommitMessageResult>
   }
@@ -488,6 +518,7 @@ export async function generateRuntimePullRequestFields(
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.generatePullRequestFields({
       worktreePath: context.worktreePath,
+      repoId: context.worktreeId ? getRepoIdFromWorktreeId(context.worktreeId) : undefined,
       connectionId: context.connectionId,
       ...input
     }) as Promise<RuntimeGeneratePullRequestFieldsResult>

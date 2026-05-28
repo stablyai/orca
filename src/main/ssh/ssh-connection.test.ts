@@ -35,6 +35,11 @@ vi.mock('ssh2', () => {
     on(event: string, handler: (...args: unknown[]) => void) {
       eventHandlers?.set(event, handler)
     }
+    off(event: string, handler: (...args: unknown[]) => void) {
+      if (eventHandlers?.get(event) === handler) {
+        eventHandlers.delete(event)
+      }
+    }
     connect(config?: unknown) {
       this.lastConnectConfig = config
       setTimeout(() => {
@@ -176,6 +181,16 @@ describe('SshConnection', () => {
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('removes startup listeners after ssh2 connect succeeds', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect()
+
+    expect(eventHandlers.has('ready')).toBe(false)
+    // The remaining error listener is the steady-state disconnect handler.
+    expect(eventHandlers.has('error')).toBe(true)
+  })
+
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
     // Why: guards the "Nagle is re-enabled because someone refactored only
     // the initial connect path" regression class. attemptConnect bumps
@@ -199,6 +214,23 @@ describe('SshConnection', () => {
 
     expect(clientInstances).toHaveLength(2)
     expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('forces a fresh SSH connection for an explicit reconnect', async () => {
+    const states: string[] = []
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => states.push(state.status))
+      })
+    )
+    await conn.connect()
+
+    await conn.reconnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(states).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected'])
+    expect(conn.getState().status).toBe('connected')
   })
 
   it('transitions through connecting → connected states', async () => {

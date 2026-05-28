@@ -37,4 +37,14 @@ describe('parseStatusOutput', () => {
       { path: 'scratch.txt', status: 'untracked', area: 'untracked' }
     ])
   })
+
+  it('parses rename records with spaces in the paths', () => {
+    const result = parseStatusOutput(
+      '2 R. N... 100644 100644 100644 aaaa bbbb R100 src/new name.ts\tsrc/old name.ts\n'
+    )
+
+    expect(result.entries).toEqual([
+      { path: 'src/new name.ts', oldPath: 'src/old name.ts', status: 'renamed', area: 'staged' }
+    ])
+  })
 })

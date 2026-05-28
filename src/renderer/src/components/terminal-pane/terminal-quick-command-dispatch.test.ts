@@ -4,10 +4,7 @@ import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatc
 function createPane() {
   return {
     terminal: {
-      focus: vi.fn(),
-      modes: { bracketedPasteMode: true },
-      options: { ignoreBracketedPasteMode: false },
-      paste: vi.fn()
+      focus: vi.fn()
     }
   }
 }
@@ -30,7 +27,6 @@ describe('sendTerminalQuickCommandToPane', () => {
 
     expect(sent).toBe(true)
     expect(sendInput).toHaveBeenCalledWith('git status\r')
-    expect(pane.terminal.paste).not.toHaveBeenCalled()
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 
@@ -51,11 +47,10 @@ describe('sendTerminalQuickCommandToPane', () => {
 
     expect(sent).toBe(false)
     expect(sendInput).toHaveBeenCalledWith('npm test')
-    expect(pane.terminal.paste).not.toHaveBeenCalled()
     expect(pane.terminal.focus).not.toHaveBeenCalled()
   })
 
-  it('pastes multiline commands before appending enter', () => {
+  it('flattens multiline commands with semicolons before sending', () => {
     const sendInput = vi.fn(() => true)
     const pane = createPane()
     const commandText = 'cd packages\nbun run build\ncd ..'
@@ -72,12 +67,11 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(pane.terminal.paste).toHaveBeenCalledWith(commandText)
-    expect(sendInput).toHaveBeenCalledWith('\r')
+    expect(sendInput).toHaveBeenCalledWith('cd packages; bun run build; cd ..\r')
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 
-  it('pastes multiline insert-only commands without submitting', () => {
+  it('flattens multiline insert-only commands without submitting', () => {
     const sendInput = vi.fn(() => true)
     const pane = createPane()
     const commandText = 'echo one\necho two'
@@ -94,8 +88,7 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(pane.terminal.paste).toHaveBeenCalledWith(commandText)
-    expect(sendInput).not.toHaveBeenCalled()
+    expect(sendInput).toHaveBeenCalledWith('echo one; echo two')
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 })

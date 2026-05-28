@@ -455,6 +455,37 @@ const api = {
     }
   },
 
+  projectGroups: {
+    list: (): Promise<unknown[]> => ipcRenderer.invoke('projectGroups:list'),
+    create: (args: {
+      name: string
+      parentPath?: string | null
+      parentGroupId?: string | null
+      createdFrom?: 'manual' | 'folder-scan' | 'migration'
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:create', args),
+    update: (args: { groupId: string; updates: Record<string, unknown> }): Promise<unknown> =>
+      ipcRenderer.invoke('projectGroups:update', args),
+    delete: (args: { groupId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('projectGroups:delete', args),
+    moveProject: (args: {
+      projectId: string
+      groupId: string | null
+      order?: number
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:moveProject', args),
+    scanNested: (args: {
+      path: string
+      connectionId?: string
+      options?: Record<string, unknown>
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:scanNested', args),
+    importNested: (args: {
+      parentPath: string
+      groupName: string
+      projectPaths: string[]
+      connectionId?: string
+      mode: 'group' | 'separate'
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:importNested', args)
+  },
+
   sparsePresets: {
     list: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('sparsePresets:list', args),
@@ -663,6 +694,12 @@ const api = {
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
 
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> =>
+      ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+
     /** Check if a PTY's shell has child processes (e.g. a running command).
      *  Returns false for an idle shell prompt. */
     hasChildProcesses: (id: string): Promise<boolean> =>
@@ -676,9 +713,13 @@ const api = {
      *  Returns `''` when the id is unknown or the platform cannot resolve one. */
     getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
 
-    onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
-        callback(data)
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { id: string; data: string; seq?: number; rawLength?: number }
+      ) => callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
     },
@@ -1151,6 +1192,10 @@ const api = {
       workspaceId?: string
       parentIssueId?: string
       projectId?: string | null
+      stateId?: string
+      priority?: number
+      assigneeId?: string | null
+      labelIds?: string[]
     }): Promise<
       | { ok: true; id: string; identifier: string; title: string; url: string }
       | { ok: false; error: string }
@@ -1327,6 +1372,8 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:droidStatus'),
+    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
     grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
     copilotStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),
@@ -1468,7 +1515,8 @@ const api = {
   computerUsePermissions: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
     openSetup: (args?: { id?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('computerUsePermissions:openSetup', args)
+      ipcRenderer.invoke('computerUsePermissions:openSetup', args),
+    reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
   shell: {
@@ -1699,8 +1747,8 @@ const api = {
       return () => ipcRenderer.removeListener('browser:navigation-update', listener)
     },
 
-    onActivateView: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
+    onActivateView: (callback: (data: { worktreeId?: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId?: string }) =>
         callback(data)
       ipcRenderer.on('browser:activateView', listener)
       return () => ipcRenderer.removeListener('browser:activateView', listener)
@@ -2113,6 +2161,8 @@ const api = {
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
+    abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:abortMerge', args),
     diff: (args: {
       worktreePath: string
       filePath: string

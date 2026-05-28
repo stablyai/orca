@@ -70,6 +70,10 @@ export class SshConnection {
     return { ...this.target }
   }
 
+  setCallbacks(callbacks: SshConnectionCallbacks): void {
+    this.callbacks = callbacks
+  }
+
   // Why: exposes whether a passphrase/password is already cached in-memory for
   // this connection. Used by ssh:needsPassphrasePrompt so callers can decide
   // whether a manual-reconnect will prompt or go through silently. Without this,
@@ -339,6 +343,23 @@ export class SshConnection {
     }
   }
 
+  async reconnect(): Promise<void> {
+    if (this.disposed || this.state.status === 'connecting') {
+      return
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still
+    // connected. Tear down the local transport and run the normal reconnect
+    // path so the relay session can reattach remote PTYs after wake.
+    this.closeTransportsForReconnect()
+    this.state.reconnectAttempt = 0
+    this.setState('reconnecting')
+    await this.runReconnectAttempt(0)
+  }
+
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
     this.useSystemSshTransport = true
     this.client = null
@@ -429,10 +450,17 @@ export class SshConnection {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
-      client.on('ready', () => {
+
+      const cleanupStartupListeners = (): void => {
+        client.off('ready', onReady)
+        client.off('error', onStartupError)
+      }
+
+      const onReady = (): void => {
         if (settled) {
           return
         }
+        cleanupStartupListeners()
         // Why: connect() completion races with explicit disconnect(). Once a
         // newer connect attempt or disconnect bumps the generation/disposed
         // state, this late ready event must not resurrect the torn-down client.
@@ -465,15 +493,20 @@ export class SshConnection {
         this.setState('connected')
         this.setupDisconnectHandler(client)
         resolve()
-      })
-      client.on('error', (err) => {
+      }
+
+      const onStartupError = (err: Error): void => {
         if (settled) {
           return
         }
+        cleanupStartupListeners()
         settled = true
         client.destroy()
         reject(err)
-      })
+      }
+
+      client.on('ready', onReady)
+      client.on('error', onStartupError)
       client.connect(config)
     })
   }
@@ -515,28 +548,55 @@ export class SshConnection {
       if (this.disposed) {
         return
       }
-      try {
-        // Why: reset reconnectAttempt before attemptConnect so setState('connected')
-        // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
-        this.state.reconnectAttempt = 0
-        await this.attemptConnect()
-      } catch (err) {
-        if (this.disposed) {
-          return
-        }
-        const error = err instanceof Error ? err : new Error(String(err))
-        if (isAuthError(error) || isPassphraseError(error)) {
-          this.setState('auth-failed', error.message)
-          return
-        }
-        if (!isTransientError(error)) {
-          this.setState('error', error.message)
-          return
-        }
-        this.state.reconnectAttempt = attempt + 1
-        this.scheduleReconnect()
-      }
+      await this.runReconnectAttempt(attempt)
     }, RECONNECT_BACKOFF_MS[attempt])
+  }
+
+  private async runReconnectAttempt(attempt: number): Promise<void> {
+    try {
+      // Why: reset reconnectAttempt before attemptConnect so setState('connected')
+      // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
+      this.state.reconnectAttempt = 0
+      await this.attemptConnect()
+    } catch (err) {
+      if (this.disposed) {
+        return
+      }
+      const error = err instanceof Error ? err : new Error(String(err))
+      if (isAuthError(error) || isPassphraseError(error)) {
+        this.setState('auth-failed', error.message)
+        return
+      }
+      if (!isTransientError(error)) {
+        this.setState('error', error.message)
+        return
+      }
+      this.state.reconnectAttempt = attempt + 1
+      this.scheduleReconnect()
+    }
+  }
+
+  private closeTransportsForReconnect(): void {
+    this.connectGeneration += 1
+    const client = this.client
+    this.client = null
+    try {
+      client?.end()
+      client?.destroy()
+    } catch {
+      /* best-effort transport teardown */
+    }
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+    this.systemOperationAbortController.abort()
+    this.systemOperationAbortController = new AbortController()
+    for (const channel of this.systemCommandChannels) {
+      channel.close()
+    }
+    this.systemCommandChannels.clear()
+    this.systemSsh?.kill()
+    this.systemSsh = null
+    this.useSystemSshTransport = false
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {

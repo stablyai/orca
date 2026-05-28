@@ -5,6 +5,7 @@ import { writeFileSync, chmodSync, unlinkSync } from 'fs'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
 import {
   PROTOCOL_VERSION,
@@ -62,12 +63,16 @@ export class DaemonServer {
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = createServer((socket) => this.handleConnection(socket))
-
-      this.server.on('error', (err) => {
+      const onListenError = (err: Error): void => {
         reject(err)
-      })
+      }
+
+      this.server.once('error', onListenError)
 
       this.server.listen(this.socketPath, () => {
+        // Why: after bind, steady-state socket errors are handled per client;
+        // the startup promise listener would otherwise retain this closure.
+        this.server?.off('error', onListenError)
         writeFileSync(this.tokenPath, this.token, { mode: 0o600 })
         try {
           chmodSync(this.socketPath, 0o600)
@@ -212,6 +217,7 @@ export class DaemonServer {
           rows: p.rows,
           cwd: p.cwd,
           env: p.env,
+          envToDelete: p.envToDelete,
           command: p.command,
           shellOverride: p.shellOverride,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
@@ -307,6 +313,9 @@ export class DaemonServer {
 
       case 'ping':
         return { pong: true }
+
+      case 'systemResolverHealth':
+        return { health: readCurrentProcessMacSystemResolverHealth() }
 
       case 'shutdown':
         if (request.payload.killSessions) {

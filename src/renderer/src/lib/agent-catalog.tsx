@@ -55,6 +55,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://pi.dev'
   },
   {
+    id: 'omp',
+    label: 'OMP',
+    cmd: 'omp',
+    faviconDomain: 'omp.sh',
+    homepageUrl: 'https://omp.sh'
+  },
+  {
     id: 'gemini',
     label: 'Gemini',
     cmd: 'gemini',
@@ -141,6 +148,17 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
   },
   {
+    id: 'command-code',
+    label: 'Command Code',
+    // Why: `npm i -g command-code` installs both `command-code` and the
+    // shorter alias `cmd`. Show the full name in the settings hint so it
+    // matches TUI_AGENT_CONFIG['command-code'].detectCmd and avoids any
+    // suggestion that Orca is looking for Windows' built-in `cmd.exe`.
+    cmd: 'command-code',
+    faviconDomain: 'commandcode.ai',
+    homepageUrl: 'https://commandcode.ai/docs/quickstart'
+  },
+  {
     id: 'continue',
     label: 'Continue',
     cmd: 'continue',
@@ -223,6 +241,31 @@ function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
       />
       <path fill="currentColor" d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+    </svg>
+  )
+}
+
+function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  const gradientId = `${React.useId().replace(/:/g, '')}-omp-gradient`
+
+  // SVG sourced from omp.sh's homepage mark. Why: omp.sh/favicon.svg includes
+  // a dark square background, while the homepage mark is transparent.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="oklch(0.7 0.24 340)" />
+          <stop offset=".5" stopColor="oklch(0.62 0.21 295)" />
+          <stop offset="1" stopColor="oklch(0.81 0.14 200)" />
+        </linearGradient>
+      </defs>
+      <path fill={`url(#${gradientId})`} d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
     </svg>
   )
 }
@@ -349,6 +392,9 @@ export function AgentIcon({
   }
   if (agent === 'pi') {
     return <PiIcon size={size} />
+  }
+  if (agent === 'omp') {
+    return <OmpIcon size={size} />
   }
   if (agent === 'aider') {
     return <AiderIcon size={size} />

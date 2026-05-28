@@ -44,7 +44,7 @@ import {
   UNATTRIBUTED_REPO_ID,
   type DaemonSession,
   type Metric,
-  type UnifiedRepoGroup,
+  type UnifiedProjectGroup,
   type UnifiedSessionRow,
   type UnifiedWorktreeRow
 } from './mergeSnapshotAndSessions'
@@ -298,7 +298,7 @@ function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWor
   return copy
 }
 
-function sortRepoGroups(groups: UnifiedRepoGroup[], sort: SortOption): UnifiedRepoGroup[] {
+function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): UnifiedProjectGroup[] {
   const copy = [...groups]
   if (sort === 'memory') {
     copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
@@ -543,7 +543,7 @@ function ResourceTree({
   onDelete,
   onKillSession
 }: {
-  repos: UnifiedRepoGroup[]
+  repos: UnifiedProjectGroup[]
   sortOption: SortOption
   collapsedRepos: Set<string>
   toggleRepo: (repoId: string) => void
@@ -558,7 +558,7 @@ function ResourceTree({
   const worktreeById = useWorktreeMap()
 
   const sortedRepos = useMemo(() => {
-    const grouped = sortRepoGroups(repos, sortOption)
+    const grouped = sortProjectGroups(repos, sortOption)
     return grouped.map((repo) => ({
       ...repo,
       worktrees: sortWorktrees(repo.worktrees, sortOption)

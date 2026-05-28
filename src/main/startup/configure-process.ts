@@ -135,6 +135,17 @@ export function configureDevUserDataPath(isDev: boolean): void {
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
+export function shouldInstallManagedHooks(isDev: boolean): boolean {
+  void isDev
+  // Why: managed hook installation now targets Orca-owned, environment-scoped
+  // homes for Codex rather than the user's default ~/.codex state, so plain
+  // dev runs need the install path enabled to keep hook-backed agent statuses
+  // accurate without an opt-in flag. The remaining agents still rely on the
+  // shared startup installer loop, so keep the policy uniformly on until
+  // they are migrated to more granular ownership seams.
+  return true
+}
+
 export function installDevParentDisconnectQuit(isDev: boolean): void {
   if (!isDev || typeof process.send !== 'function') {
     return

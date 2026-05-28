@@ -973,6 +973,30 @@ describe('AgentHookServer listener replay', () => {
     expect(rendererListener).not.toHaveBeenCalled()
   })
 
+  it('marks listener replay callbacks as replayed', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'cached task', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        isReplay: true,
+        payload: expect.objectContaining({ state: 'working', prompt: 'cached task' })
+      })
+    )
+  })
+
   it('unsubscribes status-change listeners without removing the remaining listeners', () => {
     const server = new AgentHookServer()
     const removed = vi.fn()
@@ -1228,6 +1252,242 @@ describe('AgentHookServer listener replay', () => {
           agentType: 'claude',
           toolName: 'Bash',
           toolInput: 'rm -rf /tmp/orca-subagent-repro'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('lets Claude permission clear when approved PostToolUse matches the preceding tool use id', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' },
+        tool_use_id: 'toolu-approved-by-claude'
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' }
+      })
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' },
+        tool_use_id: 'toolu-approved-by-claude'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'rm -rf /tmp/orca-2824-permission-target'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('lets Claude permission clear by tool use id when tool input is not previewable', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-a' },
+        tool_use_id: 'toolu-approved-opaque'
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-a' }
+      })
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-a' },
+        tool_use_id: 'toolu-approved-opaque'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          agentType: 'claude',
+          toolName: 'BespokeTool'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps Claude permission visible for unpreviewable tool input with another tool use id', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-a' },
+        tool_use_id: 'toolu-permission-owner-opaque'
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-a' }
+      })
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'BespokeTool',
+        tool_input: { opaque: 'request-b' },
+        tool_use_id: 'toolu-other-opaque'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'waiting',
+          agentType: 'claude',
+          toolName: 'BespokeTool'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps Claude permission visible when another tool use completes after permission', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-permission-owner'
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' }
+      })
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-other-subagent'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'waiting',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'pnpm test'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps Claude permission visible when an explicit agent type reports another tool use id', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        agent_type: 'main',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-permission-owner-type'
+      })
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        agent_type: 'main',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' }
+      })
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_type: 'main',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-other-type'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'waiting',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'pnpm test'
         })
       ])
     } finally {
@@ -1757,6 +2017,110 @@ describe('AgentHookServer listener replay', () => {
             state: 'working',
             prompt: 'form encoded',
             agentType: 'claude'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('tracks Codex agent statuses from form-encoded managed hook posts', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const postCodexHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const params = new URLSearchParams({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'production',
+          version: env.ORCA_AGENT_HOOK_VERSION ?? '',
+          payload: JSON.stringify(payload)
+        })
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: params
+        })
+        expect(response.status).toBe(204)
+      }
+
+      await postCodexHook({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'ship codex hook status'
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          state: 'working',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: undefined,
+          toolInput: undefined
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'pnpm test', workdir: '/repo' }
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: 'exec_command',
+          toolInput: 'pnpm test'
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'git push', workdir: '/repo' }
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'waiting',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          toolName: 'exec_command',
+          toolInput: 'git push'
+        })
+      ])
+
+      await postCodexHook({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'done'
+      })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          prompt: 'ship codex hook status',
+          lastAssistantMessage: 'done'
+        })
+      ])
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'ship codex hook status',
+            lastAssistantMessage: 'done'
           })
         })
       )
@@ -2928,6 +3292,30 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('pi')
     expect(result?.payload.prompt).toBe('rename this fn')
+  })
+
+  it('OMP uses Pi-compatible events but keeps OMP agent attribution', () => {
+    const started = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for omp' }),
+      'production'
+    )
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
+
+    const done = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'status for omp',
+      agentType: 'omp'
+    })
   })
 
   it('agent_start without a prompt keeps the cached prompt from the current turn', () => {

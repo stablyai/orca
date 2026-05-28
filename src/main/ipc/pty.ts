@@ -10,12 +10,12 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
-import { ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV } from '../../shared/claude-settings'
-import { claudeHookService } from '../claude/hook-service'
 import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
+import { ORCA_PI_AGENT_STATUS_EXTENSION_FILE } from '../pi/agent-status-extension-source'
+import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
@@ -54,6 +54,8 @@ import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
 } from '../agent-hooks/migration-unsupported-pty-state'
+import { parseWslPath } from '../wsl'
+import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -91,7 +93,9 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENV',
   'ORCA_AGENT_HOOK_VERSION',
   'ORCA_AGENT_HOOK_ENDPOINT',
-  ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV
+  // Why: PR 2778 briefly exported this scoped Claude settings path. Keep
+  // deleting stale inherited values so older PTYs cannot leak the reverted path.
+  'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
@@ -253,12 +257,142 @@ export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
   userDataPath: string
   selectedCodexHomePath: string | null
+  skipCodexHomeEnv?: boolean
   githubAttributionEnabled: boolean
+  /** The launch command the renderer chose for this PTY (e.g. 'pi', 'omp',
+   *  'claude'). Used to resolve the per-agent overlay source dir for Pi /
+   *  OMP - both consume `PI_CODING_AGENT_DIR` but default to different
+   *  `~/.<kind>/agent` paths. Undefined for bare-shell spawns; defaults
+   *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
+   *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
+  launchCommand?: string
   agentStatusHooksEnabled: boolean
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
-  return baseEnv.PATH ?? process.env.PATH ?? process.env.Path ?? ''
+  return baseEnv.PATH ?? baseEnv.Path ?? process.env.PATH ?? process.env.Path ?? ''
+}
+
+function isWslShellName(shellPath: string | undefined): boolean {
+  const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
+  return shellName === 'wsl.exe' || shellName === 'wsl'
+}
+
+function shouldSkipCodexHomeEnvForWindowsShell(
+  shellPath: string | undefined,
+  cwd: string | undefined
+): boolean {
+  return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
+}
+
+const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
+
+function readEnvWithProcessFallback(
+  baseEnv: Record<string, string>,
+  key: string
+): string | undefined {
+  return baseEnv[key] ?? process.env[key]
+}
+
+function resolvePiAgentSourceDir(
+  baseEnv: Record<string, string>,
+  kind: PiAgentKind
+): string | undefined {
+  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
+  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
+  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+
+  const sourceDir = readEnvWithProcessFallback(baseEnv, sourceKey)
+  if (sourceDir) {
+    return sourceDir
+  }
+
+  const publicDir = readEnvWithProcessFallback(baseEnv, 'PI_CODING_AGENT_DIR')
+  const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
+  const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
+  // Why: if PI_CODING_AGENT_DIR is just a restored Orca overlay from either
+  // kind and the matching source shadow is absent, remirroring it would leak
+  // another agent's overlay tree into this launch. Fall through to defaults.
+  if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
+    return publicDir
+  }
+
+  return readShellStartupEnvVar(
+    'PI_CODING_AGENT_DIR',
+    baseEnv.HOME ?? process.env.HOME,
+    baseEnv.SHELL ?? process.env.SHELL
+  )
+}
+
+function resolveScopedPiAgentSourceDir(
+  baseEnv: Record<string, string>,
+  kind: PiAgentKind
+): string | undefined {
+  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
+  return readEnvWithProcessFallback(baseEnv, sourceKey)
+}
+
+function getPiAgentStatusExtensionPath(agentDir: string): string {
+  return join(agentDir, 'extensions', ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
+}
+
+function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
+  if (kind === 'omp') {
+    delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
+    delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    return
+  }
+  delete baseEnv.ORCA_PI_CODING_AGENT_DIR
+  delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
+}
+
+function exposePiAgentOverlayEnv(
+  baseEnv: Record<string, string>,
+  kind: PiAgentKind,
+  overlayDir: string,
+  sourceDir: string | undefined
+): void {
+  if (kind === 'omp') {
+    baseEnv.ORCA_OMP_CODING_AGENT_DIR = overlayDir
+    baseEnv.ORCA_OMP_STATUS_EXTENSION = getPiAgentStatusExtensionPath(overlayDir)
+    if (sourceDir) {
+      // Why: preserve the original OMP root across nested Orca terminals; the
+      // public env var is intentionally restored to the current PTY overlay.
+      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
+    } else {
+      delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
+    }
+    return
+  }
+  baseEnv.ORCA_PI_CODING_AGENT_DIR = overlayDir
+  if (sourceDir) {
+    // Why: preserve the original Pi root across nested Orca terminals; the
+    // public env var is intentionally restored to the current PTY overlay.
+    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+  } else {
+    delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
+  }
+}
+
+function mergePtyEnvDeletions(
+  existingKeys: string[] | undefined,
+  additionalKeys: readonly string[]
+): string[] | undefined {
+  if (!existingKeys && additionalKeys.length === 0) {
+    return undefined
+  }
+  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+}
+
+function getInheritedAgentHookEnvKeysToDelete(
+  spawnEnv: Record<string, string> | undefined
+): string[] {
+  const env = spawnEnv ?? {}
+  // Why: daemon/local providers merge process.env after main-process cleanup.
+  // Delete reverted or unavailable hook env keys there without dropping fresh
+  // receiver coordinates that buildPtyHostEnv intentionally set.
+  return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
 // Why: when agent status is disabled, a nested Orca terminal can still pass
@@ -299,6 +433,8 @@ export function buildPtyHostEnv(
   baseEnv: Record<string, string>,
   opts: BuildPtyHostEnvOptions
 ): Record<string, string> {
+  mergePersistedWindowsPath(baseEnv)
+
   // Why: the Local path passes a baseEnv that already includes process.env
   // (LocalPtyProvider.spawn merges it before calling buildSpawnEnv). The
   // daemon path passes only args.env since process.env propagates to the
@@ -316,16 +452,17 @@ export function buildPtyHostEnv(
       baseEnv.HOME ?? process.env.HOME,
       baseEnv.SHELL ?? process.env.SHELL
     )
-  const preexistingPiAgentDir =
-    baseEnv.ORCA_PI_SOURCE_AGENT_DIR ??
-    process.env.ORCA_PI_SOURCE_AGENT_DIR ??
-    baseEnv.PI_CODING_AGENT_DIR ??
-    process.env.PI_CODING_AGENT_DIR ??
-    readShellStartupEnvVar(
-      'PI_CODING_AGENT_DIR',
-      baseEnv.HOME ?? process.env.HOME,
-      baseEnv.SHELL ?? process.env.SHELL
-    )
+  const piAgentKind = detectPiAgentKindFromCommand(opts.launchCommand)
+  const hasLaunchCommand =
+    typeof opts.launchCommand === 'string' && opts.launchCommand.trim().length > 0
+  const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
+  // Why: source shadows are agent-scoped. Trusting the other kind's source
+  // would reintroduce the exact Pi/OMP extension-state shadowing this PR fixes.
+  const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
+  const preexistingOmpAgentDir =
+    piAgentKind === 'omp'
+      ? resolvePiAgentSourceDir(baseEnv, 'omp')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
 
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
@@ -366,44 +503,71 @@ export function buildPtyHostEnv(
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
-    Object.assign(baseEnv, claudeHookService.buildPtyEnv())
   }
 
-  // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
-  // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
-  // their user state without sharing a mutable overlay across terminals.
-  // Under the daemon path, `id` is the daemon sessionId — the overlay
-  // survives daemon cold restore because the sessionId is stable across
-  // restarts by design. A future reader should NOT "simplify" id allocation
-  // back to a fresh UUID per spawn; that would discard user Pi state on
-  // every daemon reconnect.
+  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root (OMP
+  // inherits the env var name from Pi by design; its CHANGELOG documents the
+  // OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename. Build a PTY-scoped
+  // overlay from the caller's chosen root so sessions keep their user state
+  // without sharing a mutable overlay across terminals. Under the daemon path,
+  // `id` is the daemon sessionId — the overlay survives daemon cold restore
+  // because the sessionId is stable across restarts by design. A future reader
+  // should NOT "simplify" id allocation back to a fresh UUID per spawn; that
+  // would discard user state on every daemon reconnect.
   if (opts.agentStatusHooksEnabled) {
-    Object.assign(baseEnv, piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir))
-    if (baseEnv.PI_CODING_AGENT_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
-      // wrappers restore this PTY-scoped value after user startup files run.
-      baseEnv.ORCA_PI_CODING_AGENT_DIR = baseEnv.PI_CODING_AGENT_DIR
-      if (preexistingPiAgentDir) {
-        // Why: preserve the original Pi root across nested Orca terminals; the
-        // public env var is intentionally restored to the current PTY overlay.
-        baseEnv.ORCA_PI_SOURCE_AGENT_DIR = preexistingPiAgentDir
+    clearPiAgentShadowEnv(baseEnv, 'pi')
+    clearPiAgentShadowEnv(baseEnv, 'omp')
+    if (piAgentKind === 'pi') {
+      const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi')
+      Object.assign(baseEnv, piEnv)
+      if (piEnv.PI_CODING_AGENT_DIR) {
+        // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
+        // wrappers restore this PTY-scoped value after user startup files run.
+        baseEnv.PI_CODING_AGENT_DIR = piEnv.PI_CODING_AGENT_DIR
+        exposePiAgentOverlayEnv(baseEnv, 'pi', piEnv.PI_CODING_AGENT_DIR, preexistingPiAgentDir)
+      }
+    }
+
+    if (shouldPrepareOmpShadow) {
+      const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp')
+      if (ompEnv.PI_CODING_AGENT_DIR) {
+        if (piAgentKind === 'omp') {
+          // Why: an OMP-launched PTY should default the binary-facing env var to
+          // OMP. Bare shells keep the Pi primary and use the `omp` shell wrapper
+          // to switch only while OMP is running.
+          baseEnv.PI_CODING_AGENT_DIR = ompEnv.PI_CODING_AGENT_DIR
+        }
+        exposePiAgentOverlayEnv(baseEnv, 'omp', ompEnv.PI_CODING_AGENT_DIR, preexistingOmpAgentDir)
       }
     }
   } else {
+    // Why: when agent status is disabled we must strip BOTH kinds' shadow vars
+    // so a nested PTY does not inherit a stale overlay from either agent.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
       source: 'ORCA_PI_SOURCE_AGENT_DIR'
     })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'PI_CODING_AGENT_DIR',
+      overlay: 'ORCA_OMP_CODING_AGENT_DIR',
+      source: 'ORCA_OMP_SOURCE_AGENT_DIR'
+    })
+    delete baseEnv.ORCA_OMP_STATUS_EXTENSION
   }
 
-  // Why: Codex account switching now materializes auth into one shared
-  // runtime home (~/.codex), and Codex launched inside Orca terminals must
-  // use that same prepared home as quota fetches and other entry points.
-  // Keep the override PTY-scoped so Orca does not mutate the app process
-  // environment or the user's unrelated external shells.
-  if (opts.selectedCodexHomePath) {
+  // Why: Codex account switching now materializes auth into an Orca-scoped
+  // runtime home, and Codex launched inside Orca terminals must use that same
+  // prepared home as quota fetches and other entry points. Keep the override
+  // PTY-scoped so dev/prod Orcas do not share hooks through ~/.codex.
+  if (opts.skipCodexHomeEnv) {
+    delete baseEnv.CODEX_HOME
+    delete baseEnv.ORCA_CODEX_HOME
+  } else if (opts.selectedCodexHomePath) {
     baseEnv.CODEX_HOME = opts.selectedCodexHomePath
+    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers
+    // restore this runtime home before Codex can be launched from the prompt.
+    baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
   }
 
   // Why: in dev mode the `orca` CLI defaults to the production userData
@@ -647,6 +811,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
+  ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
@@ -666,12 +831,16 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
       pwshAvailable: () => isPwshAvailable(),
-      buildSpawnEnv: (id, baseEnv) => {
+      buildSpawnEnv: (id, baseEnv, ctx) => {
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          // Why: WSL's inner shell cannot use a Windows userData CODEX_HOME.
+          // Leave Linux Codex on its native ~/.codex until we own a WSL home.
+          skipCodexHomeEnv: ctx?.isWsl === true,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
+          launchCommand: ctx?.command,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
         })
         // Why: agents need their own terminal handle at process start so they
@@ -704,7 +873,12 @@ export function registerPtyHandlers(
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
   // throughput. Keystroke echo/redraws bypass this below because agent TUIs
   // already spend tens of ms producing their redraw.
-  const pendingData = new Map<string, string>()
+  type PendingPtyData = {
+    data: string
+    startSeq?: number
+  }
+
+  const pendingData = new Map<string, PendingPtyData>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
@@ -715,6 +889,40 @@ export function registerPtyHandlers(
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+
+  function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
+    return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
+  }
+
+  function makePtyDataPayload(
+    id: string,
+    data: string,
+    startSeq: number | undefined
+  ): { id: string; data: string; seq?: number; rawLength?: number } {
+    const payload: { id: string; data: string; seq?: number; rawLength?: number } = { id, data }
+    if (typeof startSeq === 'number') {
+      payload.seq = startSeq + data.length
+      payload.rawLength = data.length
+    }
+    return payload
+  }
+
+  function appendPendingPtyData(
+    existing: PendingPtyData | undefined,
+    data: string,
+    startSeq: number | undefined
+  ): PendingPtyData {
+    if (!existing) {
+      return typeof startSeq === 'number' ? { data, startSeq } : { data }
+    }
+    const next: PendingPtyData = { data: existing.data + data }
+    if (typeof existing.startSeq === 'number') {
+      next.startSeq = existing.startSeq
+    } else if (typeof startSeq === 'number') {
+      next.startSeq = startSeq
+    }
+    return next
+  }
 
   function schedulePendingDataFlush(delayMs: number): void {
     if (flushTimer) {
@@ -735,14 +943,19 @@ export function registerPtyHandlers(
       if (!next) {
         break
       }
-      const [id, data] = next
+      const [id, pending] = next
       pendingData.delete(id)
+      const { data } = pending
       const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
       if (remaining) {
-        pendingData.set(id, remaining)
+        const nextPending: PendingPtyData = { data: remaining }
+        if (typeof pending.startSeq === 'number') {
+          nextPending.startSeq = pending.startSeq + chunk.length
+        }
+        pendingData.set(id, nextPending)
       }
-      mainWindow.webContents.send('pty:data', { id, data: chunk })
+      mainWindow.webContents.send('pty:data', makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
     }
     if (pendingData.size > 0) {
@@ -777,9 +990,10 @@ export function registerPtyHandlers(
     const isLocalProvider = localProvider instanceof LocalPtyProvider
 
     localDataUnsub = localProvider.onData((payload) => {
-      if (!isLocalProvider) {
-        runtime?.onPtyData(payload.id, payload.data, Date.now())
-      }
+      const outputSeq = isLocalProvider
+        ? runtime?.getPtyOutputSequence(payload.id)
+        : runtime?.onPtyData(payload.id, payload.data, Date.now())
+      const startSeq = getChunkStartSeq(outputSeq, payload.data)
       if (mainWindow.isDestroyed()) {
         // Why: clear the pending flush timer so it doesn't fire after the window
         // is gone. Without this, macOS app re-activation leaks orphaned timers
@@ -792,7 +1006,8 @@ export function registerPtyHandlers(
         return
       }
       const existing = pendingData.get(payload.id)
-      const nextData = existing ? existing + payload.data : payload.data
+      const pending = appendPendingPtyData(existing, payload.data, startSeq)
+      const nextData = pending.data
       const lastInputAt = lastInputAtByPty.get(payload.id)
       const isInteractiveOutput =
         nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
@@ -805,11 +1020,14 @@ export function registerPtyHandlers(
         // Waiting for the throughput batch timer adds visible input latency.
         mainWindow.webContents.send('pty:data', {
           id: payload.id,
-          data: nextData
+          data: nextData,
+          ...(typeof pending.startSeq === 'number'
+            ? { seq: pending.startSeq + nextData.length, rawLength: nextData.length }
+            : {})
         })
         return
       }
-      pendingData.set(payload.id, nextData)
+      pendingData.set(payload.id, pending)
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
       }
@@ -827,7 +1045,10 @@ export function registerPtyHandlers(
         // tears down the terminal on pty:exit before the batch timer fires.
         const remaining = pendingData.get(payload.id)
         if (remaining) {
-          mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining })
+          mainWindow.webContents.send(
+            'pty:data',
+            makePtyDataPayload(payload.id, remaining.data, remaining.startSeq)
+          )
           pendingData.delete(payload.id)
         }
         lastInputAtByPty.delete(payload.id)
@@ -974,6 +1195,12 @@ export function registerPtyHandlers(
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
+      const daemonShellOverride =
+        process.platform === 'win32' && !args.connectionId
+          ? getSettings?.()?.terminalWindowsShell
+          : undefined
+      const skipCodexHomeEnv =
+        isDaemonHostSpawn && shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd)
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -982,7 +1209,9 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
+          launchCommand: args.command,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
         })
       }
@@ -991,10 +1220,20 @@ export function registerPtyHandlers(
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
-        env
+        env,
+        ...(isDaemonHostSpawn ? { isNewSession: true } : {})
       }
-      if (claudeAuth?.stripAuthEnv) {
-        spawnOptions.envToDelete = [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+      spawnOptions.envToDelete = mergePtyEnvDeletions(
+        claudeAuth?.stripAuthEnv
+          ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+          : undefined,
+        args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(env)
+      )
+      if (skipCodexHomeEnv) {
+        spawnOptions.envToDelete = mergePtyEnvDeletions(
+          spawnOptions.envToDelete,
+          CODEX_HOME_ENV_KEYS
+        )
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
@@ -1170,6 +1409,31 @@ export function registerPtyHandlers(
 
   // ─── IPC Handlers (thin dispatch layer) ─────────────────────────
 
+  function normalizeSnapshotScrollbackRows(value: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return undefined
+    }
+    return Math.max(0, Math.min(50_000, Math.floor(value)))
+  }
+
+  ipcMain.handle(
+    'pty:getMainBufferSnapshot',
+    async (
+      _event,
+      args: { id?: unknown; opts?: { scrollbackRows?: unknown } }
+    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> => {
+      if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
+        return null
+      }
+      const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
+      try {
+        return await runtime.serializeMainTerminalBuffer(args.id, { scrollbackRows })
+      } catch {
+        return null
+      }
+    }
+  )
+
   ipcMain.handle(
     'pty:spawn',
     async (
@@ -1333,6 +1597,13 @@ export function registerPtyHandlers(
         runtime && !(provider instanceof LocalPtyProvider)
           ? runtime.createPreAllocatedTerminalHandle()
           : null
+      const effectiveShellOverride =
+        args.shellOverride ??
+        (process.platform === 'win32' && !args.connectionId
+          ? getSettings?.()?.terminalWindowsShell
+          : undefined)
+      const skipCodexHomeEnv =
+        isDaemonHostSpawn && shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd)
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
           // Should be unreachable: the expression above returns a string when
@@ -1357,7 +1628,9 @@ export function registerPtyHandlers(
             isPackaged: app.isPackaged,
             userDataPath: app.getPath('userData'),
             selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+            skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
+            launchCommand: args.command,
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
           })
         } catch (err) {
@@ -1381,14 +1654,22 @@ export function registerPtyHandlers(
       const envToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
+      const combinedEnvToDelete = mergePtyEnvDeletions(
+        mergePtyEnvDeletions(
+          envToDelete,
+          args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(spawnEnv)
+        ),
+        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
+      )
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
-        env: spawnEnv
+        env: spawnEnv,
+        ...(isMintedSessionId ? { isNewSession: true } : {})
       }
-      if (envToDelete) {
-        spawnOptions.envToDelete = envToDelete
+      if (combinedEnvToDelete) {
+        spawnOptions.envToDelete = combinedEnvToDelete
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
@@ -1406,11 +1687,6 @@ export function registerPtyHandlers(
       // or falls back to PowerShell. The LocalPtyProvider already consults
       // getWindowsShell(); this mirrors that on the daemon path so users who
       // set WSL as default actually get WSL when pressing Ctrl+T.
-      const effectiveShellOverride =
-        args.shellOverride ??
-        (process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined)
       if (effectiveShellOverride !== undefined) {
         spawnOptions.shellOverride = effectiveShellOverride
       }

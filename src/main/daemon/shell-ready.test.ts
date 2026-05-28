@@ -130,6 +130,7 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -155,6 +156,7 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -185,6 +187,7 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -210,9 +213,9 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('local _orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
-    expect(zshenv).toContain('[[ -f "$_orca_user_zdotdir/.zshenv" ]]')
-    expect(zshenv).toContain('*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
+    expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
   })
 
   it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {
@@ -228,12 +231,28 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
     const piRestoreLine =
       '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
+    const codexRestoreLine =
+      '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+    const ompRestoreLine =
+      'if [[ -z "${ORCA_PI_CODING_AGENT_DIR:-}" && -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then'
+    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
     expect(zshrc).toContain(piRestoreLine)
     expect(zlogin).toContain(piRestoreLine)
     expect(bashRc).toContain(piRestoreLine)
+    expect(zshrc).toContain(codexRestoreLine)
+    expect(zlogin).toContain(codexRestoreLine)
+    expect(bashRc).toContain(codexRestoreLine)
+    // OMP launches use ORCA_OMP_CODING_AGENT_DIR; both restore lines must be
+    // present so a PTY of either kind has its overlay restored after rc files.
+    expect(zshrc).toContain(ompRestoreLine)
+    expect(zlogin).toContain(ompRestoreLine)
+    expect(bashRc).toContain(ompRestoreLine)
+    expect(zshrc).toContain(ompWrapperLine)
+    expect(zlogin).toContain(ompWrapperLine)
+    expect(bashRc).toContain(ompWrapperLine)
   })
 
   // Why: regression guard for issue #2422. The daemon-side bash wrapper must
@@ -314,6 +333,7 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice/.config/zsh')
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -393,5 +413,41 @@ describePosix('daemon shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
     }
+  })
+
+  it('sources user .zshenv at wrapper top level before repinning ZDOTDIR', async () => {
+    // Why: PR #1737 sourced .zshenv inside a wrapper function, which broke
+    // common patterns like "typeset -U path". The fix must keep .zshenv at
+    // zsh top level while still capturing the ZDOTDIR it resolved.
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    expect(zshenv).toContain('unset ZDOTDIR')
+    expect(zshenv).toContain('_orca_zshenv_source_dir="${ORCA_ZSHENV_SOURCE_DIR:-$HOME}"')
+    expect(zshenv).toContain('source "${_orca_zshenv_path}"')
+    expect(zshenv).toContain('_orca_discovered_zdotdir="${ZDOTDIR:-}"')
+    expect(zshenv).toContain(
+      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}"'
+    )
+    expect(zshenv).toContain('export ZDOTDIR=')
+  })
+
+  it('preserves spawn-env ORCA_ORIG_ZDOTDIR as fallback when discovery yields nothing', async () => {
+    // Why: if user .zshenv returns early or doesn't set ZDOTDIR, the wrapper
+    // should fall back to the spawn-env ORCA_ORIG_ZDOTDIR (if present), then HOME.
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // Save spawn-env value before sourcing user .zshenv
+    expect(zshenv).toContain('_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"')
+
+    // Fallback chain: discovered → normalized spawn-env path → HOME
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
   })
 })

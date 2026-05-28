@@ -197,6 +197,7 @@ describe('git RPC methods', () => {
         defaultModelId: 'auto'
       }),
       cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
+      abortRuntimeGitMerge: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
     } as unknown as OrcaRuntimeService
@@ -216,6 +217,7 @@ describe('git RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('git.cancelGenerateCommitMessage', { worktree: 'id:wt-1' })
     )
+    await dispatcher.dispatch(makeRequest('git.abortMerge', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
       makeRequest('git.push', {
         worktree: 'id:wt-1',
@@ -237,6 +239,7 @@ describe('git RPC methods', () => {
       agentCmdOverrides: { cursor: 'cursor-agent' }
     })
     expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith(
       'id:wt-1',
       true,

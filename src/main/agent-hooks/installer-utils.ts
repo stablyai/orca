@@ -18,6 +18,8 @@ export type HookCommandConfig = {
   type: 'command'
   command: string
   timeout?: number
+  async?: boolean
+  statusMessage?: string
   [key: string]: unknown
 }
 
