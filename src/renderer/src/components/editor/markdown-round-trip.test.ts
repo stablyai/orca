@@ -103,6 +103,26 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
+  it('preserves details blocks with unsupported attributes as passthrough html', () => {
+    const input =
+      '<details id="x"><summary class="s">Toggle</summary><p data-x="1">Body</p></details>\n'
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('preserves details blocks with closing tags inside fenced code as passthrough html', () => {
+    const input = [
+      '<details><summary>Toggle</summary>',
+      '',
+      '```',
+      '</details>',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
   it('preserves nested details blocks as passthrough html', () => {
     const input =
       '<details><summary>Outer</summary><details><summary>Inner</summary><p>Body</p></details></details>\n'
