@@ -18,7 +18,11 @@ import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-f
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
-import { POST_REPLAY_MODE_RESET, POST_REPLAY_REATTACH_RESET } from './layout-serialization'
+import {
+  POST_REPLAY_MODE_RESET,
+  POST_REPLAY_REATTACH_RESET,
+  RESET_TERMINAL_CURSOR_STYLE
+} from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -242,6 +246,17 @@ export function connectPanePty(
   let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
+  // Why: idle callbacks are registered before the deferred PTY output plumbing
+  // exists. Start with the shared scheduler, then switch to the PTY writer
+  // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
+  let queueAgentIdleCursorReset = (): void => {
+    if (disposed) {
+      return
+    }
+    writeTerminalOutput(pane.terminal, RESET_TERMINAL_CURSOR_STYLE, {
+      foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+    })
+  }
   // Why: passphrase-gate waits register a teardown here so dispose() can
   // actively unsubscribe + resolve them. Without this, a pane disposed
   // mid-wait leaks its zustand subscriber and the surrounding async IIFE
@@ -877,6 +892,9 @@ export function connectPanePty(
     if (syncAgentTaskCompleteNotificationEnabled()) {
       agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
+    // Why: some agent TUIs leave xterm in DECSCUSR steady-cursor mode when
+    // they become idle. Reset to Orca's configured cursor once the turn ends.
+    queueAgentIdleCursorReset()
   }
   const onAgentBecameWorking = (): void => {
     if (syncAgentTaskCompleteNotificationEnabled()) {
@@ -1341,6 +1359,16 @@ export function connectPanePty(
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded
       })
+    }
+
+    queueAgentIdleCursorReset = (): void => {
+      if (disposed) {
+        return
+      }
+      writePtyOutputToXterm(
+        RESET_TERMINAL_CURSOR_STYLE,
+        shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      )
     }
 
     function markHiddenOutputRestoreNeeded(): void {
