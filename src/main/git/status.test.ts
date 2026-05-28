@@ -42,6 +42,7 @@ vi.mock('fs', () => ({
 
 import {
   abortMerge,
+  abortRebase,
   bulkStageFiles,
   bulkDiscardChanges,
   bulkUnstageFiles,
@@ -672,6 +673,20 @@ describe('abortMerge', () => {
     await abortMerge('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['merge', '--abort'], { cwd: '/repo' })
+  })
+})
+
+describe('abortRebase', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('runs git rebase --abort in the worktree', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await abortRebase('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rebase', '--abort'], { cwd: '/repo' })
   })
 })
 

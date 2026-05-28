@@ -146,6 +146,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.openDiff',
   'files.read',
   'git.abortMerge',
+  'git.abortRebase',
   'git.bulkStage',
   'git.bulkUnstage',
   'git.commit',

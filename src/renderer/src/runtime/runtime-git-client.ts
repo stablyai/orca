@@ -196,6 +196,23 @@ export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<
   )
 }
 
+export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.abortRebase({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.abortRebase',
+    { worktree: context.worktreeId },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
   args: { filePath: string; staged: boolean; compareAgainstHead?: boolean }

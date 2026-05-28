@@ -65,6 +65,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
+    this.dispatcher.onRequest('git.abortRebase', (p) => this.abortRebase(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -190,6 +191,11 @@ export class GitHandler {
   private async abortMerge(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     await this.git(['merge', '--abort'], worktreePath)
+  }
+
+  private async abortRebase(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    await this.git(['rebase', '--abort'], worktreePath)
   }
 
   private normalizeGitPathForCompare(filePath: string): string {

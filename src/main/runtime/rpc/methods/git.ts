@@ -57,6 +57,11 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
+    name: 'git.abortRebase',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
     name: 'git.diff',
     params: GitDiff,
     handler: async (params, { runtime }) =>

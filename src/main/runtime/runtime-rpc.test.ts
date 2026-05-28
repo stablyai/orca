@@ -762,6 +762,7 @@ describe('OrcaRuntimeRpcServer', () => {
       .mockResolvedValue({ hasUpstream: true, ahead: 1, behind: 0 })
     const rebaseRuntimeGitFromBase = vi.fn().mockResolvedValue({ ok: true })
     const abortRuntimeGitMerge = vi.fn().mockResolvedValue({ ok: true })
+    const abortRuntimeGitRebase = vi.fn().mockResolvedValue({ ok: true })
     const bulkStageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const bulkUnstageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const getRuntimeGitDiff = vi.fn().mockResolvedValue({
@@ -844,6 +845,7 @@ describe('OrcaRuntimeRpcServer', () => {
       getRuntimeGitUpstreamStatus,
       rebaseRuntimeGitFromBase,
       abortRuntimeGitMerge,
+      abortRuntimeGitRebase,
       bulkStageRuntimeGitPaths,
       bulkUnstageRuntimeGitPaths,
       getRuntimeGitDiff,
@@ -1414,6 +1416,16 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_git_abort_rebase',
+        method: 'git.abortRebase',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_git_bulk_unstage',
         method: 'git.bulkUnstage',
         deviceToken: mobile.token,
@@ -1626,6 +1638,9 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_bulk_stage', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_abort_merge', ok: true }))
     expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_git_abort_rebase', ok: true })
+    )
+    expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
@@ -1660,6 +1675,7 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
     expect(bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])
     expect(abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')
+    expect(abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
     expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)

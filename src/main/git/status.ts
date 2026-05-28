@@ -467,6 +467,10 @@ export async function abortMerge(worktreePath: string): Promise<void> {
   await gitExecFileAsync(['merge', '--abort'], { cwd: worktreePath })
 }
 
+export async function abortRebase(worktreePath: string): Promise<void> {
+  await gitExecFileAsync(['rebase', '--abort'], { cwd: worktreePath })
+}
+
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 

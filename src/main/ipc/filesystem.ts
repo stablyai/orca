@@ -33,6 +33,7 @@ import {
 import {
   getStatus,
   abortMerge,
+  abortRebase,
   detectConflictOperation,
   getDiff,
   commitChanges,
@@ -710,6 +711,21 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await abortMerge(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:abortRebase',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.abortRebase(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await abortRebase(worktreePath)
     }
   )
 

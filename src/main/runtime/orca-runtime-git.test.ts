@@ -9,6 +9,7 @@ import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runt
 
 const mocks = vi.hoisted(() => ({
   abortMerge: vi.fn(),
+  abortRebase: vi.fn(),
   getStagedCommitContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../git/status', async () => ({
   ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
   abortMerge: mocks.abortMerge,
+  abortRebase: mocks.abortRebase,
   getStagedCommitContext: mocks.getStagedCommitContext
 }))
 
@@ -60,6 +62,7 @@ function makeCommands(worktreePath: string): RuntimeGitCommands {
 describe('RuntimeGitCommands', () => {
   beforeEach(() => {
     mocks.abortMerge.mockReset()
+    mocks.abortRebase.mockReset()
     mocks.getStagedCommitContext.mockReset()
     mocks.generateCommitMessageFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
@@ -98,6 +101,34 @@ describe('RuntimeGitCommands', () => {
 
     expect(provider.abortMerge).toHaveBeenCalledWith('/remote/repo')
     expect(mocks.abortMerge).not.toHaveBeenCalled()
+  })
+
+  it('aborts a local rebase through the resolved worktree', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+    mocks.abortRebase.mockResolvedValue(undefined)
+
+    await expect(commands.abortRuntimeGitRebase('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(mocks.abortRebase).toHaveBeenCalledWith(worktreePath)
+  })
+
+  it('aborts a remote rebase through the SSH git provider', async () => {
+    const provider = { abortRebase: vi.fn().mockResolvedValue(undefined) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.abortRuntimeGitRebase('id:wt-1')).resolves.toEqual({ ok: true })
+
+    expect(provider.abortRebase).toHaveBeenCalledWith('/remote/repo')
+    expect(mocks.abortRebase).not.toHaveBeenCalled()
   })
 
   it('rejects slash-only git mutation paths before they can target the worktree root', async () => {

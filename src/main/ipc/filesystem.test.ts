@@ -16,6 +16,7 @@ const {
   commitChangesMock,
   getStatusMock,
   abortMergeMock,
+  abortRebaseMock,
   getDiffMock,
   getBranchCompareMock,
   getBranchDiffMock,
@@ -48,6 +49,7 @@ const {
   commitChangesMock: vi.fn(),
   getStatusMock: vi.fn(),
   abortMergeMock: vi.fn(),
+  abortRebaseMock: vi.fn(),
   getDiffMock: vi.fn(),
   getBranchCompareMock: vi.fn(),
   getBranchDiffMock: vi.fn(),
@@ -92,6 +94,7 @@ vi.mock('../git/status', () => ({
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
   abortMerge: abortMergeMock,
+  abortRebase: abortRebaseMock,
   getDiff: getDiffMock,
   getBranchCompare: getBranchCompareMock,
   getBranchDiff: getBranchDiffMock,
@@ -201,6 +204,8 @@ describe('registerFilesystemHandlers', () => {
       lstatMock,
       commitChangesMock,
       getStatusMock,
+      abortMergeMock,
+      abortRebaseMock,
       getDiffMock,
       getBranchCompareMock,
       getBranchDiffMock,
@@ -600,6 +605,26 @@ describe('registerFilesystemHandlers', () => {
 
     expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
     expect(sshProvider.abortMerge).toHaveBeenCalledWith('/remote/repo')
+  })
+
+  it('routes abort rebase through local and SSH git providers', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    abortRebaseMock.mockResolvedValue(undefined)
+    const sshProvider = {
+      abortRebase: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:abortRebase')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    await handlers.get('git:abortRebase')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })
+
+    expect(abortRebaseMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(sshProvider.abortRebase).toHaveBeenCalledWith('/remote/repo')
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {
