@@ -23,8 +23,15 @@ import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
-import { basename, isAbsolute, join, posix } from 'path'
+import { isAbsolute, join, posix } from 'path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import {
+  cleanupClaimedCloneTarget,
+  claimCloneTarget,
+  deriveValidatedClonePath,
+  getClonePathComparisonKey
+} from '../git/repo-clone-path'
+import type { ClaimedCloneTarget } from '../git/repo-clone-path'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
@@ -75,11 +82,25 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
   track('repo_added', { method, ...getCohortAtEmit() })
 }
 
+type ActiveCloneMetadata = {
+  path: string
+  pathKey: string
+  claimedTarget: ClaimedCloneTarget
+  process: ChildProcess
+  abortRequested: boolean
+  generation: number
+  pendingAbortCleanup: Promise<void> | null
+  resolvePendingAbortCleanup: (() => void) | null
+}
+
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
 // and a function-scoped variable would lose the reference to an in-flight clone.
-let activeCloneProc: ChildProcess | null = null
-let activeClonePath: string | null = null
+let activeClone: ActiveCloneMetadata | null = null
+let nextCloneGeneration = 1
+const latestCloneGenerationByPath = new Map<string, number>()
+const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
+const cloneInFlightByPath = new Map<string, Promise<void>>()
 
 const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -145,6 +166,71 @@ function validateNestedRepoScanRoot(path: string, connectionId?: string): void {
   }
   if (!isAbsolute(path)) {
     throw new Error('Repo path must be an absolute path')
+  }
+}
+
+async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
+  if (!metadata.claimedTarget.canCleanup || !metadata.claimedTarget.ownedDirectoryIdentity) {
+    return
+  }
+  if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
+    return
+  }
+  // Why: an immediate retry can attach a newer process to the same target
+  // before the aborted process closes; the old close handler must not delete it.
+  if (
+    activeClone &&
+    activeClone.process !== metadata.process &&
+    activeClone.pathKey === metadata.pathKey
+  ) {
+    return
+  }
+
+  if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
+    return
+  }
+  await cleanupClaimedCloneTarget(metadata.path, metadata.claimedTarget)
+}
+
+function markCloneAbortCleanupPending(metadata: ActiveCloneMetadata): void {
+  if (metadata.resolvePendingAbortCleanup) {
+    return
+  }
+  metadata.pendingAbortCleanup = new Promise<void>((resolve) => {
+    metadata.resolvePendingAbortCleanup = resolve
+  })
+  pendingAbortCleanupByPath.set(metadata.pathKey, metadata.pendingAbortCleanup)
+}
+
+function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
+  if (pendingAbortCleanupByPath.get(metadata.pathKey) === metadata.pendingAbortCleanup) {
+    pendingAbortCleanupByPath.delete(metadata.pathKey)
+  }
+  metadata.resolvePendingAbortCleanup?.()
+  metadata.pendingAbortCleanup = null
+  metadata.resolvePendingAbortCleanup = null
+}
+
+async function runWithClonePathLock<T>(clonePathKey: string, task: () => Promise<T>): Promise<T> {
+  const previous = cloneInFlightByPath.get(clonePathKey) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const tail = previous.then(
+    () => current,
+    () => current
+  )
+  cloneInFlightByPath.set(clonePathKey, tail)
+
+  try {
+    await previous
+    return await task()
+  } finally {
+    release()
+    if (cloneInFlightByPath.get(clonePathKey) === tail) {
+      cloneInFlightByPath.delete(clonePathKey)
+    }
   }
 }
 
@@ -976,19 +1062,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:cloneAbort', async () => {
-    if (activeCloneProc) {
-      const pathToClean = activeClonePath
-      activeCloneProc.kill()
-      activeCloneProc = null
-      activeClonePath = null
-      // Why: git clone creates the target directory before it finishes.
-      // Without cleanup, retrying the same URL/destination fails with
-      // "destination path already exists and is not an empty directory".
-      if (pathToClean) {
-        await rm(pathToClean, { recursive: true, force: true }).catch(() => {
-          // Best-effort cleanup — don't fail the abort if removal fails
-        })
-      }
+    if (activeClone) {
+      const clone = activeClone
+      clone.abortRequested = true
+      markCloneAbortCleanupPending(clone)
+      clone.process.kill()
+      activeClone = null
     }
   })
 
@@ -999,114 +1078,183 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // the repo folder name from the URL (e.g. "orca" from .../orca.git).
       // This matches the default git clone behavior where the last path segment
       // of the URL becomes the directory name.
-      const repoName = basename(args.url.replace(/\.git\/?$/, ''))
-      if (!repoName) {
-        throw new Error('Could not determine repository name from URL')
-      }
-      // Why: gitSpawn uses args.destination as cwd, so it must exist before
-      // spawn — fresh installs may have a defaulted parent dir that does not
-      // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
-      await mkdir(args.destination, { recursive: true })
-      const clonePath = join(args.destination, repoName)
+      const clonePath = deriveValidatedClonePath(args)
+      const clonePathKey = getClonePathComparisonKey(clonePath)
+      return runWithClonePathLock(clonePathKey, async () => {
+        await pendingAbortCleanupByPath.get(clonePathKey)
+        const existingAfterPendingClone = store
+          .getRepos()
+          .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
+        if (existingAfterPendingClone && !isFolderRepo(existingAfterPendingClone)) {
+          emitRepoAdded('clone_url', true)
+          return existingAfterPendingClone
+        }
+        // Why: gitSpawn uses args.destination as cwd, so it must exist before
+        // spawn — fresh installs may have a defaulted parent dir that does not
+        // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+        await mkdir(args.destination, { recursive: true })
+        const claimedTarget = await claimCloneTarget(clonePath)
 
-      // Why: use spawn instead of execFile so there is no maxBuffer limit.
-      // git clone writes progress to stderr which can exceed Node's default
-      // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
-      // of stderr for error reporting and discard stdout entirely.
-      // Why: use --progress to force git to emit progress even when stderr
-      // is not a TTY. Without it, git suppresses progress output when piped.
-      await new Promise<void>((resolve, reject) => {
-        // Why: clone destination may be a WSL path (e.g. user picks a WSL
-        // directory). Use the parent destination as the cwd so the runner
-        // detects WSL and routes through wsl.exe.
-        // Why: use the '--' separator to isolate the URL argument and prevent
-        // malicious URLs from being interpreted as git flags (command injection).
-        const proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
-          cwd: args.destination,
-          stdio: ['ignore', 'ignore', 'pipe']
-        })
-        activeCloneProc = proc
-        activeClonePath = clonePath
+        // Why: use spawn instead of execFile so there is no maxBuffer limit.
+        // git clone writes progress to stderr which can exceed Node's default
+        // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
+        // of stderr for error reporting and discard stdout entirely.
+        // Why: use --progress to force git to emit progress even when stderr
+        // is not a TTY. Without it, git suppresses progress output when piped.
+        const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
+        await new Promise<void>((resolve, reject) => {
+          // Why: clone destination may be a WSL path (e.g. user picks a WSL
+          // directory). Use the parent destination as the cwd so the runner
+          // detects WSL and routes through wsl.exe.
+          // Why: use the '--' separator to isolate the URL argument and prevent
+          // malicious URLs from being interpreted as git flags (command injection).
+          let proc: ReturnType<typeof gitSpawn>
+          try {
+            proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
+              cwd: args.destination,
+              stdio: ['ignore', 'ignore', 'pipe']
+            })
+          } catch (err) {
+            void cleanupClaimedCloneTarget(clonePath, claimedTarget).finally(() => {
+              const message = err instanceof Error ? err.message : String(err)
+              reject(new Error(`Clone failed: ${message}`))
+            })
+            return
+          }
+          const generation = nextCloneGeneration++
+          latestCloneGenerationByPath.set(clonePathKey, generation)
+          const metadata: ActiveCloneMetadata = {
+            path: clonePath,
+            pathKey: clonePathKey,
+            claimedTarget,
+            process: proc,
+            abortRequested: false,
+            generation,
+            pendingAbortCleanup: null,
+            resolvePendingAbortCleanup: null
+          }
+          cloneMetadataRef.current = metadata
+          activeClone = metadata
 
-        let stderrTail = ''
-        proc.stderr!.on('data', (chunk: Buffer) => {
-          const text = chunk.toString()
-          stderrTail = (stderrTail + text).slice(-4096)
+          let stderrTail = ''
+          let settled = false
+          proc.stderr!.on('data', (chunk: Buffer) => {
+            const text = chunk.toString()
+            stderrTail = (stderrTail + text).slice(-4096)
 
-          // Why: git progress lines use \r to overwrite in-place. Split on
-          // both \r and \n to find the latest progress fragment, then extract
-          // the phase name and percentage for the renderer.
-          const lines = text.split(/[\r\n]+/)
-          for (const line of lines) {
-            const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-            if (match && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('repos:clone-progress', {
-                phase: match[1].trim(),
-                percent: parseInt(match[2], 10)
-              })
+            // Why: git progress lines use \r to overwrite in-place. Split on
+            // both \r and \n to find the latest progress fragment, then extract
+            // the phase name and percentage for the renderer.
+            const lines = text.split(/[\r\n]+/)
+            for (const line of lines) {
+              const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+              if (match && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('repos:clone-progress', {
+                  phase: match[1].trim(),
+                  percent: parseInt(match[2], 10)
+                })
+              }
+            }
+          })
+
+          const finishClone = async (
+            code: number | null,
+            signal: NodeJS.Signals | null,
+            err?: Error
+          ) => {
+            if (settled) {
+              return
+            }
+            settled = true
+            // Why: only clear the ref if it still points to this process.
+            // A quick abort-and-retry can reassign activeClone to a new
+            // spawn before this handler fires, and nulling it would make the
+            // new clone unabortable.
+            if (activeClone?.process === proc) {
+              activeClone = null
+            }
+
+            const cloneSucceeded = !err && code === 0 && !signal
+            if (!cloneSucceeded) {
+              // Why: only the process that created this target may remove it,
+              // and only after git reports the clone did not complete.
+              await cleanupOwnedCloneTarget(metadata)
+            }
+            if (metadata.abortRequested && !cloneSucceeded) {
+              settleCloneAbortCleanup(metadata)
+            }
+            if (latestCloneGenerationByPath.get(metadata.pathKey) === metadata.generation) {
+              latestCloneGenerationByPath.delete(metadata.pathKey)
+            }
+
+            if (err) {
+              reject(new Error(`Clone failed: ${err.message}`))
+            } else if (signal === 'SIGTERM') {
+              reject(new Error('Clone aborted'))
+            } else if (code === 0) {
+              resolve()
+            } else {
+              const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
+              reject(new Error(`Clone failed: ${lastLine}`))
             }
           }
+
+          proc.on('error', (err) => {
+            void finishClone(null, null, err)
+          })
+
+          proc.on('close', (code, signal) => {
+            void finishClone(code, signal)
+          })
         })
 
-        proc.on('error', (err) => reject(new Error(`Clone failed: ${err.message}`)))
-
-        proc.on('close', (code, signal) => {
-          // Why: only clear the ref if it still points to this process.
-          // A quick abort-and-retry can reassign activeCloneProc to a new
-          // spawn before this handler fires, and nulling it would make the
-          // new clone unabortable.
-          if (activeCloneProc === proc) {
-            activeCloneProc = null
-            activeClonePath = null
+        try {
+          // Why: check after clone (not before) because the path didn't exist
+          // before cloning. But if the user somehow had a folder repo at this path
+          // that git clone succeeded into (empty dir), reuse that entry and upgrade
+          // its kind to 'git' instead of creating a duplicate.
+          const existing = store
+            .getRepos()
+            .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
+          if (existing) {
+            if (isFolderRepo(existing)) {
+              const updated = store.updateRepo(existing.id, { kind: 'git' })
+              if (updated) {
+                notifyReposChanged(mainWindow)
+                // Why: folder→git upgrade is a real new git repo provisioning event.
+                emitRepoAdded('clone_url', false)
+                return updated
+              }
+            }
+            emitRepoAdded('clone_url', true)
+            return existing
           }
-          if (signal === 'SIGTERM') {
-            reject(new Error('Clone aborted'))
-          } else if (code === 0) {
-            resolve()
-          } else {
-            const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
-            reject(new Error(`Clone failed: ${lastLine}`))
-          }
-        })
-      })
 
-      // Why: check after clone (not before) because the path didn't exist
-      // before cloning. But if the user somehow had a folder repo at this path
-      // that git clone succeeded into (empty dir), reuse that entry and upgrade
-      // its kind to 'git' instead of creating a duplicate.
-      const existing = store.getRepos().find((r) => r.path === clonePath)
-      if (existing) {
-        if (isFolderRepo(existing)) {
-          const updated = store.updateRepo(existing.id, { kind: 'git' })
-          if (updated) {
-            notifyReposChanged(mainWindow)
-            // Why: folder→git upgrade is a real new git repo provisioning event.
-            emitRepoAdded('clone_url', false)
-            return updated
+          const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
+          const repo: Repo = {
+            id: randomUUID(),
+            path: clonePath,
+            displayName: getRepoName(clonePath),
+            badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            ...(repoIcon ? { repoIcon } : {}),
+            addedAt: Date.now(),
+            kind: 'git',
+            externalWorktreeVisibility: 'hide',
+            externalWorktreeVisibilityLegacy: false
+          }
+
+          store.addRepo(repo)
+          invalidateAuthorizedRootsCache()
+          notifyReposChanged(mainWindow)
+          emitRepoAdded('clone_url', false)
+          return repo
+        } finally {
+          const metadata = cloneMetadataRef.current
+          if (metadata?.abortRequested) {
+            settleCloneAbortCleanup(metadata)
           }
         }
-        emitRepoAdded('clone_url', true)
-        return existing
-      }
-
-      const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
-      const repo: Repo = {
-        id: randomUUID(),
-        path: clonePath,
-        displayName: getRepoName(clonePath),
-        badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
-        addedAt: Date.now(),
-        kind: 'git',
-        externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
-      }
-
-      store.addRepo(repo)
-      invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
-      emitRepoAdded('clone_url', false)
-      return repo
+      })
     }
   )
 

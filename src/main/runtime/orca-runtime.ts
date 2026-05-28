@@ -9,9 +9,15 @@ import {
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
+import {
+  cleanupClaimedCloneTarget,
+  claimCloneTarget,
+  deriveValidatedClonePath,
+  getClonePathComparisonKey
+} from '../git/repo-clone-path'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
-import { basename, isAbsolute, join } from 'path'
+import { isAbsolute, join } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
@@ -1027,6 +1033,7 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
+  private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
@@ -5451,30 +5458,92 @@ export class OrcaRuntimeService {
     }
     const trimmedUrl = url.trim()
     const trimmedDestination = destination.trim()
-    const repoName = basename(trimmedUrl.replace(/\.git\/?$/, ''))
-    if (!repoName) {
-      throw new Error('Could not determine repository name from URL')
-    }
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
-    if (!isAbsolute(trimmedDestination)) {
-      throw new Error('Clone destination must be an absolute path')
+    const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    const clonePathKey = getClonePathComparisonKey(clonePath)
+    const previous = this.cloneInFlightByPath.get(clonePathKey) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const tail = previous.then(
+      () => current,
+      () => current
+    )
+    this.cloneInFlightByPath.set(clonePathKey, tail)
+
+    try {
+      await previous
+      return await this.cloneRepoAfterPathLock(
+        trimmedUrl,
+        trimmedDestination,
+        clonePath,
+        clonePathKey
+      )
+    } finally {
+      release()
+      if (this.cloneInFlightByPath.get(clonePathKey) === tail) {
+        this.cloneInFlightByPath.delete(clonePathKey)
+      }
     }
+  }
+
+  private async cloneRepoAfterPathLock(
+    trimmedUrl: string,
+    trimmedDestination: string,
+    clonePath: string,
+    clonePathKey: string
+  ): Promise<Repo> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const existingBeforeClone = this.store
+      .getRepos()
+      .find((repo) => getClonePathComparisonKey(repo.path) === clonePathKey)
+    if (existingBeforeClone && !isFolderRepo(existingBeforeClone)) {
+      return existingBeforeClone
+    }
+
     await mkdir(trimmedDestination, { recursive: true })
-    const clonePath = join(trimmedDestination, repoName)
+    const claimedTarget = await claimCloneTarget(clonePath)
     await new Promise<void>((resolve, reject) => {
-      const proc = wslAwareSpawn('git', ['clone', '--progress', '--', trimmedUrl, clonePath], {
-        cwd: trimmedDestination,
-        stdio: ['ignore', 'ignore', 'pipe']
-      })
+      let proc: ReturnType<typeof wslAwareSpawn>
+      try {
+        proc = wslAwareSpawn('git', ['clone', '--progress', '--', trimmedUrl, clonePath], {
+          cwd: trimmedDestination,
+          stdio: ['ignore', 'ignore', 'pipe']
+        })
+      } catch (err) {
+        void cleanupClaimedCloneTarget(clonePath, claimedTarget).finally(() => {
+          const message = err instanceof Error ? err.message : String(err)
+          reject(new Error(`Clone failed: ${message}`))
+        })
+        return
+      }
       let stderrTail = ''
+      let settled = false
       proc.stderr?.on('data', (chunk: Buffer) => {
         stderrTail = (stderrTail + chunk.toString()).slice(-4096)
       })
-      proc.on('error', (error) => reject(new Error(`Clone failed: ${error.message}`)))
-      proc.on('close', (code, signal) => {
-        if (signal === 'SIGTERM') {
+      const finishClone = async (
+        code: number | null,
+        signal: NodeJS.Signals | null,
+        error?: Error
+      ) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        const cloneSucceeded = !error && code === 0 && !signal
+        if (!cloneSucceeded) {
+          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+        }
+
+        if (error) {
+          reject(new Error(`Clone failed: ${error.message}`))
+        } else if (signal === 'SIGTERM') {
           reject(new Error('Clone aborted'))
         } else if (code === 0) {
           resolve()
@@ -5482,10 +5551,18 @@ export class OrcaRuntimeService {
           const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
           reject(new Error(`Clone failed: ${lastLine}`))
         }
+      }
+      proc.on('error', (error) => {
+        void finishClone(null, null, error)
+      })
+      proc.on('close', (code, signal) => {
+        void finishClone(code, signal)
       })
     })
 
-    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, clonePath))
+    const existing = this.store
+      .getRepos()
+      .find((repo) => getClonePathComparisonKey(repo.path) === clonePathKey)
     if (existing) {
       if (isFolderRepo(existing)) {
         const updated = this.store.updateRepo(existing.id, { kind: 'git' })

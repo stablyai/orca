@@ -2116,6 +2116,167 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('rejects runtime cloneRepo dot-segment URLs before spawning git', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const runtime = createRuntime()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = join(tempRoot, 'destination')
+
+    try {
+      await expect(runtime.cloneRepo('file:///tmp/source/.', destination)).rejects.toThrow(
+        'Invalid repository name derived from URL'
+      )
+      expect(spawnSpy).not.toHaveBeenCalled()
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects runtime cloneRepo parent-segment URLs before spawning git', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const runtime = createRuntime()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = join(tempRoot, 'destination')
+
+    try {
+      await expect(runtime.cloneRepo('file:///tmp/source/..', destination)).rejects.toThrow(
+        'Invalid repository name derived from URL'
+      )
+      expect(spawnSpy).not.toHaveBeenCalled()
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('removes an owned runtime clone target when git exits unsuccessfully', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+    proc.stderr = new EventEmitter()
+    spawnSpy.mockReturnValue(proc as never)
+    const runtime = createRuntime()
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const clonePath = join(destination, 'repo-badge-color')
+
+    try {
+      const clonePromise = runtime.cloneRepo(
+        'https://example.com/repo-badge-color.git',
+        destination
+      )
+      await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
+      await writeFile(join(clonePath, 'partial.txt'), 'git wrote this before failing')
+      proc.stderr.emit('data', Buffer.from('fatal: repository not found\n'))
+      proc.emit('close', 128, null)
+
+      await expect(clonePromise).rejects.toThrow('Clone failed: fatal: repository not found')
+      await expect(lstat(clonePath)).rejects.toThrow()
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves an existing runtime clone target when git exits unsuccessfully', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+    proc.stderr = new EventEmitter()
+    spawnSpy.mockReturnValue(proc as never)
+    const runtime = createRuntime()
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const clonePath = join(destination, 'repo-badge-color')
+
+    try {
+      await mkdir(clonePath)
+      await writeFile(join(clonePath, 'user-file.txt'), 'keep me')
+      const clonePromise = runtime.cloneRepo(
+        'https://example.com/repo-badge-color.git',
+        destination
+      )
+      await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
+      proc.emit('close', 128, null)
+
+      await expect(clonePromise).rejects.toThrow('Clone failed')
+      await expect(lstat(join(clonePath, 'user-file.txt'))).resolves.toBeTruthy()
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('skips runtime clone failure cleanup when the owned target is replaced', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+    proc.stderr = new EventEmitter()
+    spawnSpy.mockReturnValue(proc as never)
+    const runtime = createRuntime()
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const clonePath = join(destination, 'repo-badge-color')
+    const replacementFile = join(clonePath, 'replacement.txt')
+
+    try {
+      const clonePromise = runtime.cloneRepo(
+        'https://example.com/repo-badge-color.git',
+        destination
+      )
+      await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
+      await rm(clonePath, { recursive: true, force: true })
+      await mkdir(clonePath)
+      await writeFile(replacementFile, 'new owner')
+      proc.emit('close', 128, null)
+
+      await expect(clonePromise).rejects.toThrow('Clone failed')
+      await expect(lstat(replacementFile)).resolves.toBeTruthy()
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes concurrent runtime clones for the same target', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const firstProc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+    firstProc.stderr = new EventEmitter()
+    spawnSpy.mockReturnValueOnce(firstProc as never)
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+
+    try {
+      const firstClonePromise = runtime.cloneRepo(
+        'https://example.com/repo-badge-color.git',
+        destination
+      )
+      const secondClonePromise = runtime.cloneRepo(
+        'https://example.com/repo-badge-color.git',
+        destination
+      )
+      await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(spawnSpy).toHaveBeenCalledTimes(1)
+
+      firstProc.emit('close', 0, null)
+      await expect(firstClonePromise).resolves.toMatchObject({
+        path: join(destination, 'repo-badge-color')
+      })
+      await expect(secondClonePromise).resolves.toMatchObject({
+        path: join(destination, 'repo-badge-color')
+      })
+      expect(spawnSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
   it('associates controller PTYs with mixed-case Windows and UNC cwd paths', async () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       {
