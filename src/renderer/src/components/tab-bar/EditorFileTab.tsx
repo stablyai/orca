@@ -9,7 +9,8 @@ import {
   ShieldAlert,
   ExternalLink,
   Columns2,
-  Rows2
+  Rows2,
+  Pencil
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
@@ -28,6 +30,7 @@ import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
+import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -109,15 +112,23 @@ export default function EditorFileTab({
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const skipMenuFocusRestoreRef = useRef(false)
   // Escape fires setIsRenaming(false), which unmounts the input. The browser
   // still fires focusout as the focused node is removed, so onBlur can invoke
   // commitRename *after* cancel — committing the typed value against the
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
-  // Only real on-disk files in edit mode are renameable. Diff, conflict-review,
-  // untitled drafts, and combined/virtual views don't point at a single concrete
-  // file we can safely rename.
-  const canRename = file.mode === 'edit' && !file.isUntitled && !file.diffSource && !file.conflict
+  // Only on-disk edit tabs are renameable. Diff, conflict-review, and
+  // combined/virtual views don't point at a single concrete file we can safely rename.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict
+
+  const openRenameInput = (): void => {
+    if (!canRename) {
+      return
+    }
+    renameCancelledRef.current = false
+    setIsRenaming(true)
+  }
 
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
@@ -139,10 +150,7 @@ export default function EditorFileTab({
     if (newName === oldName) {
       return
     }
-    const worktreePath = worktree?.path ?? null
-    if (!worktreePath) {
-      return
-    }
+    const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
     void renameFileOnDisk({
       oldPath: file.filePath,
       newName,
@@ -261,12 +269,15 @@ export default function EditorFileTab({
           )}
           <span className="mr-1 flex min-w-0 items-baseline gap-1">
             {isRenaming ? (
-              <input
+              <Input
                 ref={renameInputRef}
+                data-tab-rename-input="true"
+                aria-label={`Rename file ${basename(file.filePath)}`}
                 defaultValue={basename(file.filePath)}
-                // Tiny border to make the edit affordance obvious without
-                // changing overall tab height. Size matches the label span.
-                className="truncate max-w-[80px] bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1 py-0"
+                // Why: keep the inline field compact enough for the titlebar while
+                // giving filenames a little more room than the static tab label.
+                className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+                spellCheck={false}
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
@@ -297,7 +308,7 @@ export default function EditorFileTab({
                     return
                   }
                   e.stopPropagation()
-                  setIsRenaming(true)
+                  openRenameInput()
                 }}
               >
                 {getEditorDisplayLabel(file)}
@@ -353,7 +364,18 @@ export default function EditorFileTab({
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-48" sideOffset={0} align="start">
+        <DropdownMenuContent
+          className="w-48"
+          sideOffset={0}
+          align="start"
+          onCloseAutoFocus={(event) => {
+            if (!skipMenuFocusRestoreRef.current) {
+              return
+            }
+            skipMenuFocusRestoreRef.current = false
+            event.preventDefault()
+          }}
+        >
           <DropdownMenuItem onSelect={() => onSplitGroup('up', file.tabId ?? file.id)}>
             <Rows2 className="mr-1.5 size-3.5" />
             Split Up
@@ -369,6 +391,18 @@ export default function EditorFileTab({
           <DropdownMenuItem onSelect={() => onSplitGroup('right', file.tabId ?? file.id)}>
             <Columns2 className="mr-1.5 size-3.5" />
             Split Right
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={!canRename || isRenaming}
+            onSelect={() => {
+              skipMenuFocusRestoreRef.current = true
+              onActivate()
+              openRenameInput()
+            }}
+          >
+            <Pencil className="mr-1.5 size-3.5" />
+            Rename
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
