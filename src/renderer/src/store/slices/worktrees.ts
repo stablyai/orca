@@ -29,6 +29,7 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-k
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { branchName } from '@/lib/git-utils'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
@@ -838,13 +839,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         changed = true
-        // Why: when the user hasn't set a custom name, mergeWorktree derives the
-        // title from the branch. A terminal branch switch only patches branch/head
-        // here, so re-derive the title too when it was auto-derived (matches the
-        // branch) — otherwise the card title stays frozen on the old branch name.
-        const branchShort = (b: string): string => b.replace(/^refs\/heads\//, '')
-        const wasAutoDerived = worktree.displayName === branchShort(worktree.branch)
-        const nextDisplayName = wasAutoDerived ? branchShort(nextBranch) : worktree.displayName
+        // Why: terminal branch switches only patch branch/head here; auto-derived
+        // titles need the same branch derivation that full worktree listing uses.
+        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
+        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
         return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
