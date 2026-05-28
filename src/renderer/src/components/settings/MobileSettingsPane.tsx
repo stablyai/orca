@@ -11,7 +11,7 @@ import {
 export { MOBILE_SETTINGS_PANE_SEARCH_ENTRIES }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.9'
+const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.10'
 
 type MobileSettingsPaneProps = {
   settings: GlobalSettings
