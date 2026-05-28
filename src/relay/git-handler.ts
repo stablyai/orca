@@ -36,6 +36,7 @@ import {
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { buildRelayCommandEnv } from './relay-command-env'
+import { resolveSafeUntrackedDiscardTarget } from '../shared/git-discard-path-safety'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -222,7 +223,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
 
-    const resolved = this.assertInWorktree(worktreePath, filePath)
+    this.assertInWorktree(worktreePath, filePath)
 
     let tracked = false
     try {
@@ -232,9 +233,13 @@ export class GitHandler {
       // untracked
     }
 
-    await (tracked
-      ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
-      : rm(resolved, { force: true, recursive: true }))
+    if (tracked) {
+      await this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
+      return
+    }
+
+    const safeTarget = await resolveSafeUntrackedDiscardTarget(worktreePath, filePath)
+    await rm(safeTarget, { force: true, recursive: true })
   }
 
   private async bulkDiscard(params: Record<string, unknown>) {
@@ -261,6 +266,9 @@ export class GitHandler {
     const untrackedPaths = filePaths.filter(
       (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
     )
+    const untrackedTargets = await Promise.all(
+      untrackedPaths.map((filePath) => resolveSafeUntrackedDiscardTarget(worktreePath, filePath))
+    )
 
     for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
@@ -268,9 +276,7 @@ export class GitHandler {
     }
 
     await Promise.all(
-      untrackedPaths.map((filePath) =>
-        rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
-      )
+      untrackedTargets.map((target) => rm(target, { force: true, recursive: true }))
     )
   }
 

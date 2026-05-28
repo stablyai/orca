@@ -7,7 +7,7 @@ import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 import {
@@ -452,6 +452,59 @@ describe('GitHandler', () => {
           filePaths: ['file.txt', '../../../etc/passwd']
         })
       ).rejects.toThrow('outside the worktree')
+    })
+
+    it('rejects untracked child paths through symlinked parents', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-git-outside-'))
+      const outsideFile = path.join(outsideDir, 'keep.txt')
+      writeFileSync(outsideFile, 'outside')
+      symlinkSync(
+        outsideDir,
+        path.join(tmpDir, 'link'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+
+      try {
+        await expect(
+          dispatcher.callRequest('git.discard', {
+            worktreePath: tmpDir,
+            filePath: 'link/keep.txt'
+          })
+        ).rejects.toThrow('outside the worktree')
+        await expect(fs.access(outsideFile)).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects bulk untracked child paths through symlinked parents before deleting anything', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-git-outside-'))
+      const outsideFile = path.join(outsideDir, 'keep.txt')
+      const untrackedFile = path.join(tmpDir, 'new.txt')
+      writeFileSync(outsideFile, 'outside')
+      writeFileSync(untrackedFile, 'untracked')
+      symlinkSync(
+        outsideDir,
+        path.join(tmpDir, 'link'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+
+      try {
+        await expect(
+          dispatcher.callRequest('git.bulkDiscard', {
+            worktreePath: tmpDir,
+            filePaths: ['new.txt', 'link/keep.txt']
+          })
+        ).rejects.toThrow('outside the worktree')
+        await expect(fs.access(outsideFile)).resolves.toBeUndefined()
+        await expect(fs.access(untrackedFile)).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true })
+      }
     })
   })
 

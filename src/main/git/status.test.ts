@@ -6,6 +6,7 @@ const {
   gitExecFileAsyncMock,
   gitExecFileAsyncBufferMock,
   lstatMock,
+  realpathMock,
   readFileMock,
   rmMock,
   existsSyncMock
@@ -13,6 +14,7 @@ const {
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncBufferMock: vi.fn(),
   lstatMock: vi.fn(),
+  realpathMock: vi.fn(),
   readFileMock: vi.fn(),
   rmMock: vi.fn(),
   existsSyncMock: vi.fn()
@@ -29,6 +31,7 @@ vi.mock('./runner', () => ({
 
 vi.mock('fs/promises', () => ({
   lstat: lstatMock,
+  realpath: realpathMock,
   readFile: readFileMock,
   rm: rmMock
 }))
@@ -55,8 +58,12 @@ describe('discardChanges', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
+    lstatMock.mockReset()
+    realpathMock.mockReset()
     readFileMock.mockReset()
     rmMock.mockReset()
+    lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
   it('restores tracked files from HEAD', async () => {
@@ -113,7 +120,11 @@ describe('discardChanges', () => {
 describe('bulk git helpers', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    lstatMock.mockReset()
+    realpathMock.mockReset()
     rmMock.mockReset()
+    lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
   it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
