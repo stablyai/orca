@@ -194,6 +194,7 @@ describe('BrowserTab favicon', () => {
     expect(images[0].props.draggable).toBe(false)
     expect(images[0].props.className).toContain('size-3 mr-1 shrink-0')
     expect(images[0].props.className).toContain('object-contain')
+    expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
   })
 

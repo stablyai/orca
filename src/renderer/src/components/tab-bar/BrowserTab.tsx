@@ -78,7 +78,9 @@ function BrowserTabFavicon({
         alt=""
         aria-hidden
         draggable={false}
-        className="size-3 mr-1 shrink-0 rounded-sm object-contain"
+        // Why: transparent dark/light-mode favicons can disappear against tab
+        // chrome; a token-colored 1px shadow keeps the 12px mark legible.
+        className="size-3 mr-1 shrink-0 rounded-sm object-contain drop-shadow-[0_0_1px_var(--foreground)]"
         onError={() => setFailedFavicon({ tabId, faviconUrl: displayFaviconUrl })}
       />
     )
