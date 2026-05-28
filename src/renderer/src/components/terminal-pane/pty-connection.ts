@@ -859,17 +859,17 @@ export function connectPanePty(
     }
   })
 
-  // ─── Agent task-complete: OS notification, not tab attention ──────────
+  // ─── Agent task-complete: OS notification + background workspace unread ─
   //
   // The working→idle title transition drives two independent concerns:
   //   1. The Claude prompt-cache countdown in the sidebar.
   //   2. The "Agent Task Complete" OS notification users toggle in Settings.
   //
-  // We intentionally do NOT raise tab/worktree unread from here — that
-  // remains BEL-only so non-agent long-running tasks stay first-class and
-  // so unread state only reflects what the terminal byte stream actually
-  // signals. OS notifications are a separate channel: not every agent CLI
-  // reliably emits BEL on completion (Gemini, some Codex flows), and
+  // We intentionally do NOT raise tab-level unread from here. The shared
+  // notification dispatcher marks switched-away workspaces unread, while BEL
+  // remains the terminal-byte attention source for tab bells and non-agent
+  // long-running tasks. OS notifications are a separate channel: not every
+  // agent CLI reliably emits BEL on completion (Gemini, some Codex flows), and
   // without this dispatch the Settings toggle would have zero producers.
   // Double-firing with a concurrent BEL is handled by delaying the BEL OS
   // notification below; main still keeps a 5 s per-worktree dedupe as the

@@ -25,6 +25,7 @@ type MockState = {
       customSoundPath?: string | null
     }
   }
+  markWorktreeUnread: ReturnType<typeof vi.fn>
 }
 
 const playDesktopNotificationSound = vi.hoisted(() => vi.fn())
@@ -87,7 +88,8 @@ describe('dispatchTerminalNotification', () => {
         ]
       },
       repos: [{ id: 'repo1', displayName: 'orca', connectionId: null }],
-      settings: { notifications: { customSoundPath: null } }
+      settings: { notifications: { customSoundPath: null } },
+      markWorktreeUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -120,6 +122,20 @@ describe('dispatchTerminalNotification', () => {
         agentLastAssistantMessage: 'Done.'
       })
     )
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+  })
+
+  it('does not mark the visible worktree unread for agent completion notifications', () => {
+    mockState.activeWorktreeId = 'wt-primary'
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
   })
 
   it('still drops stale notifications when neither worktree nor pane has a live pty', () => {

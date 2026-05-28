@@ -28,6 +28,7 @@ function leafIdForPane(paneId: number): string {
 }
 
 type StoreState = {
+  activeWorktreeId: string | null
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
   unreadTerminalTabs?: Record<string, true>
@@ -68,6 +69,7 @@ type StoreState = {
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
+  markWorktreeUnread: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
@@ -383,6 +385,7 @@ describe('connectPanePty', () => {
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = {
+      activeWorktreeId: 'wt-1',
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },
@@ -406,6 +409,7 @@ describe('connectPanePty', () => {
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
       agentStatusByPaneKey: {},
+      markWorktreeUnread: vi.fn(),
       setAgentStatus: vi.fn((paneKey: string, payload: Record<string, unknown>) => {
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           ...payload,
@@ -4150,10 +4154,11 @@ describe('connectPanePty', () => {
   })
 
   // Why: the working→idle transition fires an 'agent-task-complete' OS
-  // notification (user-toggleable in Settings) but MUST NOT raise tab/worktree
-  // unread — those stay BEL-only so non-agent long-running tasks remain
-  // first-class attention sources. Double-firing with a concurrent BEL is
-  // collapsed by the per-worktree dedupe in main/ipc/notifications.ts.
+  // notification (user-toggleable in Settings). When the user has switched
+  // away, the notification dispatch boundary also raises the workspace unread
+  // bell so the Dock badge and sidebar agree with the system notification.
+  // Double-firing with a concurrent BEL is collapsed by the per-worktree
+  // dedupe in main/ipc/notifications.ts.
   //
   // This test deliberately wires the real useNotificationDispatch hook into
   // connectPanePty instead of a vi.fn() stub. A stub would let the producer
@@ -4161,7 +4166,7 @@ describe('connectPanePty', () => {
   // routing through the real hook to window.api.notifications.dispatch means
   // removing the producer breaks the IPC assertion, which is the user-facing
   // contract.
-  it('dispatches agent-task-complete on working→idle but does not raise tab/worktree unread', async () => {
+  it('dispatches agent-task-complete on working→idle and marks a switched-away worktree unread', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
@@ -4197,6 +4202,7 @@ describe('connectPanePty', () => {
       { id: 'wt-2', repoId: 'repo2', path: '/tmp/wt-2', displayName: 'feat/other' }
     ]
     mockStoreState.repos.push({ id: 'repo2', connectionId: null, displayName: 'docs' })
+    mockStoreState.activeWorktreeId = 'wt-2'
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -4215,6 +4221,7 @@ describe('connectPanePty', () => {
     idleHandler('* Claude done')
 
     expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
     expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
@@ -4226,6 +4233,7 @@ describe('connectPanePty', () => {
       terminalTitle: '* Claude done',
       paneKey
     })
+    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',

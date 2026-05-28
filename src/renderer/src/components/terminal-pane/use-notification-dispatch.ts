@@ -158,6 +158,12 @@ export function dispatchTerminalNotification(
     return
   }
 
+  if (event.source === 'agent-task-complete' && state.activeWorktreeId !== worktreeId) {
+    // Why: a task-complete notification for a background workspace must leave
+    // the same durable unread signal that drives the sidebar bell and Dock badge.
+    state.markWorktreeUnread(worktreeId)
+  }
+
   // Why: prefer worktree.repoId over string-parsing the worktreeId. The
   // `${repoId}::${path}` format is an implementation detail of id
   // construction; coupling the notification dispatcher to it would silently
