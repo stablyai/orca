@@ -123,6 +123,63 @@ export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
   return true
 }
 
+export function exitEmptyDetailsBody(editor: Editor): boolean {
+  const { state, view } = editor
+  const { selection } = state
+  const { $from, empty } = selection
+
+  if (!empty || !$from.parent.isTextblock || $from.parent.content.size !== 0) {
+    return false
+  }
+
+  const detailsContentDepth = $from.depth - 1
+  if (detailsContentDepth < 1) {
+    return false
+  }
+
+  const detailsContentNode = $from.node(detailsContentDepth)
+  if (detailsContentNode.type.name !== 'detailsContent') {
+    return false
+  }
+
+  const childIndex = $from.index(detailsContentDepth)
+  if (childIndex !== detailsContentNode.childCount - 1) {
+    return false
+  }
+
+  const detailsDepth = detailsContentDepth - 1
+  const detailsNode = $from.node(detailsDepth)
+  if (detailsNode.type.name !== 'details') {
+    return false
+  }
+
+  const paragraphType = state.schema.nodes.paragraph
+  const paragraph = paragraphType?.createAndFill()
+  if (!paragraph) {
+    return false
+  }
+
+  const currentBlockFrom = $from.before($from.depth)
+  const currentBlockTo = $from.after($from.depth)
+  const shouldRemoveTrailingEmptyBlock = detailsContentNode.childCount > 1
+  let insertPos = $from.after(detailsDepth)
+  const tr = state.tr
+
+  if (shouldRemoveTrailingEmptyBlock) {
+    tr.delete(currentBlockFrom, currentBlockTo)
+    insertPos -= currentBlockTo - currentBlockFrom
+  }
+
+  // Why: an empty toggle body must have an Enter escape hatch, while the
+  // detailsContent node still needs one child to stay schema-valid.
+  tr.insert(insertPos, paragraph)
+  tr.setSelection(TextSelection.create(tr.doc, insertPos + 1))
+  tr.scrollIntoView()
+  view.dispatch(tr)
+
+  return true
+}
+
 const OrcaDetails = Details.extend({
   // Why: details summary Enter must run before StarterKit's generic paragraph
   // splitting so typing a toggle title then pressing Enter moves into the body.
@@ -220,6 +277,8 @@ const OrcaDetailsContent = DetailsContent.extend({
 
     return {
       ...parentShortcuts,
+      Enter: ({ editor }) =>
+        exitEmptyDetailsBody(editor) || parentShortcuts.Enter?.({ editor }) || false,
       Backspace: ({ editor }) =>
         moveFromEmptyDetailsBodyToSummary(editor) ||
         parentShortcuts.Backspace?.({ editor }) ||
