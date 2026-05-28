@@ -1,5 +1,5 @@
-import { spawn as spawnProcess } from 'child_process'
-import { dirname } from 'path'
+import { spawn as spawnProcess, type SpawnOptions } from 'child_process'
+import { dirname, resolve } from 'path'
 import { RuntimeClientError } from './types'
 
 export function launchOrcaApp(): void {
@@ -15,9 +15,10 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnProcess(overrideExecutable, [], {
+    spawnProcess(overrideExecutable, getExecutableAppArgs(), {
       detached: true,
       stdio: 'ignore',
+      ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
     }).unref()
     return
@@ -50,6 +51,102 @@ export function launchOrcaApp(): void {
   throw new RuntimeClientError(
     'runtime_open_failed',
     'Could not determine how to launch Orca. Start Orca manually and try again.'
+  )
+}
+
+export function serveOrcaApp(
+  args: {
+    json?: boolean
+    port?: string | null
+    pairingAddress?: string | null
+    noPairing?: boolean
+    mobilePairing?: boolean
+  } = {}
+): Promise<number> {
+  const executable = resolveForegroundOrcaExecutable()
+  const childArgs = [...getExecutableAppArgs(), '--serve']
+  if (args.json) {
+    childArgs.push('--serve-json')
+  }
+  if (args.port) {
+    childArgs.push('--serve-port', args.port)
+  }
+  if (args.pairingAddress) {
+    childArgs.push('--serve-pairing-address', args.pairingAddress)
+  }
+  if (args.noPairing) {
+    childArgs.push('--serve-no-pairing')
+  }
+  if (args.mobilePairing) {
+    childArgs.push('--serve-mobile-pairing')
+  }
+
+  const child = spawnProcess(executable, childArgs, {
+    cwd: resolveAppRoot(),
+    stdio: 'inherit',
+    ...getExecutableSpawnOptions(executable),
+    env: stripElectronRunAsNode(process.env)
+  })
+
+  return new Promise((resolve, reject) => {
+    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+    const forwardSignal = (signal: NodeJS.Signals): void => {
+      child.kill(signal)
+      forceKillTimer ??= setTimeout(() => {
+        child.kill('SIGKILL')
+      }, 5000)
+    }
+    const cleanup = (): void => {
+      process.off('SIGINT', forwardSignal)
+      process.off('SIGTERM', forwardSignal)
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+        forceKillTimer = null
+      }
+    }
+    process.on('SIGINT', forwardSignal)
+    process.on('SIGTERM', forwardSignal)
+    child.once('error', (error) => {
+      cleanup()
+      reject(error)
+    })
+    child.once('exit', (code, signal) => {
+      cleanup()
+      if (typeof code === 'number') {
+        resolve(code)
+        return
+      }
+      reject(new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}`))
+    })
+  })
+}
+
+function getExecutableAppArgs(): string[] {
+  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+}
+
+function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
+  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
+}
+
+function resolveAppRoot(): string {
+  // Why: dev-mode resource resolution in the Electron child may consult
+  // process.cwd(). Pin it to the app root so `orca serve` behaves the same
+  // regardless of the shell directory it was launched from.
+  return resolve(__dirname, '../../..')
+}
+
+function resolveForegroundOrcaExecutable(): string {
+  const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
+  if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
+    return overrideExecutable
+  }
+  if (process.env.ELECTRON_RUN_AS_NODE === '1') {
+    return process.execPath
+  }
+  throw new RuntimeClientError(
+    'runtime_serve_failed',
+    'Could not determine how to start Orca server. Set ORCA_APP_EXECUTABLE to the Orca executable.'
   )
 }
 

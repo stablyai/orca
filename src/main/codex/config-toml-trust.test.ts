@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -10,6 +18,8 @@ import {
   readHookTrustEntries,
   removeHookTrustEntries,
   upsertHookTrustEntries,
+  upsertProjectTrustLevel,
+  upsertProjectTrustLevelInContent,
   type CodexTrustEntry
 } from './config-toml-trust'
 
@@ -216,6 +226,23 @@ describe('computeTrustKey', () => {
         command: 'irrelevant'
       })
     ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
+  })
+
+  it('uses Codex canonicalized source paths when hooks.json exists', () => {
+    const nestedDir = join(tmpDir, 'nested')
+    mkdirSync(nestedDir)
+    const hooksPath = join(nestedDir, '..', 'hooks.json')
+    writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
+
+    expect(
+      computeTrustKey({
+        sourcePath: hooksPath,
+        eventLabel: 'user_prompt_submit',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'irrelevant'
+      })
+    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
   })
 })
 
@@ -630,6 +657,90 @@ describe('upsertHookTrustEntries', () => {
     const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
     expect(headerCount).toBe(1)
     expect(written).not.toContain('sha256:OLD')
+  })
+})
+
+describe('upsertProjectTrustLevel', () => {
+  it('creates a projects trust block when the config is empty', () => {
+    expect(upsertProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')).toBe(
+      ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', ''].join('\n')
+    )
+  })
+
+  it('uses Codex canonicalized project paths when the project exists', () => {
+    const nestedDir = join(tmpDir, 'nested')
+    const projectDir = join(tmpDir, 'project')
+    mkdirSync(nestedDir)
+    mkdirSync(projectDir)
+    const aliasedProjectPath = join(nestedDir, '..', 'project')
+    const trustedPath = realpathSync.native(aliasedProjectPath)
+    const trustedTomlPath = trustedPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+
+    expect(upsertProjectTrustLevelInContent('', aliasedProjectPath, 'trusted')).toBe(
+      [`[projects."${trustedTomlPath}"]`, 'trust_level = "trusted"', ''].join('\n')
+    )
+  })
+
+  it('updates an existing project block without touching unrelated keys', () => {
+    const original = [
+      'model = "gpt-5.5"',
+      '',
+      '[projects."/tmp/codex-ws"]',
+      'notes = "keep"',
+      'trust_level = "untrusted"',
+      '',
+      '[profiles.default]',
+      'sandbox_mode = "workspace-write"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')
+
+    expect(updated).toContain('model = "gpt-5.5"')
+    expect(updated).toContain('[projects."/tmp/codex-ws"]\nnotes = "keep"')
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('trust_level = "untrusted"')
+    expect(updated).toContain('[profiles.default]\nsandbox_mode = "workspace-write"')
+  })
+
+  it('adds trust_level to an existing project block that does not have one', () => {
+    const original = [
+      '[projects."/tmp/codex-ws"]',
+      'notes = "keep"',
+      '',
+      '[other]',
+      'value = 1',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, '/tmp/codex-ws', 'trusted')
+
+    expect(updated).toContain(
+      ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', 'notes = "keep"'].join('\n')
+    )
+    expect(updated).toContain('[other]\nvalue = 1')
+  })
+
+  it('preserves CRLF endings and escapes the project path in the header', () => {
+    const original = ['[profiles.default]', 'model = "gpt-5"', ''].join('\r\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
+
+    expect(updated).toContain(
+      ['[projects."C:\\\\Users\\\\nw\\\\repo"]', 'trust_level = "trusted"', ''].join('\r\n')
+    )
+    expect(updated).toContain('[profiles.default]\r\nmodel = "gpt-5"')
+  })
+
+  it('writes config.toml and avoids rewriting an already-trusted project', () => {
+    upsertProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
+    const firstWrite = readFileSync(configPath, 'utf-8')
+
+    rmSync(`${configPath}.bak`, { force: true })
+    upsertProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
   })
 })
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -8,6 +8,8 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
+import { loadHosts } from '../src/transport/host-store'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -49,6 +51,7 @@ function extractPairCode(url: string): string | null {
 
 export default function RootLayout() {
   const router = useRouter()
+  const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
   // Why: route `orca://pair#<code>` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -69,6 +72,72 @@ export default function RootLayout() {
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
     return () => sub.remove()
+  }, [router])
+
+  // Why: iOS delivers local notification taps through expo-notifications,
+  // not Linking. Route both cold-start and warm-start responses to the host
+  // and worktree that scheduled the notification.
+  useEffect(() => {
+    let disposed = false
+
+    function clearLastNotificationResponse() {
+      try {
+        Notifications.clearLastNotificationResponse()
+      } catch {
+        // Older native shells may not expose the clear API; duplicate guards
+        // still protect the current JS runtime.
+      }
+    }
+
+    function getInitialNotificationResponse(): Notifications.NotificationResponse | null {
+      try {
+        return Notifications.getLastNotificationResponse()
+      } catch {
+        return null
+      }
+    }
+
+    async function getNavigationPath(data: unknown): Promise<string | null> {
+      const hosts = await loadHosts().catch(() => null)
+      return getNotificationNavigationPath(data, {
+        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined
+      })
+    }
+
+    async function handleNotificationResponse(response: Notifications.NotificationResponse) {
+      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        clearLastNotificationResponse()
+        return
+      }
+
+      const notificationId = response.notification.request.identifier
+      if (handledNotificationIdsRef.current.has(notificationId)) {
+        return
+      }
+      handledNotificationIdsRef.current.add(notificationId)
+
+      const path = await getNavigationPath(response.notification.request.content.data)
+      clearLastNotificationResponse()
+      if (disposed) {
+        return
+      }
+      if (path) {
+        router.push(path)
+      }
+    }
+
+    const initialResponse = getInitialNotificationResponse()
+    if (initialResponse) {
+      void handleNotificationResponse(initialResponse)
+    }
+
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      void handleNotificationResponse(response)
+    })
+    return () => {
+      disposed = true
+      sub.remove()
+    }
   }, [router])
 
   // Why: hide the native splash only once the navigation Stack has been laid

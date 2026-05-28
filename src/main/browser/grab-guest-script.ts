@@ -68,8 +68,18 @@ const ARM_SCRIPT = `(function() {
     nearbyTextEntryMaxLength: 200,
     nearbyTextMaxEntries: 10,
     htmlSnippetMaxLength: 4096,
-    ancestorPathMaxEntries: 10
+    ancestorPathMaxEntries: 10,
+    nearbyElementsMaxEntries: 6,
+    nearbyElementMaxLength: 160,
+    selectorMaxLength: 700,
+    pathMaxLength: 900,
+    cssClassesMaxLength: 500,
+    selectedTextMaxLength: 500,
+    sourceFileMaxLength: 500,
+    reactComponentsMaxLength: 500
   };
+  var TEXT_NODE_SCAN_LIMIT = 80;
+  var NEARBY_ELEMENT_SCAN_LIMIT = 80;
 
   // --- Safe attribute names ---
   var SAFE_ATTRS = new Set([
@@ -118,9 +128,96 @@ const ARM_SCRIPT = `(function() {
     }
   }
 
+  function normalizeText(text) {
+    return String(text || '').trim().replace(/\\s+/g, ' ');
+  }
+
+  function getBoundedText(el, max) {
+    try {
+      var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      var chunks = [];
+      var length = 0;
+      var inspected = 0;
+      var node = walker.nextNode();
+      while (node && length < max + 20 && inspected < TEXT_NODE_SCAN_LIMIT) {
+        inspected++;
+        var separatorLength = chunks.length > 0 ? 1 : 0;
+        var remaining = max + 20 - length - separatorLength;
+        if (remaining <= 0) break;
+        var value = normalizeText((node.nodeValue || '').slice(0, remaining));
+        if (value) {
+          chunks.push(value.slice(0, remaining));
+          length += Math.min(value.length, remaining) + separatorLength;
+        }
+        node = walker.nextNode();
+      }
+      return clampStr(normalizeText(chunks.join(' ')), max);
+    } catch (e) {
+      return '';
+    }
+  }
+
   function getTextSnippet(el) {
-    var text = (el.textContent || '').trim().replace(/\\s+/g, ' ');
-    return clampStr(text, BUDGET.textSnippetMaxLength);
+    return getBoundedText(el, BUDGET.textSnippetMaxLength);
+  }
+
+  function getSelectedText() {
+    try {
+      var selection = window.getSelection ? window.getSelection() : null;
+      if (!selection || selection.rangeCount === 0) return '';
+      var chunks = [];
+      var length = 0;
+      var inspected = 0;
+      for (var i = 0; i < selection.rangeCount && length < BUDGET.selectedTextMaxLength + 20; i++) {
+        var range = selection.getRangeAt(i);
+        var walkerRoot = range.commonAncestorContainer;
+        var walker = document.createTreeWalker(
+          walkerRoot,
+          NodeFilter.SHOW_TEXT,
+          {
+            acceptNode: function(node) {
+              if (range.intersectsNode && !range.intersectsNode(node)) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              return NodeFilter.FILTER_ACCEPT;
+            }
+          }
+        );
+        var node = walkerRoot.nodeType === Node.TEXT_NODE ? walkerRoot : walker.nextNode();
+        while (
+          node &&
+          length < BUDGET.selectedTextMaxLength + 20 &&
+          inspected < TEXT_NODE_SCAN_LIMIT
+        ) {
+          inspected++;
+          var textNode = node;
+          var value = textNode.nodeValue || '';
+          var separatorLength = chunks.length > 0 ? 1 : 0;
+          var remaining = BUDGET.selectedTextMaxLength + 20 - length - separatorLength;
+          if (remaining <= 0) break;
+          if (value) {
+            var start = textNode === range.startContainer ? range.startOffset : 0;
+            var end = textNode === range.endContainer ? range.endOffset : value.length;
+            if (end > start + remaining) {
+              end = start + remaining;
+            }
+            if (textNode === range.startContainer) {
+              start = Math.min(start, value.length);
+            }
+            value = value.slice(start, end);
+            value = normalizeText(value);
+          }
+          if (value) {
+            chunks.push(value.slice(0, remaining));
+            length += Math.min(value.length, remaining) + separatorLength;
+          }
+          node = walker.nextNode();
+        }
+      }
+      return clampStr(chunks.join(' '), BUDGET.selectedTextMaxLength);
+    } catch (e) {
+      return '';
+    }
   }
 
   function getHtmlSnippet(el) {
@@ -171,14 +268,14 @@ const ARM_SCRIPT = `(function() {
       var names = [];
       for (var i = 0; i < parts.length; i++) {
         var ref = document.getElementById(parts[i]);
-        if (ref) names.push((ref.textContent || '').trim());
+        if (ref) names.push(getBoundedText(ref, 100));
       }
       if (names.length) accessibleName = names.join(' ');
     } else {
       // Fall back to text content for buttons/links
       var tag = el.tagName.toLowerCase();
       if (tag === 'button' || tag === 'a' || tag === 'label') {
-        accessibleName = clampStr((el.textContent || '').trim(), 100);
+        accessibleName = getBoundedText(el, 100);
       } else if (el.getAttribute('title')) {
         accessibleName = el.getAttribute('title');
       } else if (el.getAttribute('alt')) {
@@ -204,45 +301,160 @@ const ARM_SCRIPT = `(function() {
     return result;
   }
 
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, function(ch) {
+      return '\\\\' + ch;
+    });
+  }
+
+  function looksHashy(value) {
+    return /^[A-Za-z0-9_-]{12,}$/.test(value) && /\\d/.test(value) && /[A-Z]/.test(value);
+  }
+
+  function getStableClasses(el, maxCount) {
+    if (!el.classList) return [];
+    var result = [];
+    for (var i = 0; i < el.classList.length && result.length < maxCount; i++) {
+      var cls = el.classList[i];
+      if (!cls || cls.length > 60 || containsSecret(cls)) continue;
+      if (/^css-[a-z0-9]+$/i.test(cls) || looksHashy(cls)) continue;
+      result.push(cls);
+    }
+    return result;
+  }
+
+  function buildSelectorPart(el) {
+    var tag = el.tagName.toLowerCase();
+    var id = el.id;
+    if (id && !containsSecret(id)) {
+      return tag + '#' + cssEscape(id);
+    }
+    var classes = getStableClasses(el, 2);
+    if (classes.length > 0) {
+      return tag + classes.map(function(cls) { return '.' + cssEscape(cls); }).join('');
+    }
+    return tag;
+  }
+
+  function isUniqueSelector(selector) {
+    try {
+      return document.querySelectorAll(selector).length === 1;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function getNthOfTypeSuffix(current) {
+    var tag = current.tagName;
+    var index = 1;
+    var sibling = current.previousElementSibling;
+    while (sibling) {
+      if (sibling.tagName === tag) index++;
+      sibling = sibling.previousElementSibling;
+    }
+    if (index > 1) return ':nth-of-type(' + index + ')';
+
+    sibling = current.nextElementSibling;
+    while (sibling) {
+      if (sibling.tagName === tag) return ':nth-of-type(1)';
+      sibling = sibling.nextElementSibling;
+    }
+    return '';
+  }
+
   function buildSelector(el) {
     var parts = [];
     var current = el;
-    while (current && current !== document.body && parts.length < 10) {
-      var tag = current.tagName.toLowerCase();
-      var id = current.id;
-      if (id) {
-        parts.unshift(tag + '#' + CSS.escape(id));
-        break;
-      }
+    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 10) {
+      var part = buildSelectorPart(current);
       var parent = current.parentElement;
-      if (parent) {
-        var siblings = Array.from(parent.children).filter(
-          function(c) { return c.tagName === current.tagName; }
-        );
-        if (siblings.length > 1) {
-          var index = siblings.indexOf(current) + 1;
-          parts.unshift(tag + ':nth-of-type(' + index + ')');
-        } else {
-          parts.unshift(tag);
-        }
-      } else {
-        parts.unshift(tag);
+      if (parent && !isUniqueSelector(parts.concat([part]).reverse().join(' > '))) {
+        part += getNthOfTypeSuffix(current);
+      }
+      parts.unshift(part);
+      var selector = parts.join(' > ');
+      if (isUniqueSelector(selector)) {
+        return clampStr(selector, BUDGET.selectorMaxLength);
       }
       current = parent;
     }
-    return parts.join(' > ') || el.tagName.toLowerCase();
+    return clampStr(parts.join(' > ') || el.tagName.toLowerCase(), BUDGET.selectorMaxLength);
+  }
+
+  function buildReadablePath(el) {
+    var parts = [];
+    var current = el;
+    while (current && current !== document.documentElement && parts.length < 6) {
+      var tag = current.tagName.toLowerCase();
+      if (tag === 'html' || tag === 'body') break;
+      var label = tag;
+      var aria = current.getAttribute('aria-label');
+      var role = current.getAttribute('role');
+      var stableClasses = getStableClasses(current, 1);
+      if (current.id && !containsSecret(current.id)) {
+        label = '#' + cssEscape(current.id);
+      } else if (aria && !containsSecret(aria)) {
+        label = tag + '[aria-label="' + clampStr(aria, 40).replace(/"/g, '\\\\"') + '"]';
+      } else if (role && !containsSecret(role)) {
+        label = tag + '[role="' + clampStr(role, 30).replace(/"/g, '\\\\"') + '"]';
+      } else if (stableClasses.length > 0) {
+        label = '.' + cssEscape(stableClasses[0]);
+      }
+      parts.unshift(label);
+      current = current.parentElement;
+    }
+    return clampStr(parts.join(' > '), BUDGET.pathMaxLength);
+  }
+
+  function buildFullPath(el) {
+    var parts = [];
+    var current = el;
+    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement && parts.length < 20) {
+      parts.unshift(buildSelectorPart(current));
+      current = current.parentElement;
+    }
+    return clampStr(parts.join(' > '), BUDGET.pathMaxLength);
   }
 
   function getNearbyText(el) {
     var results = [];
     var parent = el.parentElement;
     if (!parent) return results;
-    var siblings = parent.children;
-    for (var i = 0; i < siblings.length && results.length < BUDGET.nearbyTextMaxEntries; i++) {
-      if (siblings[i] === el) continue;
-      var text = (siblings[i].textContent || '').trim().replace(/\\s+/g, ' ');
+
+    function addSiblingText(sibling) {
+      if (!sibling) return;
+      var text = getBoundedText(sibling, BUDGET.nearbyTextEntryMaxLength);
       if (text) {
         results.push(clampStr(text, BUDGET.nearbyTextEntryMaxLength));
+      }
+    }
+
+    var inspected = 0;
+    var previous = el.previousElementSibling;
+    var next = el.nextElementSibling;
+    while (
+      results.length < BUDGET.nearbyTextMaxEntries &&
+      inspected < NEARBY_ELEMENT_SCAN_LIMIT &&
+      (previous || next)
+    ) {
+      if (previous) {
+        var previousSibling = previous;
+        previous = previous.previousElementSibling;
+        inspected++;
+        addSiblingText(previousSibling);
+      }
+      if (
+        next &&
+        results.length < BUDGET.nearbyTextMaxEntries &&
+        inspected < NEARBY_ELEMENT_SCAN_LIMIT
+      ) {
+        var nextSibling = next;
+        next = next.nextElementSibling;
+        inspected++;
+        addSiblingText(nextSibling);
       }
     }
     return results;
@@ -260,9 +472,149 @@ const ARM_SCRIPT = `(function() {
     return path;
   }
 
+  function getNearbyElements(el) {
+    var parent = el.parentElement;
+    if (!parent) return [];
+    var result = [];
+
+    function addSibling(sibling) {
+      if (!sibling) return;
+      if (sibling === el) return;
+      var rect = sibling.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return;
+      var label = sibling.tagName.toLowerCase();
+      var stableClasses = getStableClasses(sibling, 1);
+      if (stableClasses.length > 0) label += '.' + stableClasses[0];
+      var text = getBoundedText(sibling, 50);
+      if (text) label += ' "' + clampStr(text, 50) + '"';
+      result.push(clampStr(label, BUDGET.nearbyElementMaxLength));
+    }
+    var inspected = 0;
+    var previous = el.previousElementSibling;
+    var next = el.nextElementSibling;
+    while (
+      result.length < BUDGET.nearbyElementsMaxEntries &&
+      inspected < NEARBY_ELEMENT_SCAN_LIMIT &&
+      (previous || next)
+    ) {
+      if (previous) {
+        var previousSibling = previous;
+        previous = previous.previousElementSibling;
+        inspected++;
+        addSibling(previousSibling);
+      }
+      if (
+        next &&
+        result.length < BUDGET.nearbyElementsMaxEntries &&
+        inspected < NEARBY_ELEMENT_SCAN_LIMIT
+      ) {
+        var nextSibling = next;
+        next = next.nextElementSibling;
+        inspected++;
+        addSibling(nextSibling);
+      }
+    }
+    return result;
+  }
+
+  function isElementFixed(el) {
+    var current = el;
+    while (current && current !== document.body) {
+      var position = window.getComputedStyle(current).position;
+      if (position === 'fixed' || position === 'sticky') return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function getFiberFromElement(el) {
+    var keys = Object.keys(el);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].indexOf('__reactFiber$') === 0 || keys[i].indexOf('__reactInternalInstance$') === 0) {
+        try {
+          return el[keys[i]] || null;
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  function getComponentNameFromFiber(fiber) {
+    if (!fiber) return null;
+    var type = fiber.type || fiber.elementType;
+    if (!type || typeof type === 'string') return null;
+    if (type.displayName || type.name) return type.displayName || type.name;
+    if (type.render && (type.render.displayName || type.render.name)) {
+      return type.render.displayName || type.render.name;
+    }
+    if (type.type && (type.type.displayName || type.type.name)) {
+      return type.type.displayName || type.type.name;
+    }
+    return null;
+  }
+
+  function shouldSkipReactName(name) {
+    if (!name || name.length <= 2) return true;
+    return /^(Fragment|Root|Routes|Route|Outlet|Provider|Consumer|Profiler|Suspense)$/.test(name) ||
+      /(?:Boundary|BoundaryHandler|Router|Provider|Consumer|Context|Wrapper)$/.test(name) ||
+      /^(Inner|Outer|Client|Server|RSC|Dev|React|Hot)/.test(name);
+  }
+
+  function cleanSourcePath(path) {
+    if (!path) return '';
+    return String(path)
+      .replace(/[?#].*$/, '')
+      .replace(/^turbopack:\\/\\/\\/\\[project\\]\\//, '')
+      .replace(/^webpack-internal:\\/\\/\\/\\.\\//, '')
+      .replace(/^webpack-internal:\\/\\/\\//, '')
+      .replace(/^webpack:\\/\\/\\/\\.\\//, '')
+      .replace(/^webpack:\\/\\/\\//, '')
+      .replace(/^turbopack:\\/\\/\\//, '')
+      .replace(/^https?:\\/\\/[^/]+\\//, '')
+      .replace(/^file:\\/\\/\\//, '/')
+      .replace(/^\\([^)]+\\)\\/\\.\\//, '')
+      .replace(/^\\.\\//, '');
+  }
+
+  function getReactMetadata(el) {
+    try {
+      var fiber = getFiberFromElement(el);
+      var components = [];
+      var sourceFile = null;
+      var depth = 0;
+      while (fiber && depth < 35) {
+        var name = getComponentNameFromFiber(fiber);
+        if (name && !shouldSkipReactName(name) && components.indexOf(name) === -1 && components.length < 6) {
+          components.push(name);
+        }
+        var source = fiber._debugSource || (fiber._debugOwner && fiber._debugOwner._debugSource);
+        if (!sourceFile && source && source.fileName && source.lineNumber) {
+          sourceFile = cleanSourcePath(source.fileName) + ':' + source.lineNumber +
+            (source.columnNumber !== undefined ? ':' + source.columnNumber : '');
+          if (containsSecret(sourceFile)) {
+            sourceFile = null;
+          }
+        }
+        fiber = fiber.return;
+        depth++;
+      }
+      return {
+        reactComponents: components.length > 0
+          ? clampStr(components.slice().reverse().map(function(c) { return '<' + c + '>'; }).join(' '), BUDGET.reactComponentsMaxLength)
+          : null,
+        sourceFile: sourceFile ? clampStr(sourceFile, BUDGET.sourceFileMaxLength) : null
+      };
+    } catch (e) {
+      return { reactComponents: null, sourceFile: null };
+    }
+  }
+
   // --- Build full payload for an element ---
   function extractPayload(el) {
     var rect = el.getBoundingClientRect();
+    var react = getReactMetadata(el);
     return {
       page: {
         sanitizedUrl: sanitizeUrl(window.location.href),
@@ -277,6 +629,16 @@ const ARM_SCRIPT = `(function() {
       target: {
         tagName: el.tagName.toLowerCase(),
         selector: buildSelector(el),
+        elementPath: buildReadablePath(el),
+        fullPath: buildFullPath(el),
+        cssClasses: containsSecret(el.getAttribute('class') || '')
+          ? '[redacted]'
+          : clampStr(el.getAttribute('class') || '', BUDGET.cssClassesMaxLength),
+        nearbyElements: getNearbyElements(el),
+        selectedText: getSelectedText() || null,
+        isFixed: isElementFixed(el),
+        reactComponents: react.reactComponents,
+        sourceFile: react.sourceFile,
         textSnippet: getTextSnippet(el),
         htmlSnippet: getHtmlSnippet(el),
         attributes: getSafeAttributes(el),
@@ -349,7 +711,7 @@ const ARM_SCRIPT = `(function() {
     // Build label text
     var tag = el.tagName.toLowerCase();
     var role = el.getAttribute('role');
-    var text = (el.textContent || '').trim().replace(/\\s+/g, ' ');
+    var text = getBoundedText(el, 40);
     if (text.length > 40) text = text.slice(0, 37) + '...';
     var w = Math.round(rect.width);
     var h = Math.round(rect.height);
@@ -420,6 +782,16 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
     return;
   }
 
+  function extractSelectedPayload(el) {
+    try {
+      return grab.extractPayload(el);
+    } catch (error) {
+      grab.cleanup();
+      reject(error instanceof Error ? error : new Error('Failed to extract element context'));
+      return null;
+    }
+  }
+
   function onClick(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -432,7 +804,8 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
       reject(new Error('cancelled'));
       return;
     }
-    var payload = grab.extractPayload(el);
+    var payload = extractSelectedPayload(el);
+    if (!payload) return;
     // Why: freeze the highlight instead of removing it so the user sees
     // which element was selected while the copy menu is shown. Teardown
     // happens later when the renderer calls setGrabMode(false) or re-arms.
@@ -456,7 +829,8 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
       reject(new Error('cancelled'));
       return;
     }
-    var payload = grab.extractPayload(el);
+    var payload = extractSelectedPayload(el);
+    if (!payload) return;
     grab.freezeHighlight();
     resolve({ __orcaContextMenu: true, payload: payload });
   }
@@ -482,7 +856,13 @@ const FINALIZE_SCRIPT = `(function() {
   if (!grab) return null;
   var el = grab.getCurrentElement();
   if (!el) return null;
-  var payload = grab.extractPayload(el);
+  var payload = null;
+  try {
+    payload = grab.extractPayload(el);
+  } catch (e) {
+    grab.cleanup();
+    return null;
+  }
   grab.cleanup();
   return payload;
 })()`
@@ -499,7 +879,11 @@ const EXTRACT_HOVER_SCRIPT = `(function() {
   if (!grab) return null;
   var el = grab.getCurrentElement();
   if (!el) return null;
-  return grab.extractPayload(el);
+  try {
+    return grab.extractPayload(el);
+  } catch (e) {
+    return null;
+  }
 })()`
 
 // ---------------------------------------------------------------------------

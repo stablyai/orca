@@ -29,6 +29,7 @@ function createAdapter(
         title: label
       }))
     ),
+    hasPty: vi.fn((id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
@@ -118,6 +119,20 @@ describe('DaemonPtyRouter', () => {
     await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
     expect(current.spawn).toHaveBeenCalledWith({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+  })
+
+  it('uses mapped adapter liveness instead of routing-cache presence for hasPty', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    expect(router.hasPty('legacy-session')).toBe(true)
+
+    await router.shutdown('legacy-session', { keepHistory: true })
+
+    expect(router.hasPty('legacy-session')).toBe(false)
+    expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {

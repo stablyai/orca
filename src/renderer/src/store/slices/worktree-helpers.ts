@@ -1,11 +1,20 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
+  GitPushTarget,
   SetupDecision,
+  TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceStatus,
   Worktree,
+  WorktreeBaseStatusEvent,
+  WorktreeLineage,
+  WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -15,8 +24,12 @@ export type WorktreeDeleteState = {
 
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
+  detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
+  worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
+  baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
+  remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
   /**
    * Monotonically increasing counter that signals when the sidebar sort order
    * should be recomputed.  Only bumped by events that represent meaningful
@@ -53,8 +66,14 @@ export type WorktreeSlice = {
    * sessions (design §4.4). Session-only; never persisted.
    */
   hasHydratedWorktreePurge: boolean
+  fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
+  fetchWorktreeLineage: () => Promise<void>
+  updateWorktreeLineage: (
+    worktreeId: string,
+    args: { parentWorktreeId?: string; noParent?: boolean }
+  ) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -64,7 +83,17 @@ export type WorktreeSlice = {
     /** Telemetry-only: which renderer surface initiated this create. Optional
      *  so existing callers default to `unknown`; specify when the surface
      *  matters for the activation funnel. */
-    telemetrySource?: WorkspaceCreateTelemetrySource
+    telemetrySource?: WorkspaceCreateTelemetrySource,
+    displayName?: string,
+    linkedIssue?: number,
+    linkedPR?: number,
+    pushTarget?: GitPushTarget,
+    createdWithAgent?: TuiAgent,
+    linkedLinearIssue?: string,
+    branchNameOverride?: string,
+    workspaceStatus?: WorkspaceStatus,
+    linkedGitLabMR?: number,
+    linkedGitLabIssue?: number
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -72,6 +101,9 @@ export type WorktreeSlice = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreesMeta: (
+    updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  ) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
@@ -102,6 +134,7 @@ export type WorktreeSlice = {
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
+  getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.
    * Called by the `worktrees:changed` listener on server-side deletions and
@@ -112,6 +145,8 @@ export type WorktreeSlice = {
     worktreeId: string,
     identity: { head?: string; branch?: string }
   ) => void
+  updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
+  updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
 }
 
 export function findWorktreeById(
@@ -153,9 +188,4 @@ export function applyWorktreeUpdates(
   }
 
   return changed ? next : worktreesByRepo
-}
-
-export function getRepoIdFromWorktreeId(worktreeId: string): string {
-  const sepIdx = worktreeId.indexOf('::')
-  return sepIdx === -1 ? worktreeId : worktreeId.slice(0, sepIdx)
 }

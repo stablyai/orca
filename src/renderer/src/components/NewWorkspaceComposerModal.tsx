@@ -6,19 +6,20 @@ import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import {
-  shouldAllowComposerEnterSubmitTarget,
-  shouldSuppressEnterSubmit
-} from '@/lib/new-workspace-enter-guard'
-import type { TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import type {
+  TuiAgent,
+  WorkspaceCreateTelemetrySource,
+  WorkspaceStatus
+} from '../../../shared/types'
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialBaseBranch?: string
+  initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
    *  `openModal('new-workspace-composer', ...)` site so
    *  `workspace_created.source` carries the right value. Falls back to
@@ -82,10 +83,6 @@ function ComposerModalBody({
           trigger?.focus({ preventScroll: true })
         }}
       >
-        <DialogHeader className="gap-1">
-          <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
-        </DialogHeader>
-
         <QuickTabBody modalData={modalData} onClose={onClose} active />
       </DialogContent>
     </Dialog>
@@ -109,10 +106,13 @@ function QuickTabBody({
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,
-    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {})
+    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
+    enableIssueAutomation: false,
+    createGateMode: 'quick'
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want
@@ -151,6 +151,7 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
@@ -182,21 +183,15 @@ function QuickTabBody({
         return
       }
 
-      // Why: require the platform modifier (Cmd on macOS, Ctrl elsewhere) so
-      // plain Enter inside fields (notes, repo search) doesn't accidentally
-      // submit — users can type or confirm selections without triggering
-      // workspace creation.
-      const hasModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!hasModifier) {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
       if (createDisabled) {
-        return
-      }
-      if (shouldSuppressEnterSubmit(event, false)) {
         return
       }
       event.preventDefault()
@@ -208,12 +203,16 @@ function QuickTabBody({
 
   return (
     <>
+      <DialogHeader className="gap-1">
+        <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+      </DialogHeader>
       <NewWorkspaceComposerCard
         composerRef={composerRef}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
       />

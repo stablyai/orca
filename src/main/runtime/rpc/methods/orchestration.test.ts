@@ -349,6 +349,42 @@ describe('orchestration RPC methods', () => {
       // Must not have marked read
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
+
+    it('does not mark messages read when a waiting check is aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      ctx = { runtime, signal: abortController.signal }
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        db.insertMessage({ from: 'a', to: 'b', subject: 'arrived during close' })
+        abortController.abort()
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it('does not mark existing messages read when the check starts aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      abortController.abort()
+      ctx = { runtime, signal: abortController.signal }
+      db.insertMessage({ from: 'a', to: 'b', subject: 'already unread' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
   })
 
   describe('orchestration.reply', () => {
@@ -439,6 +475,16 @@ describe('orchestration RPC methods', () => {
       })) as { task: { status: string } }
 
       expect(result.task.status).toBe('pending')
+    })
+
+    it('records the caller terminal handle when creating a task', async () => {
+      setup()
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'spawn related workspace',
+        callerTerminalHandle: 'term_creator'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
     it('rejects invalid deps JSON', async () => {
@@ -976,10 +1022,14 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.reset', () => {
-    it('resets all state', async () => {
-      setup()
+    function seedResetState(): void {
       db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
       db.createTask({ spec: 'work' })
+    }
+
+    it('resets all state', async () => {
+      setup()
+      seedResetState()
 
       const result = (await call('orchestration.reset', { all: true })) as { reset: string }
       expect(result.reset).toBe('all')
@@ -989,8 +1039,7 @@ describe('orchestration RPC methods', () => {
 
     it('resets tasks only', async () => {
       setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
-      db.createTask({ spec: 'work' })
+      seedResetState()
 
       await call('orchestration.reset', { tasks: true })
       expect(db.getInbox()).toHaveLength(1)
@@ -999,10 +1048,50 @@ describe('orchestration RPC methods', () => {
 
     it('resets messages only', async () => {
       setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
-      db.createTask({ spec: 'work' })
+      seedResetState()
 
       await call('orchestration.reset', { messages: true })
+      expect(db.getInbox()).toHaveLength(0)
+      expect(db.listTasks()).toHaveLength(1)
+    })
+
+    it.each([
+      ['empty params', {}],
+      ['false-only params', { all: false }],
+      ['multi-scope task and messages params', { tasks: true, messages: true }],
+      ['multi-scope all and tasks params', { all: true, tasks: true }],
+      ['non-boolean params', { all: 'true' }]
+    ])('rejects %s without mutating state', async (_name, params) => {
+      setup()
+      seedResetState()
+
+      await expect(call('orchestration.reset', params)).rejects.toThrow()
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+    })
+
+    it('ignores false scopes when exactly one scope is true', async () => {
+      setup()
+      seedResetState()
+
+      const result = (await call('orchestration.reset', { all: false, tasks: true })) as {
+        reset: string
+      }
+
+      expect(result.reset).toBe('tasks')
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(0)
+    })
+
+    it('ignores non-boolean scopes when exactly one real boolean scope is true', async () => {
+      setup()
+      seedResetState()
+
+      const result = (await call('orchestration.reset', { all: 'true', messages: true })) as {
+        reset: string
+      }
+
+      expect(result.reset).toBe('messages')
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })

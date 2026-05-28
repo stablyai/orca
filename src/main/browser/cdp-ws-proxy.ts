@@ -3,6 +3,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -11,6 +12,7 @@ export class CdpWsProxy {
   private port = 0
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
+  private debuggerLease: ElectronDebuggerLease | null = null
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
@@ -22,6 +24,9 @@ export class CdpWsProxy {
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
+      const onListenError = (error: Error): void => {
+        reject(error)
+      }
       this.wss.on('connection', (ws) => {
         if (this.client) {
           this.client.close()
@@ -35,6 +40,7 @@ export class CdpWsProxy {
         })
       })
       this.httpServer.listen(0, '127.0.0.1', () => {
+        this.httpServer?.removeListener('error', onListenError)
         const addr = this.httpServer!.address()
         if (typeof addr === 'object' && addr) {
           this.port = addr.port
@@ -43,7 +49,7 @@ export class CdpWsProxy {
           reject(new Error('Failed to bind proxy server'))
         }
       })
-      this.httpServer.on('error', reject)
+      this.httpServer.once('error', onListenError)
     })
   }
 
@@ -133,12 +139,10 @@ export class CdpWsProxy {
     if (this.attached) {
       return
     }
-    if (!this.webContents.debugger.isAttached()) {
-      try {
-        this.webContents.debugger.attach('1.3')
-      } catch {
-        throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
-      }
+    try {
+      this.debuggerLease = acquireElectronDebugger(this.webContents)
+    } catch {
+      throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
     }
     this.attached = true
 
@@ -171,6 +175,9 @@ export class CdpWsProxy {
     }
     this.debuggerDetachHandler = () => {
       this.attached = false
+      const lease = this.debuggerLease
+      this.debuggerLease = null
+      lease?.release()
       this.stop()
     }
     this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
@@ -186,14 +193,10 @@ export class CdpWsProxy {
       this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
       this.debuggerDetachHandler = null
     }
-    if (this.attached) {
-      try {
-        this.webContents.debugger.detach()
-      } catch {
-        /* already detached */
-      }
-      this.attached = false
-    }
+    const lease = this.debuggerLease
+    this.debuggerLease = null
+    lease?.release()
+    this.attached = false
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
@@ -280,16 +283,23 @@ export class CdpWsProxy {
     params: Record<string, unknown>,
     msgSessionId?: string
   ): void {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
     const sessionId =
       msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
-    this.webContents.debugger
-      .sendCommand(method, params, sessionId)
-      .then((result) => {
-        this.sendResult(clientId, result, client)
-      })
-      .catch((err: Error) => {
-        this.sendError(clientId, err.message, client)
-      })
+    try {
+      Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
+        .then((result) => {
+          this.sendResult(clientId, result, client)
+        })
+        .catch((err: Error) => {
+          this.sendError(clientId, err.message, client)
+        })
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 
   private async navigateWithLifecycleEnsured(

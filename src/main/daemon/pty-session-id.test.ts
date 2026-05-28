@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSafePtySessionId, mintPtySessionId } from './pty-session-id'
+import { isSafePtySessionId, mintPtySessionId, parsePtySessionId } from './pty-session-id'
 
 const USER_DATA = '/tmp/orca-userdata'
 
@@ -74,5 +74,48 @@ describe('isSafePtySessionId', () => {
     // Why: minted ids can contain `/` (from worktreeId::absolute-path) so the
     // validator must allow that as long as the result stays inside userData.
     expect(isSafePtySessionId('sub/path/ok@@12345678', USER_DATA)).toBe(true)
+  })
+})
+
+describe('parsePtySessionId', () => {
+  it('round-trips a minted id back to its worktreeId', () => {
+    const wt = 'repo-abc::/Users/me/wt/feature'
+    expect(parsePtySessionId(mintPtySessionId(wt))).toEqual({ worktreeId: wt })
+  })
+
+  it('rejects bare UUIDs (no @@)', () => {
+    expect(parsePtySessionId(mintPtySessionId())).toEqual({ worktreeId: null })
+  })
+
+  it('rejects ids with @@ but no `::` worktree shape', () => {
+    // Why: callers use the returned worktreeId as a memory-attribution key.
+    // A non-minted id like `wt-only@@abcd1234` would synthesize a bogus
+    // worktreeId; require the canonical `${repoId}::${path}` shape.
+    expect(parsePtySessionId('wt-only@@abcd1234')).toEqual({ worktreeId: null })
+  })
+
+  it('returns null for an empty string', () => {
+    expect(parsePtySessionId('')).toEqual({ worktreeId: null })
+  })
+
+  it('handles worktreeIds whose path contains @ characters', () => {
+    // Why: the parser uses lastIndexOf('@@') so `@`-containing paths still
+    // round-trip cleanly as long as `@@` only appears as the separator.
+    const wt = 'repo::/Users/me/email@host/wt'
+    expect(parsePtySessionId(`${wt}@@deadbeef`)).toEqual({ worktreeId: wt })
+  })
+
+  it('rejects degenerate `::@@…` ids with empty repo and path halves', () => {
+    // Why: `String.includes('::')` would accept '::' as a worktreeId.
+    // Memory-attribution callers must not bucket sessions under an empty key.
+    expect(parsePtySessionId('::@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
+  it('rejects ids with an empty path half (`repo::@@…`)', () => {
+    expect(parsePtySessionId('repo::@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
+  it('rejects ids with an empty repoId half (`::path@@…`)', () => {
+    expect(parsePtySessionId('::path@@deadbeef')).toEqual({ worktreeId: null })
   })
 })

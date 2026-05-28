@@ -27,6 +27,8 @@ import {
 } from './tab-group-state'
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -44,6 +46,7 @@ export type TabsSlice = {
         'id' | 'entityId' | 'label' | 'customLabel' | 'color' | 'isPreview' | 'isPinned'
       > & {
         targetGroupId: string
+        activate: boolean
       }
     >
   ) => Tab
@@ -394,7 +397,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   layoutByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
-    const id = init?.id ?? globalThis.crypto.randomUUID()
+    const id = init?.id ?? createBrowserUuid()
     let created!: Tab
     set((state) => {
       const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
@@ -434,14 +437,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
-      // Why: creating a tab implicitly activates it, so extend the group's MRU
-      // stack with the new id. Keeping MRU updates colocated with activation
-      // writes preserves the invariant that `activeTabId` equals the tail of
-      // `recentTabIds` for any tab we've actually seen.
-      const nextRecent = pushRecentTabId(
-        sanitizeRecentTabIds(group.recentTabIds, nextOrder),
-        created.id
-      )
+      const shouldActivate = init?.activate ?? true
+      const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+      const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
+      // Why: automation-created browser tabs need to exist and paint without
+      // stealing the visible group selection from the user's current tab.
+      const nextRecent = shouldActivate
+        ? pushRecentTabId(sanitizedRecent, created.id)
+        : sanitizedRecent
       return {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
@@ -451,7 +454,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...groupsByWorktree,
           [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
             ...group,
-            activeTabId: created.id,
+            activeTabId: nextActiveTabId,
             tabOrder: nextOrder,
             recentTabIds: nextRecent
           })
@@ -797,7 +800,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
     }
 
-    const groupId = globalThis.crypto.randomUUID()
+    const groupId = createBrowserUuid()
     set((state) => ({
       // Why: a freshly selected worktree can legitimately have zero tabs, but
       // split-group affordances still need a canonical root group so new tabs
@@ -903,10 +906,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupId,
         remainingGroups[0]?.id ?? null
       )
+      // Why: drop the dead group's recent-quick-command entry so the in-memory
+      // map can't grow unbounded as users open/close groups.
+      const { [groupId]: _droppedRecent, ...remainingRecent } = current.recentQuickCommandIdByGroup
       return {
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
         layoutByWorktree: collapsedState.layoutByWorktree,
         activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
+        recentQuickCommandIdByGroup: remainingRecent,
         ...(current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
@@ -928,7 +935,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   },
 
   createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
-    const newGroupId = globalThis.crypto.randomUUID()
+    const newGroupId = createBrowserUuid()
     const newGroup: TabGroup = {
       id: newGroupId,
       worktreeId,
@@ -1076,7 +1083,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let resolvedTargetGroupId = target.groupId
 
       if (target.splitDirection) {
-        const newGroupId = globalThis.crypto.randomUUID()
+        const newGroupId = createBrowserUuid()
         const newGroup: TabGroup = {
           id: newGroupId,
           worktreeId,
@@ -1285,6 +1292,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (unifiedTerminalEntityIds.has(tab.id)) {
         return false
       }
+      // Why: this is a one-shot migration filter for tabs not yet promoted
+      // to unifiedTabs — keeping the wake-hint `tab.ptyId` clause is
+      // intentional. tab.ptyId is the preserved sessionId (so wake can
+      // reattach to the same daemon-history dir / relay session); a slept
+      // tab will have `livePtyIds` empty *and* `tab.ptyId` populated, and
+      // we want it included in the migration sweep so reconcile picks it
+      // up. Reconcile fires again post-reattach, so the eventual live PTY
+      // also routes through this branch. Do *not* repurpose this as an
+      // "is this tab alive?" check — those reads must use ptyIdsByTabId.
       const livePtyIds = state.ptyIdsByTabId[tab.id] ?? []
       return livePtyIds.length > 0 || tab.ptyId != null
     })
@@ -1475,6 +1491,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .flat()
         .map((w) => w.id)
     )
+    validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

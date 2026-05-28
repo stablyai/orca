@@ -20,6 +20,7 @@ export function useLinkBubble(
     sourceFilePath: string
     worktreeId: string
     worktreeRoot: string | null
+    runtimeEnvironmentId?: string | null
   }
 ): {
   handleLinkSave: (href: string) => void
@@ -108,7 +109,8 @@ export function useLinkBubble(
     void activateMarkdownLink(linkBubble.href, {
       sourceFilePath: linkContext.sourceFilePath,
       worktreeId: linkContext.worktreeId,
-      worktreeRoot: linkContext.worktreeRoot
+      worktreeRoot: linkContext.worktreeRoot,
+      runtimeEnvironmentId: linkContext.runtimeEnvironmentId
     })
   }, [
     activateMarkdownLink,
@@ -116,6 +118,7 @@ export function useLinkBubble(
     linkContext.sourceFilePath,
     linkContext.worktreeId,
     linkContext.worktreeRoot,
+    linkContext.runtimeEnvironmentId,
     rootRef
   ])
 

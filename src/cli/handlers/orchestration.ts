@@ -207,12 +207,18 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-create': async ({ flags, client, json }) => {
+    const callerTerminalHandle =
+      typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
+      process.env.ORCA_TERMINAL_HANDLE.length > 0
+        ? process.env.ORCA_TERMINAL_HANDLE
+        : undefined
     const result = await client.call<{ task: { id: string; status: string } }>(
       'orchestration.taskCreate',
       {
         spec: getRequiredStringFlag(flags, 'spec'),
         deps: getOptionalStringFlag(flags, 'deps'),
-        parent: getOptionalStringFlag(flags, 'parent')
+        parent: getOptionalStringFlag(flags, 'parent'),
+        callerTerminalHandle
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
@@ -432,8 +438,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration reset': async ({ flags, client, json }) => {
+    const hasScopeFlag = flags.has('all') || flags.has('tasks') || flags.has('messages')
     const result = await client.call<{ reset: string }>('orchestration.reset', {
-      all: flags.has('all') ? true : undefined,
+      all: flags.has('all') || !hasScopeFlag ? true : undefined,
       tasks: flags.has('tasks') ? true : undefined,
       messages: flags.has('messages') ? true : undefined
     })

@@ -28,6 +28,11 @@ import type {
   BrowserSessionProfileScope,
   BrowserViewportOverride
 } from '../../shared/types'
+import {
+  isValidBrowserAnnotationViewportBridgeMarkers,
+  isValidBrowserAnnotationViewportBridgeToken,
+  type BrowserSetAnnotationViewportBridgeArgs
+} from '../../shared/browser-annotation-viewport-bridge'
 
 let trustedBrowserRendererWebContentsId: number | null = null
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
@@ -86,6 +91,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:setViewportOverride')
+  ipcMain.removeHandler('browser:setAnnotationViewportBridge')
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
   ipcMain.removeHandler('browser:setGrabMode')
@@ -213,6 +219,30 @@ export function registerBrowserHandlers(): void {
         }
       }
       return browserManager.setViewportOverride(args.browserPageId, args.override)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setAnnotationViewportBridge',
+    (event, args: BrowserSetAnnotationViewportBridgeArgs): Promise<boolean> | boolean => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      if (
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.enabled !== 'boolean' ||
+        typeof args.emitViewport !== 'boolean' ||
+        !isValidBrowserAnnotationViewportBridgeMarkers(args.markers) ||
+        !isValidBrowserAnnotationViewportBridgeToken(args.token)
+      ) {
+        return false
+      }
+      return browserManager.setAnnotationViewportBridge(args.browserPageId, {
+        enabled: args.enabled,
+        emitViewport: args.emitViewport,
+        markers: args.markers,
+        token: args.token
+      })
     }
   )
 

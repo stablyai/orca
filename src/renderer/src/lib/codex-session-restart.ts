@@ -1,5 +1,6 @@
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
@@ -34,7 +35,11 @@ async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
       // does not always do that. The foreground PTY process is the stable
       // source of truth for whether this live tab is actually running Codex.
       const foregroundProcesses = await Promise.all(
-        ptyIds.map((ptyId) => window.api.pty.getForegroundProcess(ptyId))
+        ptyIds.map((ptyId) =>
+          inspectRuntimeTerminalProcess(state.settings, ptyId).then(
+            (inspection) => inspection.foregroundProcess
+          )
+        )
       )
       return ptyIds.filter((_, index) => isCodexForegroundProcess(foregroundProcesses[index]))
     })

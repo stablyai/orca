@@ -5,9 +5,12 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
   type AgentStatusState,
-  type AgentType
+  type AgentType,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import type { Repo, Worktree, TerminalTab } from '../../../../shared/types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 // ─── Shared data types ────────────────────────────────────────────────────────
 
@@ -21,19 +24,24 @@ export type DashboardAgentRow = {
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */
   startedAt: number
+  lineage?: {
+    depth: 0 | 1
+    isFirstSibling: boolean
+    isLastSibling: boolean
+    childCount: number
+  }
 }
 
-// Why: the shape here is deliberately minimal — just what useRetainedAgentsSync
-// needs to diff liveGroups and decide which vanished agents to retain. The
-// per-card rendering pipeline is separate (WorktreeCardAgents +
-// useWorktreeAgentRows read retained entries directly from the store).
+// Why: the shape here is deliberately minimal. The per-card rendering pipeline
+// is separate (WorktreeCardAgents + useWorktreeAgentRows read retained entries
+// directly from the store).
 export type DashboardWorktreeCard = {
   repo: Repo
   worktree: Worktree
   agents: DashboardAgentRow[]
 }
 
-export type DashboardRepoGroup = {
+export type DashboardProjectGroup = {
   repo: Repo
   worktrees: DashboardWorktreeCard[]
 }
@@ -97,25 +105,40 @@ function buildDashboardData(
   worktreesByRepo: Record<string, Worktree[]>,
   tabsByWorktree: Record<string, TerminalTab[]>,
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>,
   now: number
-): DashboardRepoGroup[] {
+): DashboardProjectGroup[] {
   // Why: build a tabId -> entries index once per computation instead of
   // re-scanning every agent status entry inside the per-tab loop. paneKey is
-  // formatted as `${tabId}:${paneId}`; splitting on the first ':' lets us
-  // bucket entries by tab in a single O(N) pass, turning the per-worktree
-  // build from O(tabs × statuses) into O(tabs).
+  // formatted as `${tabId}:${leafId}`; parsePaneKey also drops legacy numeric
+  // suffixes so stale rows do not remain routable after pane replay.
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    const colonIndex = paneKey.indexOf(':')
-    if (colonIndex === -1) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed) {
       continue
     }
-    const tabId = paneKey.slice(0, colonIndex)
-    const bucket = entriesByTabId.get(tabId)
+    const bucket = entriesByTabId.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
-      entriesByTabId.set(tabId, [entry])
+      entriesByTabId.set(parsed.tabId, [entry])
+    }
+  }
+  for (const unsupported of Object.values(migrationUnsupportedByPtyId)) {
+    const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+    if (!entry) {
+      continue
+    }
+    const parsed = parsePaneKey(entry.paneKey)
+    if (!parsed) {
+      continue
+    }
+    const bucket = entriesByTabId.get(parsed.tabId)
+    if (bucket) {
+      bucket.push(entry)
+    } else {
+      entriesByTabId.set(parsed.tabId, [entry])
     }
   }
 
@@ -127,26 +150,24 @@ function buildDashboardData(
         return { repo, worktree, agents } satisfies DashboardWorktreeCard
       })
 
-    return { repo, worktrees } satisfies DashboardRepoGroup
+    return { repo, worktrees } satisfies DashboardProjectGroup
   })
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Cross-worktree aggregate of live agent rows. Used by useRetainedAgentsSync
- * to drive retention: when a previously-live 'done' agent disappears from
- * this set, its snapshot is moved into retainedAgentsByPaneKey so the inline
- * per-card list can still render it.
+ * Cross-worktree aggregate of live agent rows.
  *
  * Not used to render anything directly — the inline list reads its own
  * worktree-scoped slice via useWorktreeAgentRows.
  */
-export function useDashboardData(): DashboardRepoGroup[] {
+export function useDashboardData(): DashboardProjectGroup[] {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   // Why: agentStatusEpoch is included in the dependency array (but not in the
   // computation itself) so the memo recomputes when freshness boundaries expire,
   // even if no new PTY data arrives.
@@ -158,8 +179,22 @@ export function useDashboardData(): DashboardRepoGroup[] {
     // freshness boundary crosses, driving re-evaluation without coupling to
     // wall-clock time directly.
     () =>
-      buildDashboardData(repos, worktreesByRepo, tabsByWorktree, agentStatusByPaneKey, Date.now()),
+      buildDashboardData(
+        repos,
+        worktreesByRepo,
+        tabsByWorktree,
+        agentStatusByPaneKey,
+        migrationUnsupportedByPtyId,
+        Date.now()
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [repos, worktreesByRepo, tabsByWorktree, agentStatusByPaneKey, agentStatusEpoch]
+    [
+      repos,
+      worktreesByRepo,
+      tabsByWorktree,
+      agentStatusByPaneKey,
+      migrationUnsupportedByPtyId,
+      agentStatusEpoch
+    ]
   )
 }

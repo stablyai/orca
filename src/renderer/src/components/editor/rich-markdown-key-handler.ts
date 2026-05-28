@@ -1,6 +1,9 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { editorShortcutMatches } from './editor-shortcuts'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   commitRow,
@@ -10,6 +13,12 @@ import {
   type SlashCommand,
   type SlashMenuState
 } from './rich-markdown-commands'
+import {
+  collapseEmptyListContinuationParagraph,
+  commitEmptyOrderedListMarkerAsText,
+  convertEmptyNestedOrderedItemToContinuation,
+  exitTrailingEmptyOrderedListItem
+} from './rich-markdown-list-continuation'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -26,14 +35,20 @@ export type KeyHandlerContext = {
   filteredDocLinkRowsRef: MutableRefObject<DocLinkMenuRow[]>
   selectedDocLinkIndexRef: MutableRefObject<number>
   handleLocalImagePickRef: MutableRefObject<() => void>
+  handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
+  typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
-  setSlashMenu: (menu: SlashMenuState | null) => void
+  setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
+}
+
+function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
+  return event.isComposing || editor?.view.composing === true
 }
 
 /**
@@ -45,12 +60,18 @@ export function createRichMarkdownKeyHandler(
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-    if (isMarkdownPreviewFindShortcut(event, ctx.isMac)) {
+    if (
+      isMarkdownPreviewFindShortcut(
+        event,
+        getShortcutPlatform(),
+        useAppStore.getState().keybindings
+      )
+    ) {
       event.preventDefault()
       ctx.openSearchRef.current()
       return true
     }
-    if (mod && event.key.toLowerCase() === 's') {
+    if (editorShortcutMatches('editor.save', event)) {
       event.preventDefault()
       // Why: flush any pending debounced serialization so the save
       // captures the very latest editor content, not a stale snapshot.
@@ -94,6 +115,37 @@ export function createRichMarkdownKeyHandler(
         ctx.setIsEditingLink(true)
       }
       return true
+    }
+
+    if (event.key === 'Backspace') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        (convertEmptyNestedOrderedItemToContinuation(ed) ||
+          collapseEmptyListContinuationParagraph(ed))
+      ) {
+        event.preventDefault()
+        return true
+      }
+    }
+
+    if (event.key === 'Enter') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        ctx.typedEmptyOrderedListMarkerRef.current &&
+        commitEmptyOrderedListMarkerAsText(ed)
+      ) {
+        ctx.typedEmptyOrderedListMarkerRef.current = false
+        event.preventDefault()
+        return true
+      }
+      if (ed && !isComposingMarkdownInput(event, ed) && exitTrailingEmptyOrderedListItem(ed)) {
+        event.preventDefault()
+        return true
+      }
     }
 
     // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,
@@ -195,6 +247,13 @@ export function createRichMarkdownKeyHandler(
     }
 
     const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      ctx.setSlashMenu(null)
+      return true
+    }
+
     if (currentFilteredSlashCommands.length === 0) {
       return false
     }
@@ -228,18 +287,16 @@ export function createRichMarkdownKeyHandler(
       // mirrors the latest highlighted slash-menu item for keyboard picks.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
       if (selectedCommand) {
-        runSlashCommand(activeEditor, currentSlashMenu, selectedCommand, () =>
-          ctx.handleLocalImagePickRef.current()
+        runSlashCommand(
+          activeEditor,
+          currentSlashMenu,
+          selectedCommand,
+          () => ctx.handleLocalImagePickRef.current(),
+          () => ctx.handleEmojiPickRef.current(currentSlashMenu)
         )
       }
       return true
     }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      ctx.setSlashMenu(null)
-      return true
-    }
-
     return false
   }
 }

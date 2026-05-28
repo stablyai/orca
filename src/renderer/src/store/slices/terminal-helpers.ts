@@ -9,6 +9,20 @@ export function emptyLayoutSnapshot(): TerminalLayoutSnapshot {
   }
 }
 
+export function singlePaneLayoutSnapshot(
+  leafId: string,
+  ptyId?: string,
+  title?: string | null
+): TerminalLayoutSnapshot {
+  return {
+    root: { type: 'leaf', leafId },
+    activeLeafId: leafId,
+    expandedLeafId: null,
+    ...(ptyId ? { ptyIdsByLeafId: { [leafId]: ptyId } } : {}),
+    ...(title ? { titlesByLeafId: { [leafId]: title } } : {})
+  }
+}
+
 export function clearTransientTerminalState(tab: TerminalTab, index: number): TerminalTab {
   return {
     ...tab,

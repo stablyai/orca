@@ -1,11 +1,13 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, Copy, File } from 'lucide-react'
+import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useWorktreesForRepo } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import {
   CommandDialog,
   CommandInput,
@@ -13,46 +15,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-
-/**
- * Simple fuzzy match: checks if all characters in the query appear in order
- * within the target string (case-insensitive). Returns a score (lower = better)
- * or -1 if no match.
- */
-function fuzzyMatch(query: string, target: string): number {
-  const q = query.toLowerCase()
-  const t = target.toLowerCase()
-  let qi = 0
-  let score = 0
-  let lastMatchIdx = -1
-
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) {
-      // Bonus for consecutive matches
-      const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
-      score += gap
-      // Bonus for matching after separator (/ or .)
-      if (ti > 0 && (t[ti - 1] === '/' || t[ti - 1] === '.' || t[ti - 1] === '-')) {
-        score -= 5 // reward
-      }
-      lastMatchIdx = ti
-      qi++
-    }
-  }
-
-  if (qi < q.length) {
-    return -1 // not all chars matched
-  }
-
-  // Prefer matches where query appears in the filename (last segment)
-  const lastSlash = target.lastIndexOf('/')
-  const filename = target.slice(lastSlash + 1).toLowerCase()
-  if (filename.includes(q)) {
-    score -= 100 // strong reward for filename match
-  }
-
-  return score
-}
+import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
 
 /**
  * Parses the install-ripgrep guidance message produced by the relay's
@@ -254,15 +217,18 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     const excludePaths = excludePathsKey ? excludePathsKey.split('\n') : undefined
 
-    void window.api.fs
-      // Why: quick-open shares the active worktree path model with file explorer
-      // and search, so remote worktrees must include connectionId. Without this,
-      // Windows resolves Linux roots (e.g. /home/*) as local C:\home\* paths.
-      .listFiles({
+    void listRuntimeFiles(
+      {
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId
+      },
+      {
         rootPath: worktreePath,
-        connectionId,
         excludePaths
-      })
+      }
+    )
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
@@ -289,25 +255,13 @@ export default function QuickOpen(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [visible, worktreePath, connectionId, excludePathsKey, filesRequestKey])
+  }, [visible, activeWorktreeId, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
-  // Filter files by fuzzy match
-  const filtered = useMemo(() => {
-    const normalizedQuery = deferredQuery.trim()
-    if (!normalizedQuery) {
-      // Show first 50 files when no query
-      return files.slice(0, 50).map((f) => ({ path: f, score: 0 }))
-    }
-    const results: { path: string; score: number }[] = []
-    for (const f of files) {
-      const score = fuzzyMatch(normalizedQuery, f)
-      if (score !== -1) {
-        results.push({ path: f, score })
-      }
-    }
-    results.sort((a, b) => a.score - b.score)
-    return results.slice(0, 50)
-  }, [deferredQuery, files])
+  const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
+  const filtered = useMemo(
+    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
+    [deferredQuery, indexedFiles]
+  )
 
   const handleSelect = useCallback(
     (relativePath: string) => {
@@ -375,6 +329,7 @@ export default function QuickOpen(): React.JSX.Element | null {
             const lastSlash = item.path.lastIndexOf('/')
             const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
             const filename = item.path.slice(lastSlash + 1)
+            const FileIcon = getFileTypeIcon(item.path)
 
             return (
               <CommandItem
@@ -383,7 +338,7 @@ export default function QuickOpen(): React.JSX.Element | null {
                 onSelect={() => handleSelect(item.path)}
                 className="flex items-center gap-2 px-3 py-1.5"
               >
-                <File size={14} className="text-muted-foreground flex-shrink-0" />
+                <FileIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
                 <span className="truncate text-foreground">{filename}</span>
                 {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
               </CommandItem>

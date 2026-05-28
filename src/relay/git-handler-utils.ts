@@ -7,25 +7,8 @@
  */
 import * as path from 'path'
 import { existsSync } from 'fs'
-
-// ─── Status parsing ──────────────────────────────────────────────────
-
-export function parseStatusChar(char: string): string {
-  switch (char) {
-    case 'M':
-      return 'modified'
-    case 'A':
-      return 'added'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    default:
-      return 'modified'
-  }
-}
+import { isBinaryBuffer } from '../shared/binary-buffer'
+import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
@@ -63,89 +46,6 @@ export function parseConflictKind(xy: string): string | null {
     default:
       return null
   }
-}
-
-/**
- * Parse `git status --porcelain=v2` output into structured entries.
- * Does NOT handle unmerged entries (those require worktree access).
- */
-export function parseStatusOutput(stdout: string): {
-  entries: Record<string, unknown>[]
-  unmergedLines: string[]
-  head?: string
-  branch?: string
-} {
-  const entries: Record<string, unknown>[] = []
-  const unmergedLines: string[] = []
-  let head: string | undefined
-  let branch: string | undefined
-
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-
-    if (line.startsWith('# branch.oid ')) {
-      head = line.slice('# branch.oid '.length).trim()
-      continue
-    }
-
-    if (line.startsWith('# branch.head ')) {
-      const branchHead = line.slice('# branch.head '.length).trim()
-      branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
-      continue
-    }
-
-    if (line.startsWith('1 ') || line.startsWith('2 ')) {
-      const parts = line.split(' ')
-      const xy = parts[1]
-      const indexStatus = xy[0]
-      const worktreeStatus = xy[1]
-
-      if (line.startsWith('2 ')) {
-        // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
-        // The new path is the last space-delimited token before the tab; origPath follows the tab.
-        const tabParts = line.split('\t')
-        const spaceParts = tabParts[0].split(' ')
-        const filePath = spaceParts.at(-1)!
-        const oldPath = tabParts[1]
-        if (indexStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(indexStatus),
-            area: 'staged',
-            oldPath
-          })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged',
-            oldPath
-          })
-        }
-      } else {
-        const filePath = parts.slice(8).join(' ')
-        if (indexStatus !== '.') {
-          entries.push({ path: filePath, status: parseStatusChar(indexStatus), area: 'staged' })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged'
-          })
-        }
-      }
-    } else if (line.startsWith('? ')) {
-      entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
-    } else if (line.startsWith('u ')) {
-      unmergedLines.push(line)
-    }
-  }
-
-  return { entries, unmergedLines, head, branch }
 }
 
 /**
@@ -202,7 +102,10 @@ export function parseUnmergedEntry(
 /**
  * Parse `git diff --name-status` output into structured change entries.
  */
-export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
+export function parseBranchDiff(
+  stdout: string,
+  statsByPath: Map<string, GitLineStats> = new Map()
+): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -216,12 +119,12 @@ export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
       const oldPath = parts[1]
       const filePath = parts[2]
       if (filePath) {
-        entries.push({ path: filePath, oldPath, status })
+        entries.push({ path: filePath, oldPath, status, ...statsByPath.get(filePath) })
       }
     } else {
       const filePath = parts[1]
       if (filePath) {
-        entries.push({ path: filePath, status })
+        entries.push({ path: filePath, status, ...statsByPath.get(filePath) })
       }
     }
   }
@@ -270,16 +173,6 @@ export function parseWorktreeList(output: string): Record<string, unknown>[] {
 }
 
 // ─── Binary / blob helpers ───────────────────────────────────────────
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
-}
 
 export const PREVIEWABLE_MIME: Record<string, string> = {
   '.png': 'image/png',

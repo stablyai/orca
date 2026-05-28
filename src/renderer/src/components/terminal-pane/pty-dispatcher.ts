@@ -13,7 +13,12 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 // PTY ID. Eliminates the N-listener problem that triggers
 // MaxListenersExceededWarning with many panes/tabs.
 
-export const ptyDataHandlers = new Map<string, (data: string) => void>()
+export type PtyDataMeta = {
+  seq?: number
+  rawLength?: number
+}
+
+export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
  *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
@@ -49,6 +54,7 @@ export function subscribeToPtyData(ptyId: string, watcher: (data: string) => voi
  *  guard and suppress xterm auto-replies during replay. */
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
+const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 /** Per-PTY teardown callbacks registered by each transport to clear closure
  *  state (stale-title timer, agent tracker) that would otherwise fire after
  *  the data handler is removed. */
@@ -80,7 +86,16 @@ export function ensurePtyDispatcher(): void {
   }
   ptyDispatcherAttached = true
   window.api.pty.onData((payload) => {
-    ptyDataHandlers.get(payload.id)?.(payload.data)
+    let meta: PtyDataMeta | undefined
+    if (typeof payload.seq === 'number') {
+      meta ??= {}
+      meta.seq = payload.seq
+    }
+    if (typeof payload.rawLength === 'number') {
+      meta ??= {}
+      meta.rawLength = payload.rawLength
+    }
+    ptyDataHandlers.get(payload.id)?.(payload.data, meta)
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
       // Why: snapshot the Set before iterating because watchers commonly
@@ -101,7 +116,35 @@ export function ensurePtyDispatcher(): void {
   })
   window.api.pty.onExit((payload) => {
     ptyExitHandlers.get(payload.id)?.(payload.code)
+    const sidecars = ptyExitSidecars.get(payload.id)
+    if (sidecars && sidecars.size > 0) {
+      const snapshot = Array.from(sidecars)
+      ptyExitSidecars.delete(payload.id)
+      for (const sidecar of snapshot) {
+        sidecar(payload.code)
+      }
+    }
   })
+}
+
+export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => void): () => void {
+  ensurePtyDispatcher()
+  let set = ptyExitSidecars.get(ptyId)
+  if (!set) {
+    set = new Set()
+    ptyExitSidecars.set(ptyId, set)
+  }
+  set.add(watcher)
+  return () => {
+    const current = ptyExitSidecars.get(ptyId)
+    if (!current) {
+      return
+    }
+    current.delete(watcher)
+    if (current.size === 0) {
+      ptyExitSidecars.delete(ptyId)
+    }
+  }
 }
 
 // ─── Eager PTY buffer for reconnection on restart ────────────────────
@@ -201,7 +244,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** Replay bytes from a prior session (eager buffers, attach-time screen
        *  clears). Routed separately from onData so the renderer can engage
        *  the replay guard — otherwise xterm auto-replies to embedded query
@@ -225,7 +268,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** See note on connect.callbacks.onReplayData. */
       onReplayData?: (data: string) => void
       onStatus?: (shell: string) => void
@@ -235,6 +278,7 @@ export type PtyTransport = {
   }) => void
   disconnect: () => void
   sendInput: (data: string) => boolean
+  sendInputAccepted?: (data: string) => Promise<boolean>
   resize: (
     cols: number,
     rows: number,
@@ -262,6 +306,8 @@ export type IpcPtyTransportOptions = {
    *  these from the calling pane's (tabId, leafId). */
   tabId?: string
   leafId?: string
+  /** Whether renderer-backed runtime reveal should focus the created tab. */
+  activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim

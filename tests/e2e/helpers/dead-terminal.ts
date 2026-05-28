@@ -6,9 +6,44 @@
  */
 
 import { expect } from '@playwright/test'
+import { execFileSync } from 'child_process'
+import { writeFileSync } from 'fs'
+import path from 'path'
 import type { getActiveWorktreeId } from './store'
 
 type TestPage = Parameters<typeof getActiveWorktreeId>[0]
+
+const SETUP_HOOK_CONTENT = 'scripts:\n  setup: echo SETUP_COMPLETE\n'
+
+async function ensureSetupHookCommitted(page: TestPage): Promise<void> {
+  const activeWorktreePath = await page.evaluate(() => {
+    const state = window.__store?.getState()
+    if (!state?.activeWorktreeId) {
+      throw new Error('No active worktree')
+    }
+    const activeWorktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((wt) => wt.id === state.activeWorktreeId)
+    if (!activeWorktree) {
+      throw new Error('Active worktree not found in store')
+    }
+    return activeWorktree.path
+  })
+
+  writeFileSync(path.join(activeWorktreePath, 'orca.yaml'), SETUP_HOOK_CONTENT, 'utf-8')
+  execFileSync('git', ['add', 'orca.yaml'], { cwd: activeWorktreePath, stdio: 'pipe' })
+
+  try {
+    execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: activeWorktreePath, stdio: 'pipe' })
+  } catch {
+    // Why: worktree creation reads orca.yaml from the created worktree, so the
+    // temp repo must commit this hook before `git worktree add` copies it.
+    execFileSync('git', ['commit', '-m', 'Add e2e setup hook'], {
+      cwd: activeWorktreePath,
+      stdio: 'pipe'
+    })
+  }
+}
 
 /**
  * Create a worktree with setup via the real IPC flow, then activate it
@@ -21,6 +56,8 @@ export async function createAndActivateWorktreeWithSetup(
   suffix: string,
   direction: 'vertical' | 'horizontal'
 ): Promise<string> {
+  await ensureSetupHookCommitted(page)
+
   const name = `e2e-dead-term-${suffix}-${Date.now()}`
   return page.evaluate(
     async ({ worktreeName, direction }) => {

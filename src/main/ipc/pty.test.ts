@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter, join } from 'node:path'
 
 const {
   handleMock,
@@ -12,6 +13,7 @@ const {
   statSyncMock,
   accessSyncMock,
   mkdirSyncMock,
+  readFileSyncMock,
   writeFileSyncMock,
   chmodSyncMock,
   getPathMock,
@@ -19,11 +21,19 @@ const {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
+  clearAgentHookPaneStateMock,
+  registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
   trackMock,
-  classifyErrorMock
+  classifyErrorMock,
+  registerPtyMock,
+  unregisterPtyMock,
+  setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKeyMock,
+  clearPaneKeyAliasesForPtyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -33,6 +43,7 @@ const {
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   chmodSyncMock: vi.fn(),
   getPathMock: vi.fn(),
@@ -41,10 +52,18 @@ const {
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  clearAgentHookPaneStateMock: vi.fn(),
+  registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn(),
   trackMock: vi.fn(),
-  classifyErrorMock: vi.fn()
+  classifyErrorMock: vi.fn(),
+  registerPtyMock: vi.fn(),
+  unregisterPtyMock: vi.fn(),
+  setMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtysForPaneKeyMock: vi.fn(),
+  clearPaneKeyAliasesForPtyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -65,6 +84,7 @@ vi.mock('fs', () => ({
   statSync: statSyncMock,
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
+  readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
   constants: {
@@ -85,7 +105,10 @@ vi.mock('../opencode/hook-service', () => ({
 
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
-    buildPtyEnv: buildAgentHookEnvMock
+    buildPtyEnv: buildAgentHookEnvMock,
+    clearPaneState: clearAgentHookPaneStateMock,
+    registerPaneKeyAlias: registerPaneKeyAliasMock,
+    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }
 }))
 
@@ -107,13 +130,41 @@ vi.mock('../telemetry/client', () => ({
 vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
+
+vi.mock('../memory/pty-registry', () => ({
+  registerPty: registerPtyMock,
+  unregisterPty: unregisterPtyMock
+}))
+
+vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+  setMigrationUnsupportedPty: setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPty: clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKey: clearMigrationUnsupportedPtysForPaneKeyMock
+}))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
+  clearProviderPtyState,
+  deletePtyOwnership,
+  getPtyIdForPaneKey,
+  setPtyOwnership,
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
+
+const POWERSHELL_OSC133_ARGS = [
+  '-NoLogo',
+  '-NoExit',
+  '-EncodedCommand',
+  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+]
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -130,11 +181,31 @@ describe('registerPtyHandlers', () => {
     }
   }
 
+  const savedOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR
+  const savedOrcaOpenCodeConfigDir = process.env.ORCA_OPENCODE_CONFIG_DIR
+  const savedOrcaOpenCodeSourceConfigDir = process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   const savedPiAgentDir = process.env.PI_CODING_AGENT_DIR
+  const savedOrcaPiAgentDir = process.env.ORCA_PI_CODING_AGENT_DIR
+  const savedOrcaPiSourceAgentDir = process.env.ORCA_PI_SOURCE_AGENT_DIR
+  const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
+  const savedOrcaOmpAgentDir = process.env.ORCA_OMP_CODING_AGENT_DIR
+  const savedOrcaOmpSourceAgentDir = process.env.ORCA_OMP_SOURCE_AGENT_DIR
+  const savedOrcaOmpStatusExtension = process.env.ORCA_OMP_STATUS_EXTENSION
+  const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
 
   beforeEach(() => {
     delete process.env.OPENCODE_CONFIG_DIR
+    delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+    delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
     delete process.env.PI_CODING_AGENT_DIR
+    delete process.env.ORCA_PI_SOURCE_AGENT_DIR
+    delete process.env.ORCA_PI_CODING_AGENT_DIR
+    delete process.env.ORCA_CODEX_HOME
+    delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
+    delete process.env.ORCA_OMP_CODING_AGENT_DIR
+    delete process.env.ORCA_OMP_STATUS_EXTENSION
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -144,6 +215,7 @@ describe('registerPtyHandlers', () => {
     statSyncMock.mockReset()
     accessSyncMock.mockReset()
     mkdirSyncMock.mockReset()
+    readFileSyncMock.mockReset()
     writeFileSyncMock.mockReset()
     chmodSyncMock.mockReset()
     getPathMock.mockReset()
@@ -151,11 +223,19 @@ describe('registerPtyHandlers', () => {
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    clearAgentHookPaneStateMock.mockReset()
+    registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
     trackMock.mockReset()
     classifyErrorMock.mockReset()
+    registerPtyMock.mockReset()
+    unregisterPtyMock.mockReset()
+    setMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtysForPaneKeyMock.mockReset()
+    clearPaneKeyAliasesForPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -165,21 +245,26 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReturnValue('/tmp/orca-user-data')
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
-    openCodeBuildPtyEnvMock.mockReturnValue({
+    readFileSyncMock.mockReturnValue('')
+    openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
       ORCA_OPENCODE_PTY_ID: 'test-pty',
-      OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
-    })
+      OPENCODE_CONFIG_DIR: existingConfigDir
+        ? '/tmp/orca-opencode-overlay'
+        : '/tmp/orca-opencode-config'
+    }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
       ORCA_AGENT_HOOK_TOKEN: 'agent-token'
     })
-    piBuildPtyEnvMock.mockImplementation((_ptyId: string, existingAgentDir?: string) => ({
-      PI_CODING_AGENT_DIR: existingAgentDir
-        ? '/tmp/orca-pi-agent-overlay'
-        : '/tmp/orca-pi-agent-overlay'
-    }))
+    piBuildPtyEnvMock.mockImplementation(
+      (_ptyId: string, existingAgentDir?: string, _kind?: string) => ({
+        PI_CODING_AGENT_DIR: existingAgentDir
+          ? '/tmp/orca-pi-agent-overlay'
+          : '/tmp/orca-pi-agent-overlay'
+      })
+    )
     isPwshAvailableMock.mockReturnValue(false)
     spawnMock.mockReturnValue({
       onData: vi.fn(() => makeDisposable()),
@@ -195,8 +280,60 @@ describe('registerPtyHandlers', () => {
   afterEach(() => {
     unregisterSshPtyProvider('ssh-1')
     setLocalPtyProvider(new LocalPtyProvider())
+    if (savedOpenCodeConfigDir !== undefined) {
+      process.env.OPENCODE_CONFIG_DIR = savedOpenCodeConfigDir
+    } else {
+      delete process.env.OPENCODE_CONFIG_DIR
+    }
+    if (savedOrcaOpenCodeConfigDir !== undefined) {
+      process.env.ORCA_OPENCODE_CONFIG_DIR = savedOrcaOpenCodeConfigDir
+    } else {
+      delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    }
+    if (savedOrcaOpenCodeSourceConfigDir !== undefined) {
+      process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = savedOrcaOpenCodeSourceConfigDir
+    } else {
+      delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    }
     if (savedPiAgentDir !== undefined) {
       process.env.PI_CODING_AGENT_DIR = savedPiAgentDir
+    } else {
+      delete process.env.PI_CODING_AGENT_DIR
+    }
+    if (savedOrcaPiAgentDir !== undefined) {
+      process.env.ORCA_PI_CODING_AGENT_DIR = savedOrcaPiAgentDir
+    } else {
+      delete process.env.ORCA_PI_CODING_AGENT_DIR
+    }
+    if (savedOrcaPiSourceAgentDir === undefined) {
+      delete process.env.ORCA_PI_SOURCE_AGENT_DIR
+    } else {
+      process.env.ORCA_PI_SOURCE_AGENT_DIR = savedOrcaPiSourceAgentDir
+    }
+    if (savedOrcaCodexHome === undefined) {
+      delete process.env.ORCA_CODEX_HOME
+    } else {
+      process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
+    }
+    if (savedOrcaOmpAgentDir !== undefined) {
+      process.env.ORCA_OMP_CODING_AGENT_DIR = savedOrcaOmpAgentDir
+    } else {
+      delete process.env.ORCA_OMP_CODING_AGENT_DIR
+    }
+    if (savedOrcaOmpSourceAgentDir !== undefined) {
+      process.env.ORCA_OMP_SOURCE_AGENT_DIR = savedOrcaOmpSourceAgentDir
+    } else {
+      delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
+    }
+    if (savedOrcaOmpStatusExtension !== undefined) {
+      process.env.ORCA_OMP_STATUS_EXTENSION = savedOrcaOmpStatusExtension
+    } else {
+      delete process.env.ORCA_OMP_STATUS_EXTENSION
+    }
+    if (savedOrcaClaudeAgentStatusSettings === undefined) {
+      delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
+    } else {
+      process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS = savedOrcaClaudeAgentStatusSettings
     }
   })
 
@@ -227,12 +364,25 @@ describe('registerPtyHandlers', () => {
     }
   }
 
+  function getPtyWriteListener(): (event: unknown, args: { id: string; data: string }) => void {
+    const writeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:write')
+    if (!writeCall) {
+      throw new Error('missing pty:write listener')
+    }
+    return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
+  }
+
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
     getSelectedCodexHomePath?: () => string | null,
-    getSettings?: () => { enableGitHubAttribution: boolean }
+    getSettings?: () => { enableGitHubAttribution?: boolean; agentStatusHooksEnabled?: boolean },
+    // Why: PR #2662 finding 2 — the threading from IPC `args.command` through
+    // buildPtyHostEnv to piTitlebarExtensionService.buildPtyEnv was untested
+    // for the OMP case because this helper never forwarded a command. Accept
+    // an optional `command` so callers can exercise OMP overlay resolution.
+    command?: string
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -259,7 +409,8 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        ...(argsEnv ? { env: argsEnv } : {})
+        ...(argsEnv ? { env: argsEnv } : {}),
+        ...(command ? { command } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
       return spawnCall[2].env as Record<string, string>
@@ -294,6 +445,29 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('marks local Claude launches live until the PTY is killed', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude',
+        envPatch: {},
+        stripAuthEnv: false,
+        provenance: 'managed:account-1'
+      }))
+      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
+
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+
+      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
+      expect(hasLiveClaudePtys()).toBe(true)
+
+      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+
+      expect(hasLiveClaudePtys()).toBe(false)
+    })
+
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -339,6 +513,7 @@ describe('registerPtyHandlers', () => {
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
       expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
+      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
@@ -350,15 +525,223 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_OPENCODE_HOOK_TOKEN).toBe('opencode-token')
       expect(env.ORCA_OPENCODE_PTY_ID).toBe('test-pty')
       expect(env.OPENCODE_CONFIG_DIR).toEqual(expect.any(String))
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(env.OPENCODE_CONFIG_DIR)
+    })
+
+    it('mirrors the original OpenCode source dir when launched from an Orca overlay shell', async () => {
+      const env = await spawnAndGetEnv({
+        OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+        ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/tmp/user-opencode-config'
+      })
+      expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-opencode-config'
+      )
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/tmp/user-opencode-config')
+    })
+
+    it('restores user OpenCode config when agent status hooks are disabled in a nested Orca shell', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+          ORCA_OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/tmp/user-opencode-config'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/user-opencode-config')
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('strips inherited OpenCode overlay env when agent status hooks are disabled without a source dir', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+          ORCA_OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('reproduces issue #1534: GUI-launched Orca mirrors zshrc-only OpenCode config', async () => {
+      // Why: the reporter's app process did not inherit OPENCODE_CONFIG_DIR;
+      // their interactive zsh startup later exported a company config repo.
+      readFileSyncMock.mockImplementation((path: string) => {
+        if (path.endsWith('.zshrc')) {
+          return [
+            '# Company-wide OpenCode config loaded by interactive shells',
+            'export OPENCODE_CONFIG_DIR="$HOME/company/opencode-config"',
+            ''
+          ].join('\n')
+        }
+        return ''
+      })
+
+      const env = await spawnAndGetEnv(undefined, {
+        HOME: '/home/pim',
+        SHELL: '/bin/zsh',
+        OPENCODE_CONFIG_DIR: undefined,
+        ORCA_OPENCODE_SOURCE_CONFIG_DIR: undefined
+      })
+
+      expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/home/pim/company/opencode-config'
+      )
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/home/pim/company/opencode-config')
+      expect(env.OPENCODE_CONFIG_DIR).not.toBe(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR)
     })
 
     it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+      )
     })
 
-    it('injects the Claude/Codex hook receiver env into Orca terminal PTYs', async () => {
+    it('threads command: "omp" through to piBuildPtyEnv and emits ORCA_OMP_* shadow vars', async () => {
+      // Why: OMP launches must emit OMP-named Orca shadow vars (ORCA_OMP_*),
+      // not Pi-named ones. The PI_CODING_AGENT_DIR binary var is unavoidable
+      // (OMP's own binary reads it — see C:\tmp\pr-workspace\oh-my-pi
+      // packages/utils/src/dirs.ts), but every other Orca-owned env name
+      // stays kind-scoped so an OMP PTY never accumulates Pi shadow state.
+      const env = await spawnAndGetEnv(
+        undefined,
+        { PI_CODING_AGENT_DIR: '/tmp/user-omp-agent' },
+        undefined,
+        undefined,
+        'omp'
+      )
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-omp-agent',
+        'omp'
+      )
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+      )
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
+      // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('mirrors the original Pi source dir when launched from an Orca overlay shell', async () => {
+      const env = await spawnAndGetEnv({
+        PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+        ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
+      })
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+    })
+
+    it('does not use an inherited Pi overlay source for an OMP launch', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'omp'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('does not use an inherited OMP overlay source for an explicit Pi launch', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+          ORCA_OMP_CODING_AGENT_DIR: '/tmp/parent-orca-omp-overlay',
+          ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/user-omp-agent'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'pi'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
+    it('restores user Pi config when agent status hooks are disabled in a nested Orca shell', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+          ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('mirrors Pi config exported only by shell startup files', async () => {
+      readFileSyncMock.mockImplementation((path: string) =>
+        path.endsWith('.zshrc') ? 'export PI_CODING_AGENT_DIR="$HOME/.config/pi-agent"\n' : ''
+      )
+
+      const env = await spawnAndGetEnv(undefined, {
+        HOME: '/home/tester',
+        SHELL: '/bin/zsh',
+        PI_CODING_AGENT_DIR: undefined
+      })
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/home/tester/.config/pi-agent',
+        'pi'
+      )
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/home/tester/.config/pi-agent')
+    })
+
+    it('injects the agent hook receiver env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv()
       // Why: after the daemon-parity refactor, buildAgentHookEnv runs exactly
       // once for a local spawn — inside the shared buildPtyHostEnv helper,
@@ -368,6 +751,44 @@ describe('registerPtyHandlers', () => {
       expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(1)
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+    })
+
+    it('strips stale inherited hook receiver env before injecting this runtime', async () => {
+      const env = await spawnAndGetEnv({
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENV: 'production',
+        ORCA_AGENT_HOOK_VERSION: 'stale-version',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env',
+        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+      })
+
+      expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
+    })
+
+    it('does not leak inherited hook receiver env if the hook server is unavailable', async () => {
+      buildAgentHookEnvMock.mockReturnValueOnce({})
+
+      const env = await spawnAndGetEnv({
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENV: 'production',
+        ORCA_AGENT_HOOK_VERSION: 'stale-version',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env',
+        ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+      })
+
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENV).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_VERSION).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
     })
 
     it('prepends local git/gh attribution shims when attribution is enabled', async () => {
@@ -423,13 +844,14 @@ describe('registerPtyHandlers', () => {
       expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
     })
 
-    it('leaves ambient CODEX_HOME untouched when system default is selected', async () => {
+    it('overrides ambient CODEX_HOME with the Orca-managed home for system default', async () => {
       const env = await spawnAndGetEnv(
         undefined,
         { CODEX_HOME: '/tmp/system-codex-home' },
-        () => null
+        () => '/tmp/orca-codex-home'
       )
-      expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
+      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
@@ -443,7 +865,11 @@ describe('registerPtyHandlers', () => {
 
       function setupDaemonAdapter() {
         const daemonSpawn = vi.fn(
-          async (options: { env: Record<string, string>; sessionId?: string }) => ({
+          async (options: {
+            env: Record<string, string>
+            sessionId?: string
+            isNewSession?: boolean
+          }) => ({
             id: options.sessionId ?? 'daemon-pty'
           })
         )
@@ -461,12 +887,21 @@ describe('registerPtyHandlers', () => {
         return daemonSpawn
       }
 
-      async function daemonSpawnAndGetEnv(
+      type DaemonSpawnCall = {
+        env: Record<string, string>
+        envToDelete?: string[]
+        isNewSession?: boolean
+      }
+
+      async function daemonSpawnAndGetOptions(
         argsEnv?: Record<string, string>,
         getSelectedCodexHomePath?: () => string | null,
         getSettings?: () => { enableGitHubAttribution: boolean },
-        processEnvOverrides?: Record<string, string | undefined>
-      ): Promise<Record<string, string>> {
+        processEnvOverrides?: Record<string, string | undefined>,
+        // Why: daemon spawn tests need to exercise both WSL launch metadata
+        // from main and PR #2662 command threading for OMP overlay selection.
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
+      ): Promise<DaemonSpawnCall> {
         const daemonSpawn = setupDaemonAdapter()
         const savedEnv: Record<string, string | undefined> = {}
         if (processEnvOverrides) {
@@ -490,9 +925,10 @@ describe('registerPtyHandlers', () => {
           await handlers.get('pty:spawn')!(null, {
             cols: 80,
             rows: 24,
+            ...spawnArgs,
             ...(argsEnv ? { env: argsEnv } : {})
           })
-          return daemonSpawn.mock.calls.at(-1)![0].env
+          return daemonSpawn.mock.calls.at(-1)![0] as DaemonSpawnCall
         } finally {
           for (const [k, v] of Object.entries(savedEnv)) {
             if (v === undefined) {
@@ -504,6 +940,24 @@ describe('registerPtyHandlers', () => {
         }
       }
 
+      async function daemonSpawnAndGetEnv(
+        argsEnv?: Record<string, string>,
+        getSelectedCodexHomePath?: () => string | null,
+        getSettings?: () => { enableGitHubAttribution: boolean },
+        processEnvOverrides?: Record<string, string | undefined>,
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
+      ): Promise<Record<string, string>> {
+        return (
+          await daemonSpawnAndGetOptions(
+            argsEnv,
+            getSelectedCodexHomePath,
+            getSettings,
+            processEnvOverrides,
+            spawnArgs
+          )
+        ).env
+      }
+
       it('injects OpenCode plugin env (OPENCODE_CONFIG_DIR) on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           OPENCODE_CONFIG_DIR: undefined
@@ -513,9 +967,31 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       })
 
-      it('preserves a user-provided OPENCODE_CONFIG_DIR on the daemon path', async () => {
+      it('mirrors a user-provided OPENCODE_CONFIG_DIR into a per-PTY overlay on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
-        expect(env.OPENCODE_CONFIG_DIR).toBe('/user/custom/opencode')
+        // Why: OpenCode loads config from a single dir, so the user's path is
+        // mirrored into a per-PTY overlay rather than passed through literally.
+        expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/custom/opencode'
+        )
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
+      })
+
+      it('uses source OpenCode config env instead of remirroring a parent overlay', async () => {
+        const env = await daemonSpawnAndGetEnv({
+          OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode'
+        })
+        expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/custom/opencode'
+        )
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
       })
 
       it('injects Pi overlay env (PI_CODING_AGENT_DIR) on the daemon path', async () => {
@@ -523,19 +999,178 @@ describe('registerPtyHandlers', () => {
         // Why: asserts the overlay key was passed through — the id is the
         // daemon-assigned sessionId minted in pty.ts, and the mock returns
         // the fixed overlay path from the shared setup.
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent', 'pi')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
+        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+        )
+      })
+
+      it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP shadow vars', async () => {
+        // Why: mirror of the local-spawn OMP threading assertion. The
+        // daemon path's `command` forwarding could silently regress and
+        // Pi-only tests would still pass.
+        const env = await daemonSpawnAndGetEnv(
+          { PI_CODING_AGENT_DIR: '/user/.omp/agent' },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'omp' }
+        )
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/.omp/agent',
+          'omp'
+        )
+        expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
+        )
+        expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, () => '/tmp/orca-codex-home')
         expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
+        expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      })
+
+      it('skips host Codex home when a daemon-backed Windows spawn targets a WSL cwd', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'win32'
+        })
+        try {
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            {},
+            () => 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
+            undefined,
+            {
+              CODEX_HOME: 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
+              ORCA_CODEX_HOME: 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home'
+            },
+            { cwd: '\\\\wsl.localhost\\Ubuntu\\home\\test\\repo' }
+          )
+          const { env } = spawnOptions
+          expect(env.CODEX_HOME).toBeUndefined()
+          expect(env.ORCA_CODEX_HOME).toBeUndefined()
+          expect(spawnOptions.envToDelete).toEqual(
+            expect.arrayContaining(['CODEX_HOME', 'ORCA_CODEX_HOME'])
+          )
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+
+      it('skips host Codex home when a daemon-backed Windows spawn uses a WSL shell override', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'win32'
+        })
+        try {
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            {},
+            () => 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
+            undefined,
+            {
+              CODEX_HOME: 'C:\\Users\\test\\.codex',
+              ORCA_CODEX_HOME: 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home'
+            },
+            { shellOverride: 'wsl.exe' }
+          )
+          expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
+          expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
+          expect(spawnOptions.envToDelete).toEqual(
+            expect.arrayContaining(['CODEX_HOME', 'ORCA_CODEX_HOME'])
+          )
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
       })
 
       it('injects the agent-hook receiver env on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('deletes stale Claude scoped settings env from daemon-hosted PTYs', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions({}, undefined, undefined, {
+          ORCA_CLAUDE_AGENT_STATUS_SETTINGS:
+            '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+        })
+        expect(spawnOptions.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_CLAUDE_AGENT_STATUS_SETTINGS'])
+        )
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('deletes stale Claude scoped settings env from runtime-created daemon PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS =
+          '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_CLAUDE_AGENT_STATUS_SETTINGS'])
+        )
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+          })
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+        } finally {
+          mockedApp.isPackaged = prev
+        }
       })
 
       it('prepends attribution shims on the daemon path', async () => {
@@ -556,7 +1191,25 @@ describe('registerPtyHandlers', () => {
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toContain('/tmp/orca-user-data/cli/bin')
+          expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
+      it('preserves the inherited PATH when dev-mode daemon env omits PATH', async () => {
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            PATH: '/system/bin'
+          })
+          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.PATH).toBe(
+            `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
+          )
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -575,7 +1228,8 @@ describe('registerPtyHandlers', () => {
         const sessionId = spawnOpts.sessionId
         expect(sessionId).toEqual(expect.any(String))
         expect((sessionId ?? '').length).toBeGreaterThan(0)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+        expect(spawnOpts.isNewSession).toBe(true)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
       it('respects a caller-provided sessionId instead of minting a new one', async () => {
@@ -589,7 +1243,8 @@ describe('registerPtyHandlers', () => {
           sessionId: 'user-session-42'
         })
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined)
+        expect(daemonSpawn.mock.calls.at(-1)![0].isNewSession).toBeUndefined()
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
       })
 
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
@@ -608,7 +1263,7 @@ describe('registerPtyHandlers', () => {
         })
         const sessionId = daemonSpawn.mock.calls.at(-1)![0].sessionId ?? ''
         expect(sessionId).toMatch(/^wt-alpha@@[0-9a-f]{8}$/)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
       it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
@@ -620,8 +1275,13 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           PI_CODING_AGENT_DIR: '/ambient/pi/agent'
         })
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/ambient/pi/agent')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/ambient/pi/agent',
+          'pi'
+        )
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       })
 
       it('skips attribution shims on the daemon path when the setting is disabled', async () => {
@@ -737,6 +1397,423 @@ describe('registerPtyHandlers', () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
           id: 'ssh-pty'
         }))
+        const store = {
+          upsertSshRemotePtyLease: vi.fn(),
+          persistPtyBinding: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const leafId = '11111111-1111-4111-8111-111111111111'
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
+          connectionId: 'ssh-1',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId
+        })
+        const env = sshSpawn.mock.calls.at(-1)![0].env
+        // Why: every host-local var must be absent over SSH — the hook
+        // server is on the Orca host's 127.0.0.1, dev CLI / attribution /
+        // overlay / plugin-dir paths only exist on the local disk, so
+        // shipping any of them to a remote shell is at best useless and at
+        // worst a credential leak.
+        expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(env.CODEX_HOME).toBeUndefined()
+        expect(env.FOO).toBe('bar')
+        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+        expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
+          expect.objectContaining({
+            targetId: 'ssh-1',
+            ptyId: 'ssh-pty',
+            worktreeId: 'wt-1',
+            tabId: 'tab-1',
+            leafId,
+            state: 'attached'
+          })
+        )
+        expect(store.persistPtyBinding).toHaveBeenCalledWith({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId,
+          ptyId: 'ssh-pty'
+        })
+
+        store.upsertSshRemotePtyLease.mockClear()
+        store.persistPtyBinding.mockClear()
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { ORCA_PANE_KEY: 'tab-1:pane:1' },
+          connectionId: 'ssh-1',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1'
+        })
+        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
+        expect(sshSpawn.mock.calls.at(-1)?.[0].env.ORCA_PANE_KEY).toBeUndefined()
+        expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
+        expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      })
+
+      it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
+        const sshSpawn = vi.fn(async () => {
+          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        await expect(
+          handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {},
+            connectionId: 'ssh-1',
+            sessionId: 'remote-pty'
+          })
+        ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
+
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
+      })
+
+      it('marks a scoped SSH session expired using the raw relay lease id', async () => {
+        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+        const sshSpawn = vi.fn(async () => {
+          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership(scopedPtyId, 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
+        } finally {
+          deletePtyOwnership(scopedPtyId)
+        }
+
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
+        expect(openCodeClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
+        expect(piClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
+      })
+
+      it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn().mockRejectedValue(new Error('Multiplexer disposed')),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:kill')!(null, { id: 'remote-pty', keepHistory: false })
+          ).rejects.toThrow('Multiplexer disposed')
+        } finally {
+          deletePtyOwnership('remote-pty')
+        }
+
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+          'ssh-1',
+          'remote-pty',
+          'terminated'
+        )
+      })
+
+      it('marks an SSH lease terminated after runtime controller kill succeeds', async () => {
+        const shutdown = vi.fn(async () => undefined)
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        expect(controller.kill('remote-pty')).toBe(true)
+        await Promise.resolve()
+
+        expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: false })
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+          'ssh-1',
+          'remote-pty',
+          'terminated'
+        )
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        expect(controller.kill('remote-pty')).toBe(true)
+
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+          'ssh-1',
+          'remote-pty',
+          'terminated'
+        )
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('preserves an SSH lease when runtime controller kill shutdown fails transiently', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn().mockRejectedValue(new Error('Multiplexer disposed')),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        try {
+          expect(controller.kill('remote-pty')).toBe(true)
+          await Promise.resolve()
+          await Promise.resolve()
+        } finally {
+          warnSpy.mockRestore()
+          deletePtyOwnership('remote-pty')
+        }
+
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+          'ssh-1',
+          'remote-pty',
+          'terminated'
+        )
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
           write: vi.fn(),
@@ -761,28 +1838,133 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          env: { FOO: 'bar' },
-          connectionId: 'ssh-1'
-        })
-        const env = sshSpawn.mock.calls.at(-1)![0].env
-        // Why: every host-local var must be absent over SSH — the hook
-        // server is on the Orca host's 127.0.0.1, dev CLI / attribution /
-        // overlay / plugin-dir paths only exist on the local disk, so
-        // shipping any of them to a remote shell is at best useless and at
-        // worst a credential leak.
-        expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
-        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.CODEX_HOME).toBeUndefined()
-        expect(env.FOO).toBe('bar')
-        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
-        expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
+        try {
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: 'tab-1:0',
+              ORCA_TAB_ID: 'tab-1',
+              ORCA_WORKTREE_ID: 'wt-1'
+            },
+            connectionId: 'ssh-1'
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.FOO).toBe('bar')
+          expect(env.ORCA_PANE_KEY).toBeUndefined()
+          expect(env.ORCA_TAB_ID).toBeUndefined()
+          expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          // Why: the local hook server's userData-relative endpoint file path
+          // is meaningless on the remote box; assert it does not leak.
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
+      })
+
+      it('forwards ORCA_PANE_KEY/TAB_ID/WORKTREE_ID over SSH by default', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        try {
+          const leafId = '22222222-2222-4222-8222-222222222222'
+          const paneKey = makePaneKey('tab-2', leafId)
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: paneKey,
+              ORCA_TAB_ID: 'tab-2',
+              ORCA_WORKTREE_ID: 'wt-2'
+            },
+            connectionId: 'ssh-1',
+            tabId: 'tab-2',
+            leafId
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.ORCA_PANE_KEY).toBe(paneKey)
+          expect(env.ORCA_TAB_ID).toBe('tab-2')
+          expect(env.ORCA_WORKTREE_ID).toBe('wt-2')
+          // Local hook server coords still must NOT cross the wire — the
+          // relay is the source of truth for those.
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
       })
     })
+  })
+
+  it('rethrows non-not-found local provider shutdown failures', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn().mockRejectedValue(new Error('daemon unavailable')),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
+      'daemon unavailable'
+    )
   })
 
   it('lists sessions from both local and SSH providers', async () => {
@@ -830,6 +2012,149 @@ describe('registerPtyHandlers', () => {
       immediate: true,
       keepHistory: false
     })
+  })
+
+  it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const shutdownA = vi.fn(async () => undefined)
+    const shutdownB = vi.fn(async () => undefined)
+    registerSshPtyProvider('ssh-a', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: shutdownA,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [
+        { id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a', title: 'ssh-a' }
+      ]),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerSshPtyProvider('ssh-b', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: shutdownB,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [
+        { id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b', title: 'ssh-b' }
+      ]),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      id: string
+      cwd: string
+      title: string
+    }[]
+
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a' }),
+        expect.objectContaining({ id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b' })
+      ])
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-a@@pty-1' })
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-b@@pty-1' })
+
+    expect(shutdownA).toHaveBeenCalledWith('ssh:ssh-a@@pty-1', {
+      immediate: true,
+      keepHistory: false
+    })
+    expect(shutdownB).toHaveBeenCalledWith('ssh:ssh-b@@pty-1', {
+      immediate: true,
+      keepHistory: false
+    })
+  })
+
+  it('ignores fire-and-forget IPC for detached SSH PTYs without a provider', async () => {
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    const provider = {
+      spawn: vi.fn(async () => ({ id: 'remote-pty' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(async () => undefined),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    }
+    registerSshPtyProvider('ssh-1', provider as never)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      connectionId: 'ssh-1',
+      env: {}
+    })
+    unregisterSshPtyProvider('ssh-1')
+    const listenerFor = (channel: string): ((event: unknown, args: unknown) => void) => {
+      const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === channel)
+      if (!call) {
+        throw new Error(`missing ${channel} listener`)
+      }
+      return call[1] as (event: unknown, args: unknown) => void
+    }
+
+    expect(() => listenerFor('pty:write')(null, { id: 'remote-pty', data: 'x' })).not.toThrow()
+    expect(() =>
+      listenerFor('pty:resize')(null, { id: 'remote-pty', cols: 100, rows: 30 })
+    ).not.toThrow()
+    expect(() => listenerFor('pty:ackColdRestore')(null, { id: 'remote-pty' })).not.toThrow()
+    expect(() =>
+      listenerFor('pty:signal')(null, { id: 'remote-pty', signal: 'SIGINT' })
+    ).not.toThrow()
+
+    await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).resolves.toBeUndefined()
+    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'terminated')
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
@@ -883,6 +2208,111 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('reuses the runtime background handle in local PTY spawn env', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        preAllocatedHandle?: string
+      }): Promise<{ id: string }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    expect(controller).not.toBeNull()
+    const spawnController = controller as unknown as RuntimeSpawnController
+    await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      preAllocatedHandle: 'term_expected'
+    })
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_expected')
+    expect(runtime.preAllocateHandleForPty).not.toHaveBeenCalled()
+    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'term_expected'
+    )
+  })
+
+  it('maps runtime-owned spawn paneKeys for renderer serializer settlement', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+      hasRendererSerializer?(ptyId: string): boolean
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const paneKey = makePaneKey('tab-cli', '11111111-1111-4111-8111-111111111111')
+    const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const result = await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      env: { ORCA_PANE_KEY: ` ${paneKey} ` }
+    })
+
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+  })
+
+  it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_TERMINAL_HANDLE: 'term_untrusted' }
+    })
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
+    expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
+  })
+
   describe('Windows UTF-8 code page', () => {
     let originalPlatform: string
     let originalComspec: string | undefined
@@ -931,11 +2361,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -948,11 +2374,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1011,11 +2433,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1037,11 +2455,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1062,15 +2476,7 @@ describe('registerPtyHandlers', () => {
       )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'pwsh.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
-        expect.any(Object)
-      )
+      expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
     })
 
     it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
@@ -1091,11 +2497,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1118,11 +2520,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1157,7 +2555,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(
         mainWindow as never,
         undefined,
-        undefined,
+        () => 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
         () =>
           ({
             terminalWindowsShell: 'wsl.exe',
@@ -1166,7 +2564,10 @@ describe('registerPtyHandlers', () => {
       )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
+      const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
       expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
+      expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
+      expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
     })
 
     it('keeps shellOverride priority for one-off tabs', () => {
@@ -1176,7 +2577,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(
         mainWindow as never,
         undefined,
-        undefined,
+        () => 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
         () =>
           ({
             terminalWindowsShell: 'powershell.exe',
@@ -1189,7 +2590,10 @@ describe('registerPtyHandlers', () => {
         shellOverride: 'wsl.exe'
       })
 
+      const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
       expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
+      expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
+      expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
     })
   })
 
@@ -1268,6 +2672,79 @@ describe('registerPtyHandlers', () => {
         delete process.env.ZDOTDIR
       } else {
         process.env.ZDOTDIR = originalZdotdir
+      }
+    }
+  })
+
+  it('uses the POSIX shell wrapper so OpenCode config survives shell startup files', () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/zsh'
+
+    try {
+      const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp' })
+      expect(shell).toBe('/bin/zsh')
+      expect(args).toEqual(['-l'])
+      expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
+  it('uses the POSIX shell wrapper so Pi config survives shell startup files', () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/zsh'
+    openCodeBuildPtyEnvMock.mockImplementationOnce(() => ({
+      ORCA_OPENCODE_HOOK_PORT: '4567',
+      ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
+      ORCA_OPENCODE_PTY_ID: 'test-pty'
+    }))
+
+    try {
+      const [shell, args, options] = spawnAndGetCall({
+        cwd: '/tmp',
+        env: { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' }
+      })
+      expect(shell).toBe('/bin/zsh')
+      expect(args).toEqual(['-l'])
+      expect(options.env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
       }
     }
   })
@@ -1354,6 +2831,246 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('batches PTY output when it is not responding to recent input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('background output')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(7)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends small PTY redraws immediately after terminal input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b[20;2Hredraw')
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[20;2Hredraw'
+      })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores PTY input for unknown sessions', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: 'missing-pty',
+        data: 'a'
+      })
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches large PTY output even after recent terminal input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mainWindow.webContents.send.mockClear()
+
+      const largeOutput = 'x'.repeat(1025)
+      mockProc.emitData(largeOutput)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: largeOutput
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches combined pending output that exceeds the interactive size limit', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      const pendingOutput = 'x'.repeat(1020)
+      mockProc.emitData(pendingOutput)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mockProc.emitData('redraw')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${pendingOutput}redraw`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains large batched PTY output in bounded slices', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const firstSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const secondSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      const firstChunk = 'x'.repeat(16 * 1024)
+      const firstRemainder = 'tail'
+      secondProc.emitData('second-terminal-output')
+      firstProc.emitData(`${firstChunk}${firstRemainder}`)
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: secondSpawn.id,
+        data: 'second-terminal-output'
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstChunk
+      })
+
+      vi.advanceTimersByTime(1)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(3)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(3, 'pty:data', {
+        id: firstSpawn.id,
+        data: firstRemainder
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('batches stale PTY output after the interactive window expires', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      vi.advanceTimersByTime(101)
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('stale redraw')
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'stale redraw'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('falls back to a system shell when SHELL points to a missing binary', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -1416,7 +3133,14 @@ describe('registerPtyHandlers', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/zsh',
         ['-l'],
-        expect.objectContaining({ cwd: '/tmp' })
+        expect.objectContaining({
+          cwd: '/tmp',
+          env: expect.objectContaining({
+            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
+            ORCA_SHELL_READY_MARKER: '0',
+            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+          })
+        })
       )
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Shell "/opt/homebrew/bin/bash" is not executable')
@@ -1429,6 +3153,143 @@ describe('registerPtyHandlers', () => {
         process.env.SHELL = originalShell
       }
     }
+  })
+
+  it('acknowledges pty writes only for owned PTYs', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+
+    expect(handlers.get('pty:writeAccepted')!(null, { id: result.id, data: '\x03' })).toBe(true)
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x03')
+    expect(
+      handlers.get('pty:writeAccepted')!(null, {
+        id: 'missing-pty-for-write-ack',
+        data: '\x03'
+      })
+    ).toBe(false)
+    expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+  })
+
+  it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: 'tab-1:0' }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
+      'tab-1:0',
+      stablePaneKey,
+      expect.any(String)
+    )
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+    expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: makePaneKey('tab-2', leafId) }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: null
+      })
+    )
+  })
+
+  it('does not let an old PTY teardown clear a newer pane-key owner', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+
+    const first = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+    const second = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    clearAgentHookPaneStateMock.mockClear()
+    clearProviderPtyState(first.id)
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+
+    clearProviderPtyState(second.id)
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
+  })
+
+  it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+
+    const current = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(current.id)
+    clearPaneKeyAliasesForPtyMock.mockClear()
+
+    clearProviderPtyState('old-pty-without-forward-pane-key')
+
+    const cleanupOptions = clearPaneKeyAliasesForPtyMock.mock.calls.find(
+      ([ptyId]) => ptyId === 'old-pty-without-forward-pane-key'
+    )?.[1]
+    expect(cleanupOptions?.shouldClearStablePaneKey(stablePaneKey)).toBe(false)
   })
 
   it('prefers args.env.SHELL and normalizes the child env after fallback', async () => {
@@ -1456,7 +3317,12 @@ describe('registerPtyHandlers', () => {
         ['-l'],
         expect.objectContaining({
           cwd: '/tmp',
-          env: expect.objectContaining({ SHELL: '/bin/zsh' })
+          env: expect.objectContaining({
+            SHELL: '/bin/zsh',
+            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
+            ORCA_SHELL_READY_MARKER: '0',
+            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+          })
         })
       )
       expect(warnSpy).toHaveBeenCalledWith(
@@ -1866,6 +3732,32 @@ describe('registerPtyHandlers', () => {
       const requestId = getSentRequestIds()[0]
       listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
       await expect(pending).resolves.toBeNull()
+    })
+  })
+
+  describe('main buffer snapshot dispatch', () => {
+    it('returns a sequenced main-owned terminal snapshot with clamped scrollback', async () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        serializeMainTerminalBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot\r\n',
+          cols: 120,
+          rows: 40,
+          seq: 42
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
+        id: 'pty-1',
+        opts: { scrollbackRows: 999_999 }
+      })
+
+      expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+        scrollbackRows: 50_000
+      })
+      expect(result).toEqual({ data: 'snapshot\r\n', cols: 120, rows: 40, seq: 42 })
     })
   })
 })

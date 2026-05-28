@@ -4,16 +4,16 @@ import { FitAddon } from '@xterm/addon-fit'
 // Upstream packaging bug: @xterm/addon-ligatures declares `"main":
 // "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
 // resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
-// the patch once that lands.
+// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
+// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
 import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-reorder'
@@ -23,24 +23,12 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import type { GlobalSettings } from '../../../../shared/types'
+import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
-
-const ENABLE_WEBGL_RENDERER = true
-let suggestedRendererType: 'dom' | undefined
-
-export function resetTerminalWebglSuggestion(): void {
-  // Why: VS Code clears its suggested renderer when gpuAcceleration changes,
-  // letting "auto" retry WebGL after a user toggles the setting.
-  suggestedRendererType = undefined
-}
-
-function shouldUseWebgl(mode: GlobalSettings['terminalGpuAcceleration']): boolean {
-  return mode === 'on' || (mode === 'auto' && suggestedRendererType === undefined)
-}
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
@@ -50,16 +38,18 @@ function getTerminalUrlOpenHint(): string {
 
 export function createPaneDOM(
   id: number,
+  leafId: TerminalLeafId,
   options: PaneManagerOptions,
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number) => void,
+  onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
   onMouseEnter: (id: number, event: MouseEvent) => void
 ): ManagedPaneInternal {
   // Create .pane container
   const container = document.createElement('div')
   container.className = 'pane'
   container.dataset.paneId = String(id)
+  container.dataset.leafId = leafId
 
   // Create .xterm-container — baseline layout (position, width, height, margin)
   // is CSS-driven (see main.css .xterm-container) so that the data-has-title
@@ -116,6 +106,8 @@ export function createPaneDOM(
 
   const pane: ManagedPaneInternal = {
     id,
+    leafId,
+    stablePaneId: leafId,
     terminal,
     container,
     xtermContainer,
@@ -124,6 +116,7 @@ export function createPaneDOM(
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -142,8 +135,10 @@ export function createPaneDOM(
   // the terminal. We must call focus: true here because after DOM reparenting
   // (e.g. splitPane moves the original pane into a flex container), xterm.js's
   // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', () => {
-    onPointerDown(id)
+  container.addEventListener('pointerdown', (event) => {
+    onPointerDown(id, {
+      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    })
   })
 
   // Focus-follows-mouse handler: when the setting is enabled, hovering a
@@ -287,74 +282,6 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
       disposeWebgl(pane)
       attachWebgl(pane)
     }
-  }
-}
-
-export function disposeWebgl(
-  pane: ManagedPaneInternal,
-  options?: { refreshDimensions?: boolean }
-): void {
-  if (!pane.webglAddon) {
-    return
-  }
-  try {
-    pane.webglAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  pane.webglAddon = null
-  if (options?.refreshDimensions) {
-    // Why: VS Code refreshes terminal dimensions after WebGL teardown because
-    // DOM and WebGL renderer cell metrics differ. Without this, Linux DOM
-    // scrollbars can desync and trigger visible reflow jitter.
-    requestAnimationFrame(() => {
-      try {
-        pane.fitAddon.fit()
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      } catch {
-        /* ignore — pane may have been disposed in the meantime */
-      }
-    })
-  }
-}
-
-export function attachWebgl(pane: ManagedPaneInternal): void {
-  if (
-    !ENABLE_WEBGL_RENDERER ||
-    !pane.gpuRenderingEnabled ||
-    !shouldUseWebgl(pane.terminalGpuAcceleration) ||
-    pane.webglAttachmentDeferred ||
-    pane.webglDisabledAfterContextLoss
-  ) {
-    pane.webglAddon = null
-    return
-  }
-  try {
-    const webglAddon = new WebglAddon()
-    webglAddon.onContextLoss(() => {
-      console.warn(
-        '[terminal] WebGL context lost for pane',
-        pane.id,
-        '— falling back to DOM renderer'
-      )
-      // Why: Chromium starts reclaiming terminal contexts under pressure.
-      // Recreating WebGL for this pane can loop context loss and leave xterm
-      // visually blank, so keep the pane on the DOM renderer until remount.
-      pane.webglDisabledAfterContextLoss = true
-      disposeWebgl(pane, { refreshDimensions: true })
-    })
-    pane.terminal.loadAddon(webglAddon)
-    pane.webglAddon = webglAddon
-  } catch (err) {
-    if (pane.terminalGpuAcceleration === 'auto') {
-      // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`
-      // behavior: once WebGL fails, keep subsequent auto panes on DOM until
-      // the setting changes and resets the suggestion.
-      suggestedRendererType = 'dom'
-    }
-    // WebGL not available — default DOM renderer is fine, but log it for debugging
-    console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
-    pane.webglAddon = null
   }
 }
 

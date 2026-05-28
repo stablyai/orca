@@ -1,6 +1,8 @@
 // Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
-import type { GitUpstreamStatus } from '../../../../shared/types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
+import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 
 // Why: this module owns the pure state-machine logic for the Source Control
 // primary action (split button). Keeping the logic outside the React component
@@ -14,7 +16,14 @@ import type { GitUpstreamStatus } from '../../../../shared/types'
 // `handlePrimaryClick` switch exhaustively over only the kinds the
 // primary can actually emit, and it kills the compound-commit branch in
 // the isRemoteOperationActive tooltip below at compile time.
-export type PrimaryActionKind = 'commit' | 'push' | 'pull' | 'sync' | 'publish'
+export type PrimaryActionKind =
+  | 'commit'
+  | 'stage'
+  | 'push'
+  | 'pull'
+  | 'sync'
+  | 'publish'
+  | 'create_pr'
 
 // Why: the in-flight remote op tracker stores which action the user actually
 // triggered, so the primary button can mirror that label/spinner instead of
@@ -22,7 +31,7 @@ export type PrimaryActionKind = 'commit' | 'push' | 'pull' | 'sync' | 'publish'
 // because Fetch participates in the busy flag, but it is intentionally NOT
 // in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
 // the primary keeps its natural label and CommitArea suppresses the spinner.
-export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish'
+export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish' | 'rebase'
 
 export type PrimaryAction = {
   kind: PrimaryActionKind
@@ -34,23 +43,33 @@ export type PrimaryAction = {
 export type PrimaryActionInputs = {
   stagedCount: number
   hasUnstagedChanges: boolean
+  hasPartiallyStagedChanges: boolean
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
   isCommitting: boolean
   isRemoteOperationActive: boolean
   upstreamStatus: GitUpstreamStatus | undefined
+  prState?: PRState | null
+  isPRStateLoading?: boolean
   // Why: which remote op is currently running, when one is. null when no
   // remote op is in flight. Used by the in-flight branch below to mirror
   // the user-triggered action on the primary button instead of leaving a
   // stale label that no longer matches what the slice is doing.
   inFlightRemoteOpKind?: RemoteOpKind | null
+  hostedReviewCreation?: HostedReviewCreationEligibility | null
+  // Why: an unpublished branch is only worth publishing when it actually
+  // carries commits beyond the compare base. Undefined preserves the old
+  // behavior while the branch compare request is still unavailable/loading.
+  branchCommitsAhead?: number
 }
 
 const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
+  stage: 'Stage All',
   push: 'Push',
   pull: 'Pull',
   sync: 'Sync',
-  publish: 'Publish Branch'
+  publish: 'Publish Branch',
+  create_pr: 'Create PR'
 }
 
 function describePushCount(ahead: number): string {
@@ -65,6 +84,12 @@ function describeSyncCounts(ahead: number, behind: number): string {
   return `Pull ${behind}, push ${ahead}`
 }
 
+function describeForcePushWithLease(count: number | undefined, upstreamName?: string): string {
+  const countText =
+    count && count > 0 ? `${count} branch commit${count === 1 ? '' : 's'}` : 'this branch'
+  return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
+}
+
 /**
  * Resolve the primary split-button action.
  *
@@ -72,11 +97,13 @@ function describeSyncCounts(ahead: number, behind: number): string {
  *   1. In-flight commit locks the primary to a disabled "Commit".
  *   2. In-flight remote operation keeps the current label but disables it.
  *   3. Unresolved conflicts block the commit path entirely.
- *   4. Has staged files + message → plain "Commit" (compound flows live in
- *      the dropdown; after the commit lands, step 6 rotates the primary to
+ *   4. Has partially staged files → "Stage All" to avoid hook-time partial
+ *      stash conflicts.
+ *   5. Has staged files + message → plain "Commit" (compound flows live in
+ *      the dropdown; after the commit lands, step 7 rotates the primary to
  *      the appropriate single remote action).
- *   5. Has staged files + no message → disabled "Commit" with a reason.
- *   6. Clean tree → adaptive remote action (or disabled "Commit" no-op).
+ *   6. Has staged files + no message → disabled "Commit" with a reason.
+ *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
  * An undefined upstream status means fetchUpstreamStatus has not resolved
  * yet for this worktree. We return a disabled Commit so the button has a
@@ -87,12 +114,17 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   const {
     stagedCount,
     hasUnstagedChanges,
+    hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
     isRemoteOperationActive,
     upstreamStatus,
-    inFlightRemoteOpKind
+    prState,
+    isPRStateLoading,
+    inFlightRemoteOpKind,
+    hostedReviewCreation,
+    branchCommitsAhead
   } = inputs
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -164,10 +196,22 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
 
-  // 4. Has staged files + message → plain Commit. The primary button never
+  // 4. A path with both staged and unstaged edits can make lint-staged's
+  // partial-stash restore fail after formatters rewrite the staged copy. Push
+  // the user through Stage All first so the index matches the worktree.
+  if (hasStaged && hasPartiallyStagedChanges) {
+    return {
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes before committing partially staged files',
+      disabled: false
+    }
+  }
+
+  // 5. Has staged files + message → plain Commit. The primary button never
   //    compounds ("Commit & Push" etc.) — after the commit lands, the primary
   //    naturally rotates to the appropriate remote action (Push / Sync /
-  //    Publish Branch) via step 6 below. Users who want the one-click
+  //    Publish Branch) via step 7 below. Users who want the one-click
   //    compound flow can still reach it from the dropdown.
   if (hasStaged && hasMessage) {
     return {
@@ -178,7 +222,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // 5. Has staged files but no message — user just needs to type something.
+  // 6. Has staged files but no message — user just needs to type something.
   if (hasStaged && !hasMessage) {
     return {
       kind: 'commit',
@@ -188,7 +232,21 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // 6. Clean tree + no staged files → adaptive remote action.
+  // 6b. Nothing staged but local changes exist — surface staging as the
+  //     primary so dirty trees don't invite a remote op (pull/sync would fail
+  //     with uncommitted changes; push/publish skips the actual user need).
+  //     Sits before the upstream-status checks so it works regardless of
+  //     whether upstream has resolved yet.
+  if (!hasStaged && hasUnstagedChanges) {
+    return {
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes',
+      disabled: false
+    }
+  }
+
+  // 7. Clean tree + no staged files → adaptive remote action.
   if (!upstreamStatus) {
     return {
       kind: 'commit',
@@ -199,6 +257,33 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
+    if (branchCommitsAhead === 0) {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Nothing to commit. Branch has no changes to publish.',
+        disabled: true
+      }
+    }
+
+    if (isPRStateLoading) {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Checking PR status…',
+        disabled: true
+      }
+    }
+
+    if (prState === 'merged') {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Nothing to commit. PR is already merged.',
+        disabled: true
+      }
+    }
+
     return {
       kind: 'publish',
       label: 'Publish Branch',
@@ -208,6 +293,14 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (upstreamStatus.ahead > 0 && upstreamStatus.behind > 0) {
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return {
+        kind: 'push',
+        label: 'Force Push',
+        title: describeForcePushWithLease(branchCommitsAhead, upstreamStatus.upstreamName),
+        disabled: false
+      }
+    }
     return {
       kind: 'sync',
       label: 'Sync',
@@ -228,6 +321,15 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       kind: 'push',
       label: 'Push',
       title: describePushCount(upstreamStatus.ahead),
+      disabled: false
+    }
+  }
+
+  if (hostedReviewCreation?.canCreate) {
+    return {
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Create a pull request for this branch',
       disabled: false
     }
   }

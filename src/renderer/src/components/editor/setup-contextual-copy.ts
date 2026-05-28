@@ -1,20 +1,24 @@
 import type { editor } from 'monaco-editor'
+import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { monaco } from '@/lib/monaco-setup'
+import { useAppStore } from '@/store'
+import { editorShortcutMatches } from './editor-shortcuts'
 import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
+import {
+  PRIMARY_SELECTION_MAX_LENGTH,
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/primary-selection'
 
 export function setupContextualCopy({
   editorInstance,
-  monaco,
   filePath,
-  copyShortcutLabel,
   setCopyToast,
   propsRef,
   copyToastTimeoutRef
 }: {
   editorInstance: editor.IStandaloneCodeEditor
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  monaco: any
   filePath: string
-  copyShortcutLabel: string
   setCopyToast: (toast: { left: number; top: number } | null) => void
   propsRef: React.MutableRefObject<{
     relativePath: string
@@ -24,12 +28,19 @@ export function setupContextualCopy({
   copyToastTimeoutRef: React.MutableRefObject<number | null>
 }): void {
   let copyHintInterval: number | null = null
+  let primarySelectionTimer: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
   const copyHintNode = document.createElement('div')
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
-  copyHintNode.textContent = `Copy context ${copyShortcutLabel}`
+  const updateCopyHintLabel = (): void => {
+    copyHintNode.textContent = `Copy context ${formatShortcutLabel(
+      'editor.copyContext',
+      useAppStore.getState().keybindings
+    )}`
+  }
+  updateCopyHintLabel()
   copyHintNode.style.display = 'none'
   const copyHintWidget: editor.IContentWidget = {
     allowEditorOverflow: true,
@@ -75,6 +86,7 @@ export function setupContextualCopy({
   }
 
   const updateCopyHint = (): void => {
+    updateCopyHintLabel()
     const contextualCopyText = getContextualCopyText()
     if (!contextualCopyText) {
       copyHintNode.style.display = 'none'
@@ -180,6 +192,48 @@ export function setupContextualCopy({
     })
   }
 
+  const updatePrimarySelectionBuffer = (): void => {
+    const model = editorInstance.getModel()
+    const selections = editorInstance.getSelections()
+    if (!isPrimarySelectionEnabled() || !model || !selections?.length) {
+      return
+    }
+
+    const sortedSelections = selections.slice().sort((a, b) => {
+      if (a.startLineNumber !== b.startLineNumber) {
+        return a.startLineNumber - b.startLineNumber
+      }
+      return a.startColumn - b.startColumn
+    })
+
+    let totalLength = 0
+    for (const selection of sortedSelections) {
+      if (selection.isEmpty()) {
+        return
+      }
+      totalLength += model.getValueLengthInRange(selection)
+      if (totalLength > PRIMARY_SELECTION_MAX_LENGTH) {
+        return
+      }
+    }
+
+    setPrimarySelectionText(
+      sortedSelections.map((selection) => model.getValueInRange(selection)).join(model.getEOL())
+    )
+  }
+
+  const schedulePrimarySelectionBufferUpdate = (): void => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+    }
+    // Why: Monaco emits intermediate selection changes during drag; match the
+    // editor selection clipboard debounce so we don't churn the clipboard.
+    primarySelectionTimer = window.setTimeout(() => {
+      primarySelectionTimer = null
+      updatePrimarySelectionBuffer()
+    }, 100)
+  }
+
   const copySelectionWithContext = async (): Promise<boolean> => {
     const copiedText = getContextualCopyText()
     if (!copiedText) {
@@ -201,17 +255,10 @@ export function setupContextualCopy({
     return true
   }
 
-  const isContextualCopyShortcut = (event: KeyboardEvent): boolean => {
-    const isMac = navigator.userAgent.includes('Mac')
-    const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-    return mod && event.altKey && !event.shiftKey && event.key.toLowerCase() === 'c'
-  }
-
-  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyC, () => {
-    void copySelectionWithContext()
-  })
-
-  editorInstance.onDidChangeCursorSelection(() => {
+  editorInstance.onDidChangeCursorSelection((event) => {
+    if (event.source !== 'restoreState') {
+      schedulePrimarySelectionBufferUpdate()
+    }
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
@@ -232,7 +279,7 @@ export function setupContextualCopy({
 
   const editorDomNode = editorInstance.getContainerDomNode()
   const handleKeyDown = (event: KeyboardEvent): void => {
-    if (!isContextualCopyShortcut(event)) {
+    if (!editorShortcutMatches('editor.copyContext', event)) {
       return
     }
 
@@ -247,6 +294,10 @@ export function setupContextualCopy({
   editorDomNode.addEventListener('mouseup', updateCopyHint, true)
   editorDomNode.addEventListener('keyup', updateCopyHint, true)
   editorInstance.onDidDispose(() => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+      primarySelectionTimer = null
+    }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
     editorDomNode.removeEventListener('mouseup', updateCopyHint, true)
     editorDomNode.removeEventListener('keyup', updateCopyHint, true)

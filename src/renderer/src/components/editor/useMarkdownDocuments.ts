@@ -3,6 +3,8 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getConnectionId } from '@/lib/connection-context'
+import { listRuntimeMarkdownDocuments, statRuntimePath } from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { createMarkdownDocumentIndex, resolveMarkdownDocLink } from './markdown-doc-links'
 
@@ -48,10 +50,18 @@ export function useMarkdownDocuments(
     const requestId = requestRef.current + 1
     requestRef.current = requestId
     try {
-      const documents = await window.api.fs.listMarkdownDocuments({
-        rootPath: worktreePath,
-        connectionId: connectionId ?? undefined
-      })
+      const documents = await listRuntimeMarkdownDocuments(
+        {
+          settings: settingsForRuntimeOwner(
+            useAppStore.getState().settings,
+            activeFile.runtimeEnvironmentId
+          ),
+          worktreeId,
+          worktreePath,
+          connectionId: connectionId ?? undefined
+        },
+        worktreePath
+      )
       if (requestRef.current !== requestId) {
         return
       }
@@ -68,18 +78,26 @@ export function useMarkdownDocuments(
         }))
       }
     }
-  }, [connectionId, worktreeId, worktreePath])
+  }, [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath])
 
   const openMarkdownDocument = useCallback(
     async (document: MarkdownDocument): Promise<void> => {
-      if (!worktreeId) {
+      if (!worktreeId || !worktreePath) {
         return
       }
       try {
-        const stats = await window.api.fs.stat({
-          filePath: document.filePath,
-          connectionId: connectionId ?? undefined
-        })
+        const stats = await statRuntimePath(
+          {
+            settings: settingsForRuntimeOwner(
+              useAppStore.getState().settings,
+              activeFile.runtimeEnvironmentId
+            ),
+            worktreeId,
+            worktreePath,
+            connectionId: connectionId ?? undefined
+          },
+          document.filePath
+        )
         if (stats.isDirectory) {
           await refreshMarkdownDocuments()
           return
@@ -94,10 +112,18 @@ export function useMarkdownDocuments(
         relativePath: document.relativePath,
         worktreeId,
         language: 'markdown',
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
         mode: 'edit'
       })
     },
-    [connectionId, openFile, refreshMarkdownDocuments, worktreeId]
+    [
+      activeFile.runtimeEnvironmentId,
+      connectionId,
+      openFile,
+      refreshMarkdownDocuments,
+      worktreeId,
+      worktreePath
+    ]
   )
 
   useEffect(() => {

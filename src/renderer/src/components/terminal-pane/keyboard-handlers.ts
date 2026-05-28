@@ -1,9 +1,21 @@
+/* eslint-disable max-lines -- Why: terminal keyboard routing keeps shortcut
+ * precedence in one ordered handler so shell input, pane commands, search, and
+ * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import {
+  keybindingMatchesAction,
+  type KeybindingOverrides,
+  type KeybindingPlatform,
+  type TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
+import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
+import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -63,8 +75,24 @@ export function matchSearchNavigate(
   return e.shiftKey ? 'previous' : 'next'
 }
 
+export function matchFileSearchShortcut(
+  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
+  platform: KeybindingPlatform,
+  keybindings?: KeybindingOverrides,
+  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first'
+): boolean {
+  if (e.repeat) {
+    return false
+  }
+  return keybindingMatchesAction('sidebar.search.toggle', e, platform, keybindings, {
+    context: 'terminal',
+    terminalShortcutPolicy
+  })
+}
+
 type KeyboardHandlersDeps = {
   isActive: boolean
+  keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneCwdRef: React.RefObject<PaneCwdMap>
@@ -77,14 +105,18 @@ type KeyboardHandlersDeps = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  keybindings?: KeybindingOverrides
+  terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
 export function useTerminalKeyboardShortcuts({
   isActive,
+  keyboardScopeRef,
   managerRef,
   paneTransportsRef,
   paneCwdRef,
@@ -96,10 +128,13 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
+  onSearchSelectedText,
   onRequestClosePane,
   searchOpenRef,
   searchStateRef,
-  macOptionAsAltRef
+  macOptionAsAltRef,
+  keybindings,
+  terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -107,6 +142,8 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const isMac = navigator.userAgent.includes('Mac')
+    const isWindows = navigator.userAgent.includes('Windows')
+    const shortcutPlatform: KeybindingPlatform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
     // reports that key's own position (0 = standard), not which modifier is
@@ -128,6 +165,21 @@ export function useTerminalKeyboardShortcuts({
       const manager = managerRef.current
       if (!manager) {
         return
+      }
+      const keyboardScope = keyboardScopeRef.current
+      if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
+        return
+      }
+
+      if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
+        if (selectedText) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          onSearchSelectedText(selectedText)
+          return
+        }
       }
 
       // Cmd+G / Cmd+Shift+G navigates terminal search matches even when focus
@@ -163,7 +215,9 @@ export function useTerminalKeyboardShortcuts({
         e,
         isMac,
         macOptionAsAltRef.current,
-        optionKeyLocation
+        optionKeyLocation,
+        isWindows,
+        keybindings
       )
       if (!action) {
         return
@@ -252,6 +306,20 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'equalizePaneSizes') {
+        // Consume the chord first so a user-assigned terminal shortcut can't fall
+        // through to app-level zoom when an expanded pane blocks the equalize.
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (expandedPaneIdRef.current !== null) {
+          return
+        }
+        manager.equalizePaneSizes()
+        const paneToFocus = manager.getActivePane() ?? manager.getPanes()[0]
+        paneToFocus?.terminal.focus()
+        return
+      }
+
       // Cmd+Shift+Enter expands/collapses the active pane to full terminal area.
       if (action.type === 'toggleExpandActivePane') {
         const panes = manager.getPanes()
@@ -299,6 +367,10 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
+        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+        if (splitWebRuntimeTerminal(ptyId, action.direction)) {
+          return
+        }
         // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
         // if we have a confirmed live OSC 7 for the source pane, split
         // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
@@ -308,7 +380,6 @@ export function useTerminalKeyboardShortcuts({
           manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
           return
         }
-        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
         const paneIdAtDispatch = pane.id
         const directionAtDispatch = action.direction
         void (async () => {
@@ -333,6 +404,7 @@ export function useTerminalKeyboardShortcuts({
     }
   }, [
     isActive,
+    keyboardScopeRef,
     managerRef,
     paneTransportsRef,
     paneCwdRef,
@@ -344,9 +416,12 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    onSearchSelectedText,
     onRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    keybindings,
+    terminalShortcutPolicy
   ])
 }

@@ -75,6 +75,24 @@ describe('mapGhosttyToOrca — font & cursor', () => {
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['focus-follows-mouse'])
   })
+
+  it('maps middle-click-action primary-paste to primary selection paste', () => {
+    const result = mapGhosttyToOrca({ 'middle-click-action': 'primary-paste' })
+    expect(result.diff).toEqual({ primarySelectionMiddleClickPaste: true })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps middle-click-action ignore to disabled primary selection paste', () => {
+    const result = mapGhosttyToOrca({ 'middle-click-action': 'ignore' })
+    expect(result.diff).toEqual({ primarySelectionMiddleClickPaste: false })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects invalid middle-click-action value', () => {
+    const result = mapGhosttyToOrca({ 'middle-click-action': 'copy' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['middle-click-action'])
+  })
 })
 
 describe('mapGhosttyToOrca — macos-option-as-alt', () => {

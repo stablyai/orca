@@ -179,7 +179,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
       connectionId: connId
     })
     expect(results[0]).toMatchObject({ status: 'imported', kind: 'directory' })
-    expect(mkdirSftpMock).toHaveBeenCalledWith(mockSftp, `${destDir}/assets`)
+    expect(mkdirSftpMock).toHaveBeenCalledWith(mockSftp, `${destDir}/assets`, {
+      allowExisting: false
+    })
+    expect(uploadDirMock).toHaveBeenCalledWith(
+      mockSftp,
+      path.resolve('/tmp/dropped/assets'),
+      `${destDir}/assets`,
+      path.resolve('/tmp/dropped/assets'),
+      { exclusive: true }
+    )
   })
 
   it('reports per-item failure when deconfliction throws', async () => {

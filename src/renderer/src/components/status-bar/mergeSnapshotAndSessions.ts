@@ -4,7 +4,7 @@
    in ResourceUsageStatusSegment.tsx. Splitting would scatter logic that has
    exactly one consumer. See docs/resource-usage-merge-spec.md. */
 /**
- * Resource Usage popover merge helper.
+ * Resource Manager popover merge helper.
  *
  * Produces a single grouped list (repo → worktree → session) by unifying:
  *
@@ -28,6 +28,12 @@ import type {
   TerminalTab,
   WorktreeMemory
 } from '../../../../shared/types'
+import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
+import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId
+} from '../../../../shared/worktree-id'
 
 // ─── View-model types (renderer-local) ──────────────────────────────
 
@@ -61,14 +67,22 @@ export type UnifiedWorktreeRow = {
   memory: Metric
   history: number[]
   hasLocalSamples: boolean
+  /** Why: the chip in ResourceUsageStatusSegment now keys on this — the repo
+   *  has an SSH connectionId — instead of `!hasLocalSamples`, which used to
+   *  mislabel warm-reattached *local* PTYs as REMOTE. */
+  isRemote: boolean
   sessions: UnifiedSessionRow[]
 }
 
-export type UnifiedRepoGroup = {
+export type UnifiedProjectGroup = {
   repoId: string
   repoName: string
   cpu: Metric
   memory: Metric
+  /** Why: renamed in spirit but kept as `hasRemoteChildren` for callsite
+   *  stability — the repo-level chip predicate is now "the repo's
+   *  connectionId is non-null", which is the only way a repo can have
+   *  remote children. */
   hasRemoteChildren: boolean
   worktrees: UnifiedWorktreeRow[]
 }
@@ -88,44 +102,19 @@ export type MergeContext = {
   /** Repo display names by repo id. Used for new groups synthesized from
    *  daemon sessions whose repo isn't in the snapshot (typical SSH case). */
   repoDisplayNameById: Map<string, string>
+  /** Repo connectionId by repo id (null/missing == local). Drives the
+   *  `· remote` chip predicate, decoupling label from data-coverage. */
+  repoConnectionIdById: Map<string, string | null>
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-const ORCA_WORKTREE_ID_SEPARATOR = '::'
-
-/** Why: minted PTY session ids look like `${worktreeId}@@${shortUuid}`
- *  (see src/main/daemon/pty-session-id.ts). The renderer-side parser
- *  only needs the prefix; `lastIndexOf` is robust to worktreeIds that
- *  may themselves contain `@`. */
-function parseWorktreeIdFromSessionId(sessionId: string): string | null {
-  const idx = sessionId.lastIndexOf('@@')
-  if (idx <= 0) {
-    return null
-  }
-  const candidate = sessionId.slice(0, idx)
-  if (!candidate.includes(ORCA_WORKTREE_ID_SEPARATOR)) {
-    return null
-  }
-  return candidate
-}
-
 function deriveRepoIdFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(ORCA_WORKTREE_ID_SEPARATOR)
-  return sep > 0 ? worktreeId.slice(0, sep) : worktreeId
+  return getRepoIdFromWorktreeId(worktreeId)
 }
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(ORCA_WORKTREE_ID_SEPARATOR)
-  if (sep <= 0) {
-    return worktreeId
-  }
-  const path = worktreeId.slice(sep + 2)
-  if (!path) {
-    return worktreeId
-  }
-  const parts = path.split(/[\\/]+/).filter(Boolean)
-  return parts.at(-1) ?? worktreeId
+  return getWorktreePathBasenameFromId(worktreeId) ?? worktreeId
 }
 
 function shortCwd(cwd: string): string {
@@ -137,19 +126,12 @@ function shortCwd(cwd: string): string {
   return parts.length > 2 ? parts.slice(-2).join(sep) : cwd
 }
 
-function parsePaneKey(paneKey: string | null): { tabId: string; paneRuntimeId: number } | null {
+function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string } | null {
   if (!paneKey) {
     return null
   }
-  const sepIdx = paneKey.indexOf(':')
-  if (sepIdx <= 0) {
-    return null
-  }
-  const paneRuntimeId = Number(paneKey.slice(sepIdx + 1))
-  if (!Number.isFinite(paneRuntimeId)) {
-    return null
-  }
-  return { tabId: paneKey.slice(0, sepIdx), paneRuntimeId }
+  const parsed = parseStablePaneKey(paneKey)
+  return parsed ? { tabId: parsed.tabId, leafId: parsed.leafId } : null
 }
 
 function resolveSnapshotSessionLabel(
@@ -166,10 +148,6 @@ function resolveSnapshotSessionLabel(
       const custom = tab.customTitle?.trim()
       if (custom) {
         return custom
-      }
-      const runtime = ctx.runtimePaneTitlesByTabId[parsed.tabId]?.[parsed.paneRuntimeId]?.trim()
-      if (runtime) {
-        return runtime
       }
       return tab.defaultTitle?.trim() || tab.title?.trim() || `Terminal ${tabIndex + 1}`
     }
@@ -258,8 +236,8 @@ export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
   ctx: MergeContext
-): UnifiedRepoGroup[] {
-  const repos = new Map<string, UnifiedRepoGroup>()
+): UnifiedProjectGroup[] {
+  const repos = new Map<string, UnifiedProjectGroup>()
   const seenSessionIds = new Set<string>()
   const index = buildMergeIndex(ctx)
   // Why: bound = the daemon session id appears as a pty id under some tab.
@@ -269,21 +247,30 @@ export function mergeSnapshotAndSessions(
     ? new Set(index.ptyIdToTabId.keys())
     : new Set<string>()
 
+  function isRepoRemote(repoId: string): boolean {
+    // Why: missing entry === we don't know about this repo (typically the
+    // unattributed bucket or a session whose repo metadata never made it
+    // into the renderer). Treat unknown as not-remote so a missing-data
+    // edge case can never spuriously flip the chip on. The chip should
+    // only fire when we have positive evidence the repo is SSH-backed.
+    return ctx.repoConnectionIdById.get(repoId) != null
+  }
+
   function ensureRepo(
     repoId: string,
     repoName: string,
     initiallyHasRemoteChildren = false
-  ): UnifiedRepoGroup {
+  ): UnifiedProjectGroup {
     const existing = repos.get(repoId)
     if (existing) {
       return existing
     }
-    const next: UnifiedRepoGroup = {
+    const next: UnifiedProjectGroup = {
       repoId,
       repoName,
       cpu: null,
       memory: null,
-      hasRemoteChildren: initiallyHasRemoteChildren,
+      hasRemoteChildren: initiallyHasRemoteChildren || isRepoRemote(repoId),
       worktrees: []
     }
     repos.set(repoId, next)
@@ -291,7 +278,7 @@ export function mergeSnapshotAndSessions(
   }
 
   function findWorktreeRow(
-    repo: UnifiedRepoGroup,
+    repo: UnifiedProjectGroup,
     worktreeId: string
   ): UnifiedWorktreeRow | undefined {
     return repo.worktrees.find((w) => w.worktreeId === worktreeId)
@@ -325,6 +312,7 @@ export function mergeSnapshotAndSessions(
         memory: wt.memory,
         history: wt.history,
         hasLocalSamples: true,
+        isRemote: isRepoRemote(wt.repoId),
         sessions
       })
     }
@@ -343,7 +331,7 @@ export function mergeSnapshotAndSessions(
 
     // 2b: @@-parse — recover worktreeId from the minted session id format.
     if (!worktreeId) {
-      worktreeId = parseWorktreeIdFromSessionId(session.id)
+      worktreeId = parsePtySessionId(session.id).worktreeId
     }
 
     // 2c: unattributed bucket.
@@ -359,8 +347,11 @@ export function mergeSnapshotAndSessions(
       ? session.title || session.id.slice(0, 12)
       : deriveWorktreeNameFromWorktreeId(finalWorktreeId)
 
-    const repo = ensureRepo(finalRepoId, finalRepoName, true)
-    repo.hasRemoteChildren = true
+    const repoIsRemote = isRepoRemote(finalRepoId)
+    const repo = ensureRepo(finalRepoId, finalRepoName, repoIsRemote)
+    if (repoIsRemote) {
+      repo.hasRemoteChildren = true
+    }
 
     let row = findWorktreeRow(repo, finalWorktreeId)
     if (!row) {
@@ -373,6 +364,7 @@ export function mergeSnapshotAndSessions(
         memory: null,
         history: [],
         hasLocalSamples: false,
+        isRemote: repoIsRemote,
         sessions: []
       }
       repo.worktrees.push(row)
@@ -391,26 +383,23 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 3: per-repo aggregates exclude remote children.
+  // ── Step 3: per-repo aggregates. Remote children are identified by the
+  //   repo's connectionId, not by missing data — `!hasLocalSamples` would
+  //   mislabel warm-reattached local PTYs. The aggregate still skips rows
+  //   we can't sample (worktree.cpu === null) so the numbers stay honest.
   for (const repo of repos.values()) {
     let cpuSum = 0
     let memSum = 0
     let anyLocal = false
-    let anyRemote = false
     for (const wt of repo.worktrees) {
-      if (wt.hasLocalSamples && wt.cpu !== null && wt.memory !== null) {
+      if (wt.cpu !== null && wt.memory !== null) {
         cpuSum += wt.cpu
         memSum += wt.memory
         anyLocal = true
-      } else {
-        anyRemote = true
       }
     }
     repo.cpu = anyLocal ? cpuSum : null
     repo.memory = anyLocal ? memSum : null
-    if (anyRemote) {
-      repo.hasRemoteChildren = true
-    }
   }
 
   return [...repos.values()]

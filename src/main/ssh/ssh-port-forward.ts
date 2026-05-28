@@ -69,6 +69,7 @@ export class SshPortForwardManager {
         }
         socket.pipe(channel).pipe(socket)
         channel.on('close', () => socket.destroy())
+        channel.on('error', () => socket.destroy())
         socket.on('close', () => channel.close())
       })
     })

@@ -9,10 +9,9 @@
 //
 // See docs/mobile-presence-lock.md.
 
-export type DriverState =
-  | { kind: 'idle' }
-  | { kind: 'desktop' }
-  | { kind: 'mobile'; clientId: string }
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-types'
+
+export type DriverState = RuntimeTerminalDriverState
 
 const driverByPtyId = new Map<string, DriverState>()
 
@@ -49,4 +48,22 @@ export function getDriverForPty(ptyId: string): DriverState {
 
 export function isPtyLocked(ptyId: string): boolean {
   return driverByPtyId.get(ptyId)?.kind === 'mobile'
+}
+
+export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]): void {
+  const affectedPtyIds = new Set(driverByPtyId.keys())
+  driverByPtyId.clear()
+
+  for (const { ptyId, driver } of drivers) {
+    affectedPtyIds.add(ptyId)
+    if (driver.kind !== 'idle') {
+      driverByPtyId.set(ptyId, driver)
+    }
+  }
+
+  // Why: startup hydration can arrive after TerminalPane has mounted. Notify
+  // all affected PTYs so the pane-local overlay cannot miss an active lock.
+  for (const ptyId of affectedPtyIds) {
+    notifyChange({ ptyId, driver: getDriverForPty(ptyId) })
+  }
 }

@@ -9,6 +9,10 @@ export function markClaudePtyExited(ptyId: string): void {
   liveClaudePtyIds.delete(ptyId)
 }
 
+export function hasLiveClaudePtys(): boolean {
+  return liveClaudePtyIds.size > 0
+}
+
 export function beginClaudeAuthSwitch(): void {
   if (switchInProgress) {
     throw new Error('A Claude account switch is already in progress.')

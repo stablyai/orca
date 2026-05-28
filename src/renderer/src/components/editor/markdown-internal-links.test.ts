@@ -44,6 +44,17 @@ describe('resolveMarkdownLinkTarget', () => {
     expect(r).toMatchObject({ kind: 'markdown', line: 10, column: 5 })
   })
 
+  it('extracts line+col from non-markdown file links', () => {
+    const r = resolveMarkdownLinkTarget('../src/PdfViewer.tsx:142:7', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      absolutePath: '/repo/src/PdfViewer.tsx',
+      relativePath: 'src/PdfViewer.tsx',
+      line: 142,
+      column: 7
+    })
+  })
+
   it('ignores non-line-col hashes', () => {
     const r = resolveMarkdownLinkTarget('./guide.md#intro', SOURCE, ROOT)
     expect(r).toMatchObject({ kind: 'markdown', line: undefined, column: undefined })
@@ -72,7 +83,31 @@ describe('resolveMarkdownLinkTarget', () => {
 
   it('classifies non-markdown local file as file', () => {
     const r = resolveMarkdownLinkTarget('./image.png', SOURCE, ROOT)
-    expect(r?.kind).toBe('file')
+    expect(r).toMatchObject({
+      kind: 'file',
+      absolutePath: '/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
+  it('classifies explicit file URLs inside the worktree with a relative path', () => {
+    const r = resolveMarkdownLinkTarget('file:///repo/docs/image.png', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file:///repo/docs/image.png',
+      absolutePath: '/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
+  it('classifies explicit file URLs outside the worktree without a relative path', () => {
+    const r = resolveMarkdownLinkTarget('file:///tmp/image.png', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file:///tmp/image.png',
+      absolutePath: '/tmp/image.png',
+      relativePath: undefined
+    })
   })
 
   it('never returns markdown when worktreeRoot is null', () => {

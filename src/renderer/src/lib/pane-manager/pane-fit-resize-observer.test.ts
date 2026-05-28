@@ -33,8 +33,11 @@ function flushAnimationFrames(timestamp = 16): void {
 }
 
 function createPane(): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       cols: 79,
       rows: 24
@@ -46,6 +49,7 @@ function createPane(): ManagedPaneInternal {
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn(),
       proposeDimensions: vi.fn(() => ({ cols: 80, rows: 24 }))
@@ -61,10 +65,10 @@ function createPane(): ManagedPaneInternal {
     compositionHandler: null,
     debugLabel: null,
     pendingSplitScrollState: {
+      bufferType: 'normal',
       wasAtBottom: true,
-      firstVisibleLineContent: '',
       viewportY: 0,
-      totalLines: 24
+      baseY: 0
     } satisfies ScrollState
   }
 }

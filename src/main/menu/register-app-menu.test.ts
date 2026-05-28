@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { registerAppMenu } from './register-app-menu'
+import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 
 const isMac = process.platform === 'darwin'
 
@@ -27,6 +27,9 @@ function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenFeatureTour: vi.fn(),
+    onOpenCrashReport: vi.fn(),
+    onBeforeReload: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -35,7 +38,8 @@ function buildMenuOptions() {
     onToggleAppearance: vi.fn(),
     getAppearanceState: vi.fn(() => ({
       showTasksButton: true,
-      showTitlebarAgentActivity: true,
+      showMobileButton: true,
+      showTitlebarAppName: true,
       statusBarVisible: true
     }))
   }
@@ -54,6 +58,12 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('toggles missing default-on appearance settings from visible to hidden', () => {
+    expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
+    expect(getNextDefaultOnAppearanceSettingValue(false)).toBe(true)
+  })
+
   beforeEach(() => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
@@ -61,61 +71,70 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
-  it('uses a reload menu item without a ctrl/cmd+r accelerator', () => {
+  it('shows reload shortcuts as policy-routed menu hints', () => {
     registerAppMenu(buildMenuOptions())
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+Shift+R'}`
 
     expect(viewSubmenu).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Reload' }),
-        expect.objectContaining({ label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R' })
-      ])
+      expect.arrayContaining([expect.objectContaining({ label: 'Reload' })])
     )
 
     const reloadItem = viewSubmenu.find((item) => item.label === 'Reload')
     expect(reloadItem?.accelerator).toBeUndefined()
+    const forceReloadItem = viewSubmenu.find((item) => item.label === expectedForceReloadLabel)
+    expect(forceReloadItem).toBeDefined()
+    expect(forceReloadItem?.accelerator).toBeUndefined()
   })
 
   it('reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 101,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
     const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
     reloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadMock).toHaveBeenCalledTimes(1)
     expect(reloadIgnoringCacheMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: false, webContentsId: 101 })
   })
 
   it('force reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 102,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
-    const forceReloadItem = getSubmenu(getTemplate(), 'View').find(
-      (item) => item.label === 'Force Reload'
+    const forceReloadItem = getSubmenu(getTemplate(), 'View').find((item) =>
+      item.label?.startsWith('Force Reload\t')
     )
     forceReloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
   it('includes prereleases when Check for Updates is clicked with shift held', () => {
@@ -151,7 +170,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+Shift+J'}`
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
@@ -168,10 +187,18 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).toEqual(expect.arrayContaining(['Export as PDF...', 'Settings', 'Exit']))
+    expect(fileLabels).toEqual(
+      expect.arrayContaining([
+        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
+        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
+        'Exit'
+      ])
+    )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(expect.arrayContaining(['Check for Updates...']))
+    expect(helpLabels).toEqual(
+      expect.arrayContaining(['Report Crash...', 'Explore Orca', 'Check for Updates...'])
+    )
   })
 
   it.runIf(isMac)('keeps the macOS app-named menu with Settings and quit roles', () => {
@@ -180,21 +207,55 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
+    expect(appLabels).toEqual(
+      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
+    )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
     // the system app menu, so only Export belongs under File.
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain('Settings')
+    expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).not.toContain('Exit')
-    // No Help menu on macOS — About/Check for Updates live in the app menu.
-    expect(template.find((item) => item.label === 'Help')).toBeUndefined()
+    const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
+    expect(helpLabels).toEqual(['Report Crash...', undefined, 'Explore Orca'])
+  })
+
+  it('routes Feature tour through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const featureTourItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Explore Orca'
+    )
+    expect(featureTourItem?.accelerator).toBeUndefined()
+
+    const targetWindow = {} as Electron.BaseWindow
+    featureTourItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenFeatureTour).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFeatureTour).toHaveBeenCalledWith(targetWindow)
+  })
+
+  it('routes Report Crash through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const crashReportItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Report Crash...'
+    )
+
+    const targetWindow = {} as Electron.BaseWindow
+    crashReportItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenCrashReport).toHaveBeenCalledTimes(1)
+    expect(options.onOpenCrashReport).toHaveBeenCalledWith(targetWindow)
   })
 
   it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {
     const options = buildMenuOptions()
     options.getAppearanceState.mockReturnValue({
       showTasksButton: false,
-      showTitlebarAgentActivity: true,
+      showMobileButton: true,
+      showTitlebarAppName: true,
       statusBarVisible: true
     })
     registerAppMenu(options)
@@ -209,9 +270,11 @@ describe('registerAppMenu', () => {
     expect(tasksItem?.type).toBe('checkbox')
     expect(tasksItem?.checked).toBe(false)
 
-    const titlebarItem = appearanceSubmenu.find(
-      (item) => item.label === 'Show Titlebar Agent Activity'
-    )
+    const mobileItem = appearanceSubmenu.find((item) => item.label === 'Show Orca Mobile Button')
+    expect(mobileItem?.type).toBe('checkbox')
+    expect(mobileItem?.checked).toBe(true)
+
+    const titlebarItem = appearanceSubmenu.find((item) => item.label === 'Show Titlebar App Name')
     expect(titlebarItem?.checked).toBe(true)
 
     const statusBarItem = appearanceSubmenu.find((item) => item.label === 'Show Status Bar')
@@ -229,8 +292,16 @@ describe('registerAppMenu', () => {
     appearanceSubmenu
       .find((item) => item.label === 'Show Tasks Button')
       ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
+      .find((item) => item.label === 'Show Orca Mobile Button')
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
+      .find((item) => item.label === 'Show Titlebar App Name')
+      ?.click?.({} as never, {} as never, {} as never)
 
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTasksButton')
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showMobileButton')
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showTitlebarAppName')
   })
 
   it('routes sidebar toggle items through their callbacks', () => {
@@ -241,8 +312,8 @@ describe('registerAppMenu', () => {
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 
-    const leftLabel = `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`
-    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`
+    const leftLabel = `Toggle Left Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
+    const rightLabel = `Toggle Right Sidebar\t${isMac ? '⌘L' : 'Ctrl+L'}`
 
     appearanceSubmenu
       .find((item) => item.label === leftLabel)

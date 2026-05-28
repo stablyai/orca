@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { parseOsc52 } from './osc52-clipboard'
+import { describe, expect, it, vi } from 'vitest'
+import { handleOsc52ClipboardRequest, parseOsc52 } from './osc52-clipboard'
 
 function b64(s: string): string {
   return Buffer.from(s, 'utf-8').toString('base64')
@@ -65,5 +65,48 @@ describe('parseOsc52', () => {
   it('rejects payloads larger than the size cap', () => {
     const huge = 'A'.repeat(128 * 1024 + 100) // valid base64 alphabet char
     expect(parseOsc52(`c;${huge}`)).toMatchObject({ kind: 'invalid' })
+  })
+})
+
+describe('handleOsc52ClipboardRequest', () => {
+  it('writes valid OSC 52 clipboard payloads when enabled', () => {
+    const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+
+    expect(
+      handleOsc52ClipboardRequest(`c;${b64('from remote')}`, {
+        allowClipboardWrite: true,
+        writeClipboardText
+      })
+    ).toBe(true)
+
+    expect(writeClipboardText).toHaveBeenCalledWith('from remote')
+  })
+
+  it('surfaces a blocked valid write when OSC 52 clipboard writes are disabled', () => {
+    const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const onBlockedWrite = vi.fn()
+
+    expect(
+      handleOsc52ClipboardRequest(`c;${b64('from remote')}`, {
+        allowClipboardWrite: false,
+        writeClipboardText,
+        onBlockedWrite
+      })
+    ).toBe(true)
+
+    expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(onBlockedWrite).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not surface blocked queries because Orca must not answer them', () => {
+    const onBlockedWrite = vi.fn()
+
+    handleOsc52ClipboardRequest('c;?', {
+      allowClipboardWrite: false,
+      writeClipboardText: vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+      onBlockedWrite
+    })
+
+    expect(onBlockedWrite).not.toHaveBeenCalled()
   })
 })

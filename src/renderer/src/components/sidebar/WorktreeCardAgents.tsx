@@ -1,5 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
-import { ChevronDown } from 'lucide-react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -8,6 +7,9 @@ import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
+import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 
 type Props = {
   worktreeId: string
@@ -45,6 +47,70 @@ type BodyProps = {
   className?: string
 }
 
+type AgentLineageModel = {
+  rootAgents: DashboardAgentRowData[]
+  childrenByParentPaneKey: Map<string, DashboardAgentRowData[]>
+}
+
+function buildAgentLineageModel(agents: DashboardAgentRowData[]): AgentLineageModel {
+  const agentPaneKeys = new Set(agents.map((agent) => agent.paneKey))
+  const childrenByParentPaneKey = new Map<string, DashboardAgentRowData[]>()
+  const childPaneKeys = new Set<string>()
+
+  for (const agent of agents) {
+    const parentPaneKey = agent.entry.orchestration?.parentPaneKey
+    if (!parentPaneKey || !agentPaneKeys.has(parentPaneKey)) {
+      continue
+    }
+    childPaneKeys.add(agent.paneKey)
+    const siblings = childrenByParentPaneKey.get(parentPaneKey)
+    if (siblings) {
+      siblings.push(agent)
+    } else {
+      childrenByParentPaneKey.set(parentPaneKey, [agent])
+    }
+  }
+
+  const rootAgents = agents.filter((agent) => !childPaneKeys.has(agent.paneKey))
+  if (rootAgents.length === 0 && agents.length > 0) {
+    // Why: malformed orchestration metadata can theoretically form a cycle.
+    // Keep every row visible instead of recursing forever or hiding the list.
+    return { rootAgents: agents, childrenByParentPaneKey: new Map() }
+  }
+
+  const reachablePaneKeys = new Set<string>()
+  const markReachable = (
+    agent: DashboardAgentRowData,
+    ancestorPaneKeys: ReadonlySet<string> = new Set()
+  ): void => {
+    if (reachablePaneKeys.has(agent.paneKey) || ancestorPaneKeys.has(agent.paneKey)) {
+      return
+    }
+    reachablePaneKeys.add(agent.paneKey)
+    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
+    descendantAncestorPaneKeys.add(agent.paneKey)
+    for (const childAgent of childrenByParentPaneKey.get(agent.paneKey) ?? []) {
+      markReachable(childAgent, descendantAncestorPaneKeys)
+    }
+  }
+  for (const rootAgent of rootAgents) {
+    markReachable(rootAgent)
+  }
+
+  for (const agent of agents) {
+    if (reachablePaneKeys.has(agent.paneKey)) {
+      continue
+    }
+    // Why: a partial cycle alongside a valid root has no true root, so it
+    // would otherwise disappear. Render malformed participants as flat rows
+    // and drop their child edges, matching the dashboard lineage fallback.
+    rootAgents.push(agent)
+    childrenByParentPaneKey.delete(agent.paneKey)
+  }
+
+  return { rootAgents, childrenByParentPaneKey }
+}
+
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
@@ -52,13 +118,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
-
-  // Why: per-worktree collapse is session-only UI state. Single-primitive
-  // subscription so the card only re-renders when THIS worktree's collapsed
-  // flag flips — not on any other worktree's toggle.
-  const isCollapsed = useAppStore((s) => s.collapsedInlineAgentsByWorktreeId[worktreeId] === true)
-  const toggleInlineAgentsCollapsed = useAppStore((s) => s.toggleInlineAgentsCollapsed)
+  const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -86,18 +146,21 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
-      acknowledgeAgents([paneKey])
-      const colon = paneKey.indexOf(':')
-      const tail = colon > 0 ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      let paneId: number | null = null
-      if (Number.isFinite(parsed) && parsed > 0) {
-        paneId = parsed
-      } else {
-        // Why: paneKey for sidebar agent rows is always ${tabId}:${paneId}
-        // with a positive integer paneId; anything else (empty, zero,
-        // non-numeric) means upstream row construction drifted.
+      const parsed = parsePaneKey(paneKey)
+      if (!parsed) {
+        // Why: malformed or legacy numeric keys cannot be resolved safely after
+        // pane replay/remount, so drop the stale row instead of guessing.
         console.warn('[WorktreeCardAgents] malformed paneKey, skipping pane focus', paneKey)
+        dismissStaleAgentRowByKey(paneKey)
+        return
+      }
+      if (parsed.tabId !== tabId) {
+        console.warn('[WorktreeCardAgents] paneKey tabId mismatch, dismissing row', {
+          tabId,
+          paneKey
+        })
+        dismissStaleAgentRowByKey(paneKey)
+        return
       }
       // Why: route through activateAndRevealWorktree so cross-repo clicks also
       // set activeRepoId, record a nav-history entry, clear sidebar filters,
@@ -109,78 +172,128 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
-        activateTabAndFocusPane(tabId, paneId)
+        activateTabAndFocusPane(tabId, parsed.leafId, {
+          ackPaneKeyOnSuccess: paneKey,
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
+        })
+      } else {
+        dismissStaleAgentRowByKey(paneKey)
       }
     },
-    [worktreeId, acknowledgeAgents]
-  )
-
-  const handleToggleCollapsed = useCallback(
-    (e: React.MouseEvent) => {
-      // Why: the header is inside WorktreeCard, whose outer click handler
-      // activates the worktree. Stop propagation so expanding/collapsing the
-      // list doesn't also navigate away — the user's intent is clearly the
-      // toggle, not a worktree switch.
-      e.stopPropagation()
-      toggleInlineAgentsCollapsed(worktreeId)
-    },
-    [toggleInlineAgentsCollapsed, worktreeId]
+    [worktreeId]
   )
 
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
   // never mount this component (see WorktreeCardAgents), so idle worktrees
   // don't pay any timer cost.
   const now = useNow(30_000)
+  const hasLineage = agents.some((agent) => agent.lineage && agent.lineage.depth > 0)
+  const { rootAgents, childrenByParentPaneKey } = useMemo(
+    () => buildAgentLineageModel(agents),
+    [agents]
+  )
+  const [expandedLineageParents, setExpandedLineageParents] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
+  const toggleLineageParent = useCallback((paneKey: string) => {
+    setExpandedLineageParents((current) => {
+      const next = new Set(current)
+      if (next.has(paneKey)) {
+        next.delete(paneKey)
+      } else {
+        next.add(paneKey)
+      }
+      return next
+    })
+  }, [])
+
+  const stopBubble = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+  }, [])
+
+  // Why: when any root row has a disclosure chevron, leaf siblings reserve a
+  // matching leading spacer so the state-dot column stays aligned across the
+  // card. Without this, parent rows shift right by the chevron's width while
+  // leaf rows hug the gutter — visible misalignment when the user sweeps the
+  // leading column.
+  const anyRootHasChildren = rootAgents.some(
+    (agent) => (childrenByParentPaneKey.get(agent.paneKey) ?? []).length > 0
+  )
+
+  const renderAgentBranch = (
+    agent: DashboardAgentRowData,
+    ancestorPaneKeys: ReadonlySet<string> = new Set()
+  ): React.ReactNode => {
+    if (ancestorPaneKeys.has(agent.paneKey)) {
+      // Why: orchestration metadata is external state and can be malformed.
+      // Bail out of repeated ancestors instead of recursing forever.
+      return null
+    }
+    const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
+    const hasChildAgents = childAgents.length > 0
+    const expanded = expandedLineageParents.has(agent.paneKey)
+    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
+    descendantAncestorPaneKeys.add(agent.paneKey)
+    return (
+      <React.Fragment key={agent.paneKey}>
+        <DashboardAgentRow
+          agent={agent}
+          onDismiss={handleDismissAgent}
+          onActivate={handleActivateAgentTab}
+          now={now}
+          // Why: bold an agent row until the user has visited its tab.
+          // useAutoAckViewedAgent acks automatically when the user
+          // focuses the agent's tab, which mutes the row in lockstep.
+          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
+          // Why: inline rows pack tighter than a full-panel layout;
+          // 'md' reads as a second ~12px glyph users confuse with the
+          // agent identity icon right next to it. 'sm' keeps the two
+          // distinguishable at a glance.
+          stateDotSize="sm"
+          // Why: in the per-card inline list clicking the row jumps
+          // directly to the agent, so the expand chevron is redundant.
+          // Keep the identity glyph (Claude/Gemini/…) so users can tell
+          // agents apart at a glance within a worktree.
+          hideExpand
+          // Why: fold orchestration children under the parent row's leading
+          // chevron so a parent reads as a tree node, not as a separate
+          // disclosure stripe below it. Variant B in the mockups.
+          childAgentCount={hasChildAgents ? childAgents.length : undefined}
+          childAgentsExpanded={expanded}
+          onToggleChildAgents={
+            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
+          }
+          // Why: keep leaf rows aligned with parent rows in the same card —
+          // see anyRootHasChildren above.
+          reserveDisclosureGutter={anyRootHasChildren && !hasChildAgents}
+          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          // Why: the disclosure variant uses chevron + indentation to show
+          // hierarchy. The legacy L-connector / vertical-trunk decorations
+          // are pinned to a fixed left offset that doesn't match the
+          // chevron-shifted column and read as floating fragments.
+          hideLineageConnectors
+        />
+        {hasChildAgents && expanded
+          ? childAgents.map((childAgent) =>
+              renderAgentBranch(childAgent, descendantAncestorPaneKeys)
+            )
+          : null}
+      </React.Fragment>
+    )
+  }
 
   return (
+    // Why: swallow bubbling so clicks on the gutter around the agent rows
+    // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1', className)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('flex flex-col mt-1 mb-1', className)}
+      onClick={stopBubble}
+      onDoubleClick={stopBubble}
+      role={hasLineage ? 'tree' : 'group'}
+      aria-label="Agents"
     >
-      {/* Why: clickable header toggles the section open/closed. Using a real
-          <button> keeps keyboard + a11y semantics correct (Enter/Space
-          activate, proper focus ring, aria-expanded for screen readers). */}
-      <button
-        type="button"
-        onClick={handleToggleCollapsed}
-        aria-expanded={!isCollapsed}
-        aria-label={isCollapsed ? 'Expand agent activity' : 'Collapse agent activity'}
-        className="flex items-center gap-1 mb-0.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-      >
-        <ChevronDown
-          className={cn('size-2.5 transition-transform duration-150', isCollapsed && '-rotate-90')}
-        />
-        <span>Agents ({agents.length})</span>
-      </button>
-      {!isCollapsed && (
-        <div className="flex flex-col divide-y divide-border/30">
-          {agents.map((agent) => (
-            <div key={agent.paneKey} className="py-0.5">
-              <DashboardAgentRow
-                agent={agent}
-                onDismiss={handleDismissAgent}
-                onActivate={handleActivateAgentTab}
-                now={now}
-                // Why: bold an agent row until the user has visited its tab.
-                // useAutoAckViewedAgent acks automatically when the user
-                // focuses the agent's tab, which mutes the row in lockstep.
-                isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-                // Why: inline rows pack tighter than a full-panel layout;
-                // 'md' reads as a second ~12px glyph users confuse with the
-                // agent identity icon right next to it. 'sm' keeps the two
-                // distinguishable at a glance.
-                stateDotSize="sm"
-                // Why: in the per-card inline list clicking the row jumps
-                // directly to the agent, so the expand chevron is redundant.
-                // Keep the identity glyph (Claude/Gemini/…) so users can tell
-                // agents apart at a glance within a worktree.
-                hideExpand
-              />
-            </div>
-          ))}
-        </div>
-      )}
+      {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>
   )
 })

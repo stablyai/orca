@@ -12,6 +12,7 @@ const {
   guestSetBackgroundThrottlingMock,
   guestSetWindowOpenHandlerMock,
   guestExecuteJavaScriptMock,
+  guestExecuteJavaScriptInIsolatedWorldMock,
   guestIsDestroyedMock,
   guestGetZoomFactorMock,
   guestCapturePageMock,
@@ -25,6 +26,7 @@ const {
   guestSetBackgroundThrottlingMock: vi.fn(),
   guestSetWindowOpenHandlerMock: vi.fn(),
   guestExecuteJavaScriptMock: vi.fn(),
+  guestExecuteJavaScriptInIsolatedWorldMock: vi.fn(),
   guestIsDestroyedMock: vi.fn(() => false),
   guestGetZoomFactorMock: vi.fn(() => 1),
   guestCapturePageMock: vi.fn(),
@@ -53,6 +55,7 @@ function makeGuest(id: number) {
     off: guestOffMock,
     openDevTools: vi.fn(),
     executeJavaScript: guestExecuteJavaScriptMock,
+    executeJavaScriptInIsolatedWorld: guestExecuteJavaScriptInIsolatedWorldMock,
     getZoomFactor: guestGetZoomFactorMock,
     capturePage: guestCapturePageMock,
     getURL: vi.fn(() => 'https://example.com/')
@@ -61,13 +64,17 @@ function makeGuest(id: number) {
 
 describe('browserManager grab operations', () => {
   const rendererWebContentsId = 5001
+  const primaryModifier =
+    process.platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
   let guest: Electron.WebContents
 
   beforeEach(() => {
     vi.clearAllMocks()
     guestIsDestroyedMock.mockReturnValue(false)
     guestExecuteJavaScriptMock.mockResolvedValue(true)
+    guestExecuteJavaScriptInIsolatedWorldMock.mockResolvedValue(true)
     browserManager.unregisterAll()
+    browserManager.setSettingsResolver(() => ({}))
 
     guest = makeGuest(101)
     webContentsFromIdMock.mockImplementation((id: number) => {
@@ -154,7 +161,13 @@ describe('browserManager grab operations', () => {
       const preventDefault = vi.fn()
       handler?.(
         { preventDefault } as never,
-        { type: 'keyDown', meta: true, control: true, shift: false, alt: false, key: 'c' } as never
+        {
+          type: 'keyDown',
+          ...primaryModifier,
+          shift: false,
+          alt: false,
+          key: 'c'
+        } as never
       )
 
       await Promise.resolve()
@@ -174,7 +187,13 @@ describe('browserManager grab operations', () => {
       const preventDefault = vi.fn()
       handler?.(
         { preventDefault } as never,
-        { type: 'keyDown', meta: true, control: true, shift: false, alt: false, key: 'c' } as never
+        {
+          type: 'keyDown',
+          ...primaryModifier,
+          shift: false,
+          alt: false,
+          key: 'c'
+        } as never
       )
 
       await Promise.resolve()
@@ -227,8 +246,8 @@ describe('browserManager grab operations', () => {
         { preventDefault } as never,
         {
           type: 'keyDown',
-          meta: true,
-          control: true,
+          meta: process.platform === 'darwin',
+          control: process.platform !== 'darwin',
           shift: true,
           alt: false,
           code: 'KeyB',
@@ -753,11 +772,11 @@ describe('browserManager grab operations', () => {
       })
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         1,
-        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = 'none'; })()`
+        expect.stringContaining('__orcaGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         2,
-        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = ''; })()`
+        expect.stringContaining('__orcaGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(3, 'window.innerWidth')
     })

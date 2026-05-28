@@ -10,7 +10,7 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/components/Widget.svelte')).toBe('svelte')
   })
 
-  it('keeps .astro mapped to html until its grammar ships', () => {
-    expect(detectLanguage('src/routes/index.astro')).toBe('html')
+  it('maps .astro files to the custom astro language id', () => {
+    expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 })

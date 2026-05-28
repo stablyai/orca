@@ -1,25 +1,42 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
+import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
+
+type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
 export type TerminalModes = {
   bracketedPasteMode: boolean
   altScreen: boolean
+  mouseTrackingMode: TerminalMouseTrackingMode
+  sgrMouseMode: boolean
+  sgrMousePixelsMode: boolean
 }
+
+export type TerminalKeyboardAvoidanceMetrics = {
+  cursorY: number
+  rows: number
+  altScreen: boolean
+}
+
+export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
   onSelectionEvicted?: () => void
   onModesChanged?: (modes: TerminalModes) => void
+  onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
+  onTerminalInput?: (bytes: string) => void
 }
 
 export type TerminalWebViewHandle = {
   write: (data: string) => void
   init: (cols: number, rows: number, initialData?: string) => void
+  resize: (cols: number, rows: number) => void
   clear: () => void
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
@@ -34,17 +51,52 @@ export type TerminalWebViewHandle = {
 
 type Props = {
   style?: StyleProp<ViewStyle>
+  terminalTheme?: MobileTerminalTheme
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
 type TerminalMessage =
   | { type: 'write'; id?: number; data: string }
-  | { type: 'init'; id?: number; cols: number; rows: number; initialData?: string }
+  | {
+      type: 'init'
+      id?: number
+      cols: number
+      rows: number
+      initialData?: string
+      terminalTheme?: MobileTerminalTheme
+    }
+  | { type: 'resize'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
   | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
+  | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
+
+const DEFAULT_TERMINAL_THEME: MobileTerminalTheme['theme'] = {
+  background: colors.terminalBg,
+  foreground: '#c0caf5',
+  cursor: '#c0caf5',
+  cursorAccent: colors.terminalBg,
+  selectionBackground: '#33467c',
+  selectionForeground: '#c0caf5',
+  black: '#15161e',
+  red: '#f7768e',
+  green: '#9ece6a',
+  yellow: '#e0af68',
+  blue: '#7aa2f7',
+  magenta: '#bb9af7',
+  cyan: '#7dcfff',
+  white: '#a9b1d6',
+  brightBlack: '#414868',
+  brightRed: '#f7768e',
+  brightGreen: '#9ece6a',
+  brightYellow: '#e0af68',
+  brightBlue: '#7aa2f7',
+  brightMagenta: '#bb9af7',
+  brightCyan: '#7dcfff',
+  brightWhite: '#c0caf5'
+}
 
 // Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
 // positioning designed for the desktop's terminal dimensions (~150+ cols).
@@ -80,6 +132,46 @@ const XTERM_HTML = `<!DOCTYPE html>
     display: inline-block;
   }
   .xterm { -webkit-user-select: none; user-select: none; }
+  .xterm .xterm-viewport {
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+  }
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+  .xterm .xterm-scrollable-element > .xterm-scrollbar,
+  .xterm .xterm-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  #scroll-indicator {
+    position: fixed;
+    top: 4px;
+    right: 3px;
+    bottom: 4px;
+    width: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms linear;
+    z-index: 7;
+  }
+  #scroll-indicator.visible { opacity: 0.72; }
+  #scroll-thumb {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    min-height: 24px;
+    border-radius: 999px;
+    background: ${colors.textSecondary};
+    will-change: transform, height;
+  }
   /* Why: selection overlay sits in unscaled viewport coords, above the
      transformed surface, so handle hit areas and Copy menu positions
      don't depend on getTotalScale() for their on-screen size. */
@@ -156,6 +248,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 <div id="terminal-container">
   <div id="terminal-surface"></div>
 </div>
+<div id="scroll-indicator"><div id="scroll-thumb"></div></div>
 <div id="selection-overlay">
   <div id="sel-handle-start" class="sel-handle start"></div>
   <div id="sel-handle-end" class="sel-handle end"></div>
@@ -169,7 +262,12 @@ const XTERM_HTML = `<!DOCTYPE html>
 (function() {
   var surface = document.getElementById('terminal-surface');
   var ESC = String.fromCharCode(27);
+  var C1_CSI = String.fromCharCode(155);
+  var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null;
+  var scrollIndicator = document.getElementById('scroll-indicator');
+  var scrollThumb = document.getElementById('scroll-thumb');
+  var scrollIndicatorHideTimer = null;
   var writeQueue = [];
   var writesDraining = false;
   var afterDrainCallbacks = [];
@@ -178,9 +276,18 @@ const XTERM_HTML = `<!DOCTYPE html>
   var userScale = 1;
   var panX = 0;
   var panY = 0;
+  var smoothScrollOffsetY = 0;
+  var pendingNormalScrollDeltaY = 0;
+  var normalScrollFrameId = null;
   var initRows = 24;
   var terminalGeneration = 0;
+  var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalTheme = defaultTheme;
   var activeAltScreenSnapshot = false;
+  var trackedMouseTrackingMode = 'none';
+  var sgrMouseMode = false;
+  var sgrMousePixelsMode = false;
+  var mouseModeScanTail = '';
   var handledMessageIds = [];
   // Why: after init() the initial scrollback applyFitScale may have run
   // against an empty buffer (or one without the widest line yet). Re-fit
@@ -232,7 +339,55 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function updateTransform() {
     surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';
+    updateScrollIndicator(false);
     if (selMode === 'select') repositionOverlay();
+  }
+
+  function updateScrollIndicator(reveal) {
+    if (!scrollIndicator || !scrollThumb || !term || !term.buffer || !term.buffer.active) return;
+    var buffer = term.buffer.active;
+    var maxViewportY = buffer.baseY || 0;
+    if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput()) {
+      scrollIndicator.classList.remove('visible');
+      return;
+    }
+    var trackHeight = Math.max(0, window.innerHeight - 8);
+    var totalRows = maxViewportY + (term.rows || 0);
+    if (trackHeight <= 0 || totalRows <= 0) return;
+    var thumbHeight = Math.max(24, trackHeight * (term.rows || 0) / totalRows);
+    var maxTop = Math.max(0, trackHeight - thumbHeight);
+    var top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0;
+    scrollThumb.style.height = thumbHeight + 'px';
+    scrollThumb.style.transform = 'translateY(' + top + 'px)';
+    if (!reveal) return;
+    scrollIndicator.classList.add('visible');
+    if (scrollIndicatorHideTimer) clearTimeout(scrollIndicatorHideTimer);
+    scrollIndicatorHideTimer = setTimeout(function() {
+      scrollIndicator.classList.remove('visible');
+      scrollIndicatorHideTimer = null;
+    }, 550);
+  }
+
+  function normalizeTerminalTheme(input) {
+    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
+      ? input.theme
+      : null;
+    if (!source) return defaultTheme;
+    var next = {};
+    var keys = Object.keys(defaultTheme);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (typeof source[key] === 'string') next[key] = source[key];
+    }
+    return Object.assign({}, defaultTheme, next);
+  }
+
+  function applyTerminalTheme(input) {
+    terminalTheme = normalizeTerminalTheme(input);
+    var background = terminalTheme.background || '${colors.terminalBg}';
+    document.documentElement.style.background = background;
+    document.body.style.background = background;
+    if (term) term.options.theme = terminalTheme;
   }
 
   function getCellHeight() {
@@ -355,6 +510,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     userScale = 1;
     panX = 0;
     panY = 0;
+    smoothScrollOffsetY = 0;
     updateTransform();
     adjustRowsForViewport();
 
@@ -397,6 +553,58 @@ const XTERM_HTML = `<!DOCTYPE html>
     return on > 0 ? data.slice(on) : data;
   }
 
+  function updateMouseModeFromData(data) {
+    if (typeof data !== 'string' || data.length === 0) return;
+    var input = mouseModeScanTail + data;
+    mouseModeScanTail = extractMouseModeScanTail(input);
+    var re = new RegExp(ESC + 'c|' + ESC + '\\\\[\\\\?([0-9;]+)([hl])|' + C1_CSI + '\\\\?([0-9;]+)([hl])', 'g');
+    var match;
+    while ((match = re.exec(input)) !== null) {
+      if (match[0] === ESC + 'c') {
+        trackedMouseTrackingMode = 'none';
+        sgrMouseMode = false;
+        sgrMousePixelsMode = false;
+        continue;
+      }
+      var enabled = (match[2] || match[4]) === 'h';
+      var params = (match[1] || match[3]).split(';');
+      for (var i = 0; i < params.length; i++) {
+        if (params[i] === '') continue;
+        var param = Number(params[i]);
+        if (!Number.isInteger(param)) continue;
+        if (param === 9) trackedMouseTrackingMode = enabled ? 'x10' : 'none';
+        if (param === 1000) trackedMouseTrackingMode = enabled ? 'vt200' : 'none';
+        if (param === 1002) trackedMouseTrackingMode = enabled ? 'drag' : 'none';
+        if (param === 1003) trackedMouseTrackingMode = enabled ? 'any' : 'none';
+        if (param === 1006) {
+          sgrMouseMode = enabled;
+          sgrMousePixelsMode = false;
+        }
+        if (param === 1016) {
+          sgrMouseMode = false;
+          sgrMousePixelsMode = enabled;
+        }
+      }
+    }
+  }
+
+  function extractMouseModeScanTail(input) {
+    var start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI));
+    if (start === -1) return '';
+    var tail = input.slice(start);
+    // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
+    // Keep parser state far beyond normal mode lists while still bounding memory.
+    if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) return '';
+    if (tail === ESC || tail === ESC + '[' || tail === C1_CSI) return tail;
+    if (tail.indexOf(ESC + '[?') === 0) {
+      return /^[0-9;]*$/.test(tail.slice(3)) ? tail : '';
+    }
+    if (tail.indexOf(C1_CSI + '?') === 0) {
+      return /^[0-9;]*$/.test(tail.slice(2)) ? tail : '';
+    }
+    return '';
+  }
+
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
     var next = writeQueue.shift();
@@ -421,7 +629,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     pumpWrites(terminalGeneration);
   }
 
-  function init(cols, rows, initialData) {
+  function init(cols, rows, initialData, nextTheme) {
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
@@ -430,36 +638,44 @@ const XTERM_HTML = `<!DOCTYPE html>
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
+    smoothScrollOffsetY = 0;
+    mouseModeScanTail = '';
+    trackedMouseTrackingMode = 'none';
+    sgrMouseMode = false;
+    sgrMousePixelsMode = false;
+    lastEmittedModes = {
+      bracketedPasteMode: false,
+      altScreen: false,
+      mouseTrackingMode: 'none',
+      sgrMouseMode: false,
+      sgrMousePixelsMode: false
+    };
     var replayData = normalizeInitialData(initialData);
+    // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
+    // mirrored modes aligned with exactly what this mobile xterm replays.
+    updateMouseModeFromData(replayData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
-    if (term) term.dispose();
+    var oldTerm = term;
+    var oldSurface = surface;
+    var nextSurface = null;
+    if (oldTerm) {
+      nextSurface = document.createElement('div');
+      nextSurface.id = 'terminal-surface';
+      nextSurface.style.visibility = 'hidden';
+      nextSurface.style.position = 'absolute';
+      nextSurface.style.left = '0';
+      nextSurface.style.top = '0';
+      document.getElementById('terminal-container').appendChild(nextSurface);
+      surface = nextSurface;
+      attachSurfaceEventHandlers(surface);
+      oldSurface.removeAttribute('id');
+    }
 
+    applyTerminalTheme(nextTheme);
     term = new Terminal({
       cols: cols || 80,
       rows: rows || 24,
-      theme: {
-        background: '${colors.terminalBg}',
-        foreground: '#c0caf5',
-        cursor: '#c0caf5',
-        cursorAccent: '${colors.terminalBg}',
-        selectionBackground: '#33467c',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#a9b1d6',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5'
-      },
+      theme: terminalTheme,
       fontFamily: '"Menlo", "Consolas", "DejaVu Sans Mono", monospace',
       fontSize: 13,
       scrollback: 5000,
@@ -485,6 +701,14 @@ const XTERM_HTML = `<!DOCTYPE html>
       ready = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
+        if (nextSurface && oldSurface) {
+          nextSurface.style.visibility = 'visible';
+          nextSurface.style.position = '';
+          nextSurface.style.left = '';
+          nextSurface.style.top = '';
+          oldSurface.remove();
+          if (oldTerm) oldTerm.dispose();
+        }
         applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
       });
@@ -492,6 +716,7 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
 
   function write(data) {
+    updateMouseModeFromData(data);
     writeQueue.push(data);
     pumpWrites(terminalGeneration);
     // Why: first live data chunk after init may widen the buffer past
@@ -506,6 +731,14 @@ const XTERM_HTML = `<!DOCTYPE html>
         applyFitScale('first-data');
       });
     }
+  }
+
+  function resize(cols, rows) {
+    if (!term) return;
+    initRows = rows || initRows;
+    term.resize(cols || term.cols, rows || term.rows);
+    applyFitScale('resize-msg');
+    notify({ type: 'ready', cols: cols, rows: rows });
   }
 
   function notify(msg) {
@@ -575,7 +808,9 @@ const XTERM_HTML = `<!DOCTYPE html>
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme);
+    } else if (msg.type === 'resize') {
+      resize(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
       write(msg.data);
     } else if (msg.type === 'clear') {
@@ -583,7 +818,12 @@ const XTERM_HTML = `<!DOCTYPE html>
       writeQueue = [];
       afterDrainCallbacks = [];
       writesDraining = false;
+      mouseModeScanTail = '';
+      trackedMouseTrackingMode = 'none';
+      sgrMouseMode = false;
+      sgrMousePixelsMode = false;
       if (term) { term.clear(); term.reset(); }
+      emitModesIfChanged();
       resetEvictionCounter();
       if (selMode === 'select') {
         notify({ type: 'selection-evicted' });
@@ -593,6 +833,8 @@ const XTERM_HTML = `<!DOCTYPE html>
       measureFitDimensions(msg.containerHeight);
     } else if (msg.type === 'reset-zoom') {
       applyFitScale('reset-zoom-msg');
+    } else if (msg.type === 'set-theme') {
+      applyTerminalTheme(msg.terminalTheme);
     } else if (msg.type === 'cancel-select') {
       if (selMode === 'select') cancelSelect();
     } else if (msg.type === 'do-select-all') {
@@ -675,22 +917,69 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (!term) return;
     var bp = !!(term.modes && term.modes.bracketedPasteMode);
     var alt = false;
+    var mouseTrackingMode = getMouseTrackingMode();
     try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
-    if (bp !== lastEmittedModes.bracketedPasteMode || alt !== lastEmittedModes.altScreen) {
-      lastEmittedModes = { bracketedPasteMode: bp, altScreen: alt };
-      notify({ type: 'modes', bracketedPasteMode: bp, altScreen: alt });
+    if (
+      bp !== lastEmittedModes.bracketedPasteMode ||
+      alt !== lastEmittedModes.altScreen ||
+      mouseTrackingMode !== lastEmittedModes.mouseTrackingMode ||
+      sgrMouseMode !== lastEmittedModes.sgrMouseMode ||
+      sgrMousePixelsMode !== lastEmittedModes.sgrMousePixelsMode
+    ) {
+      lastEmittedModes = {
+        bracketedPasteMode: bp,
+        altScreen: alt,
+        mouseTrackingMode: mouseTrackingMode,
+        sgrMouseMode: sgrMouseMode,
+        sgrMousePixelsMode: sgrMousePixelsMode
+      };
+      notify({
+        type: 'modes',
+        bracketedPasteMode: bp,
+        altScreen: alt,
+        mouseTrackingMode: mouseTrackingMode,
+        sgrMouseMode: sgrMouseMode,
+        sgrMousePixelsMode: sgrMousePixelsMode
+      });
     }
   }
-  var lastEmittedModes = { bracketedPasteMode: false, altScreen: false };
+  var lastEmittedModes = {
+    bracketedPasteMode: false,
+    altScreen: false,
+    mouseTrackingMode: 'none',
+    sgrMouseMode: false,
+    sgrMousePixelsMode: false
+  };
+
+  function emitKeyboardAvoidanceMetrics() {
+    if (!term) return;
+    var alt = false;
+    try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
+    notify({
+      type: 'keyboard-avoidance-metrics',
+      cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
+      rows: term.rows || 0,
+      altScreen: alt
+    });
+  }
 
   function attachTermObservers() {
     if (!term) return;
     try { term.onLineFeed(logFeedAndEvict); } catch (e) {}
+    try { term.onScroll(function() { updateScrollIndicator(false); }); } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
-    try { term.onWriteParsed && term.onWriteParsed(emitModesIfChanged); } catch (e) {}
+    try {
+      term.onWriteParsed && term.onWriteParsed(function() {
+        emitModesIfChanged();
+        emitKeyboardAvoidanceMetrics();
+      });
+    } catch (e) {}
     // Initial emit once buffer settles.
-    afterWritesDrained(function() { emitModesIfChanged(); });
+    afterWritesDrained(function() {
+      emitModesIfChanged();
+      emitKeyboardAvoidanceMetrics();
+    });
   }
 
   function viewportToCell(clientX, clientY) {
@@ -710,6 +999,228 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (viewportRow > term.rows - 1) viewportRow = term.rows - 1;
     var viewportY = term.buffer.active.viewportY;
     return { col: col, row: viewportRow + viewportY };
+  }
+
+  function viewportToMouseReportCell(clientX, clientY) {
+    if (!term) return null;
+    var cellW = getCellWidth();
+    var cellH = getCellHeight();
+    if (cellW <= 0 || cellH <= 0) return null;
+    if (typeof clientX !== 'number') clientX = window.innerWidth / 2;
+    if (typeof clientY !== 'number') clientY = window.innerHeight / 2;
+    var total = getTotalScale();
+    if (total <= 0) total = 1;
+    var sx = (clientX - panX) / total;
+    var sy = (clientY - panY) / total;
+    var maxX = Math.max(0, term.cols * cellW - 1);
+    var maxY = Math.max(0, term.rows * cellH - 1);
+    if (sx < 0) sx = 0;
+    if (sx > maxX) sx = maxX;
+    if (sy < 0) sy = 0;
+    if (sy > maxY) sy = maxY;
+    var col = Math.floor(sx / cellW);
+    var row = Math.floor(sy / cellH);
+    if (col < 0) col = 0;
+    if (col > term.cols - 1) col = term.cols - 1;
+    if (row < 0) row = 0;
+    if (row > term.rows - 1) row = term.rows - 1;
+    return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) };
+  }
+
+  function isAlternateBufferActive() {
+    try {
+      return !!(term && term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getMouseTrackingMode() {
+    try {
+      if (term && term.modes && typeof term.modes.mouseTrackingMode === 'string') {
+        var mode = term.modes.mouseTrackingMode;
+        if (mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any') return mode;
+        return 'none';
+      }
+    } catch (e) {}
+    if (
+      trackedMouseTrackingMode === 'x10' ||
+      trackedMouseTrackingMode === 'vt200' ||
+      trackedMouseTrackingMode === 'drag' ||
+      trackedMouseTrackingMode === 'any'
+    ) {
+      return trackedMouseTrackingMode;
+    }
+    return 'none';
+  }
+
+  function repeatSequence(sequence, count) {
+    var out = '';
+    for (var i = 0; i < count; i++) out += sequence;
+    return out;
+  }
+
+  function buildArrowScrollSequence(lines) {
+    var prefix = '[';
+    try {
+      if (term && term.modes && term.modes.applicationCursorKeysMode) prefix = 'O';
+    } catch (e) {}
+    return ESC + prefix + (lines < 0 ? 'A' : 'B');
+  }
+
+  function buildMouseWheelSequence(lines, clientX, clientY) {
+    var cell = viewportToMouseReportCell(clientX, clientY);
+    if (!cell) return '';
+    var eventCode = lines < 0 ? 64 : 65;
+    if (sgrMousePixelsMode) {
+      return ESC + '[<' + eventCode + ';' + cell.x + ';' + cell.y + 'M';
+    }
+    if (sgrMouseMode) {
+      // Why: xterm increments zero-based mouse cells before encoding reports.
+      return ESC + '[<' + eventCode + ';' + (cell.col + 1) + ';' + (cell.row + 1) + 'M';
+    }
+    // Why: xterm increments zero-based mouse cells before encoding reports.
+    var button = eventCode + 32;
+    var col = cell.col + 1 + 32;
+    var row = cell.row + 1 + 32;
+    // Why: non-SGR mouse bytes above ASCII are not preserved reliably through
+    // the mobile JSON/RPC string path. Fall back to keys for wide terminals.
+    if (button > 126 || col > 126 || row > 126) return '';
+    return ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
+  function isWheelMouseTrackingMode(mode) {
+    return mode !== 'none' && mode !== 'x10';
+  }
+
+  function shouldRouteScrollToTerminalInput() {
+    return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();
+  }
+
+  function buildMouseWheelScrollInput(lines, clientX, clientY) {
+    var count = Math.min(Math.abs(lines), 32);
+    if (count === 0) return '';
+    var sequence = buildMouseWheelSequence(lines, clientX, clientY);
+    if (!sequence) return '';
+    return repeatSequence(sequence, count);
+  }
+
+  function buildTuiScrollInput(lines, clientX, clientY) {
+    var count = Math.min(Math.abs(lines), 32);
+    if (count === 0) return '';
+    var mouseTrackingMode = getMouseTrackingMode();
+    var sequence = '';
+    if (isWheelMouseTrackingMode(mouseTrackingMode)) {
+      sequence = buildMouseWheelSequence(lines, clientX, clientY);
+    }
+    if (!sequence) sequence = buildArrowScrollSequence(lines);
+    return repeatSequence(sequence, count);
+  }
+
+  function routeScrollLines(lines, clientX, clientY) {
+    if (!term || lines === 0) return;
+    var mouseTrackingMode = getMouseTrackingMode();
+    var alternateBufferActive = isAlternateBufferActive();
+    if (isWheelMouseTrackingMode(mouseTrackingMode)) {
+      // Why: xterm sends wheel events to mouse-aware TUIs before considering
+      // scrollback, even if the app stays on the normal buffer.
+      var mouseInput = buildMouseWheelScrollInput(lines, clientX, clientY);
+      if (mouseInput) {
+        notify({ type: 'terminal-input', bytes: mouseInput });
+        return;
+      }
+      // Why: default mouse encoding can be unrepresentable in our ASCII-safe
+      // RPC path on wide terminals. Send bounded arrows instead of local
+      // scrollback/no-op while a mouse-aware app owns scroll gestures.
+      var fallbackInput = buildTuiScrollInput(lines, clientX, clientY);
+      if (fallbackInput) notify({ type: 'terminal-input', bytes: fallbackInput });
+      return;
+    }
+    if (alternateBufferActive) {
+      // Why: alternate-screen TUIs own their scroll state and xterm has no
+      // scrollback there, so mobile scroll gestures must become terminal input.
+      var input = buildTuiScrollInput(lines, clientX, clientY);
+      if (input) notify({ type: 'terminal-input', bytes: input });
+      return;
+    }
+    term.scrollLines(lines);
+  }
+
+  function clampNormalScrollLines(lines) {
+    if (!term || !term.buffer || !term.buffer.active || lines === 0) return 0;
+    var buffer = term.buffer.active;
+    if (lines > 0) {
+      return Math.min(lines, Math.max(0, buffer.baseY - buffer.viewportY));
+    }
+    return Math.max(lines, -buffer.viewportY);
+  }
+
+  function canScrollNormalBufferDelta(deltaY) {
+    if (!term || !term.buffer || !term.buffer.active || deltaY === 0) return false;
+    var buffer = term.buffer.active;
+    if (deltaY > 0) return buffer.viewportY < buffer.baseY;
+    return buffer.viewportY > 0;
+  }
+
+  function applyNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    var effectiveCellH = getCellHeight() * getTotalScale();
+    if (effectiveCellH <= 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    smoothScrollOffsetY -= deltaY;
+    var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);
+    if (lines !== 0) {
+      var applied = clampNormalScrollLines(lines);
+      if (applied !== 0) {
+        term.scrollLines(applied);
+        // Why: xterm's renderer is row-based. Buffer touch pixels and only
+        // commit whole rows so TUI canvas layers do not shimmer between
+        // fractional transforms and xterm repaints.
+        smoothScrollOffsetY += applied * effectiveCellH;
+      }
+      if (applied !== lines) smoothScrollOffsetY = 0;
+    }
+    var limit = effectiveCellH - 1;
+    if (smoothScrollOffsetY > limit) smoothScrollOffsetY = limit;
+    if (smoothScrollOffsetY < -limit) smoothScrollOffsetY = -limit;
+    updateScrollIndicator(true);
+    return true;
+  }
+
+  function enqueueNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    pendingNormalScrollDeltaY += deltaY;
+    if (normalScrollFrameId !== null) return true;
+    // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
+    // deltas into one xterm row-scroll per frame instead of repainting from
+    // the input event stream.
+    normalScrollFrameId = requestAnimationFrame(function() {
+      normalScrollFrameId = null;
+      var delta = pendingNormalScrollDeltaY;
+      pendingNormalScrollDeltaY = 0;
+      if (!applyNormalBufferScrollDelta(delta)) {
+        resetSmoothScrollOffset();
+      }
+    });
+    return true;
+  }
+
+  function resetSmoothScrollOffset() {
+    pendingNormalScrollDeltaY = 0;
+    if (normalScrollFrameId !== null) {
+      cancelAnimationFrame(normalScrollFrameId);
+      normalScrollFrameId = null;
+    }
+    if (smoothScrollOffsetY === 0) return;
+    smoothScrollOffsetY = 0;
+    updateScrollIndicator(false);
   }
 
   function cellToViewportPx(col, absRow) {
@@ -1074,138 +1585,172 @@ const XTERM_HTML = `<!DOCTYPE html>
     } catch (err) {}
   });
 
-  // Why: event listeners are registered once here (not inside init()) so
-  // they don't accumulate on re-init. They close over the mutable 'term'
-  // variable, so they always reference the current terminal instance.
-  surface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
-  surface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
-
   var ts = {
     lastX: 0, lastY: 0, lastTime: 0, velY: 0,
     accumDelta: 0, momentumId: null, isPinching: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
 
+  function updateTouchVelocity(deltaY, dt) {
+    if (dt <= 0) return;
+    var instantVelocity = deltaY / dt;
+    if (!isFinite(instantVelocity)) return;
+    // Why: touchmove cadence is uneven in WebView. Blend recent samples so
+    // momentum launch doesn't inherit a one-frame spike or stall.
+    ts.velY = ts.velY === 0 ? instantVelocity : ts.velY * 0.55 + instantVelocity * 0.45;
+  }
+
   function getDistance(a, b) {
     var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  surface.addEventListener('touchstart', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (ts.momentumId) {
-      cancelAnimationFrame(ts.momentumId);
-      ts.momentumId = null;
-    }
-    if (e.touches.length === 2) {
-      ts.isPinching = true;
-      ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
-      ts.pinchScale = userScale;
-      var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      var total = getTotalScale();
-      ts.pinchSurfX = (mx - panX) / total;
-      ts.pinchSurfY = (my - panY) / total;
-    } else if (e.touches.length === 1) {
-      ts.isPinching = false;
-      ts.lastX = e.touches[0].clientX;
-      ts.lastY = e.touches[0].clientY;
-      ts.lastTime = Date.now();
-      ts.velY = 0;
-      ts.accumDelta = 0;
-    }
-  }, { capture: true, passive: true });
+  function attachSurfaceEventHandlers(targetSurface) {
+    if (!targetSurface || targetSurface.__orcaSurfaceHandlersAttached) return;
+    targetSurface.__orcaSurfaceHandlersAttached = true;
+    // Why: init() swaps in a new hidden surface to avoid flicker; each
+    // replacement needs gesture handlers or tab-switch replays stop scrolling.
+    targetSurface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
+    targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
 
-  surface.addEventListener('touchmove', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (!term) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (e.touches.length === 2) {
-      ts.isPinching = true;
-      var dist = getDistance(e.touches[0], e.touches[1]);
-      var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-      var ratio = dist / ts.pinchDist;
-      userScale = Math.max(1, Math.min(5, ts.pinchScale * ratio));
-
-      var total = getTotalScale();
-      panX = mx - ts.pinchSurfX * total;
-      panY = my - ts.pinchSurfY * total;
-      clampPan();
-      updateTransform();
-
-    } else if (e.touches.length === 1 && !ts.isPinching) {
-      var x = e.touches[0].clientX;
-      var y = e.touches[0].clientY;
-      var now = Date.now();
-      var dt = now - ts.lastTime;
-
-      if (userScale > 1.05) {
-        panX += x - ts.lastX;
-        panY += y - ts.lastY;
-        clampPan();
-        updateTransform();
-      } else {
-        var deltaY = ts.lastY - y;
-        if (dt > 0) ts.velY = deltaY / dt;
-        ts.lastTime = now;
-        var effectiveCellH = getCellHeight() * currentScale;
-        ts.accumDelta += deltaY;
-        var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-        if (lines !== 0) {
-          ts.accumDelta -= lines * effectiveCellH;
-          term.scrollLines(lines);
-        }
+    targetSurface.addEventListener('touchstart', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (ts.momentumId) {
+        cancelAnimationFrame(ts.momentumId);
+        ts.momentumId = null;
       }
-      ts.lastX = x;
-      ts.lastY = y;
-    }
-  }, { capture: true, passive: false });
-
-  surface.addEventListener('touchend', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (!term) return;
-
-    if (ts.isPinching && e.touches.length < 2) {
-      ts.isPinching = false;
-      if (userScale < 1.15) {
-        userScale = 1; panX = 0; panY = 0;
-        updateTransform();
-      }
-      if (e.touches.length === 1) {
+      if (e.touches.length === 2) {
+        ts.isPinching = true;
+        smoothScrollOffsetY = 0;
+        ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
+        ts.pinchScale = userScale;
+        var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        var total = getTotalScale();
+        ts.pinchSurfX = (mx - panX) / total;
+        ts.pinchSurfY = (my - panY) / total;
+      } else if (e.touches.length === 1) {
+        ts.isPinching = false;
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
         ts.lastTime = Date.now();
         ts.velY = 0;
         ts.accumDelta = 0;
       }
-      return;
-    }
+    }, { capture: true, passive: true });
 
-    if (e.touches.length === 0 && userScale <= 1.05) {
-      var vel = ts.velY;
-      var FRICTION = 0.95;
-      var MIN_VEL = 0.02;
-      function momentumStep() {
-        vel *= FRICTION;
-        if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-        var effectiveCellH = getCellHeight() * currentScale;
-        ts.accumDelta += vel * 16;
-        var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-        if (lines !== 0) {
-          ts.accumDelta -= lines * effectiveCellH;
-          term.scrollLines(lines);
+    targetSurface.addEventListener('touchmove', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (!term) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.touches.length === 2) {
+        ts.isPinching = true;
+        var dist = getDistance(e.touches[0], e.touches[1]);
+        var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+        var ratio = dist / ts.pinchDist;
+        userScale = Math.max(1, Math.min(5, ts.pinchScale * ratio));
+
+        var total = getTotalScale();
+        panX = mx - ts.pinchSurfX * total;
+        panY = my - ts.pinchSurfY * total;
+        clampPan();
+        updateTransform();
+
+      } else if (e.touches.length === 1 && !ts.isPinching) {
+        var x = e.touches[0].clientX;
+        var y = e.touches[0].clientY;
+        var now = Date.now();
+        var dt = now - ts.lastTime;
+
+        if (userScale > 1.05) {
+          smoothScrollOffsetY = 0;
+          panX += x - ts.lastX;
+          panY += y - ts.lastY;
+          clampPan();
+          updateTransform();
+        } else {
+          var deltaY = ts.lastY - y;
+          ts.lastTime = now;
+          if (shouldRouteScrollToTerminalInput()) {
+            updateTouchVelocity(deltaY, dt);
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += deltaY;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, x, y);
+            }
+          } else {
+            if (enqueueNormalBufferScrollDelta(deltaY)) {
+              updateTouchVelocity(deltaY, dt);
+            } else {
+              ts.velY = 0;
+            }
+          }
         }
-        ts.momentumId = requestAnimationFrame(momentumStep);
+        ts.lastX = x;
+        ts.lastY = y;
       }
-      if (Math.abs(vel) > MIN_VEL) {
-        ts.momentumId = requestAnimationFrame(momentumStep);
+    }, { capture: true, passive: false });
+
+    targetSurface.addEventListener('touchend', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (!term) return;
+
+      if (ts.isPinching && e.touches.length < 2) {
+        ts.isPinching = false;
+        if (userScale < 1.15) {
+          userScale = 1; panX = 0; panY = 0;
+          updateTransform();
+        }
+        if (e.touches.length === 1) {
+          ts.lastX = e.touches[0].clientX;
+          ts.lastY = e.touches[0].clientY;
+          ts.lastTime = Date.now();
+          ts.velY = 0;
+          ts.accumDelta = 0;
+        }
+        return;
       }
-    }
-  }, { capture: true, passive: true });
+
+      if (e.touches.length === 0 && userScale <= 1.05) {
+        var vel = ts.velY;
+        var FRICTION = 0.972;
+        var MIN_VEL = 0.012;
+        function momentumStep() {
+          vel *= FRICTION;
+          if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
+          var delta = vel * 16;
+          if (shouldRouteScrollToTerminalInput()) {
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += delta;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, ts.lastX, ts.lastY);
+            }
+          } else {
+            if (!applyNormalBufferScrollDelta(delta)) {
+              ts.momentumId = null;
+              return;
+            }
+          }
+          ts.momentumId = requestAnimationFrame(momentumStep);
+        }
+        if (Math.abs(vel) > MIN_VEL) {
+          ts.momentumId = requestAnimationFrame(momentumStep);
+        }
+      }
+    }, { capture: true, passive: true });
+  }
+
+  attachSurfaceEventHandlers(surface);
 
   window.addEventListener('message', function(e) {
     try {
@@ -1244,12 +1789,15 @@ const XTERM_HTML = `<!DOCTYPE html>
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
     style,
+    terminalTheme,
     onWebReady,
     onSelectionMode,
     onSelectionCopy,
     onSelectionEvicted,
     onModesChanged,
-    onHaptic
+    onKeyboardAvoidanceMetrics,
+    onHaptic,
+    onTerminalInput
   },
   ref
 ) {
@@ -1257,6 +1805,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const isWebReadyRef = useRef(false)
   const pendingMessagesRef = useRef<TerminalMessage[]>([])
   const messageIdRef = useRef(0)
+  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
   >(null)
@@ -1334,8 +1883,29 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } else if (msg.type === 'selection-evicted') {
         onSelectionEvicted?.()
       } else if (msg.type === 'modes') {
+        const mouseTrackingMode =
+          msg.mouseTrackingMode === 'x10' ||
+          msg.mouseTrackingMode === 'vt200' ||
+          msg.mouseTrackingMode === 'drag' ||
+          msg.mouseTrackingMode === 'any'
+            ? msg.mouseTrackingMode
+            : 'none'
         onModesChanged?.({
           bracketedPasteMode: !!msg.bracketedPasteMode,
+          altScreen: !!msg.altScreen,
+          mouseTrackingMode,
+          sgrMouseMode: !!msg.sgrMouseMode,
+          sgrMousePixelsMode: !!msg.sgrMousePixelsMode
+        })
+      } else if (msg.type === 'terminal-input') {
+        const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
+        if (bytes.length > 0) onTerminalInput?.(bytes)
+      } else if (msg.type === 'keyboard-avoidance-metrics') {
+        const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
+        const rows = typeof msg.rows === 'number' ? msg.rows : 0
+        onKeyboardAvoidanceMetrics?.({
+          cursorY,
+          rows,
           altScreen: !!msg.altScreen
         })
       } else if (msg.type === 'haptic') {
@@ -1360,13 +1930,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onSelectionCopy,
       onSelectionEvicted,
       onModesChanged,
-      onHaptic
+      onKeyboardAvoidanceMetrics,
+      onHaptic,
+      onTerminalInput
     ]
   )
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
   }, [])
+
+  useEffect(() => {
+    postMessage({ type: 'set-theme', terminalTheme })
+  }, [postMessage, terminalThemeKey, terminalTheme])
 
   useImperativeHandle(
     ref,
@@ -1391,7 +1967,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
-        postMessage({ type: 'init', cols, rows, initialData })
+        postMessage({ type: 'init', cols, rows, initialData, terminalTheme })
+      },
+      resize(cols: number, rows: number) {
+        postMessage({ type: 'resize', cols, rows })
       },
       clear() {
         postMessage({ type: 'clear' })
@@ -1433,7 +2012,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         await Promise.race([p, new Promise<void>((resolve) => setTimeout(resolve, 3000))])
       }
     }),
-    [postMessage, sendToWebView]
+    [postMessage, sendToWebView, terminalTheme]
   )
 
   return (
@@ -1443,7 +2022,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       style={[styles.webview, style]}
       originWhitelist={['*']}
       javaScriptEnabled
-      scrollEnabled={true}
+      scrollEnabled={false}
       scalesPageToFit={false}
       onLoadStart={handleLoadStart}
       onMessage={handleMessage}

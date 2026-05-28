@@ -6,19 +6,26 @@ const {
   getIssueMock,
   listIssuesMock,
   listWorkItemsMock,
-  getAuthenticatedViewerMock
+  getAuthenticatedViewerMock,
+  mergePRMock,
+  getAllWebContentsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getIssueMock: vi.fn(),
   listIssuesMock: vi.fn(),
   listWorkItemsMock: vi.fn(),
-  getAuthenticatedViewerMock: vi.fn()
+  getAuthenticatedViewerMock: vi.fn(),
+  mergePRMock: vi.fn(),
+  getAllWebContentsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
+  },
+  webContents: {
+    getAllWebContents: getAllWebContentsMock
   }
 }))
 
@@ -27,7 +34,8 @@ vi.mock('../github/client', () => ({
   getIssue: getIssueMock,
   listIssues: listIssuesMock,
   listWorkItems: listWorkItemsMock,
-  getAuthenticatedViewer: getAuthenticatedViewerMock
+  getAuthenticatedViewer: getAuthenticatedViewerMock,
+  mergePR: mergePRMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -42,6 +50,7 @@ describe('registerGitHubHandlers', () => {
     displayName: string
     badgeColor: string
     addedAt: number
+    connectionId?: string | null
     issueSourcePreference?: 'origin' | 'upstream'
   }
   let repos: FixtureRepo[] = []
@@ -60,6 +69,9 @@ describe('registerGitHubHandlers', () => {
     listIssuesMock.mockReset()
     listWorkItemsMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
+    mergePRMock.mockReset()
+    getAllWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReturnValue([])
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -93,7 +105,13 @@ describe('registerGitHubHandlers', () => {
       branch: 'feature/test'
     })
 
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/workspace/repo', 'feature/test', null)
+    expect(getPRForBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/test',
+      null,
+      null,
+      null
+    )
   })
 
   it('rejects unknown repository paths', async () => {
@@ -119,7 +137,7 @@ describe('registerGitHubHandlers', () => {
       limit: 5
     })
 
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined)
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined, null)
     expect(result).toEqual([])
   })
 
@@ -147,7 +165,7 @@ describe('registerGitHubHandlers', () => {
       limit: 5
     })
 
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined)
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined, null)
     expect(result).toEqual([])
   })
 
@@ -166,7 +184,7 @@ describe('registerGitHubHandlers', () => {
       limit: 5
     })
 
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, 'upstream')
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, 'upstream', null)
   })
 
   it('threads issueSourcePreference through gh:listWorkItems', async () => {
@@ -189,8 +207,53 @@ describe('registerGitHubHandlers', () => {
       10,
       'is:open',
       'cursor-1',
-      'origin'
+      'origin',
+      null
     )
+  })
+
+  it('threads SSH connectionId through GitHub work-item handlers', async () => {
+    repos[0].connectionId = 'openclaw-2'
+    listWorkItemsMock.mockResolvedValue({ items: [] })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:listWorkItems'](null, {
+      repoPath: '/workspace/repo',
+      limit: 10,
+      query: ''
+    })
+
+    expect(listWorkItemsMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      10,
+      '',
+      undefined,
+      undefined,
+      'openclaw-2'
+    )
+  })
+
+  it('threads SSH connectionId through pull request merge', async () => {
+    repos[0].connectionId = 'openclaw-2'
+    mergePRMock.mockResolvedValue({ ok: true })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:mergePR'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        method: 'squash',
+        prRepo: { owner: 'acme', repo: 'orca' }
+      }
+    )
+
+    expect(mergePRMock).toHaveBeenCalledWith('/workspace/repo', 42, 'squash', 'openclaw-2', {
+      owner: 'acme',
+      repo: 'orca'
+    })
   })
 
   it('forwards the authenticated viewer lookup', async () => {

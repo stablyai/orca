@@ -11,7 +11,8 @@
  */
 
 import { execSync } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
 import path from 'path'
 import os from 'os'
 
@@ -37,12 +38,22 @@ export default function globalSetup(): void {
     })
     console.log('[e2e] Build complete.')
   }
+  if (process.env.ORCA_E2E_SSH_LOCALHOST === '1') {
+    // Why: the localhost SSH spec deploys Orca's relay from out/relay. The
+    // normal Electron E2E build does not produce that bundle, so build it only
+    // for the explicit local-machine SSH run.
+    console.log('[e2e] Building SSH relay bundle for localhost SSH E2E...')
+    execSync('pnpm run build:relay', {
+      cwd: root,
+      stdio: 'inherit',
+      timeout: 120_000
+    })
+  }
 
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  const testRepoDir = path.join(os.tmpdir(), `orca-e2e-repo-${Date.now()}`)
-  mkdirSync(testRepoDir, { recursive: true })
+  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -68,7 +79,7 @@ export default function globalSetup(): void {
   // Why: several tests verify worktree-switching behavior (terminal content
   // retention, browser tab retention). They need at least 2 worktrees.
   // Creating one here makes those tests run instead of being skipped.
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${Date.now()}`)
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
   execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,
     stdio: 'pipe'

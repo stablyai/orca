@@ -18,6 +18,7 @@ import {
   LimitParam,
   ProfileCreate,
   ProfileDelete,
+  ProfileImportFromBrowser,
   Screenshot,
   Scroll,
   Select,
@@ -150,6 +151,21 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     name: 'browser.profileDelete',
     params: ProfileDelete,
     handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
+  }),
+  defineMethod({
+    name: 'browser.profileDetectBrowsers',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.browserProfileDetectBrowsers()
+  }),
+  defineMethod({
+    name: 'browser.profileImportFromBrowser',
+    params: ProfileImportFromBrowser,
+    handler: async (params, { runtime }) => runtime.browserProfileImportFromBrowser(params)
+  }),
+  defineMethod({
+    name: 'browser.profileClearDefaultCookies',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.browserProfileClearDefaultCookies()
   }),
   defineMethod({
     name: 'browser.hover',

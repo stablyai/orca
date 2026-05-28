@@ -8,6 +8,7 @@ import {
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
+  PlugZap,
   Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,13 +18,22 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { GitHubWorkItem, LinearIssue, SparsePreset, TuiAgent } from '../../../shared/types'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
+import type {
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue,
+  SparsePreset,
+  TuiAgent
+} from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+import type { SetupConfig } from '@/lib/new-workspace'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
+import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 
@@ -35,11 +45,14 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  primaryActionLabel: string
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
-  onSmartBranchSelect: (refName: string) => void
+  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
+  onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
@@ -52,24 +65,40 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
-  createError: string | null
+  createError: WorkspaceCreateErrorDisplay | null
+  selectedRepoConnectionId: string | null
+  selectedRepoSshStatus: SshConnectionStatus | null
+  selectedRepoRequiresConnection: boolean
+  selectedRepoConnectInProgress: boolean
+  onConnectSelectedRepo: () => Promise<void>
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
 }
 
+const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
+  disconnected: 'SSH not connected',
+  connecting: 'Connecting SSH...',
+  'auth-failed': 'SSH authentication failed',
+  'deploying-relay': 'Preparing SSH connection...',
+  connected: 'Connected',
+  reconnecting: 'Reconnecting SSH...',
+  'reconnection-failed': 'SSH reconnection failed',
+  error: 'SSH connection error'
+}
+
 function SetupCommandPreview({
   setupConfig,
   headerAction
 }: {
-  setupConfig: { source: 'yaml' | 'legacy'; command: string }
+  setupConfig: SetupConfig
   headerAction?: React.ReactNode
 }): React.JSX.Element {
   if (setupConfig.source === 'yaml') {
@@ -90,7 +119,7 @@ function SetupCommandPreview({
     <div className="rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 shadow-inner">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Legacy setup command
+          {setupConfig.source === 'both' ? 'Combined setup command' : 'Local setup command'}
         </div>
         {headerAction}
       </div>
@@ -118,12 +147,12 @@ function useComposerFileDragOver(): {
 
   const onDragEnter = React.useCallback((event: React.DragEvent<HTMLDivElement>): void => {
     // Why: "Files" is the DataTransfer type the OS adds for native file drags;
-    // internal in-app drags (text/x-orca-file-path) must not trigger the
+    // internal in-app drags must not trigger the
     // attachment-drop highlight so they still route to their own handlers.
     if (!event.dataTransfer.types.includes('Files')) {
       return
     }
-    if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+    if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
     dragCounterRef.current += 1
@@ -136,10 +165,10 @@ function useComposerFileDragOver(): {
         return
       }
       // Why: mirror the onDragEnter guard so internal in-app drags (which may
-      // carry both 'Files' and 'text/x-orca-file-path' types) don't decrement
+      // carry both "Files" and the workspace path MIME type) don't decrement
       // the counter when enter skipped incrementing it — otherwise the counter
       // goes negative and the native-drag highlight state desyncs.
-      if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+      if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       dragCounterRef.current -= 1
@@ -180,10 +209,13 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  selectedRepoIsGit,
   onRepoChange,
+  primaryActionLabel,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
+  onSmartGitLabItemSelect,
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
   smartNameSelection,
@@ -204,6 +236,11 @@ export default function NewWorkspaceComposerCard({
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
+  selectedRepoConnectionId,
+  selectedRepoSshStatus,
+  selectedRepoRequiresConnection,
+  selectedRepoConnectInProgress,
+  onConnectSelectedRepo,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
@@ -213,6 +250,18 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
+  const selectedRepoName = React.useMemo(() => {
+    const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
+    return repo?.displayName ?? repo?.path ?? 'This project'
+  }, [eligibleRepos, repoId])
+  const sshStatusLabel = selectedRepoSshStatus
+    ? SSH_STATUS_LABELS[selectedRepoSshStatus]
+    : 'Not connected'
+  const connectButtonLabel =
+    selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
+      ? 'Connect'
+      : 'Reconnect'
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -260,7 +309,7 @@ export default function NewWorkspaceComposerCard({
       <div className="min-w-0 space-y-4 pt-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <label className="text-xs font-medium text-muted-foreground">Repository</label>
+            <label className="text-xs font-medium text-muted-foreground">Project</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -269,7 +318,7 @@ export default function NewWorkspaceComposerCard({
                   size="icon-xs"
                   onClick={handleAddRepo}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label="Add folder or repository"
+                  aria-label="Add project"
                 >
                   <FolderPlus className="size-3" />
                 </Button>
@@ -284,7 +333,7 @@ export default function NewWorkspaceComposerCard({
             value={repoId}
             onValueChange={onRepoChange}
             onValueSelected={focusNameInput}
-            placeholder="Choose repository"
+            placeholder="Choose project"
             // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
             // handler does not reliably trigger :focus-visible in Chromium.
             // Mirror the Input component's standard ring (border-ring +
@@ -294,11 +343,40 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             showStandaloneAddButton={false}
           />
+          {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-xs font-medium text-foreground">
+                  Connect {selectedRepoName}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void onConnectSelectedRepo()}
+                disabled={selectedRepoConnectInProgress}
+                className="shrink-0"
+              >
+                {selectedRepoConnectInProgress ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <PlugZap className="size-3.5" />
+                )}
+                {selectedRepoConnectInProgress ? 'Connecting' : connectButtonLabel}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Name or &apos;Create From&apos;{' '}
+            {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
             <span className="text-muted-foreground/70">[Optional]</span>
           </label>
           <SmartWorkspaceNameField
@@ -309,10 +387,14 @@ export default function NewWorkspaceComposerCard({
             value={name}
             onValueChange={onNameValueChange}
             onGitHubItemSelect={onSmartGitHubItemSelect}
+            onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
+            disabled={selectedRepoRequiresConnection}
+            disabledPlaceholder="Connect this repo first"
+            textOnly={!selectedRepoIsGit}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -443,7 +525,11 @@ export default function NewWorkspaceComposerCard({
                       Setup script
                     </label>
                     <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
-                      {setupConfig.source === 'yaml' ? 'orca.yaml' : 'legacy hooks'}
+                      {setupConfig.source === 'yaml'
+                        ? 'orca.yaml'
+                        : setupConfig.source === 'both'
+                          ? 'orca.yaml + local'
+                          : 'local settings'}
                     </span>
                   </div>
 
@@ -530,7 +616,7 @@ export default function NewWorkspaceComposerCard({
                 />
                 {!canUseSparseCheckout ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Only available for local repositories.
+                    Only available for local Git projects.
                   </p>
                 ) : null}
               </div>
@@ -540,8 +626,19 @@ export default function NewWorkspaceComposerCard({
       </div>
 
       {createError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {createError}
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {createError.help ? (
+            <div className="space-y-1">
+              <p className="font-medium">{createError.title}</p>
+              <p>{createError.message}</p>
+              <p className="text-destructive/85">{createError.help}</p>
+            </div>
+          ) : (
+            createError.message
+          )}
         </div>
       ) : null}
 
@@ -553,9 +650,9 @@ export default function NewWorkspaceComposerCard({
           className="text-xs"
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          Create Workspace
+          {primaryActionLabel}
           <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-            <span>{isMac ? '⌘' : 'Ctrl'}</span>
+            <span>{submitShortcutModifierLabel}</span>
             <CornerDownLeft className="size-3" />
           </span>
         </Button>

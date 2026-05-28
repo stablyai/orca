@@ -5,6 +5,7 @@
 @import './rich-markdown-editor.css';
 @import './markdown-preview.css';
 @import './terminal.css';
+@import './mobile-page.css';
 
 @font-face {
   font-family: 'Geist';
@@ -57,6 +58,33 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-terminal-pane-title-on-dark-fg: var(--terminal-pane-title-on-dark-fg);
+  --color-terminal-pane-title-on-dark-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --color-terminal-pane-title-on-dark-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --color-terminal-pane-title-on-dark-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --color-terminal-pane-title-on-dark-button-hover-fg: var(
+    --terminal-pane-title-on-dark-button-hover-fg
+  );
+  --color-terminal-pane-title-on-dark-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --color-terminal-pane-title-on-dark-separator: var(--terminal-pane-title-on-dark-separator);
+  --color-terminal-pane-title-on-light-fg: var(--terminal-pane-title-on-light-fg);
+  --color-terminal-pane-title-on-light-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --color-terminal-pane-title-on-light-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --color-terminal-pane-title-on-light-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --color-terminal-pane-title-on-light-button-hover-fg: var(
+    --terminal-pane-title-on-light-button-hover-fg
+  );
+  --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
+  --color-git-graph-ref: var(--git-graph-ref);
+  --color-git-graph-remote-ref: var(--git-graph-remote-ref);
+  --color-git-graph-base-ref: var(--git-graph-base-ref);
+  --color-git-graph-lane-1: var(--git-graph-lane-1);
+  --color-git-graph-lane-2: var(--git-graph-lane-2);
+  --color-git-graph-lane-3: var(--git-graph-lane-3);
+  --color-git-graph-lane-4: var(--git-graph-lane-4);
+  --color-git-graph-lane-5: var(--git-graph-lane-5);
+  --color-annotation-highlight: var(--annotation-highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -95,6 +123,7 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --terminal-pane-locate: var(--color-blue-600);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -108,12 +137,36 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
   --git-decoration-renamed: #007acc;
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
+  --git-decoration-ignored: #8c8c8c;
+  --git-graph-ref: #007acc;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #994f00;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #f59e0b;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -139,6 +192,7 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --terminal-pane-locate: var(--color-blue-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -152,12 +206,36 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
+  --git-decoration-ignored: #6e6e6e;
+  --git-graph-ref: #3794ff;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #ce9178;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #fbbf24;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
@@ -192,11 +270,11 @@
     list-style: none;
   }
 
-  button:not(:disabled) {
+  :where(button:not(:disabled)) {
     cursor: pointer;
   }
 
-  button:disabled {
+  :where(button:disabled) {
     cursor: default;
   }
 }
@@ -225,6 +303,21 @@
   min-height: 28px;
 }
 
+/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
+.scrollbar-sleek-lg {
+  scrollbar-width: auto;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  min-height: 36px;
+}
+
 .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }
@@ -241,7 +334,7 @@
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
   /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 9px;
+  padding-right: 2px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
@@ -320,6 +413,18 @@
 }
 
 .terminal-tab-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.project-view-tab-strip {
+  /* Why: project views load after the table shell; keeping the row stable
+     prevents the list below from jumping when the tabs arrive. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -405,6 +510,107 @@
   flex-shrink: 0;
 }
 
+/* Why: small identity anchor on Windows where the native window chrome is
+   hidden. Sized to sit comfortably in the 36px titlebar with a little
+   horizontal breathing room. The SVG fill is white; light mode inverts it to
+   black so it reads on the light titlebar background. */
+.titlebar-logo {
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0 4px 0 10px;
+  opacity: 0.75;
+}
+
+/* Why: .dark is toggled on <html> (the :root), so :not(.dark) on a descendant
+   always matches. Scope to :root:not(.dark) to correctly target light mode only. */
+:root:not(.dark) .titlebar-logo {
+  filter: invert(1);
+}
+
+/* Why: Windows-only custom title bar buttons that replace the native OS chrome
+   removed by titleBarStyle:'hidden'.  Anchored to the top-right corner of the
+   viewport so they overlay any layout mode (full titlebar, workspace split, etc.)
+   and stay accessible at all times. */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: row;
+  height: 36px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background 100ms,
+    color 100ms;
+}
+
+.window-controls-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.window-controls-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* Why: flex spacer that reserves the width occupied by the three window-control
+   buttons (3 × 46px) so that the preceding titlebar content is not obscured by
+   the fixed-position overlay on Windows. */
+.window-controls-titlebar-spacer {
+  flex-shrink: 0;
+  width: var(--window-controls-width, 0px);
+}
+
+.right-sidebar-header-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.right-sidebar-header-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Why: the right sidebar header extends to the window's right edge. On Windows
+   the fixed-position window-controls overlay sits on top of that edge, so we
+   add matching padding-right so the header's close button (pr-1) isn't hidden
+   behind the overlay. --window-controls-width is 0px on non-Windows. */
+.right-sidebar-header-inset {
+  padding-right: var(--window-controls-width, 0px);
+}
+
+/* Why: in side-bar activity-bar mode the icon strip sits flush against the
+   right window edge. The fixed-position window-controls overlay (height 36px,
+   width 138px) covers the top-right corner, so the topmost sidebar icons are
+   unreachable without this offset. --window-controls-height is 0px on
+   non-Windows so this rule is a no-op there. */
+.side-activity-bar-windows-inset {
+  padding-top: var(--window-controls-height, 0px);
+}
+
+/* Why: in side activity-bar mode the panel header does NOT extend to the window
+   edge — the 40px icon strip sits to its right. But the window-controls overlay
+   is 138px wide, so it still overlaps the panel by (138 - 40) = 98px. Apply
+   exactly that remainder as padding-right so the close button clears the
+   minimize button. max(0px, ...) keeps this a no-op on non-Windows where the
+   var is 0px and the subtraction would otherwise go negative. */
+.right-sidebar-header-side-inset {
+  padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
+}
+
 .sidebar-toggle {
   -webkit-app-region: no-drag;
   background: none;
@@ -446,190 +652,28 @@
   color: var(--muted-foreground);
 }
 
-.titlebar-agent-badge {
+.titlebar-app-name {
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-  margin-right: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: color-mix(in srgb, var(--accent) 80%, transparent);
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-/* Why: the titlebar is a drag region, and descendant elements inherit that
-   region unless they opt out. Without this, hovering the dot/count spans
-   inside the badge showed the default cursor instead of pointer because the
-   drag region overrode the button's cursor. pointer-events: none forwards
-   hover/click hit-testing to the button, which already has no-drag set. */
-.titlebar-agent-badge > * {
-  pointer-events: none;
-}
-
-.titlebar-agent-badge:hover {
-  background: var(--accent);
-  border-color: var(--border);
-}
-
-.titlebar-agent-badge-idle {
-  opacity: 0.55;
-}
-
-.titlebar-agent-badge-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 18%, transparent);
-}
-
-.titlebar-agent-badge-dot-idle {
-  background: var(--muted-foreground);
-  box-shadow: none;
-}
-
-.titlebar-agent-badge-count {
-  min-width: 1ch;
-}
-
-.titlebar-agent-badge-label {
-  color: var(--muted-foreground);
-  font-weight: 500;
-}
-
-/* ─── Agent hover card (titlebar badge popover) ───────────────────── */
-
-.titlebar-agent-hovercard {
-  width: auto;
-  min-width: 180px;
-  max-width: 280px;
-  padding: 8px 0 0;
-}
-
-.titlebar-agent-hovercard-header {
-  padding: 0 12px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-
-.titlebar-agent-hovercard-header-with-list {
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-
-.titlebar-agent-hovercard-hide {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 5px 12px 8px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  background: none;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 0;
-}
-
-.titlebar-agent-hovercard-hide:hover {
-  color: var(--foreground);
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.titlebar-agent-hovercard-worktree {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: none;
-  border: none;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 0;
-  width: 100%;
-}
-
-.titlebar-agent-hovercard-worktree:hover {
-  background: var(--accent);
-}
-
-.titlebar-agent-hovercard-agent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 12px 3px 24px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
-  text-align: left;
-  width: 100%;
-  cursor: pointer;
-}
-
-.titlebar-agent-hovercard-agent:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.titlebar-agent-hovercard-agent-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-agent-hovercard-agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: #16a34a;
-}
-
-.titlebar-agent-hovercard-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.titlebar-agent-hovercard-count {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
-  font-size: 11px;
+  height: 24px;
+  max-width: min(280px, 32vw);
+  margin-left: 2px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
   color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
 }
 
-.titlebar-agent-hovercard-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #16a34a;
+.titlebar-app-name-main {
+  flex: 0 0 auto;
 }
 
 .titlebar-icon-button {
@@ -680,6 +724,8 @@
 
 .editor-header-path {
   display: block;
+  min-width: 0;
+  flex: 0 1 auto;
   padding: 0;
   max-width: 100%;
   border: none;
@@ -756,6 +802,83 @@
   transition: width 200ms ease;
 }
 
+/* Why: light-mode sidebar-accent/40 is nearly invisible on the sidebar, while
+   agent rows stack on top of the card hover. Keep nested rows quieter than the
+   workspace card without changing the established dark-mode balance. */
+.worktree-sidebar-card-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
+.dark .worktree-sidebar-card-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
+}
+
+.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+}
+
+.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+}
+
+.dark .worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.scroll-to-current-workspace-reveal-highlight {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.scroll-to-current-workspace-reveal-highlight::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 30;
+  pointer-events: none;
+  border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
+  border-radius: calc(var(--radius-md) + 2px);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
+  animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
+}
+
+@keyframes scroll-to-current-workspace-reveal-glow {
+  0% {
+    opacity: 1;
+    transform: scale(0.992);
+  }
+
+  24% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+
+  60% {
+    opacity: 0.28;
+    transform: scale(1.006);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.006);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-current-workspace-reveal-highlight::before {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;
@@ -772,37 +895,229 @@
   animation: settings-shell-enter 180ms ease-out;
 }
 
-/* Why: after clicking a sidebar item we center the target section and briefly
-   pulse its border so the user can see exactly which section their click
-   landed on — the scroll destination alone is subtle when the section is
-   already partially visible. */
-@keyframes settings-section-flash {
-  0% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
+.collapsible-height-content {
+  overflow: hidden;
+}
+
+.collapsible-height-content[data-state='open'] {
+  animation: collapsible-down 200ms ease-out;
+}
+
+.collapsible-height-content[data-state='closed'] {
+  animation: collapsible-up 180ms ease-out;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
   }
-  60% {
-    border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
-  }
-  100% {
-    border-color: var(--border);
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
   }
 }
 
-.settings-section-flash {
-  animation: settings-section-flash 900ms ease-out;
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+
+  to {
+    height: 0;
+    opacity: 0;
+  }
 }
 
 .sidebar.collapsed {
   width: 0;
   border-right: none;
   overflow: hidden;
+}
+
+/* Why: the workspace board is offset to the sidebar edge. The generic left
+   sheet translates by its full width, which makes an offset board fly in from
+   far offscreen; this reveals it from the sidebar boundary instead. */
+.workspace-kanban-sheet-content[data-state='open'] {
+  animation-name: workspace-kanban-sheet-in;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-kanban-sheet-content[data-state='closed'] {
+  animation-name: workspace-kanban-sheet-out;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@keyframes workspace-kanban-sheet-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes workspace-kanban-sheet-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+/* Why: board-origin cards use pointer drag so Shift+scroll can keep firing;
+   these replace the native drag cursor and ghost affordance. */
+[data-workspace-board-pointer-draggable='true'] {
+  cursor: grab;
+}
+
+[data-workspace-board-card-pointer-dragging='true'] {
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+}
+
+[data-workspace-board-card-pointer-dragging='true'],
+[data-workspace-board-card-pointer-dragging='true'] *,
+:root[data-workspace-board-pointer-dragging] * {
+  cursor: grabbing !important;
+}
+
+[data-workspace-board-card-drag-preview='true'] {
+  z-index: 2147483647;
+  overflow: visible;
+  border-radius: var(--radius);
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--foreground) 16%, transparent);
+  opacity: 0.96;
+  will-change: transform;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true'] {
+  isolation: isolate;
+}
+
+[data-workspace-board-card-drag-card='true'] {
+  width: 100%;
+  height: 100%;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before,
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--sidebar-ring) 44%, transparent);
+  background: var(--sidebar);
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before {
+  transform: translate(4px, 4px);
+  opacity: 0.72;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  transform: translate(8px, 8px);
+  opacity: 0.44;
+}
+
+[data-workspace-board-card-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-preview='true'] {
+  z-index: 2147483000;
+  overflow: visible;
+  border-radius: var(--radius);
+  opacity: 0.96;
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--foreground) 18%, transparent));
+  will-change: transform;
+}
+
+[data-worktree-sidebar-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-count='true'] {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  color: var(--sidebar);
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--sidebar);
+}
+
+[data-workspace-board-card-drop-indicator='true'] {
+  z-index: 2147483646;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 24%, transparent),
+    0 8px 20px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+  opacity: 0;
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 80ms ease-out;
+  will-change: transform, width, opacity;
+}
+
+[data-workspace-board-card-drop-indicator='true']::before,
+[data-workspace-board-card-drop-indicator='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--sidebar-ring);
+  transform: translateY(-50%);
+}
+
+[data-workspace-board-card-drop-indicator='true']::before {
+  left: -1px;
+}
+
+[data-workspace-board-card-drop-indicator='true']::after {
+  right: -1px;
+}
+
+[data-workspace-board-card-drag-count='true'] {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  display: flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .sidebar-header {
@@ -963,6 +1278,51 @@
   text-underline-offset: 2px;
 }
 
+/* ── Git conflict decorations ───────────────────────────────────── */
+
+.monaco-editor .orca-conflict-marker-line {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+.monaco-editor .orca-conflict-section-line {
+  border-left: 3px solid transparent;
+}
+
+.monaco-editor .orca-conflict-current-line {
+  background: color-mix(in srgb, var(--git-decoration-modified) 12%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-modified) 72%, transparent);
+}
+
+.monaco-editor .orca-conflict-base-line {
+  background: color-mix(in srgb, var(--muted-foreground) 7%, transparent);
+  border-left-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent);
+}
+
+.monaco-editor .orca-conflict-incoming-line {
+  background: color-mix(in srgb, var(--git-decoration-renamed) 11%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-renamed) 68%, transparent);
+}
+
+.monaco-editor .orca-conflict-line-decoration {
+  width: 4px !important;
+  margin-left: 3px;
+  background: var(--destructive);
+  border-radius: 999px;
+}
+
+.monaco-editor .orca-conflict-margin {
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.monaco-editor .orca-conflict-marker-label {
+  color: var(--destructive);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  opacity: 0.92;
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's
@@ -1029,6 +1389,866 @@
   animation: update-card-exit 150ms ease-in both;
 }
 
+/* Waveform bars in the FeatureTipsModal voice tip — purely decorative. */
+@keyframes waveform {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-waveform {
+  animation: waveform 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* ── Feature wall: agents-orchestration animations ───────────────── */
+
+/* Why: drives the supported-agents marquee on page 1 of the agents tile.
+   Track is duplicated in the DOM so a -50% translate loops seamlessly. */
+@keyframes feature-wall-marquee-flow {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.feature-wall-marquee-track {
+  animation: feature-wall-marquee-flow 36s linear infinite;
+}
+
+/* Shared click pulse for feature-wall fake cursors. Matches the Editor tour
+   ring so every animated mouse click reads as the same interaction. */
+.feature-wall-click-ring {
+  animation: feature-wall-click-ring 460ms ease-out forwards;
+}
+
+@keyframes feature-wall-click-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Why: smooth reveal for the Tasks-tile workspace card so it eases in once the
+   workspace flips from "Creating" to "Ready" instead of popping in. */
+@keyframes tasks-workspace-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Why: orchestrator → child connector arrows. Faint dashed strokes drawn in
+   JS so endpoints follow the real card geometry as cards animate between
+   phase 1 (parent + nested child) and phase 2 (parent + spawned peer). */
+.feature-wall-orch-arrows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 280ms ease;
+}
+.feature-wall-orch-arrows[data-fading='true'] {
+  opacity: 0;
+}
+.feature-wall-orch-arrows path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--foreground) 32%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+/* Message envelope that travels along the dashed connector. Position is
+   driven by `offset-path` so the bubble visibly follows the same shape the
+   connector drew. */
+.feature-wall-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 6px 16px rgba(24, 24, 27, 0.22),
+    0 1px 2px rgba(24, 24, 27, 0.12);
+  opacity: 0;
+  offset-rotate: 0deg;
+  offset-distance: 0%;
+  pointer-events: none;
+  will-change: offset-distance, opacity, transform;
+  transform: translate(-12px, -12px) scale(0.7);
+}
+.feature-wall-bubble svg {
+  width: 13px;
+  height: 13px;
+}
+.feature-wall-bubble.in-flight {
+  opacity: 1;
+  offset-distance: 100%;
+  transform: translate(-12px, -12px) scale(1);
+  transition:
+    offset-distance 1500ms cubic-bezier(0.25, 0.6, 0.25, 1),
+    transform 280ms ease,
+    opacity 280ms ease;
+}
+.feature-wall-bubble.landed {
+  opacity: 0;
+  offset-distance: 100%;
+  transform: translate(-12px, -12px) scale(0.85);
+  transition: opacity 320ms ease 80ms;
+}
+
+/* When a message just lands, briefly tint the recipient line so the new
+   text reads as a fresh inbound message rather than ambient text. */
+@keyframes feature-wall-msg-pop {
+  0% {
+    color: rgb(180 83 9);
+  }
+  70% {
+    color: rgb(180 83 9);
+  }
+  100% {
+    color: var(--foreground);
+  }
+}
+.feature-wall-msg-received {
+  animation: feature-wall-msg-pop 1100ms ease-out;
+}
+
+@keyframes feature-wall-orch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.feature-wall-spawn-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgb(245 158 11);
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: feature-wall-orch-spin 800ms linear infinite;
+}
+
+/* "Creating workspaces…" placeholder shown before the child workspaces
+   reveal. Once the orchestrator finishes spawning, the wrapper collapses
+   and the real child cards take its place. */
+.feature-wall-creating-children {
+  overflow: hidden;
+  opacity: 1;
+  max-height: 60px;
+  transition:
+    opacity 220ms ease,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.feature-wall-creating-children[data-hidden='true'] {
+  opacity: 0;
+  max-height: 0;
+  pointer-events: none;
+}
+
+/* Children container fades in once the orchestrator finishes creating. */
+.feature-wall-children-wrapper {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+.feature-wall-children-wrapper[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Each child agent row stays collapsed until *its* dispatch bubble lands on
+   it, so the child workspace visibly gains an agent as work arrives. */
+.feature-wall-spawn-row {
+  overflow: hidden;
+  opacity: 1;
+  max-height: 60px;
+  transform: none;
+  transition:
+    opacity 320ms ease 80ms,
+    transform 320ms ease 80ms,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms,
+    margin 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms,
+    padding 320ms cubic-bezier(0.4, 0, 0.2, 1) 80ms;
+}
+.feature-wall-spawn-row[data-pending='true'] {
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    padding 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Brief one-shot pulse when the Codex limits popover swaps accounts and the
+   "100% left" label flashes from red to green. */
+@keyframes feature-wall-meta-pulse {
+  0% {
+    color: rgb(220 38 38);
+    transform: scale(1);
+  }
+  20% {
+    color: rgb(22 163 74);
+    transform: scale(1.08);
+  }
+  100% {
+    color: rgb(22 163 74);
+    transform: scale(1);
+  }
+}
+
+.feature-wall-meta-pulse {
+  color: rgb(22 163 74);
+  font-weight: 600;
+  animation: feature-wall-meta-pulse 1100ms ease-out 1;
+}
+
+/* Onboarding step 5: the compact "Take the tour" intro expands into the
+   full tour shell, so animate the browser snapshots to avoid a hard jump. */
+html.onboarding-tour-start-transition::view-transition-old(root),
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-duration: 760ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+html.onboarding-tour-start-transition::view-transition-old(root) {
+  animation-name: onboarding-tour-start-old;
+}
+
+html.onboarding-tour-start-transition::view-transition-new(root) {
+  animation-name: onboarding-tour-start-new;
+}
+
+@keyframes onboarding-tour-start-old {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  28% {
+    opacity: 0.9;
+    transform: translateY(-2px) scale(0.998);
+  }
+  42% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.99);
+  }
+}
+
+@keyframes onboarding-tour-start-new {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  34% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Feature tour nudge: cycling preview ─────────────────────────── */
+
+/* Why: the bottom-right nudge cycles through 4 silhouette frames
+   (Workspace → Orchestration → Tasks → Terminal). Each frame is visible for
+   1/4 of the cycle. Holding fade-out late (24%–25%) gives the user dwell
+   time on the resolved state before swapping. Uses CSS-driven timing rather
+   than React state so we stay cheap when the popup is mounted but idle. */
+:root {
+  --feature-tour-cycle: 16s;
+}
+
+.feature-tour-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-frame[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-frame[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-frame[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-frame[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+@keyframes feature-tour-frame-fade {
+  0% {
+    opacity: 0;
+  }
+  1.5% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.feature-tour-copy-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
+}
+.feature-tour-copy-slide[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-copy-slide[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-copy-slide[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-copy-slide[data-frame='4'] {
+  animation-delay: 12s;
+}
+
+.feature-tour-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  animation: feature-tour-dot-pulse var(--feature-tour-cycle) linear infinite;
+}
+.feature-tour-dot[data-frame='1'] {
+  animation-delay: 0s;
+}
+.feature-tour-dot[data-frame='2'] {
+  animation-delay: 4s;
+}
+.feature-tour-dot[data-frame='3'] {
+  animation-delay: 8s;
+}
+.feature-tour-dot[data-frame='4'] {
+  animation-delay: 12s;
+}
+@keyframes feature-tour-dot-pulse {
+  0%,
+  24% {
+    background: var(--primary);
+    transform: scale(1.05);
+  }
+  25%,
+  100% {
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+    transform: scale(1);
+  }
+}
+
+/* Frame 1 — Workspace: agent-state dot pulses while a "fix login race"
+   workspace shows two agent rows working in parallel. */
+.feature-tour-ws-status {
+  animation: feature-tour-status-pulse 1.6s ease-in-out infinite;
+}
+@keyframes feature-tour-status-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+/* Frame 2 — Orchestration: child cards flash as bubbles land along the
+   dashed paths fanning down from the coordinator. */
+/* Why: bubbles use percent-based left/top so they always travel from the
+   root card's right edge (34%) to the child card's left edge (64%),
+   regardless of preview width. The previous offset-path used hardcoded
+   pixels and drifted off the dashed lines once the preview resized. */
+.feature-tour-orch-bubble {
+  position: absolute;
+  left: 34%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  border-radius: 3px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  z-index: 4;
+}
+.feature-tour-orch-bubble.top {
+  animation: feature-tour-orch-travel-top var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: 4s;
+}
+.feature-tour-orch-bubble.mid {
+  animation: feature-tour-orch-travel-mid var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: calc(4s + 0.2s);
+}
+.feature-tour-orch-bubble.bot {
+  animation: feature-tour-orch-travel-bot var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
+    infinite;
+  animation-delay: calc(4s + 0.4s);
+}
+@keyframes feature-tour-orch-travel-top {
+  0% {
+    left: 34%;
+    top: 50%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  3.5% {
+    left: 49%;
+    top: 50%;
+    opacity: 1;
+  }
+  6.5% {
+    left: 64%;
+    top: 18%;
+    opacity: 1;
+  }
+  7.5% {
+    left: 64%;
+    top: 18%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    left: 64%;
+    top: 18%;
+    opacity: 0;
+  }
+}
+@keyframes feature-tour-orch-travel-mid {
+  0% {
+    left: 34%;
+    top: 50%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  6.5% {
+    left: 64%;
+    top: 50%;
+    opacity: 1;
+  }
+  7.5% {
+    left: 64%;
+    top: 50%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    left: 64%;
+    top: 50%;
+    opacity: 0;
+  }
+}
+@keyframes feature-tour-orch-travel-bot {
+  0% {
+    left: 34%;
+    top: 50%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  3.5% {
+    left: 49%;
+    top: 50%;
+    opacity: 1;
+  }
+  6.5% {
+    left: 64%;
+    top: 82%;
+    opacity: 1;
+  }
+  7.5% {
+    left: 64%;
+    top: 82%;
+    opacity: 0;
+  }
+  25%,
+  100% {
+    left: 64%;
+    top: 82%;
+    opacity: 0;
+  }
+}
+
+.feature-tour-orch-child {
+  animation: feature-tour-orch-child-flash var(--feature-tour-cycle) linear infinite;
+}
+.feature-tour-orch-child.top {
+  animation-delay: 4s;
+}
+.feature-tour-orch-child.mid {
+  animation-delay: calc(4s + 0.2s);
+}
+.feature-tour-orch-child.bot {
+  animation-delay: calc(4s + 0.4s);
+}
+@keyframes feature-tour-orch-child-flash {
+  0%,
+  6% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  7% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+  9% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+  25%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border);
+  }
+}
+
+/* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
+   to a dark "Start workspace →" pill, then a workspace card slides in. */
+.feature-tour-tasks-cursor {
+  /* Why: anchored from the row's right edge so the cursor sits just past the
+     pill's right edge (12px row padding + ~6px past pill end) instead of
+     covering the label text. The arrow tip (top-left of the SVG) lands on the
+     dark pill's trailing edge with the body of the cursor extending right. */
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 8;
+  transform: translate(120px, -30%);
+  opacity: 0;
+  animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
+    infinite;
+  animation-delay: 8s;
+}
+.feature-tour-tasks-cursor svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+@keyframes feature-tour-tasks-cursor {
+  0% {
+    transform: translate(160px, -10%);
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  5% {
+    transform: translate(60px, -30%);
+    opacity: 1;
+  }
+  8% {
+    transform: translate(0px, -30%);
+    opacity: 1;
+  }
+  9% {
+    transform: translate(0px, -10%);
+    opacity: 1;
+  }
+  10.5% {
+    transform: translate(0px, -30%);
+    opacity: 1;
+  }
+  23.5% {
+    transform: translate(0px, -30%);
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    transform: translate(0px, -30%);
+    opacity: 0;
+  }
+}
+
+.feature-tour-tasks-row {
+  animation: feature-tour-tasks-row-hover var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-row-hover {
+  0%,
+  4% {
+    background: transparent;
+    box-shadow: none;
+  }
+  6% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  23.5% {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  25%,
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.feature-tour-tasks-pill {
+  animation: feature-tour-tasks-pill-morph var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-morph {
+  0%,
+  6% {
+    width: 28px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
+  }
+  8% {
+    width: 78px;
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  }
+  23.5% {
+    width: 78px;
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  }
+  25%,
+  100% {
+    width: 28px;
+    background: rgb(34 197 94 / 0.14);
+    border-color: rgb(34 197 94 / 0.3);
+    box-shadow: none;
+  }
+}
+
+.feature-tour-tasks-pill-label {
+  opacity: 0;
+  animation: feature-tour-tasks-pill-label var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-pill-label {
+  0%,
+  7% {
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  23.5% {
+    opacity: 1;
+  }
+  24.5% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Click ring fires when the cursor "clicks" the morphed pill on the tasks
+   row. Positioned to overlay the right-side pill of the second task. */
+.feature-tour-tasks-click-ring {
+  /* Why: ring is centered on the cursor tip (right=28 from row's right edge)
+     so the click feedback lands where the cursor is, on the arrow icon — not
+     centered on the pill, which would visually disconnect from the cursor. */
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  opacity: 0;
+  z-index: 7;
+  pointer-events: none;
+  animation: feature-tour-tasks-click-ring var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-click-ring {
+  0%,
+  7% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  8% {
+    opacity: 0.85;
+    transform: scale(0.6);
+  }
+  10% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* Newly-created workspace card slides in beneath the task row once the
+   user clicks "Start workspace" — sells the "task → workspace" jump. */
+.feature-tour-tasks-workspace {
+  opacity: 0;
+  transform: translateY(-6px);
+  animation: feature-tour-tasks-workspace var(--feature-tour-cycle) linear infinite;
+  animation-delay: 8s;
+}
+@keyframes feature-tour-tasks-workspace {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Frame 4 — Terminal: command stays anchored while the split panes stream
+   Playwright and Claude activity. */
+.feature-tour-terminal-line {
+  width: 23ch;
+}
+
+.feature-tour-terminal-output {
+  opacity: 0;
+  transform: translateY(2px);
+  animation: feature-tour-terminal-output var(--feature-tour-cycle) linear infinite;
+  animation-delay: 12s;
+}
+.feature-tour-terminal-output[data-line='1'] {
+  animation-delay: calc(12s + 0.05s);
+}
+.feature-tour-terminal-output[data-line='2'] {
+  animation-delay: calc(12s + 0.25s);
+}
+.feature-tour-terminal-output[data-line='3'] {
+  animation-delay: calc(12s + 0.45s);
+}
+@keyframes feature-tour-terminal-output {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  23.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-tour-frame,
+  .feature-tour-copy-slide,
+  .feature-tour-dot,
+  .feature-tour-ws-status,
+  .feature-tour-orch-bubble,
+  .feature-tour-orch-child,
+  .feature-tour-tasks-cursor,
+  .feature-tour-tasks-row,
+  .feature-tour-tasks-pill,
+  .feature-tour-tasks-pill-label,
+  .feature-tour-tasks-click-ring,
+  .feature-tour-tasks-workspace,
+  .feature-tour-terminal-output {
+    animation: none !important;
+  }
+  .feature-tour-frame[data-frame='1'],
+  .feature-tour-copy-slide[data-frame='1'] {
+    opacity: 1;
+  }
+  .feature-tour-dot[data-frame='1'] {
+    background: var(--primary);
+  }
+}
+
 /* ── Diff comment decorations ────────────────────────────────────── */
 
 /* Why: the "+" button is appended into Monaco's editor DOM node by
@@ -1044,23 +2264,26 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
   border-radius: 4px;
-  background: var(--background);
-  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
   cursor: pointer;
   z-index: 5;
-  opacity: 0.7;
+  opacity: 1;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
   transition:
-    opacity 100ms ease,
     color 100ms ease,
-    background-color 100ms ease;
+    background-color 100ms ease,
+    border-color 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .orca-diff-comment-add-btn:hover {
-  opacity: 1;
   color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
 .orca-diff-comment-add-btn:focus-visible {
@@ -1078,10 +2301,9 @@
 
 .orca-diff-comment-inline {
   width: 100%;
-  /* Why: match the popover's horizontal inset so the saved card lines up with
-     the new-comment popover that preceded it. Both anchor at `left: 56px` and
-     cap at 420px wide. */
-  padding: 4px 24px 6px 56px;
+  /* Why: Monaco's view-zone node already starts after the diff gutter. Avoid
+     adding a second left inset so saved notes sit flush with the code column. */
+  padding: 4px 24px 6px 0;
   box-sizing: border-box;
 }
 
@@ -1099,6 +2321,12 @@
    percentages would not give equal contrast. Override lives in `.dark`. */
 .orca-diff-comment-card {
   position: relative;
+  /* Why: Monaco's view-lines overlay (data-mprt=8) is positioned absolutely on
+     top of view-zone DOM. Without an explicit z-index here, clicks on
+     interior controls (Cancel/Save in edit mode, the textarea, etc.) hit the
+     overlay first and never reach our buttons. Lifting the whole card creates
+     a stacking context that keeps every nested control clickable. */
+  z-index: 1;
   border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
   border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: 6px;
@@ -1126,6 +2354,93 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.orca-diff-comment-author-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.orca-diff-comment-avatar {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  background: var(--muted);
+}
+
+.orca-diff-comment-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.orca-diff-comment-author {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orca-diff-comment-created-at {
+  flex: 0 0 auto;
+}
+
+.orca-diff-comment-link {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.orca-diff-comment-link:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+/* Why: keep edit + delete close together but visually distinct from the meta
+   label. Both share the same subtle button styling; only delete recolours on
+   hover (destructive intent). */
+.orca-diff-comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.orca-diff-comment-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.orca-diff-comment-edit:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 /* Why: the trash button is always visible (not hover-only) because the saved
@@ -1161,6 +2476,10 @@
   color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.orca-diff-comment-review-body {
+  padding-left: 24px;
 }
 
 /* Why: mirror the saved-note card treatment so the "entering" and "saved"
@@ -1239,6 +2558,7 @@
 
 .orca-diff-comment-popover-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
 }

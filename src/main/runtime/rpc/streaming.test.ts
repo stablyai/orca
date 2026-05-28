@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
 import { defineMethod, defineStreamingMethod, type RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { TERMINAL_METHODS } from './methods/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
@@ -262,5 +264,58 @@ describe('RpcDispatcher streaming', () => {
       ok: false,
       error: { code: 'runtime_error' }
     })
+  })
+
+  it('ends terminal.subscribe when the backing terminal exits', async () => {
+    const messages: string[] = []
+    let resolveExit!: () => void
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      }),
+      waitForTerminal: vi.fn(
+        () =>
+          new Promise<RuntimeTerminalWait>((resolve) => {
+            resolveExit = () =>
+              resolve({
+                handle: 'terminal-1',
+                condition: 'exit',
+                satisfied: true,
+                status: 'exited',
+                exitCode: 0
+              })
+          })
+      )
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' }
+      }),
+      (msg) => messages.push(msg)
+    )
+
+    await vi.waitFor(() => expect(cleanups.has('terminal-1:desktop-1')).toBe(true))
+    resolveExit()
+    await dispatchPromise
+
+    expect(messages.some((msg) => JSON.parse(msg).result?.type === 'end')).toBe(true)
+    expect(runtime.cleanupSubscription).toHaveBeenCalledWith('terminal-1:desktop-1')
   })
 })

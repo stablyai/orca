@@ -2,29 +2,12 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Mobile Pairing',
-    description:
-      'Pair a mobile device to control Orca remotely. Experimental — requires the Orca mobile APK from GitHub Releases.',
+    title: 'Pet',
+    description: 'Floating animated pet in the bottom-right corner.',
     keywords: [
       'experimental',
-      'mobile',
-      'phone',
-      'pair',
-      'qr',
-      'code',
-      'scan',
-      'remote',
-      'android',
-      'apk'
-    ]
-  },
-  {
-    title: 'Sidekick',
-    description: 'Floating animated sidekick in the bottom-right corner.',
-    keywords: [
-      'experimental',
-      'sidekick',
       'pet',
+      'sidekick',
       'mascot',
       'overlay',
       'animated',
@@ -33,21 +16,19 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Agent Orchestration',
-    description:
-      'Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates.',
+    title: 'Agents View',
+    description: 'Threaded left-sidebar feed for agent completions and blocking states.',
     keywords: [
       'experimental',
-      'orchestration',
-      'multi-agent',
       'agents',
-      'coordination',
-      'messaging',
-      'dispatch',
-      'task',
-      'DAG',
-      'worker',
-      'coordinator'
+      'agents view',
+      'activity',
+      'notifications',
+      'worktrees',
+      'timeline',
+      'unread',
+      'bell',
+      'sidebar'
     ]
   },
   {
@@ -81,8 +62,7 @@ function findEntry(title: string): SettingsSearchEntry {
 }
 
 export const EXPERIMENTAL_SEARCH_ENTRY = {
-  mobile: findEntry('Mobile Pairing'),
-  sidekick: findEntry('Sidekick'),
-  orchestration: findEntry('Agent Orchestration'),
+  pet: findEntry('Pet'),
+  activity: findEntry('Agents View'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

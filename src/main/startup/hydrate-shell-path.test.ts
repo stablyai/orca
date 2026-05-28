@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   _resetHydrateShellPathCache,
   hydrateShellPath,
-  mergePathSegments
+  mergePathSegments,
+  type HydrationResult
 } from './hydrate-shell-path'
+
+type HydrationSpawner = (shell: string) => Promise<HydrationResult>
 
 describe('hydrateShellPath', () => {
   const originalPath = process.env.PATH
@@ -28,7 +31,8 @@ describe('hydrateShellPath', () => {
         capturedShell = shell
         return {
           segments: ['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'],
-          ok: true
+          ok: true,
+          failureReason: 'none'
         }
       }
     })
@@ -36,13 +40,14 @@ describe('hydrateShellPath', () => {
     expect(capturedShell).toBe('/bin/zsh')
     expect(result.ok).toBe(true)
     expect(result.segments).toEqual(['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'])
+    expect(result.failureReason).toBe('none')
   })
 
   it('caches the hydration result so repeated calls do not re-spawn', async () => {
     let spawnCount = 0
-    const spawner = async (): Promise<{ segments: string[]; ok: boolean }> => {
+    const spawner: HydrationSpawner = async () => {
       spawnCount += 1
-      return { segments: ['/a'], ok: true }
+      return { segments: ['/a'], ok: true, failureReason: 'none' }
     }
 
     await hydrateShellPath({ shellOverride: '/bin/zsh', spawner })
@@ -54,9 +59,9 @@ describe('hydrateShellPath', () => {
 
   it('re-spawns when force:true is passed — matches the Refresh button contract', async () => {
     let spawnCount = 0
-    const spawner = async (): Promise<{ segments: string[]; ok: boolean }> => {
+    const spawner: HydrationSpawner = async () => {
       spawnCount += 1
-      return { segments: ['/a'], ok: true }
+      return { segments: ['/a'], ok: true, failureReason: 'none' }
     }
 
     await hydrateShellPath({ shellOverride: '/bin/zsh', spawner })
@@ -65,7 +70,7 @@ describe('hydrateShellPath', () => {
     expect(spawnCount).toBe(2)
   })
 
-  it('returns ok:false when no shell is available (Windows path)', async () => {
+  it('returns failureReason:no_shell when no shell is available (Windows path)', async () => {
     const result = await hydrateShellPath({
       shellOverride: null,
       spawner: async () => {
@@ -73,7 +78,36 @@ describe('hydrateShellPath', () => {
       }
     })
 
-    expect(result).toEqual({ segments: [], ok: false })
+    expect(result).toEqual({ segments: [], ok: false, failureReason: 'no_shell' })
+  })
+
+  // Why: each failure mode tagged independently so dashboards can pick the
+  // right fix (lengthen timeout vs investigate shell-invocation strategy vs
+  // surface a UX error). Spawner override stands in for the four resolve
+  // sites — the actual classification happens inside `spawnShellAndReadPath`,
+  // covered by the existing real-shell smoke surface.
+  it('propagates failureReason:timeout from the spawner', async () => {
+    const result = await hydrateShellPath({
+      shellOverride: '/bin/zsh',
+      spawner: async () => ({ segments: [], ok: false, failureReason: 'timeout' })
+    })
+    expect(result).toEqual({ segments: [], ok: false, failureReason: 'timeout' })
+  })
+
+  it('propagates failureReason:spawn_error from the spawner', async () => {
+    const result = await hydrateShellPath({
+      shellOverride: '/bin/zsh',
+      spawner: async () => ({ segments: [], ok: false, failureReason: 'spawn_error' })
+    })
+    expect(result).toEqual({ segments: [], ok: false, failureReason: 'spawn_error' })
+  })
+
+  it('propagates failureReason:empty_path from the spawner', async () => {
+    const result = await hydrateShellPath({
+      shellOverride: '/bin/zsh',
+      spawner: async () => ({ segments: [], ok: false, failureReason: 'empty_path' })
+    })
+    expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
   })
 })
 

@@ -1,61 +1,16 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import {
-  OptionalBoolean,
-  OptionalFiniteNumber,
-  OptionalString,
-  TriStateLinkedIssue
-} from '../schemas'
-
-const WorktreeListParams = z.object({
-  repo: OptionalString,
-  limit: OptionalFiniteNumber
-})
-
-const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
-})
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
-
-const WorktreeCreate = z.object({
-  repo: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector')),
-  name: OptionalString,
-  baseBranch: OptionalString,
-  linkedIssue: TriStateLinkedIssue,
-  comment: OptionalString,
-  runHooks: OptionalBoolean,
-  setupDecision: z
-    .unknown()
-    .transform((v) =>
-      typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
-    )
-    .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
-    .optional(),
-  // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-  // terminal pane launches the selected agent instead of an idle shell.
-  startupCommand: OptionalString
-})
-
-const WorktreeSet = WorktreeSelector.extend({
-  displayName: OptionalString,
-  linkedIssue: TriStateLinkedIssue,
-  comment: OptionalString,
-  isPinned: OptionalBoolean
-})
-
-const WorktreeRemove = WorktreeSelector.extend({
-  force: OptionalBoolean,
-  runHooks: OptionalBoolean
-})
+  WorktreeCreate,
+  WorktreeDetectedListParams,
+  WorktreeListParams,
+  WorktreePsParams,
+  WorktreeRemove,
+  WorktreeResolveMrBase,
+  WorktreeResolvePrBase,
+  WorktreeSelector,
+  WorktreeSet,
+  WorktreeSortOrder
+} from './worktree-schemas'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
@@ -67,6 +22,16 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.list',
     params: WorktreeListParams,
     handler: async (params, { runtime }) => runtime.listManagedWorktrees(params.repo, params.limit)
+  }),
+  defineMethod({
+    name: 'worktree.detectedList',
+    params: WorktreeDetectedListParams,
+    handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
+  }),
+  defineMethod({
+    name: 'worktree.lineageList',
+    params: null,
+    handler: async (_params, { runtime }) => ({ lineage: await runtime.listWorktreeLineage() })
   }),
   defineMethod({
     name: 'worktree.show',
@@ -93,11 +58,31 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         name: params.name ?? '',
         baseBranch: params.baseBranch,
+        branchNameOverride: params.branchNameOverride,
         linkedIssue: params.linkedIssue,
+        linkedPR: params.linkedPR,
+        linkedLinearIssue: params.linkedLinearIssue,
+        linkedGitLabMR: params.linkedGitLabMR,
+        linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
+        displayName: params.displayName,
+        workspaceStatus: params.workspaceStatus,
+        manualOrder: params.manualOrder,
+        sparseCheckout: params.sparseCheckout,
+        pushTarget: params.pushTarget,
         runHooks: params.runHooks === true,
+        activate: params.activate === true,
         setupDecision: params.setupDecision,
-        startup: params.startupCommand ? { command: params.startupCommand } : undefined
+        createdWithAgent: params.createdWithAgent,
+        startup: params.startupCommand ? { command: params.startupCommand } : undefined,
+        startupDraft: params.startupDraft,
+        lineage: {
+          parentWorktree: params.parentWorktree,
+          ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+          noParent: params.noParent === true,
+          callerTerminalHandle: params.callerTerminalHandle,
+          orchestrationContext: params.orchestrationContext
+        }
       })
   }),
   defineMethod({
@@ -107,10 +92,62 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         linkedIssue: params.linkedIssue,
+        linkedPR: params.linkedPR,
+        linkedLinearIssue: params.linkedLinearIssue,
+        linkedGitLabMR: params.linkedGitLabMR,
+        linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
-        isPinned: params.isPinned
-      })
+        isArchived: params.isArchived,
+        isUnread: params.isUnread,
+        isPinned: params.isPinned,
+        sortOrder: params.sortOrder,
+        manualOrder: params.manualOrder,
+        lastActivityAt: params.lastActivityAt,
+        createdAt: params.createdAt,
+        sparseDirectories: params.sparseDirectories,
+        sparseBaseRef: params.sparseBaseRef,
+        sparsePresetId: params.sparsePresetId,
+        baseRef: params.baseRef,
+        workspaceStatus: params.workspaceStatus,
+        pushTarget: params.pushTarget,
+        diffComments: params.diffComments,
+        lineage:
+          params.parentWorktree || params.noParent === true
+            ? {
+                parentWorktree: params.parentWorktree,
+                noParent: params.noParent === true
+              }
+            : undefined
+      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
     })
+  }),
+  defineMethod({
+    name: 'worktree.persistSortOrder',
+    params: WorktreeSortOrder,
+    handler: async (params, { runtime }) =>
+      runtime.persistManagedWorktreeSortOrder(params.orderedIds)
+  }),
+  defineMethod({
+    name: 'worktree.resolvePrBase',
+    params: WorktreeResolvePrBase,
+    handler: async (params, { runtime }) =>
+      runtime.resolveManagedPrBase({
+        repoSelector: params.repo,
+        prNumber: params.prNumber,
+        headRefName: params.headRefName,
+        isCrossRepository: params.isCrossRepository
+      })
+  }),
+  defineMethod({
+    name: 'worktree.resolveMrBase',
+    params: WorktreeResolveMrBase,
+    handler: async (params, { runtime }) =>
+      runtime.resolveManagedMrBase({
+        repoSelector: params.repo,
+        mrIid: params.mrIid,
+        sourceBranch: params.sourceBranch,
+        isCrossRepository: params.isCrossRepository
+      })
   }),
   defineMethod({
     name: 'worktree.rm',

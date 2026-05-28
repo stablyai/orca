@@ -4,10 +4,13 @@ differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
+import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
 
 const RPC_TIMEOUT_MS = 10_000
 const PTY_TIMEOUT_MS = 15_000
+const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
@@ -44,7 +47,10 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
   return `${JSON.stringify({ jsonrpc: '2.0', id, method, params: params ?? {} })}\n`
 }
 
-function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
+function mapRpcWindow(
+  raw: RpcRateWindow | undefined,
+  expectedWindowMinutes: number
+): RateLimitWindow | null {
   if (!raw || typeof raw.usedPercent !== 'number') {
     return null
   }
@@ -70,7 +76,9 @@ function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
 
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
-    windowMinutes: raw.windowDurationMins ?? 300,
+    // Why: Codex currently reports remaining minutes in `windowDurationMins`.
+    // Orca's UI needs the fixed bucket duration so labels stay "5h" / "wk".
+    windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription
   }
@@ -83,6 +91,7 @@ function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
 async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   return new Promise<ProviderRateLimits>((resolve) => {
     let buffer = ''
+    let stderr = ''
     let resolved = false
     let rpcId = 0
 
@@ -191,7 +200,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                 session: null,
                 weekly: null,
                 updatedAt: Date.now(),
-                error: msg.error.message,
+                error: withMacTailscaleDnsHint(msg.error.message, stderr),
                 status: 'error'
               })
               return
@@ -199,8 +208,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
             const result = wrapper?.rateLimits
-            const session = mapRpcWindow(result?.primary)
-            const weekly = mapRpcWindow(result?.secondary)
+            const session = mapRpcWindow(result?.primary, 300)
+            const weekly = mapRpcWindow(result?.secondary, 10080)
 
             resolve({
               provider: 'codex',
@@ -214,6 +223,14 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
         } catch {
           // Non-JSON line from the RPC server — ignore
         }
+      }
+    })
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+      // Why: this background poll only needs recent failure context for hints.
+      if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
+        stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
     })
 
@@ -232,7 +249,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             ? isBareCommand
               ? 'Codex CLI not found'
               : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : err.message,
+            : withMacTailscaleDnsHint(err.message, stderr),
           status: isEnoent && isBareCommand ? 'unavailable' : 'error'
         })
       }
@@ -247,7 +264,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: 'RPC process exited unexpectedly',
+          error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
           status: 'error'
         })
       }
@@ -330,26 +347,17 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     })
     const termDisposables: { dispose: () => void }[] = []
-    const disposeTermListeners = (): void => {
-      for (const disposable of termDisposables.splice(0)) {
-        disposable.dispose()
-      }
-    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        // Why: killing a hidden PTY without disposing node-pty's NAPI listener
-        // handles leaves ThreadSafeFunction callbacks alive into Electron
-        // shutdown, which can abort the app while Node cleans up its env.
-        disposeTermListeners()
-        term.kill()
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: 'PTY timeout',
+          error: withMacTailscaleDnsHint('PTY timeout', output),
           status: 'error'
         })
       }
@@ -357,6 +365,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const onDataDisposable = term.onData((data) => {
       output += data
+      // Why: this background fallback only needs recent status output for
+      // parsing and diagnostics; cap noisy TUI output like the Claude fallback.
+      if (output.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
+        output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
+      }
 
       // Wait for prompt, then send /status
       if (!sentStatus && />\s*$/.test(data)) {
@@ -373,8 +386,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           }
           resolved = true
           clearTimeout(timeout)
-          disposeTermListeners()
-          term.kill()
+          cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
           // eslint-disable-next-line no-control-regex
           const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
@@ -385,7 +397,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
             session,
             weekly,
             updatedAt: Date.now(),
-            error: session || weekly ? null : 'Failed to parse CLI output',
+            error:
+              session || weekly
+                ? null
+                : withMacTailscaleDnsHint('Failed to parse CLI output', clean),
             status: session || weekly ? 'ok' : 'error'
           })
         }, 500)
@@ -396,7 +411,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     const onExitDisposable = term.onExit(() => {
-      disposeTermListeners()
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
@@ -408,7 +423,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           session,
           weekly,
           updatedAt: Date.now(),
-          error: session || weekly ? null : 'CLI exited before status was available',
+          error:
+            session || weekly
+              ? null
+              : withMacTailscaleDnsHint('CLI exited before status was available', clean),
           status: session || weekly ? 'ok' : 'error'
         })
       }
@@ -428,7 +446,12 @@ export async function fetchCodexRateLimits(
 ): Promise<ProviderRateLimits> {
   // Path A: try RPC first
   try {
-    return await fetchViaRpc(options)
+    const rpcResult = await fetchViaRpc(options)
+    if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
+      return rpcResult
+    }
+    // Why: app-server can fail independently of the interactive CLI. Keep the
+    // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
     // RPC failed — fall through to PTY
   }
@@ -444,7 +467,7 @@ export async function fetchCodexRateLimits(
       session: null,
       weekly: null,
       updatedAt: Date.now(),
-      error: isNotInstalled ? 'Codex CLI not found' : message,
+      error: isNotInstalled ? 'Codex CLI not found' : withMacTailscaleDnsHint(message),
       status: isNotInstalled ? 'unavailable' : 'error'
     }
   }

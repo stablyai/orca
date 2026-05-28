@@ -2,6 +2,9 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import type { TreeNode } from './file-explorer-types'
+import { useAppStore } from '@/store'
+import { copyRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
+import { getConnectionId } from '@/lib/connection-context'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -17,11 +20,13 @@ function extractIpcErrorMessage(err: unknown, fallback: string): string {
 }
 
 type UseFileDuplicateParams = {
+  activeWorktreeId: string | null
   worktreePath: string | null
   refreshDir: (dirPath: string) => Promise<void>
 }
 
 export function useFileDuplicate({
+  activeWorktreeId,
   worktreePath,
   refreshDir
 }: UseFileDuplicateParams): (node: TreeNode) => void {
@@ -37,12 +42,19 @@ export function useFileDuplicate({
       const ext = dotIndex > 0 ? name.slice(dotIndex) : ''
 
       const run = async (): Promise<void> => {
+        const settings = useAppStore.getState().settings
+        const context = {
+          settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: getConnectionId(activeWorktreeId) ?? undefined
+        }
         // Why: generate a unique "stem copy.ext", "stem copy 2.ext", … name
         // so we never collide with an existing file. pathExists checks are
         // sequential to avoid TOCTOU races with COPYFILE_EXCL on the backend.
         let candidate = joinPath(dir, `${stem} copy${ext}`)
         let n = 2
-        while (await window.api.shell.pathExists(candidate)) {
+        while (await runtimePathExists(context, candidate)) {
           candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
           n += 1
         }
@@ -58,7 +70,7 @@ export function useFileDuplicate({
         // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
-            await window.api.shell.copyFile({ srcPath: node.path, destPath: candidate })
+            await copyRuntimePath(context, node.path, candidate)
             break
           } catch (err) {
             const isEexist =
@@ -87,6 +99,6 @@ export function useFileDuplicate({
       }
       void run()
     },
-    [worktreePath, refreshDir]
+    [activeWorktreeId, worktreePath, refreshDir]
   )
 }

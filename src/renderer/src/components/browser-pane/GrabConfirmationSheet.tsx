@@ -23,6 +23,12 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
     lines.push(`Role: ${payload.target.accessibility.role}`)
   }
   lines.push(`Selector: ${payload.target.selector}`)
+  if (payload.target.sourceFile) {
+    lines.push(`Source: ${payload.target.sourceFile}`)
+  }
+  if (payload.target.reactComponents) {
+    lines.push(`React: ${payload.target.reactComponents}`)
+  }
   const { rectViewport } = payload.target
   lines.push(`Dimensions: ${Math.round(rectViewport.width)}x${Math.round(rectViewport.height)}`)
   lines.push('')
@@ -79,6 +85,9 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   // Ancestor path
   if (payload.ancestorPath.length > 0) {
     lines.push(`Ancestor path: ${payload.ancestorPath.join(' > ')}`)
+  }
+  if (payload.target.fullPath) {
+    lines.push(`Full DOM path: ${payload.target.fullPath}`)
   }
 
   return lines.join('\n').trimEnd()
@@ -199,7 +208,7 @@ export default function GrabConfirmationSheet({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 HTML
               </h3>
-              <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground/80">
+              <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground/80 scrollbar-sleek">
                 <EscapedText text={target.htmlSnippet} />
               </pre>
             </div>

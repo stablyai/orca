@@ -5,10 +5,14 @@ Thanks for contributing to Orca.
 ## Before You Start
 
 - Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
-- Orca targets macOS, Linux, and Windows. Avoid platform-specific assumptions in shortcuts, labels, and file paths.
+- Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
 - For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
 - For shortcut labels, show `⌘` and `⇧` on macOS, and `Ctrl+` and `Shift+` on Linux and Windows.
 - For file paths, use Node or Electron path utilities such as `path.join`.
+- Orca must work against local repositories, remote servers, and SSH worktrees. Do not assume a process, file, credential, shell, or network path exists only on the local machine.
+- Orca supports many CLI agents, integrations, and git providers. Keep generic behavior provider-neutral; guard integration-specific logic behind explicit checks.
+- Keep changes well-engineered and performant: follow existing architecture, avoid unnecessary work in hot paths, clean up owned resources, and use concrete module names.
+- For UI work, follow [`docs/STYLEGUIDE.md`](../docs/STYLEGUIDE.md), use the tokens and shadcn primitives it specifies, and verify polished behavior across platforms, light/dark mode, and SSH latency.
 
 ## Local Setup
 
@@ -58,8 +62,8 @@ Each pull request should:
 - stay focused on a single topic when possible
 - include screenshots or screen recordings for new UI or behavior changes
 - include high-quality tests when behavior changes or bug fixes warrant them
-- include a brief code review summary from your AI coding agent that explicitly checks cross-platform compatibility, plus a basic security audit summary
-- mention any platform-specific behavior or testing notes
+- include a brief code review summary from your AI coding agent that explicitly checks cross-platform compatibility, SSH/remote/local compatibility, supported agent and integration compatibility, performance risk, UI quality when applicable, and basic security risk
+- mention any platform-specific, remote/SSH-specific, agent-specific, integration-specific, or git-provider-specific behavior and testing notes
 - **Include your X (Twitter) handle!** We love giving shoutouts to our contributors when we merge features on [@orca_build](https://x.com/orca_build).
 
 If there is no visual change, say that explicitly in the PR description.
@@ -95,6 +99,8 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest *stable
 **Safety guarantees:**
 
 - Stable releases are refused if the new version isn't strictly greater than the latest published stable. This is the only rule `electron-updater` actually needs — it compares semver within the `latest` channel, so a regressing stable is the one thing that breaks auto-update for fresh installs.
+- Complete RC draft releases created by the release workflow are published before cutting a new tag, so a GitHub queue failure in the final publish job can be resumed safely.
+- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag before cutting the next RC. This keeps retries from leaving multiple unpublished draft releases behind.
 - Off-main releases (when `ref` is not the tip of `main`) only push the tag. `main` is never mutated from a non-main ref, so you can safely release an older commit without polluting history.
 - When `ref` is the tip of `main`, the version-bump commit is fast-forwarded onto `main` so local `package.json` stays in sync with what's shipped.
 

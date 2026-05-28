@@ -39,17 +39,6 @@ test.describe('Dead Terminal Stress @headful', () => {
         return
       }
       state.updateSettings({ setupScriptLaunchMode: 'split-vertical' })
-
-      const wt = Object.values(state.worktreesByRepo)
-        .flat()
-        .find((w) => w.id === state.activeWorktreeId)
-      if (wt) {
-        const sep = wt.path.includes('\\') ? '\\' : '/'
-        await window.api.fs.writeFile({
-          filePath: `${wt.path}${sep}orca.yaml`,
-          content: 'scripts:\n  setup: echo SETUP_COMPLETE\n'
-        })
-      }
     })
   })
 

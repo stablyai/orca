@@ -21,7 +21,28 @@ const GEMINI_PERMISSION = '\u270B' // ✋
 // unsafe under the substring-based detector and would classify ordinary shell
 // titles like "timestamp ready" as agent activity. Product telemetry uses the
 // explicit launch/session facts Orca owns, not this inference path.
-export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode', 'aider']
+export const AGENT_NAMES = [
+  'claude',
+  'codex',
+  'copilot',
+  'cursor',
+  'gemini',
+  'antigravity',
+  'opencode',
+  'openclaw',
+  'aider',
+  'grok'
+]
+
+// Why: `android` contains `droid`; unlike the legacy agent names above, Droid
+// must be token-matched so Android terminal titles do not become agent status.
+const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
+
+// Why: Hermes is safe to token-match but unsafe to add to the legacy
+// substring list because cwd/path titles like `~/hermes/working` would
+// otherwise count as agent activity.
+const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
+const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
@@ -92,6 +113,9 @@ const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
  * normalizeTerminalChunk pass.
  */
 export function extractLastOscTitle(data: string): string | null {
+  if (!data.includes('\x1b]')) {
+    return null
+  }
   let last: string | null = null
   for (const m of data.matchAll(OSC_TITLE_RE)) {
     last = m[2]
@@ -110,6 +134,9 @@ export function extractLastOscTitle(data: string): string | null {
  * spinner-miss follow-up.
  */
 export function extractAllOscTitles(data: string): string[] {
+  if (!data.includes('\x1b]')) {
+    return []
+  }
   const titles: string[] = []
   for (const m of data.matchAll(OSC_TITLE_RE)) {
     titles.push(m[2])
@@ -147,9 +174,18 @@ function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-function containsAgentName(title: string): boolean {
+function containsLegacyAgentName(title: string): boolean {
   const lower = title.toLowerCase()
   return AGENT_NAMES.some((name) => lower.includes(name))
+}
+
+function containsAgentName(title: string): boolean {
+  return (
+    containsLegacyAgentName(title) ||
+    AGY_AGENT_NAME_RE.test(title) ||
+    DROID_AGENT_NAME_RE.test(title) ||
+    HERMES_AGENT_NAME_RE.test(title)
+  )
 }
 
 function containsAny(title: string, words: readonly string[]): boolean {
@@ -337,6 +373,12 @@ export function getAgentLabel(title: string): string | null {
   if (lower.includes('copilot')) {
     return 'GitHub Copilot'
   }
+  if (lower.includes('grok')) {
+    return 'Grok'
+  }
+  if (lower.includes('antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+    return 'Antigravity'
+  }
   if (lower.includes('opencode')) {
     return 'OpenCode'
   }
@@ -351,6 +393,16 @@ export function getAgentLabel(title: string): string | null {
   // otherwise claim every "⠋ Cursor Agent" frame as Claude.
   if (lower.includes('cursor')) {
     return 'Cursor'
+  }
+  // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
+  // Token matching avoids labeling ordinary Android terminal titles as Droid.
+  if (DROID_AGENT_NAME_RE.test(title)) {
+    return 'Droid'
+  }
+  // Why: synthesized "⠋ Hermes" working titles need to be matched before
+  // Claude's generic braille-spinner heuristic.
+  if (HERMES_AGENT_NAME_RE.test(title)) {
+    return 'Hermes'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
@@ -404,7 +456,11 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return 'working'
   }
 
-  if (containsAgentName(title)) {
+  const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
+  const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
+  const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
+  const hasLegacyAgentName = containsLegacyAgentName(title)
+  if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
     }
@@ -432,6 +488,13 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     }
     if (title.startsWith('* ')) {
       return 'idle'
+    }
+
+    // Why: Factory Droid can publish native titles like "Factory Droid needs
+    // input" while an Execute tool is still sleeping. Droid's hook events are
+    // authoritative; don't turn a name-only native title into a completion.
+    if (hasDroidAgentName && !hasLegacyAgentName) {
+      return null
     }
 
     return 'idle'

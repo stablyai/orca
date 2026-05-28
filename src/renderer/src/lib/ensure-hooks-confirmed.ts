@@ -1,6 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/types'
+import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
+import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 
 export type HookScriptKind = OrcaHookScriptKind
 
@@ -31,13 +33,24 @@ export async function ensureHooksConfirmed(
     try {
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
-        const result = await window.api.hooks.readIssueCommand({ repoId })
+        const result = await readRuntimeIssueCommand(state.settings, repoId)
         if (result.source !== 'shared') {
           return 'run'
         }
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
-        const result = await window.api.hooks.check({ repoId })
+        const repo = state.repos.find((r) => r.id === repoId)
+        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+        const sourcePolicy = resolveHookCommandSourcePolicy(
+          repo?.hookSettings?.commandSourcePolicy,
+          {
+            hasLocalScript: Boolean(localScript)
+          }
+        )
+        if (sourcePolicy === 'local-only') {
+          return 'run'
+        }
+        const result = await checkRuntimeHooks(state.settings, repoId)
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
         scriptContent = (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }

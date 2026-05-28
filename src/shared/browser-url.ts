@@ -8,6 +8,8 @@ const LOCAL_ADDRESS_PATTERN =
 // A single-word input containing a dot with a valid TLD-like suffix is treated as
 // a URL attempt, not a search query.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/][^\s]*$/
+const UNIX_ABSOLUTE_PATH_PATTERN = /^\/[^\s]*$/
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'kagi'
 
@@ -131,6 +133,19 @@ export function looksLikeSearchQuery(input: string): boolean {
   return true
 }
 
+function absolutePathToFileUrl(filePath: string): string {
+  const normalizedPath = filePath.replaceAll('\\', '/')
+  const segments = normalizedPath.split('/').map((segment, index) => {
+    if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
+      return segment
+    }
+    return encodeURIComponent(segment)
+  })
+  return normalizedPath.startsWith('/')
+    ? `file://${segments.join('/')}`
+    : `file:///${segments.join('/')}`
+}
+
 export function normalizeBrowserNavigationUrl(
   rawUrl: string,
   searchEngine?: SearchEngine | null,
@@ -147,6 +162,10 @@ export function normalizeBrowserNavigationUrl(
     } catch {
       return null
     }
+  }
+
+  if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
+    return absolutePathToFileUrl(trimmed)
   }
 
   try {

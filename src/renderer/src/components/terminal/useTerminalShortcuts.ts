@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent } from 'react'
 import type { UnifiedTerminalItem } from './useTerminalTabs'
 import { getNextTabAcrossAllTypes, getNextTabWithinActiveType } from './tab-type-cycle'
-import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 
 type UseTerminalShortcutsParams = {
   activeWorktreeId: string | null
@@ -105,7 +105,7 @@ export function useTerminalShortcuts({
   })
 
   const handleBeforeUnload = useEffectEvent((event: BeforeUnloadEvent) => {
-    if (isUpdaterQuitAndInstallInProgress()) {
+    if (isIntentionalAppRestartInProgress()) {
       return
     }
     if (!hasDirtyFiles) {

@@ -36,10 +36,10 @@ function generateId(prefix: string): string {
 // Why: v1 → v2 added `'heartbeat'` to messages.type CHECK + `last_heartbeat_at`
 // column (preamble-hardening PR). v2 → v3 adds `delivered_at` column so
 // push-on-idle can distinguish queued-but-undelivered from user-acknowledged
-// messages without touching the `read` bit (check-wait PR). Bumping together
-// since both PRs ship in the same release — existing on-disk DBs must clear
-// both gaps in one atomic migration.
-const SCHEMA_VERSION = 3
+// messages without touching the `read` bit (check-wait PR). v3 → v4 records
+// the terminal that created a task so task-record worktree creation can infer
+// the parent workspace even when no dispatch context exists.
+const SCHEMA_VERSION = 4
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -83,6 +83,7 @@ export class OrchestrationDb {
       CREATE TABLE IF NOT EXISTS tasks (
         id            TEXT PRIMARY KEY,
         parent_id     TEXT,
+        created_by_terminal_handle TEXT,
         spec          TEXT NOT NULL,
         status        TEXT NOT NULL DEFAULT 'pending'
           CHECK(status IN (
@@ -141,6 +142,7 @@ export class OrchestrationDb {
         completed_at        TEXT
       );
     `)
+    this.createUndeliveredInboxIndexIfPossible()
   }
 
   // Why: `CREATE TABLE IF NOT EXISTS` is a no-op against an existing on-disk
@@ -169,14 +171,12 @@ export class OrchestrationDb {
 
         if (!this.messagesTypeCheckAllowsHeartbeat()) {
           // Why — index list is not optional. createTables() already attached
-          // idx_messages_id / idx_inbox / idx_thread to the old messages table;
-          // DROP TABLE removes those indexes with it. CREATE INDEX IF NOT
-          // EXISTS in createTables() only runs on the next process startup,
-          // so skipping explicit recreation here would leave every
-          // getUnreadMessages / getMessageById call full-scanning for the
-          // rest of this process's lifetime — a silent O(N) perf regression.
-          // The three CREATE INDEX statements below mirror createTables()
-          // verbatim so the two definitions cannot drift.
+          // idx_messages_id / idx_inbox / idx_messages_undelivered_inbox /
+          // idx_thread to the old messages table; DROP TABLE removes those
+          // indexes with it. CREATE INDEX IF NOT EXISTS in createTables() only
+          // runs on the next process startup, so skipping explicit recreation
+          // here would leave message lookups full-scanning for the rest of this
+          // process's lifetime — a silent O(N) perf regression.
           this.db.exec(`
             CREATE TABLE messages_new (
               id            TEXT NOT NULL,
@@ -211,6 +211,8 @@ export class OrchestrationDb {
 
             CREATE UNIQUE INDEX idx_messages_id ON messages(id);
             CREATE INDEX idx_inbox ON messages(to_handle, read);
+            CREATE INDEX idx_messages_undelivered_inbox
+              ON messages(to_handle, read, delivered_at, sequence);
             CREATE INDEX idx_thread ON messages(thread_id);
           `)
         }
@@ -227,6 +229,12 @@ export class OrchestrationDb {
           this.db.exec(`ALTER TABLE messages ADD COLUMN delivered_at TEXT`)
         }
       }
+      if (current < 4) {
+        if (!this.hasColumn('tasks', 'created_by_terminal_handle')) {
+          this.db.exec(`ALTER TABLE tasks ADD COLUMN created_by_terminal_handle TEXT`)
+        }
+      }
+      this.createUndeliveredInboxIndexIfPossible()
 
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
       this.db.exec('COMMIT')
@@ -239,6 +247,16 @@ export class OrchestrationDb {
   private hasColumn(table: string, column: string): boolean {
     const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
     return rows.some((r) => r.name === column)
+  }
+
+  private createUndeliveredInboxIndexIfPossible(): void {
+    if (!this.hasColumn('messages', 'delivered_at')) {
+      return
+    }
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
+        ON messages(to_handle, read, delivered_at, sequence)
+    `)
   }
 
   // Why: sqlite_master stores the original CREATE TABLE SQL including the
@@ -294,6 +312,28 @@ export class OrchestrationDb {
     }
     return this.db
       .prepare('SELECT * FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence')
+      .all(toHandle) as MessageRow[]
+  }
+
+  // Why: push-on-idle delivery must not replay messages that were already
+  // injected into the PTY. `read` flips only when a check-caller consumes a
+  // message, so delivered-but-unread rows would otherwise be re-injected on
+  // every later idle transition (the replay bug). Filter on
+  // `delivered_at IS NULL` so each row is auto-pushed at most once; explicit
+  // `check` still sees them via getUnreadMessages.
+  getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
+    if (types && types.length > 0) {
+      const placeholders = types.map(() => '?').join(',')
+      return this.db
+        .prepare(
+          `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL AND type IN (${placeholders}) ORDER BY sequence`
+        )
+        .all(toHandle, ...types) as MessageRow[]
+    }
+    return this.db
+      .prepare(
+        'SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL ORDER BY sequence'
+      )
       .all(toHandle) as MessageRow[]
   }
 
@@ -367,14 +407,28 @@ export class OrchestrationDb {
 
   // ── Tasks ──
 
-  createTask(task: { spec: string; deps?: string[]; parentId?: string }): TaskRow {
+  createTask(task: {
+    spec: string
+    deps?: string[]
+    parentId?: string
+    createdByTerminalHandle?: string
+  }): TaskRow {
     const id = generateId('task')
     const depsJson = JSON.stringify(task.deps ?? [])
     const hasDeps = (task.deps ?? []).length > 0
     const status: TaskStatus = hasDeps ? 'pending' : 'ready'
     this.db
-      .prepare('INSERT INTO tasks (id, parent_id, spec, status, deps) VALUES (?, ?, ?, ?, ?)')
-      .run(id, task.parentId ?? null, task.spec, status, depsJson)
+      .prepare(
+        'INSERT INTO tasks (id, parent_id, created_by_terminal_handle, spec, status, deps) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+      .run(
+        id,
+        task.parentId ?? null,
+        task.createdByTerminalHandle ?? null,
+        task.spec,
+        status,
+        depsJson
+      )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
   }
 

@@ -1,11 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
-// Why: daemons can survive app updates with long-lived shell env. Bump when
-// spawn-time env semantics change so stale sessions cannot bypass new behavior.
-// Why: bumped from 3 → 4 for the getSnapshot RPC. A surviving v3 daemon
-// would reject getSnapshot as unknown, silently failing all checkpoint
-// writes. The bump forces a stale daemon to be replaced on reconnect.
-export const PROTOCOL_VERSION = 4
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3] as const
+// Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
+// when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
+// Why: bumped from 9 -> 10 so affected v9 daemons are preserved as legacy
+// instead of being resolver-health replaced while they own live PTY sessions.
+export const PROTOCOL_VERSION = 10
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -29,6 +28,9 @@ export type TerminalSnapshot = {
 export type TerminalModes = {
   bracketedPaste: boolean
   mouseTracking: boolean
+  mouseTrackingMode?: 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+  sgrMouseMode?: boolean
+  sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
 }
@@ -61,6 +63,7 @@ export type CreateOrAttachRequest = {
     rows: number
     cwd?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     command?: string
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
@@ -163,6 +166,11 @@ export type PingRequest = {
   type: 'ping'
 }
 
+export type SystemResolverHealthRequest = {
+  id: string
+  type: 'systemResolverHealth'
+}
+
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
@@ -184,6 +192,7 @@ export type DaemonRequest =
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
+  | SystemResolverHealthRequest
   | GetSnapshotRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
@@ -215,6 +224,12 @@ export type GetSnapshotResult = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+}
+
+export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
+
+export type SystemResolverHealthResult = {
+  health: SystemResolverHealth
 }
 
 export type SessionInfo = {

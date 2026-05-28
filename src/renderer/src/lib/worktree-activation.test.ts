@@ -14,6 +14,12 @@ function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
 }
 
 afterEach(() => {
+  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  useAppStore.setState((state) => ({
+    settings: state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: null }
+      : ({ activeRuntimeEnvironmentId: null } as unknown as typeof state.settings)
+  }))
   setSetupScriptLaunchMode('new-tab')
 })
 
@@ -70,6 +76,22 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+  })
+
+  it('does not create a local fallback tab in the paired web runtime client', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+    }))
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 
   it('does not create or queue anything when the worktree already has renderable content', () => {

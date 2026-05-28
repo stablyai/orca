@@ -7,7 +7,7 @@ import type { SettingsSearchEntry } from './settings-search'
 export const PRIVACY_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Privacy & Telemetry',
-    description: 'Anonymous product usage data and telemetry controls.',
+    description: 'Anonymous product usage data, diagnostics, and telemetry controls.',
     keywords: [
       'privacy',
       'telemetry',
@@ -24,6 +24,11 @@ export const PRIVACY_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Share Anonymous Usage Data',
     description: 'Help improve Orca by sending anonymous feature-usage events.',
     keywords: ['telemetry', 'usage', 'anonymous', 'opt in', 'opt out', 'share']
+  },
+  {
+    title: 'Diagnostics',
+    description: 'Trace files and OTLP export controls.',
+    keywords: ['diagnostics', 'trace', 'logs', 'otlp', 'opentelemetry', 'support']
   },
   {
     title: 'Telemetry environment variables',

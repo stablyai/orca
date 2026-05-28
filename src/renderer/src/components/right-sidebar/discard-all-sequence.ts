@@ -48,6 +48,11 @@ export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[]
 export type DiscardAllDeps = {
   /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
   bulkUnstage: (paths: string[]) => Promise<void>
+  /**
+   * Discard the given paths in one IPC round-trip. Callers may omit this to
+   * keep the legacy per-file sequence in tests or older surfaces.
+   */
+  discardMany?: (paths: string[]) => Promise<void>
   /** Discard a single path (restore working-tree to HEAD, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
   /**
@@ -102,6 +107,16 @@ export async function runDiscardAllForArea(
     } catch (error) {
       deps.onError?.(error)
       return { discarded: [], failed: [], aborted: true }
+    }
+  }
+
+  if (deps.discardMany) {
+    try {
+      await deps.discardMany([...paths])
+      return { discarded: [...paths], failed: [], aborted: false }
+    } catch {
+      // Why: older SSH relays may not support the bulk discard RPC yet. Fall
+      // back to the long-standing per-file path so the action still completes.
     }
   }
 

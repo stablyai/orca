@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -78,6 +79,22 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
+  },
+  openCodeUsage: {
+    getScanState: vi.fn().mockResolvedValue({
+      enabled: false,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyOpenCodeData: false
+    }),
+    setEnabled: vi.fn().mockResolvedValue({}),
+    refresh: vi.fn().mockResolvedValue({}),
+    getSummary: vi.fn().mockResolvedValue(null),
+    getDaily: vi.fn().mockResolvedValue([]),
+    getBreakdown: vi.fn().mockResolvedValue([]),
+    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -91,13 +108,18 @@ import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
+import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
+import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
+import { createPreflightSlice } from './preflight'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
+import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
+import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -105,6 +127,8 @@ import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createDictationSlice } from './dictation'
+import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -117,20 +141,27 @@ function createTestStore() {
     ...createTabsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
+    ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
+    ...createPreflightSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
+    ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
+    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a)
+    ...createWorktreeNavHistorySlice(...a),
+    ...createDictationSlice(...a),
+    ...createWorkspaceCleanupSlice(...a)
   }))
 }
 
@@ -176,6 +207,16 @@ describe('TabsSlice', () => {
       const group = store.getState().groupsByWorktree[WT][0]
       expect(group.activeTabId).toBe(tab2.id)
       expect(group.tabOrder).toEqual([tab1.id, tab2.id])
+    })
+
+    it('can create a tab without activating it', () => {
+      const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const tab2 = store.getState().createUnifiedTab(WT, 'browser', { activate: false })
+
+      const group = store.getState().groupsByWorktree[WT][0]
+      expect(group.activeTabId).toBe(tab1.id)
+      expect(group.tabOrder).toEqual([tab1.id, tab2.id])
+      expect(group.recentTabIds).toEqual([tab1.id])
     })
 
     it('replaces existing preview tab when creating a new preview', () => {
@@ -944,6 +985,16 @@ describe('TabsSlice', () => {
       expect(store.getState().unifiedTabsByWorktree[WT][0].label).toBe('zsh')
     })
 
+    it('setTabLabel preserves tab map references when the label is unchanged', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().setTabLabel(tab.id, 'zsh')
+      const before = store.getState().unifiedTabsByWorktree
+
+      store.getState().setTabLabel(tab.id, 'zsh')
+
+      expect(store.getState().unifiedTabsByWorktree).toBe(before)
+    })
+
     it('setTabCustomLabel updates customLabel', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       store.getState().setTabCustomLabel(tab.id, 'my-term')
@@ -1100,6 +1151,8 @@ describe('TabsSlice', () => {
               linkedIssue: null,
               linkedPR: null,
               linkedLinearIssue: null,
+              linkedGitLabMR: null,
+              linkedGitLabIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,
@@ -1176,6 +1229,44 @@ describe('TabsSlice', () => {
       expect(groups[0].tabOrder).toEqual(['term-1', 'term-2', '/tmp/feature/src/main.ts'])
     })
 
+    it('hydrates floating workspace unified tabs without a repo worktree', () => {
+      store.getState().hydrateTabsSession({
+        activeRepoId: null,
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-browser-1',
+              entityId: 'floating-browser-1',
+              groupId: 'floating-group-1',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              contentType: 'browser',
+              label: 'Browser',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        tabGroups: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-group-1',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              activeTabId: 'floating-browser-1',
+              tabOrder: ['floating-browser-1']
+            }
+          ]
+        }
+      })
+
+      expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    })
+
     it('hydrates from unified format', () => {
       store.setState({
         worktreesByRepo: {
@@ -1193,6 +1284,8 @@ describe('TabsSlice', () => {
               linkedIssue: null,
               linkedPR: null,
               linkedLinearIssue: null,
+              linkedGitLabMR: null,
+              linkedGitLabIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,
@@ -1266,6 +1359,8 @@ describe('TabsSlice', () => {
               linkedIssue: null,
               linkedPR: null,
               linkedLinearIssue: null,
+              linkedGitLabMR: null,
+              linkedGitLabIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,

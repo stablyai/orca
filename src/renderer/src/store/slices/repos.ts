@@ -1,50 +1,144 @@
+/* eslint-disable max-lines -- Why: repo slice owns local/runtime routing,
+add/remove/reorder side effects, and cross-slice teardown. Splitting it during
+the client-server refactor would obscure the invariants this file is currently
+auditing and preserving. */
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/types'
+import type {
+  Repo,
+  ProjectGroup,
+  ProjectGroupImportResult,
+  NestedRepoScanResult
+} from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 const ERROR_TOAST_DURATION = 60_000
 
+type RepoUpdate = Partial<
+  Pick<
+    Repo,
+    | 'displayName'
+    | 'badgeColor'
+    | 'repoIcon'
+    | 'hookSettings'
+    | 'worktreeBaseRef'
+    | 'kind'
+    | 'symlinkPaths'
+    | 'issueSourcePreference'
+    | 'externalWorktreeVisibility'
+    | 'externalWorktreeVisibilityPromptDismissedAt'
+    | 'projectGroupId'
+    | 'projectGroupOrder'
+    | 'sourceControlAi'
+  >
+>
+
+function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
+  const sanitized = { ...updates }
+  if ('repoIcon' in sanitized) {
+    const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
+    if (repoIcon === undefined) {
+      delete sanitized.repoIcon
+    } else {
+      sanitized.repoIcon = repoIcon
+    }
+  }
+  return sanitized
+}
+
+const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
+
+function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>> {
+  let chains = updateRepoChainsByStore.get(get)
+  if (!chains) {
+    chains = new Map<string, Promise<boolean>>()
+    updateRepoChainsByStore.set(get, chains)
+  }
+  return chains
+}
+
+function getKnownRepoWorktreeIds(state: AppState, projectId: string): string[] {
+  const ids = new Set<string>()
+  for (const worktree of state.worktreesByRepo[projectId] ?? []) {
+    ids.add(worktree.id)
+  }
+  for (const worktree of state.detectedWorktreesByRepo[projectId]?.worktrees ?? []) {
+    ids.add(worktree.id)
+  }
+  return [...ids]
+}
+
 export type RepoSlice = {
   repos: Repo[]
+  projectGroups: ProjectGroup[]
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
+  fetchProjectGroups: () => Promise<void>
   addRepo: () => Promise<Repo | null>
+  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
-  removeRepo: (repoId: string) => Promise<void>
-  updateRepo: (
-    repoId: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-      >
-    >
-  ) => Promise<void>
-  setActiveRepo: (repoId: string | null) => void
+  scanNestedRepos: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>
+  importNestedRepos: (args: {
+    parentPath: string
+    groupName: string
+    projectPaths: string[]
+    connectionId?: string
+    mode: 'group' | 'separate'
+  }) => Promise<ProjectGroupImportResult | null>
+  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  updateProjectGroup: (
+    groupId: string,
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+  ) => Promise<boolean>
+  deleteProjectGroup: (groupId: string) => Promise<boolean>
+  moveProjectToGroup: (
+    projectId: string,
+    groupId: string | null,
+    order?: number
+  ) => Promise<boolean>
+  removeProject: (projectId: string) => Promise<void>
+  updateRepo: (projectId: string, updates: RepoUpdate) => Promise<boolean>
+  setActiveRepo: (projectId: string | null) => void
+  reorderRepos: (orderedIds: string[]) => Promise<void>
 }
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
   repos: [],
+  projectGroups: [],
   activeRepoId: null,
 
   fetchRepos: async () => {
     try {
-      const repos = await window.api.repos.list()
+      const target = getActiveRuntimeTarget(get().settings)
+      const repos =
+        target.kind === 'local'
+          ? ((await window.api.repos.list()) as Repo[])
+          : (
+              await callRuntimeRpc<{ repos: Repo[] }>(
+                target,
+                'repo.list',
+                undefined,
+                // Why: remote environment fetches cross the network; keep the
+                // boot-time repo hydration bounded instead of inheriting an
+                // unbounded renderer promise.
+                { timeoutMs: 15_000 }
+              )
+            ).repos
       set((s) => {
         const validRepoIds = new Set(repos.map((repo) => repo.id))
         return {
           repos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds.filter(
+            (projectId) => validRepoIds.has(projectId)
+          )
         }
       })
     } catch (err) {
@@ -52,22 +146,217 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  addRepo: async () => {
+  fetchProjectGroups: async () => {
     try {
-      const path = await window.api.repos.pickFolder()
-      if (!path) {
-        return null
+      const target = getActiveRuntimeTarget(get().settings)
+      const projectGroups =
+        target.kind === 'local'
+          ? ((await window.api.projectGroups.list()) as ProjectGroup[])
+          : (
+              await callRuntimeRpc<{ groups: ProjectGroup[] }>(
+                target,
+                'projectGroup.list',
+                undefined,
+                {
+                  timeoutMs: 15_000
+                }
+              )
+            ).groups
+      set({ projectGroups })
+    } catch (err) {
+      console.error('Failed to fetch project groups:', err)
+    }
+  },
+
+  scanNestedRepos: async (path, connectionId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      return target.kind === 'local'
+        ? ((await window.api.projectGroups.scanNested({
+            path,
+            connectionId
+          })) as NestedRepoScanResult)
+        : await callRuntimeRpc<NestedRepoScanResult>(
+            target,
+            'projectGroup.scanNested',
+            { path },
+            { timeoutMs: 15_000 }
+          )
+    } catch (err) {
+      console.error('Failed to scan nested repos:', err)
+      return null
+    }
+  },
+
+  importNestedRepos: async (args) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const result =
+        target.kind === 'local'
+          ? ((await window.api.projectGroups.importNested(args)) as ProjectGroupImportResult)
+          : await callRuntimeRpc<ProjectGroupImportResult>(
+              target,
+              'projectGroup.importNested',
+              {
+                parentPath: args.parentPath,
+                groupName: args.groupName,
+                projectPaths: args.projectPaths,
+                mode: args.mode
+              },
+              { timeoutMs: 60_000 }
+            )
+      await get().fetchProjectGroups()
+      await get().fetchRepos()
+      return result
+    } catch (err) {
+      console.error('Failed to import nested repos:', err)
+      toast.error('Failed to import repositories', {
+        description: err instanceof Error ? err.message : String(err)
+      })
+      return null
+    }
+  },
+
+  createProjectGroup: async (name) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const group =
+        target.kind === 'local'
+          ? ((await window.api.projectGroups.create({
+              name,
+              createdFrom: 'manual'
+            })) as ProjectGroup)
+          : (
+              await callRuntimeRpc<{ group: ProjectGroup }>(
+                target,
+                'projectGroup.create',
+                { name, createdFrom: 'manual' },
+                { timeoutMs: 15_000 }
+              )
+            ).group
+      set((s) => ({ projectGroups: [...s.projectGroups, group] }))
+      return group
+    } catch (err) {
+      console.error('Failed to create project group:', err)
+      return null
+    }
+  },
+
+  updateProjectGroup: async (groupId, updates) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const updated =
+        target.kind === 'local'
+          ? ((await window.api.projectGroups.update({ groupId, updates })) as ProjectGroup | null)
+          : (
+              await callRuntimeRpc<{ group: ProjectGroup | null }>(
+                target,
+                'projectGroup.update',
+                { groupId, updates },
+                { timeoutMs: 15_000 }
+              )
+            ).group
+      if (!updated) {
+        return false
       }
+      set((s) => ({
+        projectGroups: s.projectGroups.map((group) => (group.id === groupId ? updated : group))
+      }))
+      return true
+    } catch (err) {
+      console.error('Failed to update project group:', err)
+      return false
+    }
+  },
+
+  deleteProjectGroup: async (groupId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const deleted =
+        target.kind === 'local'
+          ? await window.api.projectGroups.delete({ groupId })
+          : (
+              await callRuntimeRpc<{ deleted: boolean }>(
+                target,
+                'projectGroup.delete',
+                { groupId },
+                { timeoutMs: 15_000 }
+              )
+            ).deleted
+      if (!deleted) {
+        return false
+      }
+      set((s) => {
+        const deletedGroupIds = getProjectGroupSubtreeIds(s.projectGroups, groupId)
+        return {
+          projectGroups: s.projectGroups.filter((group) => !deletedGroupIds.has(group.id)),
+          repos: s.repos.map((repo) =>
+            repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
+              ? { ...repo, projectGroupId: null }
+              : repo
+          )
+        }
+      })
+      return true
+    } catch (err) {
+      console.error('Failed to delete project group:', err)
+      return false
+    }
+  },
+
+  moveProjectToGroup: async (projectId, groupId, order) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const moved =
+        target.kind === 'local'
+          ? ((await window.api.projectGroups.moveProject({
+              projectId,
+              groupId,
+              order
+            })) as Repo | null)
+          : (
+              await callRuntimeRpc<{ repo: Repo | null }>(
+                target,
+                'projectGroup.moveProject',
+                { repo: projectId, groupId, order },
+                { timeoutMs: 15_000 }
+              )
+            ).repo
+      if (!moved) {
+        return false
+      }
+      set((s) => ({ repos: s.repos.map((repo) => (repo.id === projectId ? moved : repo)) }))
+      return true
+    } catch (err) {
+      console.error('Failed to move repo to group:', err)
+      return false
+    }
+  },
+
+  addRepoPath: async (path, kind = 'git') => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
       let repo: Repo
       try {
-        const result = await window.api.repos.add({ path })
-        if ('error' in result) {
-          throw new Error(result.error)
+        if (target.kind === 'local') {
+          const result = await window.api.repos.add({ path, kind })
+          if ('error' in result) {
+            throw new Error(result.error)
+          }
+          repo = result.repo
+        } else {
+          repo = (
+            await callRuntimeRpc<{ repo: Repo }>(
+              target,
+              'repo.add',
+              { path, kind },
+              { timeoutMs: 15_000 }
+            )
+          ).repo
         }
-        repo = result.repo
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        if (!message.includes('Not a valid git repository')) {
+        if (kind !== 'git' || !message.includes('Not a valid git repository')) {
           throw err
         }
         // Why: folder mode is a capability downgrade, not a silent fallback.
@@ -108,27 +397,27 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  addRepo: async () => {
+    const target = getActiveRuntimeTarget(get().settings)
+    if (target.kind !== 'local') {
+      // Why: OS folder pickers return client-local paths. Remote environments
+      // need an explicit server path, which the Add Project dialog handles.
+      toast.error('Use a server path to add projects from a remote runtime.')
+      return null
+    }
+    const path = await window.api.repos.pickFolder()
+    if (!path) {
+      return null
+    }
+    return get().addRepoPath(path)
+  },
+
   addNonGitFolder: async (path) => {
     try {
-      const result = await window.api.repos.add({ path, kind: 'folder' })
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-      const repo = result.repo
-      const alreadyAdded = get().repos.some((r) => r.id === repo.id)
-      if (alreadyAdded) {
-        get().clearOrcaHookTrustForRepo(repo.id)
-      }
-      set((s) => {
-        if (s.repos.some((r) => r.id === repo.id)) {
-          return s
-        }
-        return { repos: [...s.repos, repo] }
-      })
-      if (alreadyAdded) {
-        toast.info('Project already added', { description: repo.displayName })
-      } else {
-        toast.success('Folder added', { description: repo.displayName })
+      const hadProjectBeforeAdd = get().repos.length > 0
+      const repo = await get().addRepoPath(path, 'folder')
+      if (!repo) {
+        return null
       }
       // Why: without focusing the new folder, the UI looks unchanged after
       // the dialog closes and users think nothing happened. Fetch the
@@ -140,7 +429,19 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const folderWorktree = get().worktreesByRepo[repo.id]?.[0]
       if (folderWorktree) {
         const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
-        activateAndRevealWorktree(folderWorktree.id)
+        const onboarding = await window.api.onboarding.get().catch(() => null)
+        // Why: a new user can dismiss the wizard, then immediately add their
+        // first folder from Landing. That path skips onboarding's completeRepo
+        // hook, so carry the selected default agent into the first terminal here.
+        const startup = buildDismissedOnboardingFolderAgentStartup(
+          get().settings,
+          onboarding,
+          hadProjectBeforeAdd
+        )
+        activateAndRevealWorktree(folderWorktree.id, {
+          sidebarRevealBehavior: 'auto',
+          ...(startup ? { startup } : {})
+        })
       }
       return repo
     } catch (err) {
@@ -151,30 +452,48 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  removeRepo: async (repoId) => {
+  removeProject: async (projectId) => {
     try {
-      await window.api.repos.remove({ repoId })
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.repos.remove({ repoId: projectId })
+        : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
 
-      get().clearOrcaHookTrustForRepo(repoId)
+      get().clearOrcaHookTrustForRepo(projectId)
+      const repoPath = get().repos.find((repo) => repo.id === projectId)?.path
+      get().evictGitHubRepoCaches(projectId, repoPath)
+      const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+      clearRepoSlugCacheEntry(projectId)
 
       // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
+      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId)
       const killedTabIds = new Set<string>()
       const killedPtyIds = new Set<string>()
+      if (target.kind === 'environment') {
+        await Promise.allSettled(
+          worktreeIds.map((worktreeId) =>
+            callRuntimeRpc(target, 'terminal.stop', { worktree: worktreeId }, { timeoutMs: 15_000 })
+          )
+        )
+      }
       for (const wId of worktreeIds) {
         const tabs = get().tabsByWorktree[wId] ?? []
         for (const tab of tabs) {
           killedTabIds.add(tab.id)
           for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
             killedPtyIds.add(ptyId)
-            window.api.pty.kill(ptyId)
+            if (!ptyId.startsWith('remote:')) {
+              window.api.pty.kill(ptyId)
+            }
           }
         }
       }
 
       set((s) => {
         const nextWorktrees = { ...s.worktreesByRepo }
-        delete nextWorktrees[repoId]
+        delete nextWorktrees[projectId]
+        const nextDetectedWorktrees = { ...s.detectedWorktreesByRepo }
+        delete nextDetectedWorktrees[projectId]
         const nextTabs = { ...s.tabsByWorktree }
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
@@ -212,19 +531,20 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         // forever after the repo is removed.
         let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
         for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
-          if (getRepoIdFromWorktreeId(id) === repoId) {
+          if (getRepoIdFromWorktreeId(id) === projectId) {
             if (nextLastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId) {
               nextLastVisitedAtByWorktreeId = { ...s.lastVisitedAtByWorktreeId }
             }
             delete nextLastVisitedAtByWorktreeId[id]
           }
         }
-        const nextRepos = s.repos.filter((r) => r.id !== repoId)
+        const nextRepos = s.repos.filter((r) => r.id !== projectId)
         return {
           repos: nextRepos,
-          activeRepoId: s.activeRepoId === repoId ? null : s.activeRepoId,
-          filterRepoIds: s.filterRepoIds.filter((id) => id !== repoId),
+          activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
+          filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
           worktreesByRepo: nextWorktrees,
+          detectedWorktreesByRepo: nextDetectedWorktrees,
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
@@ -256,16 +576,81 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  updateRepo: async (repoId, updates) => {
-    try {
-      await window.api.repos.update({ repoId, updates })
-      set((s) => ({
-        repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
-      }))
-    } catch (err) {
-      console.error('Failed to update repo:', err)
+  updateRepo: async (projectId, updates) => {
+    const updateRepoChains = getRepoUpdateChains(get)
+    const applyRepoUpdate = async () => {
+      try {
+        const sanitizedUpdates = sanitizeRepoUpdate(updates)
+        const target = getActiveRuntimeTarget(get().settings)
+        await (target.kind === 'local'
+          ? window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+          : callRuntimeRpc(
+              target,
+              'repo.update',
+              { repo: projectId, updates: sanitizedUpdates },
+              { timeoutMs: 15_000 }
+            ))
+        set((s) => ({
+          repos: s.repos.map((r) => (r.id === projectId ? { ...r, ...sanitizedUpdates } : r))
+        }))
+        return true
+      } catch (err) {
+        console.error('Failed to update repo:', err)
+        return false
+      }
     }
+    const previous = updateRepoChains.get(projectId)
+    // Why: repo settings are persisted as full nested values. Preserve call
+    // order per repo so a slower IPC/RPC response cannot overwrite newer state.
+    const next = previous
+      ? previous.catch(() => undefined).then(applyRepoUpdate)
+      : applyRepoUpdate()
+    updateRepoChains.set(projectId, next)
+    const cleanup = () => {
+      if (updateRepoChains.get(projectId) === next) {
+        updateRepoChains.delete(projectId)
+      }
+    }
+    void next.then(cleanup, cleanup)
+    return next
   },
 
-  setActiveRepo: (repoId) => set({ activeRepoId: repoId })
+  setActiveRepo: (projectId) => set({ activeRepoId: projectId }),
+
+  reorderRepos: async (orderedIds) => {
+    // Optimistically apply the new order so the sidebar updates instantly;
+    // resync only if main rejects (stale permutation due to a racing add/remove).
+    const previous = get().repos
+    const byId = new Map(previous.map((r) => [r.id, r]))
+    const next: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = byId.get(id)
+      if (repo) {
+        next.push(repo)
+      }
+    }
+    if (next.length !== previous.length) {
+      // Caller passed a non-permutation — refuse to apply locally.
+      return
+    }
+    set({ repos: next })
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const result =
+        target.kind === 'local'
+          ? await window.api.repos.reorder({ orderedIds })
+          : await callRuntimeRpc<{ status: 'applied' | 'rejected' }>(
+              target,
+              'repo.reorder',
+              { orderedIds },
+              { timeoutMs: 15_000 }
+            )
+      if (result.status === 'rejected') {
+        await get().fetchRepos()
+      }
+    } catch (err) {
+      console.error('Failed to reorder repos:', err)
+      await get().fetchRepos()
+    }
+  }
 })

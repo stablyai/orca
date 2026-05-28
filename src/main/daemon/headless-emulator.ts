@@ -14,6 +14,10 @@ export type HeadlessSnapshotOptions = {
 }
 
 const DEFAULT_SCROLLBACK = 5000
+// Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
+// Keep parser state far beyond normal mode lists while still bounding memory.
+const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
+type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
 
 function parseFileUriPath(uri: string): string | null {
   try {
@@ -47,6 +51,10 @@ export class HeadlessEmulator {
   private terminal: Terminal
   private serializer: SerializeAddon
   private cwd: string | null = null
+  private privateModeScanTail = ''
+  private mouseTrackingMode: MouseTrackingMode = 'none'
+  private sgrMouseMode = false
+  private sgrMousePixelsMode = false
   private disposed = false
 
   constructor(opts: HeadlessEmulatorOptions) {
@@ -80,7 +88,12 @@ export class HeadlessEmulator {
 
     this.scanOsc7(data)
     return new Promise<void>((resolve) => {
-      this.terminal.write(data, resolve)
+      this.terminal.write(data, () => {
+        // Why: snapshots combine serialized xterm state with mirrored mouse
+        // modes. Commit the mirror only after xterm has parsed the same bytes.
+        this.scanPrivateModes(data)
+        resolve()
+      })
     })
   }
 
@@ -93,8 +106,12 @@ export class HeadlessEmulator {
 
   getSnapshot(opts: HeadlessSnapshotOptions = {}): TerminalSnapshot {
     const modes = this.getModes()
+    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
+      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      modes
+    )
     return {
-      snapshotAnsi: this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      snapshotAnsi,
       scrollbackAnsi: '',
       rehydrateSequences: this.buildRehydrateSequences(modes),
       cwd: this.cwd,
@@ -133,6 +150,93 @@ export class HeadlessEmulator {
     }
   }
 
+  private scanPrivateModes(data: string): void {
+    const input = this.privateModeScanTail + data
+    this.privateModeScanTail = this.extractPrivateModeScanTail(input)
+    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+    const privateModeRe = /\x1bc|\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
+    let match: RegExpExecArray | null
+    while ((match = privateModeRe.exec(input)) !== null) {
+      if (match[0] === '\x1bc') {
+        this.mouseTrackingMode = 'none'
+        this.sgrMouseMode = false
+        this.sgrMousePixelsMode = false
+        continue
+      }
+      const params = match[1] ?? match[3]
+      const enabled = (match[2] ?? match[4]) === 'h'
+      for (const rawParam of params.split(';')) {
+        if (rawParam === '') {
+          continue
+        }
+        const param = Number(rawParam)
+        if (!Number.isInteger(param)) {
+          continue
+        }
+        if (param === 9) {
+          this.mouseTrackingMode = enabled ? 'x10' : 'none'
+        }
+        if (param === 1000) {
+          this.mouseTrackingMode = enabled ? 'vt200' : 'none'
+        }
+        if (param === 1002) {
+          this.mouseTrackingMode = enabled ? 'drag' : 'none'
+        }
+        if (param === 1003) {
+          this.mouseTrackingMode = enabled ? 'any' : 'none'
+        }
+        if (param === 1006) {
+          this.sgrMouseMode = enabled
+          this.sgrMousePixelsMode = false
+        }
+        if (param === 1016) {
+          this.sgrMouseMode = false
+          this.sgrMousePixelsMode = enabled
+        }
+      }
+    }
+  }
+
+  private extractPrivateModeScanTail(input: string): string {
+    const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
+    if (start === -1) {
+      return ''
+    }
+    const tail = input.slice(start)
+    if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
+      return ''
+    }
+    if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
+      return tail
+    }
+    if (tail.startsWith('\x1b[?')) {
+      return this.isIncompletePrivateModeParams(tail.slice(3)) ? tail : ''
+    }
+    if (tail.startsWith('\x9b?')) {
+      return this.isIncompletePrivateModeParams(tail.slice(2)) ? tail : ''
+    }
+    return ''
+  }
+
+  private isIncompletePrivateModeParams(params: string): boolean {
+    return /^[0-9;]*$/.test(params)
+  }
+
+  private normalizeSnapshotAnsiForModes(snapshotAnsi: string, modes: TerminalModes): string {
+    if (!modes.alternateScreen) {
+      return snapshotAnsi
+    }
+    const alternateScreenMarker = '\x1b[?1049h'
+    const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
+    if (start === -1) {
+      return snapshotAnsi
+    }
+    // Why: rehydrateSequences already enters the alternate screen and restores
+    // mouse modes. Dropping SerializeAddon's duplicate ?1049h keeps mobile's
+    // "slice from last alt-screen marker" replay from discarding those modes.
+    return snapshotAnsi.slice(start + alternateScreenMarker.length)
+  }
+
   private parseOsc7Uri(uri: string): void {
     const parsed = parseFileUriPath(uri)
     if (parsed) {
@@ -142,9 +246,13 @@ export class HeadlessEmulator {
 
   private getModes(): TerminalModes {
     const buffer = this.terminal.buffer.active
+    const mouseTrackingMode = this.mouseTrackingMode
     return {
       bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: this.terminal.modes.mouseTrackingMode !== 'none',
+      mouseTracking: mouseTrackingMode !== 'none',
+      mouseTrackingMode,
+      sgrMouseMode: this.sgrMouseMode,
+      sgrMousePixelsMode: this.sgrMousePixelsMode,
       applicationCursor:
         buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
       alternateScreen: buffer.type === 'alternate'
@@ -153,14 +261,37 @@ export class HeadlessEmulator {
 
   private buildRehydrateSequences(modes: TerminalModes): string {
     const seqs: string[] = []
+    if (modes.alternateScreen) {
+      seqs.push('\x1b[?1049h')
+    }
     if (modes.bracketedPaste) {
       seqs.push('\x1b[?2004h')
     }
     if (modes.applicationCursor) {
       seqs.push('\x1b[?1h')
     }
-    if (modes.alternateScreen) {
-      seqs.push('\x1b[?1049h')
+    // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
+    // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
+    switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
+      case 'x10':
+        seqs.push('\x1b[?9h')
+        break
+      case 'vt200':
+        seqs.push('\x1b[?1000h')
+        break
+      case 'drag':
+        seqs.push('\x1b[?1002h')
+        break
+      case 'any':
+        seqs.push('\x1b[?1003h')
+        break
+    }
+    // Why: xterm tracks the mouse protocol and SGR encoding as independent
+    // modes, so snapshots must preserve the encoding even when reporting is off.
+    if (modes.sgrMousePixelsMode) {
+      seqs.push('\x1b[?1016h')
+    } else if (modes.sgrMouseMode) {
+      seqs.push('\x1b[?1006h')
     }
     return seqs.join('')
   }

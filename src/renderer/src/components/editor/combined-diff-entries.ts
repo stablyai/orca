@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 
 /**
  * Fallback filtering for combined-diff tabs that were opened before the
@@ -19,4 +19,13 @@ export function getCombinedUncommittedEntries(
     }
     return entry.area !== 'untracked'
   })
+}
+
+export function getCombinedBranchEntries(
+  snapshotEntries: readonly GitBranchChangeEntry[] | undefined,
+  liveEntries: readonly GitBranchChangeEntry[]
+): GitBranchChangeEntry[] {
+  // Why: an explicitly empty tab snapshot should stay empty instead of drifting
+  // to later Source Control refreshes.
+  return [...(snapshotEntries ?? liveEntries)]
 }

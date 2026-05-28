@@ -1,5 +1,13 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getSpawnArgsForWindows, isPermissionError, isWindowsBatchScript } from './win32-utils'
+import {
+  getSpawnArgsForWindows,
+  isPermissionError,
+  isWindowsBatchScript,
+  resolveWindowsCommand
+} from './win32-utils'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
@@ -44,8 +52,8 @@ describe('getSpawnArgsForWindows', () => {
           '--foo'
         ])
         expect(spawnCmd).toBe('C:\\Windows\\System32\\cmd.exe')
-        // Why: /d disables AutoRun; /c runs the given command and exits. Args
-        // follow the batch path literally without re-escaping.
+        // Why: /d disables AutoRun; /c runs the batch command and exits.
+        // Separate argv entries avoid cmd.exe seeing Node-escaped quotes.
         expect(spawnArgs).toEqual(['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--foo'])
       })
     } finally {
@@ -70,6 +78,46 @@ describe('getSpawnArgsForWindows', () => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('/usr/local/bin/codex', ['login'])
       expect(spawnCmd).toBe('/usr/local/bin/codex')
       expect(spawnArgs).toEqual(['login'])
+    })
+  })
+
+  it('rejects unsafe args for .cmd scripts on win32', () => {
+    withPlatform('win32', () => {
+      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['hello & goodbye'])).toThrow(
+        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+      )
+    })
+  })
+
+  it('rejects unsafe command paths for .cmd scripts on win32', () => {
+    withPlatform('win32', () => {
+      expect(() => getSpawnArgsForWindows('C:\\bad&path\\agent.cmd', ['login'])).toThrow(
+        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+      )
+    })
+  })
+})
+
+describe('resolveWindowsCommand', () => {
+  it('finds package-manager .cmd shims on PATH before spawning fixed commands', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-command-'))
+    try {
+      const pnpmShim = join(tempDir, 'pnpm.cmd')
+      writeFileSync(pnpmShim, '@echo off\r\n')
+
+      withPlatform('win32', () => {
+        expect(resolveWindowsCommand('pnpm', { PATH: tempDir })).toBe(pnpmShim)
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves explicit command paths unchanged', () => {
+    withPlatform('win32', () => {
+      expect(resolveWindowsCommand('C:\\tools\\npm.cmd', { PATH: 'C:\\other' })).toBe(
+        'C:\\tools\\npm.cmd'
+      )
     })
   })
 })

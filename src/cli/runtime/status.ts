@@ -29,7 +29,7 @@ export async function getCliStatus(
 
   try {
     const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
-    if (!response.ok) {
+    if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
     const graphState = response.result.graphStatus

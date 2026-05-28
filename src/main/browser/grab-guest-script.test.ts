@@ -119,4 +119,22 @@ describe('buildGuestOverlayScript', () => {
     // The catch block should return '' not the raw URL
     expect(script).toContain("return '';")
   })
+
+  it('arm script slices text nodes before normalizing bounded text', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain("normalizeText((node.nodeValue || '').slice(0, remaining))")
+    expect(script).toContain('value = value.slice(start, end)')
+    expect(script).not.toContain('normalizeText(node.nodeValue ||')
+    expect(script).not.toContain("(el.textContent || '').trim()")
+    expect(script).not.toContain('ref.textContent')
+  })
+
+  it('arm script walks nearby siblings without materializing sibling arrays', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('previousElementSibling')
+    expect(script).toContain('nextElementSibling')
+    expect(script).not.toContain('Array.from(parent.children)')
+  })
 })

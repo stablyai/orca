@@ -10,8 +10,16 @@ export function getDeleteWorktreeToastCopy(
   error: string
 ): DeleteWorktreeToastCopy {
   if (canForceDelete) {
+    if (error.includes('Worktree is no longer registered with Git but its directory remains.')) {
+      return {
+        title: `Failed to delete workspace ${worktreeName}`,
+        description:
+          'Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.',
+        isDestructive: false
+      }
+    }
     return {
-      title: `Failed to delete worktree ${worktreeName}`,
+      title: `Failed to delete workspace ${worktreeName}`,
       description: 'It has changed files. Use Force Delete to delete it anyway.',
       // Why: git commonly refuses the first delete when the worktree still has
       // modified or untracked files. Showing raw stderr in a destructive toast
@@ -22,7 +30,7 @@ export function getDeleteWorktreeToastCopy(
   }
 
   return {
-    title: `Failed to delete worktree ${worktreeName}`,
+    title: `Failed to delete workspace ${worktreeName}`,
     description: error,
     isDestructive: true
   }

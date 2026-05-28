@@ -42,12 +42,9 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     // the timer forever because the bump doesn't clear them from the map
     // (retention is intentional so freshness-aware selectors can decay).
     //
-    // Invariant: the agent-status slice always writes `updatedAt = Date.now()`
-    // on insert/update (see `setAgentStatus` in agent-status.ts), so a
-    // newly-scheduled entry cannot already be stale here. If that invariant
-    // ever breaks (e.g. persistence rehydrate, IPC-synced backdated entries),
-    // the scheduler would silently no-op and miss the epoch bump — revisit
-    // this filter at that time.
+    // Snapshot hydration can insert already-stale entries. Those need no
+    // future timer: the setAgentStatus write already bumped the epoch, so
+    // freshness-aware selectors can decay them immediately on that render.
     for (const entry of entries) {
       const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
       if (expiryAt > now) {

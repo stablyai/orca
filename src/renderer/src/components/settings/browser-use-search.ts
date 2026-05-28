@@ -8,7 +8,7 @@ export const BROWSER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Install Browser Use Skill',
-    description: 'Install the orca-cli agent skill so agents know how to use the browser.',
+    description: "Install the Browser Use skill so agents can operate Orca's browser.",
     keywords: [
       'browser use',
       'skill',
@@ -33,7 +33,14 @@ export const BROWSER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'auth',
       'chrome',
       'edge',
-      'arc'
+      'arc',
+      'computer use',
+      'system browser',
+      'existing session',
+      'authenticated browser',
+      'chrome profile',
+      'edge profile',
+      'arc profile'
     ]
   }
 ]

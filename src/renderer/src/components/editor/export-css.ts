@@ -34,8 +34,8 @@ html, body {
   margin-bottom: 0.5em;
 }
 
-.orca-export-root h1 { font-size: 1.9em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
-.orca-export-root h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+.orca-export-root h1 { font-size: 1.9em; }
+.orca-export-root h2 { font-size: 1.5em; }
 .orca-export-root h3 { font-size: 1.25em; }
 .orca-export-root h4 { font-size: 1em; }
 

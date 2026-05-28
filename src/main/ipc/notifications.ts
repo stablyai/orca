@@ -1,16 +1,35 @@
+/* eslint-disable max-lines -- Why: notification IPC keeps permission, dispatch, custom sound asset, and sound-loading handlers colocated so renderer/main contracts stay auditable. */
 import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute, normalize } from 'node:path'
+import beepSoundPath from '../../../resources/notification-sounds/beep.mp3?asset'
+import blipSoundPath from '../../../resources/notification-sounds/blip.mp3?asset'
+import blopSoundPath from '../../../resources/notification-sounds/blop.mp3?asset'
+import bongSoundPath from '../../../resources/notification-sounds/bong.mp3?asset'
+import clackSoundPath from '../../../resources/notification-sounds/clack.mp3?asset'
+import dingSoundPath from '../../../resources/notification-sounds/ding.mp3?asset'
+import sonarSoundPath from '../../../resources/notification-sounds/sonar.mp3?asset'
+import thumpSoundPath from '../../../resources/notification-sounds/thump.mp3?asset'
+import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp3?asset'
 import type { Store } from '../persistence'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationPermissionStatusResult,
+  NotificationSettings,
   NotificationSoundDataResult
 } from '../../shared/types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { buildNotificationOptions } from './notification-options'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
+const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
+const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
+const MACOS_NOTIFICATION_SETTINGS_URL =
+  'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
 const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
   ['.ogg', 'audio/ogg'],
   ['.mp3', 'audio/mpeg'],
@@ -19,6 +38,18 @@ const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Ma
   ['.aac', 'audio/aac'],
   ['.flac', 'audio/flac']
 ])
+const BUILT_IN_NOTIFICATION_SOUNDS: ReadonlyMap<string, string> = new Map([
+  ['two-tone', twoToneSoundPath],
+  ['bong', bongSoundPath],
+  ['thump', thumpSoundPath],
+  ['blip', blipSoundPath],
+  ['sonar', sonarSoundPath],
+  ['blop', blopSoundPath],
+  ['ding', dingSoundPath],
+  ['clack', clackSoundPath],
+  ['beep', beepSoundPath]
+])
+type NotificationSoundId = NotificationSettings['customSoundId']
 
 // Why: Electron Notification objects are normal JS objects — if the only
 // reference is a local variable inside the ipcMain handler, the GC can
@@ -27,23 +58,105 @@ const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Ma
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
 
+function getMacNotificationSettingsUrl(): string {
+  const bundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID ?? MACOS_PACKAGED_BUNDLE_ID
+  return `${MACOS_NOTIFICATION_SETTINGS_URL}?id=${encodeURIComponent(bundleId)}`
+}
+
+function openNotificationSystemSettings(): void {
+  if (process.platform === 'darwin') {
+    void shell.openExternal(getMacNotificationSettingsUrl())
+  } else if (process.platform === 'win32') {
+    void shell.openExternal('ms-settings:notifications')
+  }
+}
+
+function getEffectiveNotificationSoundId(settings: NotificationSettings): NotificationSoundId {
+  return settings.customSoundId ?? (settings.customSoundPath ? 'custom' : 'system')
+}
+
+function getSelectedNotificationSoundPath(settings: NotificationSettings): {
+  path: string | null
+  reason?: 'missing-path' | 'invalid-path' | 'unsupported-type'
+} {
+  const customSoundId = getEffectiveNotificationSoundId(settings)
+  if (customSoundId === 'system') {
+    return { path: null, reason: 'missing-path' }
+  }
+  if (customSoundId !== 'custom') {
+    const builtInPath = BUILT_IN_NOTIFICATION_SOUNDS.get(customSoundId)
+    return builtInPath ? { path: builtInPath } : { path: null, reason: 'missing-path' }
+  }
+  if (!settings.customSoundPath) {
+    return { path: null, reason: 'missing-path' }
+  }
+  const normalizedPath = normalize(settings.customSoundPath)
+  if (!isAbsolute(normalizedPath)) {
+    return { path: null, reason: 'invalid-path' }
+  }
+  if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
+    return { path: null, reason: 'unsupported-type' }
+  }
+  return { path: normalizedPath }
+}
+
+function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const settle = (displayed: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      resolve(displayed)
+    }
+
+    notification.once('show', () => settle(true))
+    notification.once('failed', () => settle(false))
+    timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
+  })
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
+  ipcMain.removeHandler('notifications:getPermissionStatus')
+  ipcMain.removeHandler('notifications:requestPermission')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
-    if (process.platform === 'darwin') {
-      // Deep-link into the macOS Notifications settings pane.
-      void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings')
-    } else if (process.platform === 'win32') {
-      void shell.openExternal('ms-settings:notifications')
-    }
+    openNotificationSystemSettings()
+  })
+
+  // Why: Electron's main-process `Notification` class exposes no synchronous
+  // way to read macOS auth status — the renderer-side `Notification.permission`
+  // does not exist here. We expose what we can reliably observe: whether the
+  // platform supports notifications and whether we've already kicked off the
+  // first-permission prompt. A 'denied' OS result is invisible to us; the
+  // dispatch path simply won't deliver in that case, which the user can
+  // diagnose via the System Settings deep-link.
+  const getPermissionStatus = (): NotificationPermissionStatusResult => ({
+    supported: Notification.isSupported(),
+    platform: process.platform,
+    requested: store.getUI().notificationPermissionRequested === true
+  })
+
+  ipcMain.handle('notifications:getPermissionStatus', getPermissionStatus)
+  ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
+    triggerStartupNotificationRegistration(store)
+    return getPermissionStatus()
   })
 
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
-    (_event, args: NotificationDispatchRequest): NotificationDispatchResult => {
+    (
+      _event,
+      args: NotificationDispatchRequest
+    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
       // Why: mobile push is independent of desktop notification guards.
       // The user's phone should receive the notification even when the desktop
       // window is focused (suppressWhenFocused), Electron notifications aren't
@@ -86,28 +199,36 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { delivered: false, reason: 'suppressed-focus' }
       }
 
-      // Dedupe by worktree, not by source — an agent finishing and a terminal bell
-      // often fire within the same data chunk so only the first one should surface.
-      const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-      const now = Date.now()
-      const lastSentAt = recentNotifications.get(dedupeKey) ?? 0
-      if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
-        return { delivered: false, reason: 'cooldown' }
-      }
-      recentNotifications.set(dedupeKey, now)
+      // Why: the Settings test button is an explicit user action, often
+      // clicked repeatedly while tuning sounds, so it must bypass burst dedupe.
+      if (args.source !== 'test') {
+        // Dedupe by worktree, not by source — an agent finishing and a terminal bell
+        // often fire within the same data chunk so only the first one should surface.
+        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+        const now = Date.now()
+        const lastSentAt = recentNotifications.get(dedupeKey) ?? 0
+        if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
+          return { delivered: false, reason: 'cooldown' }
+        }
+        recentNotifications.set(dedupeKey, now)
 
-      // Evict stale entries so the map doesn't grow unbounded.
-      if (recentNotifications.size > 50) {
-        for (const [key, ts] of recentNotifications) {
-          if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
-            recentNotifications.delete(key)
+        // Evict stale entries so the map doesn't grow unbounded.
+        if (recentNotifications.size > 50) {
+          for (const [key, ts] of recentNotifications) {
+            if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
+              recentNotifications.delete(key)
+            }
           }
         }
       }
 
       const notificationOptions = buildNotificationOptions(args)
-      if (settings.customSoundPath) {
+      if (getEffectiveNotificationSoundId(settings) !== 'system') {
         notificationOptions.silent = true
+      } else if (process.platform === 'darwin') {
+        // Why: macOS treats an unset notification sound as silent. When Orca is
+        // using the OS sound, ask Electron for the default notification sound.
+        notificationOptions.sound = 'default'
       }
       const notification = new Notification(notificationOptions)
 
@@ -124,15 +245,15 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       setTimeout(release, 5 * 60 * 1000)
 
       // Why: clicking a notification should bring Orca to the foreground and
-      // switch to the worktree that triggered it. We reuse the existing
-      // ui:activateWorktree IPC channel that the renderer already handles
-      // (setActiveRepo, setActiveView, setActiveWorktree, revealInSidebar).
+      // switch to the worktree/pane that triggered it. Worktree activation owns
+      // repo/sidebar state; the optional focusTerminal follow-up uses the stable
+      // pane leaf id so split-pane notifications land on the exact pane.
       // Why: worktreeId is formatted as "repoId::worktreePath".  If the
       // separator is missing we cannot reliably extract a repoId, so skip
       // the click-to-navigate binding — the notification still fires but
       // clicking it will not attempt to switch to an unknown worktree.
       if (args.worktreeId && args.worktreeId.includes('::')) {
-        const repoId = args.worktreeId.slice(0, args.worktreeId.indexOf('::'))
+        const repoId = getRepoIdFromWorktreeId(args.worktreeId)
         notification.on('click', () => {
           release()
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
@@ -150,10 +271,34 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             repoId,
             worktreeId: args.worktreeId
           })
+          const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
+          if (paneTarget) {
+            win.webContents.send('ui:focusTerminal', {
+              tabId: paneTarget.tabId,
+              worktreeId: args.worktreeId,
+              leafId: paneTarget.leafId,
+              ackPaneKeyOnSuccess: args.paneKey,
+              flashFocusedPane: true,
+              scrollToBottomIfOutputSinceLastView: true
+            })
+          }
         })
       }
 
+      const displayConfirmation = args.requireDisplayConfirmation
+        ? waitForNotificationDisplay(notification)
+        : null
       notification.show()
+
+      if (displayConfirmation) {
+        return displayConfirmation.then((displayed) => {
+          if (!displayed) {
+            release()
+            return { delivered: false, reason: 'not-displayed' }
+          }
+          return { delivered: true }
+        })
+      }
 
       return { delivered: true }
     }
@@ -169,14 +314,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     ():
       | { ok: true; path: string }
       | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' } => {
-      const pathValue = store.getSettings().notifications.customSoundPath
-      if (!pathValue) {
-        return { ok: false, reason: 'missing-path' }
+      const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
+      if (!selectedSound.path) {
+        return { ok: false, reason: selectedSound.reason ?? 'missing-path' }
       }
-      const normalizedPath = normalize(pathValue)
-      if (!isAbsolute(normalizedPath)) {
-        return { ok: false, reason: 'invalid-path' }
-      }
+      const normalizedPath = normalize(selectedSound.path)
       if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
         return { ok: false, reason: 'unsupported-type' }
       }
@@ -186,15 +328,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   ipcMain.removeHandler('notifications:loadSound')
   ipcMain.handle('notifications:loadSound', async (): Promise<NotificationSoundDataResult> => {
-    const pathValue = store.getSettings().notifications.customSoundPath
-    if (!pathValue) {
-      return { ok: false, reason: 'missing-path' }
+    const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
+    if (!selectedSound.path) {
+      return { ok: false, reason: selectedSound.reason ?? 'missing-path' }
     }
 
-    const normalizedPath = normalize(pathValue)
-    if (!isAbsolute(normalizedPath)) {
-      return { ok: false, reason: 'invalid-path' }
-    }
+    const normalizedPath = normalize(selectedSound.path)
 
     const mimeType = NOTIFICATION_SOUND_MIME_BY_EXTENSION.get(extname(normalizedPath).toLowerCase())
     if (!mimeType) {
@@ -264,7 +403,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   // notifications…") but clicking it does nothing, which is confusing.
   notification.on('click', () => {
     cleanup()
-    void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings')
+    openNotificationSystemSettings()
   })
 
   notification.on('show', () => {
@@ -278,31 +417,4 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   setTimeout(cleanup, 10_000)
 
   notification.show()
-}
-
-function buildNotificationOptions(args: NotificationDispatchRequest): {
-  title: string
-  body: string
-  silent?: boolean
-} {
-  if (args.source === 'terminal-bell') {
-    return {
-      title: `Bell in ${args.worktreeLabel ?? 'workspace'}`,
-      body: args.repoLabel ? `${args.repoLabel} · Attention requested` : 'Attention requested'
-    }
-  }
-
-  if (args.source === 'test') {
-    return {
-      title: 'Orca notifications are on',
-      body: 'This is a test notification from Orca.'
-    }
-  }
-
-  return {
-    title: `Task complete in ${args.worktreeLabel ?? 'workspace'}`,
-    body: args.repoLabel
-      ? `${args.repoLabel}${args.terminalTitle ? ` · ${args.terminalTitle}` : ''}`
-      : (args.terminalTitle ?? 'A coding agent finished working.')
-  }
 }

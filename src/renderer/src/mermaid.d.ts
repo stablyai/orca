@@ -5,6 +5,8 @@ declare module 'mermaid' {
     startOnLoad?: boolean
     theme?: MermaidTheme
     htmlLabels?: boolean
+    securityLevel?: 'strict' | 'loose' | 'antiscript' | 'sandbox'
+    suppressErrorRendering?: boolean
   }
 
   type MermaidRenderResult = {

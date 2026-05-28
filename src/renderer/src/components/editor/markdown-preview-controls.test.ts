@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
-  getMarkdownPreviewShortcutLabel,
+  getEditorToggleModes,
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
@@ -17,20 +17,29 @@ describe('getMarkdownViewModes', () => {
     ).toEqual(['source', 'rich'])
   })
 
-  it('offers source and preview for single-file markdown diffs', () => {
+  it('offers source and rich for single-file markdown diffs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'diff',
         diffSource: 'unstaged'
       })
-    ).toEqual(['source', 'preview'])
+    ).toEqual(['source', 'rich'])
   })
 
   it('does not offer preview for mermaid edit tabs', () => {
     expect(
       getMarkdownViewModes({
         language: 'mermaid',
+        mode: 'edit'
+      })
+    ).toEqual(['source', 'rich'])
+  })
+
+  it('keeps notebook toggles to source and rich without Changes', () => {
+    expect(
+      getEditorToggleModes({
+        language: 'notebook',
         mode: 'edit'
       })
     ).toEqual(['source', 'rich'])
@@ -83,7 +92,7 @@ describe('markdown preview helpers', () => {
           shiftKey: true,
           altKey: false
         } as KeyboardEvent,
-        true
+        'darwin'
       )
     ).toBe(true)
     expect(
@@ -95,7 +104,7 @@ describe('markdown preview helpers', () => {
           shiftKey: true,
           altKey: false
         } as KeyboardEvent,
-        false
+        'linux'
       )
     ).toBe(true)
     expect(
@@ -107,13 +116,8 @@ describe('markdown preview helpers', () => {
           shiftKey: false,
           altKey: false
         } as KeyboardEvent,
-        false
+        'linux'
       )
     ).toBe(false)
-  })
-
-  it('formats the shortcut label per platform', () => {
-    expect(getMarkdownPreviewShortcutLabel(true)).toBe('⌘⇧V')
-    expect(getMarkdownPreviewShortcutLabel(false)).toBe('Ctrl+Shift+V')
   })
 })

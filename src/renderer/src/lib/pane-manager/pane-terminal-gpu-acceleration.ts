@@ -1,5 +1,10 @@
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
-import { attachWebgl, disposeWebgl, resetTerminalWebglSuggestion } from './pane-lifecycle'
+import {
+  attachWebgl,
+  disposeWebgl,
+  resetTerminalWebglSuggestion,
+  shouldUseTerminalWebgl
+} from './pane-webgl-renderer'
 import { safeFit } from './pane-tree-ops'
 
 export function applyTerminalGpuAcceleration(
@@ -15,7 +20,7 @@ export function applyTerminalGpuAcceleration(
   }
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
-    if (nextMode === 'off') {
+    if (!shouldUseTerminalWebgl(pane)) {
       disposeWebgl(pane, { refreshDimensions: true })
       continue
     }

@@ -7,6 +7,19 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
+import type * as DaemonHealthModule from './daemon-health'
+
+const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
+  getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
+}))
+
+vi.mock('./daemon-health', async (importOriginal) => {
+  const actual = await importOriginal<typeof DaemonHealthModule>()
+  return {
+    ...actual,
+    getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
+  }
+})
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-adapter-test-'))
@@ -85,6 +98,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
     lastSpawnOpts = null
+    getMacDaemonSystemResolverHealthMock.mockReset()
+    getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
   })
 
   afterEach(async () => {
@@ -182,6 +197,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       await waitFor(() => dataPayloads.length > 0)
       expect(dataPayloads[0]).toEqual({ id, data: 'hello' })
+    })
+
+    it('coalesces burst data events before serializing daemon stream output', async () => {
+      const dataPayloads: { id: string; data: string }[] = []
+      adapter.onData((payload) => dataPayloads.push(payload))
+
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('a')
+      lastSubprocess._simulateData('b')
+      lastSubprocess._simulateData('c')
+
+      await waitFor(() => dataPayloads.length > 0)
+      expect(dataPayloads).toEqual([{ id, data: 'abc' }])
     })
   })
 
@@ -374,28 +402,32 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('reconcileOnStartup', () => {
     it('returns alive sessions for valid worktrees', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-active' })
+      const wt = 'repo-a::/wt/active'
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })
 
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set(['wt-active']))
+      const { alive, killed } = await adapter.reconcileOnStartup(new Set([wt]))
       expect(alive).toHaveLength(1)
-      expect(alive[0]).toContain('wt-active')
+      expect(alive[0]).toContain(wt)
       expect(killed).toHaveLength(0)
     })
 
     it('kills sessions for removed worktrees', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-removed' })
+      const wt = 'repo-a::/wt/removed'
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })
 
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set(['wt-other']))
+      const { alive, killed } = await adapter.reconcileOnStartup(new Set(['repo-a::/wt/other']))
       expect(alive).toHaveLength(0)
       expect(killed).toHaveLength(1)
-      expect(killed[0]).toContain('wt-removed')
+      expect(killed[0]).toContain(wt)
     })
 
     it('handles mix of valid and orphaned sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-keep' })
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-delete' })
+      const keep = 'repo-a::/wt/keep'
+      const drop = 'repo-a::/wt/delete'
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: keep })
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: drop })
 
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set(['wt-keep']))
+      const { alive, killed } = await adapter.reconcileOnStartup(new Set([keep]))
       expect(alive).toHaveLength(1)
       expect(killed).toHaveLength(1)
     })
@@ -407,6 +439,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const { alive, killed } = await adapter.reconcileOnStartup(new Set([complexId]))
       expect(alive).toHaveLength(1)
       expect(killed).toHaveLength(0)
+    })
+
+    it('kills sessions whose id does not match the minted format, even if id is in valid set', async () => {
+      // Why: parsePtySessionId rejects bare UUIDs (no `@@`) and ids without
+      // the `::` worktree shape. Such sessions can't be attributed to any
+      // current worktree and must be treated as orphans regardless of
+      // valid-set membership. Passing the bare-uuid as a member of
+      // validWorktreeIds proves the new strict parser short-circuits the
+      // membership check — under the old loose parser this session would
+      // have been kept.
+      const sessionId = 'bare-uuid-no-separators'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      const { alive, killed } = await adapter.reconcileOnStartup(new Set([sessionId]))
+      expect(alive).toHaveLength(0)
+      expect(killed).toHaveLength(1)
     })
   })
 
@@ -453,6 +501,97 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(existsSync(join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'))).toBe(
         false
       )
+    })
+
+    it('checkpoints only dirty sessions on the periodic timer', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      adapterClass.CHECKPOINT_INTERVAL_MS = 25
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'dirty-checkpoint'
+        })
+        const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+
+        await new Promise((r) => setTimeout(r, 80))
+
+        // Why: idle terminals can be numerous. A periodic pass with no data
+        // must not serialize every live daemon session just because it exists.
+        expect(checkpointSpy).not.toHaveBeenCalled()
+
+        lastSubprocess._simulateData('new output\r\n')
+        await waitFor(() => checkpointSpy.mock.calls.length === 1)
+        expect(checkpointSpy).toHaveBeenCalledWith(
+          id,
+          expect.objectContaining({ snapshotAnsi: expect.stringContaining('new output') })
+        )
+
+        await new Promise((r) => setTimeout(r, 80))
+        expect(checkpointSpy).toHaveBeenCalledTimes(1)
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
+    })
+
+    it('does not schedule a checkpoint timer until a session is dirty', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'idle-checkpoint'
+        })
+
+        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
+
+        lastSubprocess._simulateData('dirty after idle\r\n')
+        await waitFor(() => setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000))
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+        setTimeoutSpy.mockRestore()
+      }
+    })
+
+    it('clears a pending checkpoint timer when the last dirty session closes', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/home/user',
+          sessionId: 'close-dirty-checkpoint'
+        })
+        const internals = historyAdapter as unknown as {
+          dirtySessionVersions: Map<string, number>
+        }
+
+        lastSubprocess._simulateData('dirty before close\r\n')
+        await waitFor(() => internals.dirtySessionVersions.has(id))
+        const callsBeforeClose = clearTimeoutSpy.mock.calls.length
+
+        await historyAdapter.shutdown(id, { immediate: true })
+
+        expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(callsBeforeClose)
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+        clearTimeoutSpy.mockRestore()
+      }
     })
 
     it('writes meta.json with endedAt on exit', async () => {
@@ -711,6 +850,101 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
+    })
+
+    it('preserves an unhealthy macOS resolver daemon when it owns live sessions', async () => {
+      const respawnFn = vi.fn()
+      const exits: { id: string; code: number }[] = []
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      respawnAdapter.onExit((payload) => exits.push(payload))
+      const existing = await respawnAdapter.spawn({ cols: 80, rows: 24 })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(exits).toEqual([])
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(existing.id)
+
+      respawnAdapter.dispose()
+    })
+
+    it('preserves an unhealthy macOS resolver daemon when live sessions have not been reconciled locally', async () => {
+      const respawnFn = vi.fn()
+      const background = await adapter.spawn({ cols: 80, rows: 24 })
+      const backgroundSubprocess = lastSubprocess
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(background.id)
+      expect(backgroundSubprocess.forceKill).not.toHaveBeenCalled()
+
+      respawnAdapter.dispose()
+    })
+
+    it('replaces an unhealthy macOS resolver daemon before creating a fresh session when no sessions are active', async () => {
+      let respawnServer: DaemonServer | undefined
+      const respawnFn = vi.fn(async () => {
+        await server.shutdown()
+        rmSync(socketPath, { force: true })
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => createMockSubprocess()
+        })
+        await respawnServer.start()
+      })
+      const exits: { id: string; code: number }[] = []
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      respawnAdapter.onExit((payload) => exits.push(payload))
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(exits).toEqual([])
+      expect(replacement.id).toBeDefined()
+
+      respawnAdapter.dispose()
+      await respawnServer?.shutdown()
+    })
+
+    it('does not resolver-health restart attach-style spawns', async () => {
+      const respawnFn = vi.fn()
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const result = await respawnAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'caller-owned-session'
+      })
+
+      expect(result.id).toBe('caller-owned-session')
+      expect(getMacDaemonSystemResolverHealthMock).not.toHaveBeenCalled()
+      expect(respawnFn).not.toHaveBeenCalled()
+
+      respawnAdapter.dispose()
     })
 
     it('propagates respawn failure to the caller', async () => {

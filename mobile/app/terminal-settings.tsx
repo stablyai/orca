@@ -153,16 +153,13 @@ export default function TerminalSettingsScreen() {
         <Text style={styles.heading}>Terminal</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
         <Text style={styles.groupDescription}>
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your
-          screen. When you close the app or switch away, this controls whether it stays at
-          phone size (so interactive CLI tools don&apos;t reflow) or resizes back to your
-          desktop. You can always tap Restore on the terminal banner to resize it manually.
+          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
+          you close the app or switch away, this controls whether it stays at phone size (so
+          interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
+          tap Restore on the terminal banner to resize it manually.
         </Text>
 
         {hosts.length === 0 ? (

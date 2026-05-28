@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Copy, FolderOpen, RefreshCw } from 'lucide-react'
+import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -13,13 +25,12 @@ import {
 } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { WslCliRegistration } from './WslCliRegistration'
 
 type CliSectionProps = {
   currentPlatform: string
 }
-
-const ORCA_CLI_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orca-cli'
 
 function getRevealLabel(platform: string): string {
   if (platform === 'darwin') {
@@ -49,6 +60,14 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const {
+    installed: cliSkillDetected,
+    loading: cliSkillLoading,
+    error: cliSkillError,
+    refresh: refreshCliSkill
+  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
 
   const refreshStatus = async (): Promise<void> => {
     setLoading(true)
@@ -67,6 +86,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
+  const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
   const revealLabel = getRevealLabel(currentPlatform)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
@@ -96,15 +116,6 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       toast.error(error instanceof Error ? error.message : 'Failed to remove `orca` from PATH.')
     } finally {
       setBusyAction(null)
-    }
-  }
-
-  const handleCopySkillInstallCommand = async (command: string): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(command)
-      toast.success('Copied skill install command.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
     }
   }
 
@@ -147,21 +158,23 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <button
-              role="switch"
-              aria-checked={isEnabled}
-              disabled={loading || !isSupported || busyAction !== null}
-              onClick={() => setDialogOpen(true)}
-              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-                isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-              } ${loading || !isSupported || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-            >
-              <span
-                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  isEnabled ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            {!isBrowserManaged ? (
+              <button
+                role="switch"
+                aria-checked={isEnabled}
+                disabled={loading || !isSupported || busyAction !== null}
+                onClick={() => setDialogOpen(true)}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
+                  isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+                } ${loading || !isSupported || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                    isEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -184,7 +197,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
           </p>
         ) : null}
 
-        {!loading && !isSupported && status?.detail ? (
+        {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
           <p className="text-xs text-muted-foreground">{status.detail}</p>
         ) : null}
 
@@ -203,45 +216,38 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
           ) : null}
         </div>
 
-        <div className="border-t border-border/60 pt-3">
-          <div className="space-y-0.5">
-            <Label>Agent skills</Label>
-            <p className="text-xs text-muted-foreground">
-              Install skills so agents know how to use Orca and report status.
-            </p>
-          </div>
-
-          <div className="mt-3 space-y-3">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">CLI skill</p>
-              <div className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
-                <code className="overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-                  {ORCA_CLI_SKILL_INSTALL_COMMAND}
-                </code>
-                <TooltipProvider delayDuration={250}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() =>
-                          void handleCopySkillInstallCommand(ORCA_CLI_SKILL_INSTALL_COMMAND)
-                        }
-                        aria-label="Copy CLI skill install command"
-                      >
-                        <Copy className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Copy
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+        {!isBrowserManaged ? (
+          <div className="border-t border-border/60 pt-3">
+            <div className="space-y-0.5">
+              <Label>Agent skills</Label>
+              <p className="text-xs text-muted-foreground">
+                Give agents Orca-aware workspace, terminal, and progress workflows.
+              </p>
             </div>
+
+            <AgentSkillSetupPanel
+              className="mt-3"
+              variant="inline"
+              title="CLI skill"
+              description="Enables agents to use Orca workspace, terminal, and progress commands."
+              command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+              terminalTitle="CLI skill setup"
+              terminalAriaLabel="CLI skill install terminal"
+              terminalWorktreeId="settings-cli-skill-terminal"
+              installed={cliSkillDetected}
+              loading={cliSkillLoading}
+              error={cliSkillError}
+              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+              onBeforeOpenTerminal={async () => {
+                await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setStatus })
+              }}
+              onRecheck={refreshCliSkill}
+            />
           </div>
-        </div>
+        ) : null}
       </div>
+
+      <WslCliRegistration currentPlatform={currentPlatform} />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

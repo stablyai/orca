@@ -10,8 +10,9 @@ import { Fragment, type Node as PmNode } from '@tiptap/pm/model'
  * of just one logical line.
  *
  * This function normalises the ProseMirror document by splitting any paragraph whose
- * text nodes contain `\n` into separate paragraph nodes — one per line.  Inline marks
- * (bold, italic, links, etc.) are preserved on each resulting paragraph.  This is
+ * text nodes contain `\n` into separate paragraph nodes — one per line — and by
+ * giving empty parsed list items a paragraph caret target. Inline marks (bold,
+ * italic, links, etc.) are preserved on each resulting paragraph. This is
  * structurally correct for the editing model: each visual line becomes its own block,
  * so the cut handler (and all other block-level operations) work on a per-line basis.
  */
@@ -30,9 +31,24 @@ export function normalizeSoftBreaks(editor: Editor): void {
   // Why: doc.forEach only iterates top-level children, so paragraphs nested inside
   // blockquotes, table cells, or other container nodes would be missed.
   // doc.descendants walks every node at every depth and provides absolute positions.
-  const replacements: { from: number; to: number; paragraphs: Fragment[] }[] = []
+  const replacements: (
+    | { from: number; to: number; kind: 'soft-break-paragraphs'; paragraphs: Fragment[] }
+    | { from: number; to: number; kind: 'empty-list-item'; node: PmNode }
+  )[] = []
 
   doc.descendants((node, pos) => {
+    if (node.type.name === 'listItem' && node.childCount === 0) {
+      // Why: marked parses `3. ` immediately before a heading as a list item
+      // with no paragraph. It renders a marker but has no editable caret target.
+      replacements.push({
+        from: pos,
+        to: pos + node.nodeSize,
+        kind: 'empty-list-item',
+        node: node.type.create(node.attrs, paragraphType.create(), node.marks)
+      })
+      return false
+    }
+
     if (node.type !== paragraphType) {
       return true // continue descending into container nodes
     }
@@ -77,6 +93,7 @@ export function normalizeSoftBreaks(editor: Editor): void {
     replacements.push({
       from: pos,
       to: pos + node.nodeSize,
+      kind: 'soft-break-paragraphs',
       paragraphs: lines
     })
 
@@ -90,11 +107,16 @@ export function normalizeSoftBreaks(editor: Editor): void {
   // Capture the transaction lazily — only after all replacements are collected.
   const tr = editor.view.state.tr
 
-  // Apply replacements in reverse order to preserve positions.
-  for (let i = replacements.length - 1; i >= 0; i--) {
-    const { from, to, paragraphs } = replacements[i]
-    const newNodes = paragraphs.map((content) => paragraphType.create(null, content))
-    tr.replaceWith(from, to, newNodes)
+  // Apply replacements in reverse document order to preserve positions.
+  replacements.sort((a, b) => b.from - a.from)
+  for (const replacement of replacements) {
+    if (replacement.kind === 'empty-list-item') {
+      tr.replaceWith(replacement.from, replacement.to, replacement.node)
+      continue
+    }
+
+    const newNodes = replacement.paragraphs.map((content) => paragraphType.create(null, content))
+    tr.replaceWith(replacement.from, replacement.to, newNodes)
   }
 
   // Why: this normalization is a structural housekeeping step, not a user edit.

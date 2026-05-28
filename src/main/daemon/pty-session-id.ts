@@ -1,5 +1,12 @@
 import { randomUUID } from 'crypto'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
+import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
+
+// Why: re-exported here so main-side callers can keep importing
+// `parsePtySessionId` from this module (next to `mintPtySessionId`). The
+// implementation lives in `src/shared/` because the renderer-side merge
+// helper also needs it and cannot import node-only modules.
+export { parsePtySessionId } from '../../shared/pty-session-id-format'
 
 /**
  * Session IDs use the format `${worktreeId}@@${shortUuid}` so that
@@ -12,7 +19,9 @@ import { isAbsolute, join, relative, resolve, sep } from 'path'
  * keying.
  */
 export function mintPtySessionId(worktreeId?: string): string {
-  return worktreeId ? `${worktreeId}@@${randomUUID().slice(0, 8)}` : randomUUID()
+  return worktreeId
+    ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${randomUUID().slice(0, 8)}`
+    : randomUUID()
 }
 
 /**

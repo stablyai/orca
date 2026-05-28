@@ -9,6 +9,8 @@ import type {
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -83,6 +85,22 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
+  },
+  openCodeUsage: {
+    getScanState: vi.fn().mockResolvedValue({
+      enabled: false,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyOpenCodeData: false
+    }),
+    setEnabled: vi.fn().mockResolvedValue({}),
+    refresh: vi.fn().mockResolvedValue({}),
+    getSummary: vi.fn().mockResolvedValue(null),
+    getDaily: vi.fn().mockResolvedValue([]),
+    getBreakdown: vi.fn().mockResolvedValue([]),
+    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -96,13 +114,18 @@ import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
+import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
+import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
+import { createPreflightSlice } from './preflight'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
+import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
+import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -110,6 +133,8 @@ import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createDictationSlice } from './dictation'
+import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -120,20 +145,27 @@ function createTestStore() {
     ...createTabsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
+    ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
+    ...createPreflightSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
+    ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
+    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a)
+    ...createWorktreeNavHistorySlice(...a),
+    ...createDictationSlice(...a),
+    ...createWorkspaceCleanupSlice(...a)
   }))
 }
 
@@ -151,6 +183,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -193,9 +227,18 @@ function makeBrowserTab(
   }
 }
 
+function ownedEditorFileId(
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────
 
-describe('removeRepo cascade', () => {
+describe('removeProject cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.repos.remove.mockResolvedValue(undefined)
@@ -234,7 +277,7 @@ describe('removeRepo cascade', () => {
       activeTabId: 'tab1'
     })
 
-    await store.getState().removeRepo('repo1')
+    await store.getState().removeProject('repo1')
     const s = store.getState()
 
     expect(s.repos).toEqual([])
@@ -436,6 +479,37 @@ describe('hydrateBrowserSession', () => {
     expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
     expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
     expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('restores floating workspace browser tabs without a repo worktree', () => {
+    const store = createTestStore()
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeBrowserTab({
+            id: 'floating-browser-1',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            url: 'https://example.com'
+          })
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-browser-1'
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'browser' }
+    })
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(s.activeBrowserTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('floating-browser-1')
   })
 
   it('restores activeTabTypeByWorktree for browser worktrees when hydrateEditorSession was a no-op', () => {
@@ -671,6 +745,168 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
   })
 
+  it('preserves unrelated worktree tab arrays when recording a spawned PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [makeTab({ id: 'tab-1', worktreeId: targetWorktreeId })],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('does not persist worktree activity when attaching a mirrored remote runtime PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', lastActivityAt: 1000 })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId })]
+      }
+    })
+
+    store.getState().updateTabPtyId('tab-1', 'remote:web-env@@terminal-1')
+
+    expect(store.getState().worktreesByRepo.repo1[0].lastActivityAt).toBe(1000)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('preserves unrelated worktree tab arrays when clearing a PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [
+          makeTab({ id: 'tab-1', worktreeId: targetWorktreeId, ptyId: 'pty-fresh' })
+        ],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-fresh']
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().clearTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('changes only the owning worktree tab array when recording a PTY in a large session', () => {
+    const store = createTestStore()
+    const worktreeCount = 125
+    const targetIndex = 73
+    const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
+      makeWorktree({
+        id: `repo1::/path/wt-${index}`,
+        repoId: 'repo1',
+        path: `/path/wt-${index}`
+      })
+    )
+    const tabsByWorktree = Object.fromEntries(
+      worktrees.map((worktree, index) => [
+        worktree.id,
+        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
+      ])
+    )
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: worktrees },
+      tabsByWorktree
+    })
+
+    const targetTabId = `tab-${targetIndex}`
+    const before = store.getState().tabsByWorktree
+
+    store.getState().updateTabPtyId(targetTabId, 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    const changedWorktreeIds = Object.keys(after).filter(
+      (worktreeId) => after[worktreeId] !== before[worktreeId]
+    )
+    expect(changedWorktreeIds).toEqual([`repo1::/path/wt-${targetIndex}`])
+  })
+
+  it('does not persist worktree activity when clearing a mirrored remote runtime PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', lastActivityAt: 1000 })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId,
+            ptyId: 'remote:web-env@@terminal-1'
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:web-env@@terminal-1']
+      }
+    })
+
+    store.getState().clearTabPtyId('tab-1', 'remote:web-env@@terminal-1')
+
+    expect(store.getState().worktreesByRepo.repo1[0].lastActivityAt).toBe(1000)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
   // Why: clicking a worktree in the sidebar triggers a generation bump on
   // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
   // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the
@@ -742,6 +978,57 @@ describe('terminal slice behaviors', () => {
     // The flag is consumed so a later legitimate respawn (codex restart etc.)
     // is not silently suppressed as well.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
+  it('bumps activation generation for slept wake-hint tabs with no live PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId,
+            ptyId: 'wake-hint-session',
+            generation: 2
+          })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
+    })
+
+    store.getState().setActiveWorktree(worktreeId)
+
+    const tab = store.getState().tabsByWorktree[worktreeId][0]
+    expect(tab.generation).toBe(3)
+    expect(tab.pendingActivationSpawn).toBe(true)
   })
 
   // Why: the FIRST activation of a worktree tags every tab — even if tab.ptyId
@@ -1246,12 +1533,15 @@ describe('reconnectPersistedTerminals', () => {
     // sees the tab as active (green dot) even before the terminal mounts.
     // connectPanePty reads ptyIdsByLeafId for per-leaf daemon sessions.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('daemon-session-B')
-    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume
+    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume,
+    // but legacy pane:* leaves are reminted to durable UUID leaves at hydration.
     const layout = s.terminalLayoutsByTabId['tab1']
-    expect(layout.ptyIdsByLeafId).toEqual({
-      'pane:1': 'daemon-session-A',
-      'pane:3': 'daemon-session-B'
-    })
+    const bindings = layout.ptyIdsByLeafId ?? {}
+    expect(Object.keys(bindings)).toHaveLength(2)
+    expect(Object.keys(bindings).every(isTerminalLeafId)).toBe(true)
+    expect(Object.keys(bindings)).not.toContain('pane:1')
+    expect(Object.keys(bindings)).not.toContain('pane:3')
+    expect(Object.values(bindings).sort()).toEqual(['daemon-session-A', 'daemon-session-B'])
     expect(s.workspaceSessionReady).toBe(true)
   })
 })
@@ -1312,6 +1602,432 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[1].isPreview).toBe(true)
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
+  })
+
+  it('restores floating workspace markdown files without a repo worktree', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: '/orca/userData/floating-workspace/note.md'
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        id: fileId,
+        filePath,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null
+      })
+    ])
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+  })
+
+  it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sharedPath = '/path/wt1/README.md'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: wt,
+            language: 'markdown'
+          }
+        ],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [wt]: sharedPath,
+        [FLOATING_TERMINAL_WORKTREE_ID]: sharedPath
+      },
+      activeTabTypeByWorktree: {
+        [wt]: 'editor',
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'editor'
+      }
+    })
+
+    const floatingActiveFileId =
+      store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+    expect(floatingActiveFileId).not.toBe(sharedPath)
+    expect(
+      store
+        .getState()
+        .openFiles.some(
+          (file) =>
+            file.id === floatingActiveFileId && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        )
+    ).toBe(true)
+  })
+
+  it('keeps same-path local and runtime legacy references on their original owners', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const filePath = '/path/wt1/src/app.ts'
+    const runtimeEnvironmentId = 'runtime-1'
+    const runtimeFileId = ownedEditorFileId(filePath, wt, runtimeEnvironmentId)
+    const groupId = 'group-same-path-owners'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    const session = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath,
+            relativePath: 'src/app.ts',
+            worktreeId: wt,
+            language: 'typescript'
+          },
+          {
+            filePath,
+            relativePath: 'src/app.ts',
+            worktreeId: wt,
+            language: 'typescript',
+            runtimeEnvironmentId
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: filePath },
+      activeTabTypeByWorktree: { [wt]: 'editor' as const },
+      unifiedTabs: {
+        [wt]: [
+          {
+            id: filePath,
+            entityId: filePath,
+            groupId,
+            worktreeId: wt,
+            contentType: 'editor' as const,
+            label: 'app.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: runtimeFileId,
+            entityId: runtimeFileId,
+            groupId,
+            worktreeId: wt,
+            contentType: 'editor' as const,
+            label: 'app.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        [wt]: [
+          {
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: filePath,
+            tabOrder: [filePath, runtimeFileId],
+            recentTabIds: [runtimeFileId, filePath]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        id: filePath,
+        filePath,
+        worktreeId: wt,
+        runtimeEnvironmentId: undefined
+      }),
+      expect.objectContaining({
+        id: runtimeFileId,
+        filePath,
+        worktreeId: wt,
+        runtimeEnvironmentId
+      })
+    ])
+    expect(s.activeFileIdByWorktree[wt]).toBe(filePath)
+    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([filePath, runtimeFileId])
+    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.entityId)).toEqual([
+      filePath,
+      runtimeFileId
+    ])
+    expect(s.groupsByWorktree[wt]?.[0]).toEqual(
+      expect.objectContaining({
+        activeTabId: filePath,
+        tabOrder: [filePath, runtimeFileId],
+        recentTabIds: [runtimeFileId, filePath]
+      })
+    )
+  })
+
+  it('keeps floating owner-qualified editor ids aligned with restored unified tabs', () => {
+    const store = createTestStore()
+    const sharedPath = '/path/wt1/README.md'
+    const floatingFileId = ownedEditorFileId(sharedPath, FLOATING_TERMINAL_WORKTREE_ID, null)
+    const groupId = 'floating-group-1'
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: floatingFileId
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' as const },
+      unifiedTabs: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: floatingFileId,
+            entityId: floatingFileId,
+            groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'editor' as const,
+            label: 'README.md',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: floatingFileId,
+            tabOrder: [floatingFileId],
+            recentTabIds: [floatingFileId]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        id: floatingFileId,
+        filePath: sharedPath,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    ])
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(floatingFileId)
+    expect(s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({
+        id: floatingFileId,
+        entityId: floatingFileId
+      })
+    ])
+    expect(s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({
+        activeTabId: floatingFileId,
+        tabOrder: [floatingFileId],
+        recentTabIds: [floatingFileId]
+      })
+    ])
+  })
+
+  it('migrates legacy floating unified tab file-path references to the hydrated owner id', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/README.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+    const groupId = 'floating-group-legacy'
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: filePath },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' as const },
+      unifiedTabs: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: filePath,
+            entityId: filePath,
+            groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'editor' as const,
+            label: 'README.md',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: filePath,
+            tabOrder: [filePath],
+            recentTabIds: [filePath]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles[0]?.id).toBe(fileId)
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+    expect(s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toEqual(
+      expect.objectContaining({ id: fileId, entityId: fileId })
+    )
+    expect(s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toEqual(
+      expect.objectContaining({
+        activeTabId: fileId,
+        tabOrder: [fileId],
+        recentTabIds: [fileId]
+      })
+    )
+  })
+
+  it('re-detects restored file languages instead of trusting stale session data', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: '/path/wt1/notebooks/example.ipynb',
+            relativePath: 'notebooks/example.ipynb',
+            worktreeId: wt,
+            language: 'json'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: '/path/wt1/notebooks/example.ipynb' },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: '/path/wt1/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    )
   })
 
   it('does nothing when no editor files are persisted', () => {

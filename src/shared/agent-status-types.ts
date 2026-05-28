@@ -1,7 +1,9 @@
 // ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
 // These types define the normalized status that Orca receives from Claude,
-// Codex, and other explicit integrations. Agent state is hook-reported only —
-// we do not infer status from terminal titles anywhere in the data flow.
+// Codex, and other explicit integrations. Agent state normally comes from
+// hooks; a narrow interrupt fallback may synthesize a final done state when an
+// agent misses its own cancellation hook. We still do not infer status from
+// terminal titles anywhere in the data flow.
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -13,10 +15,17 @@ export type WellKnownAgentType =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode'
   | 'cursor'
+  | 'copilot'
   | 'aider'
   | 'pi'
+  | 'omp'
+  | 'droid'
+  | 'command-code'
+  | 'grok'
+  | 'hermes'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
@@ -35,15 +44,24 @@ export type AgentStateHistoryEntry = {
   prompt: string
   /** When this state was first reported. */
   startedAt: number
-  /** True when this `done` was a cancellation (user hit ESC/Ctrl+C). Reported
-   *  by the agent itself — Claude Code sets `is_interrupt: true` on its `Stop`
-   *  hook when the turn ended via interrupt. Always falsy for non-`done`
-   *  states, so retention logic can preserve this signal. */
+  /** True when this `done` was a cancellation. May come from an agent hook
+   *  (for example Claude Code `is_interrupt`) or Orca's guarded interrupt
+   *  fallback. Always falsy for non-`done` states, so retention logic can
+   *  preserve this signal. */
   interrupted?: boolean
 }
 
 /** Maximum number of history entries kept per agent to bound memory. */
 export const AGENT_STATE_HISTORY_MAX = 20
+
+export type AgentStatusOrchestrationContext = {
+  taskId: string
+  dispatchId: string
+  parentTerminalHandle?: string
+  parentPaneKey?: string
+  coordinatorHandle?: string
+  orchestrationRunId?: string
+}
 
 export type AgentStatusEntry = {
   state: AgentStatusState
@@ -60,7 +78,7 @@ export type AgentStatusEntry = {
    *  (tool/prompt pings reset updatedAt but not stateStartedAt). */
   stateStartedAt: number
   agentType?: AgentType
-  /** Composite key: `${tabId}:${paneId}` — matches the cacheTimerByKey convention. */
+  /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   terminalTitle?: string
   /** Rolling log of previous states. Each entry records a state the agent was in
@@ -73,11 +91,28 @@ export type AgentStatusEntry = {
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
   /** True when the current `done` state was reached via an interrupt rather
-   *  than a normal turn completion (Claude Code's `is_interrupt: true`).
+   *  than a normal turn completion. May be reported by the agent itself or
+   *  inferred by Orca's guarded interrupt fallback.
    *  Orthogonal to `state`: the agent still finished the turn, but the user
-   *  cancelled it. Undefined while the agent is working or for non-Claude
-   *  agents that don't surface this signal. */
+   *  cancelled it. Undefined while the agent is working or when no interrupt
+   *  signal was available. */
   interrupted?: boolean
+  /** Orchestration dispatch context for agent panes spawned by another agent.
+   *  Why: parent/child agent hierarchy is pane-level state, not worktree
+   *  lineage; workers often run in the same worktree as their coordinator. */
+  orchestration?: AgentStatusOrchestrationContext
+}
+
+export type MigrationUnsupportedPtyEntry = {
+  ptyId: string
+  worktreeId?: string
+  tabId?: string
+  leafId?: string
+  /** Registry-backed UUID pane proof, when available. */
+  paneKey?: string
+  reason: 'legacy-numeric-pane-key'
+  source: 'local' | 'ssh'
+  updatedAt: number
 }
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────
@@ -102,6 +137,29 @@ export type AgentStatusPayload = {
  * absence ("no new info") is distinguishable from an explicit empty string.
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
+
+/**
+ * Wire shape for agent-status IPC. Both the push channel `agentStatus:set` and the
+ * pull channel `agentStatus:getSnapshot` produce this shape so renderer call sites
+ * can apply entries through a single `setAgentStatus` path. Flattens the parsed
+ * payload onto pane identity + timing because the renderer's slice expects them
+ * destructured.
+ */
+export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  paneKey: string
+  tabId?: string
+  worktreeId?: string
+  /** Identifies the SSH connection the event arrived on, or null for local.
+   *  Stamped only on the remote-ingest path (Orca's `ingestRemote`); the
+   *  HTTP path always sets null because it cannot know which mux a request
+   *  came from. See docs/design/agent-status-over-ssh.md §5. */
+  connectionId: string | null
+  /** Timestamp (ms) when the hook server received this latest status event. */
+  receivedAt: number
+  /** Timestamp (ms) when the current state first appeared for this pane. */
+  stateStartedAt: number
+  orchestration?: AgentStatusOrchestrationContext
+}
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200

@@ -8,6 +8,17 @@ export function getRequiredStringFlag(flags: Map<string, string | boolean>, name
   throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
 }
 
+export function getRequiredStringFlagAllowingEmpty(
+  flags: Map<string, string | boolean>,
+  name: string
+): string {
+  const value = flags.get(name)
+  if (typeof value === 'string') {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
+}
+
 export function getOptionalStringFlag(
   flags: Map<string, string | boolean>,
   name: string

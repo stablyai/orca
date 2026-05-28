@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { delimiter } from 'path'
+import type { ShellHydrationFailureReason } from '../../shared/types'
 
 // Why: GUI-launched Electron on macOS/Linux inherits a minimal PATH from launchd
 // that does not include dirs appended by the user's shell rc files (~/.zshrc,
@@ -20,12 +21,17 @@ const SPAWN_TIMEOUT_MS = 5000
 // files print banners or set colored prompts. Strip them before parsing.
 const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-regex
 
-type HydrationResult = {
-  /** PATH segments extracted from the login shell, in order, de-duplicated. */
-  segments: string[]
-  /** True when the shell spawn succeeded and returned a non-empty PATH. */
-  ok: boolean
-}
+// Why: the discriminator lets telemetry classify *why* hydration failed, not
+// just whether it did. Five resolve sites in this file each tag the result
+// with the right reason. The shared alias keeps the enum in lockstep with the
+// telemetry schema (compile-time guard in telemetry-events.ts).
+export type HydrationResult =
+  | { ok: true; segments: string[]; failureReason: 'none' }
+  | {
+      ok: false
+      segments: []
+      failureReason: Exclude<ShellHydrationFailureReason, 'none'>
+    }
 
 let cached: Promise<HydrationResult> | null = null
 
@@ -104,7 +110,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       } catch {
         // ignore
       }
-      resolve({ segments: [], ok: false })
+      resolve({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -117,7 +123,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       }
       finished = true
       clearTimeout(timer)
-      resolve({ segments: [], ok: false })
+      resolve({ segments: [], ok: false, failureReason: 'spawn_error' })
     })
 
     child.on('close', () => {
@@ -127,7 +133,11 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       finished = true
       clearTimeout(timer)
       const segments = parseCapturedPath(stdout)
-      resolve({ segments, ok: segments.length > 0 })
+      if (segments.length === 0) {
+        resolve({ segments: [], ok: false, failureReason: 'empty_path' })
+        return
+      }
+      resolve({ segments, ok: true, failureReason: 'none' })
     })
   })
 }
@@ -154,7 +164,7 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
   if (!shell) {
     // Windows uses cmd/PowerShell rather than a POSIX login shell — the
     // `patchPackagedProcessPath` static list is sufficient there.
-    cached = Promise.resolve({ segments: [], ok: false })
+    cached = Promise.resolve({ segments: [], ok: false, failureReason: 'no_shell' })
     return cached
   }
   cached = (options.spawner ?? spawnShellAndReadPath)(shell)

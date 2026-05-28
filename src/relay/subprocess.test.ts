@@ -1,15 +1,18 @@
+/* oxlint-disable max-lines -- Why: subprocess coverage shares one bundled relay artifact; splitting this file would rebuild the same daemon bundle across suites and make these lifecycle tests slower/flakier. */
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
-import { mkdtempSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { rm } from 'fs/promises'
 import * as path from 'path'
 import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawn as spawnChild } from 'child_process'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
+import { getEndpointFileName } from '../shared/agent-hook-listener'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
 let bundleDir: string
 let relayEntry: string
+const spawnedSocketDirs: string[] = []
 
 beforeAll(async () => {
   bundleDir = mkdtempSync(path.join(tmpdir(), 'relay-bundle-'))
@@ -32,8 +35,27 @@ afterAll(async () => {
   }
 })
 
-function spawn(args: string[] = []): RelayProcess {
-  return spawnRelay(relayEntry, args)
+function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
+  let relayArgs = args
+  if (!args.includes('--sock-path')) {
+    const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
+    spawnedSocketDirs.push(socketDir)
+    relayArgs = [...args, '--sock-path', path.join(socketDir, 'relay.sock')]
+  }
+  return spawnRelay(relayEntry, relayArgs, env ? { env } : undefined)
+}
+
+function waitForChildExit(
+  proc: ReturnType<typeof spawnChild>,
+  timeoutMs = 5000
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out waiting for child exit')), timeoutMs)
+    proc.once('exit', (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
+    })
+  })
 }
 
 describe('Subprocess: Relay entry point', () => {
@@ -49,6 +71,10 @@ describe('Subprocess: Relay entry point', () => {
     if (tmpDir) {
       await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
     }
+    while (spawnedSocketDirs.length > 0) {
+      const socketDir = spawnedSocketDirs.pop()!
+      await rm(socketDir, { recursive: true, force: true }).catch(() => {})
+    }
   })
 
   it('prints sentinel on startup', async () => {
@@ -62,7 +88,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
     const resp = await relay.waitForResponse(id)
@@ -80,7 +105,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.readDir', { dirPath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -95,7 +119,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const filePath = path.join(tmpDir, 'output.txt')
     const wId = relay.send('fs.writeFile', { filePath, content: 'via subprocess' })
@@ -121,7 +144,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('git.status', { worktreePath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -148,7 +170,6 @@ describe('Subprocess: Relay entry point', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.readFile', { filePath: path.join(tmpDir, 'nonexistent.txt') })
     const resp = await relay.waitForResponse(id)
@@ -164,7 +185,6 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id1 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'one.txt') })
     const id2 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'two.txt') })
@@ -202,53 +222,247 @@ describe('Subprocess: Relay entry point', () => {
     expect(relay.proc.exitCode).toBe(0)
   }, 10_000)
 
-  it('registers root via request and returns acknowledgment', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
+  it.skipIf(process.platform === 'win32')(
+    'refuses a duplicate detached daemon without unlinking the active relay socket',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-dup-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      relay = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+      await relay.sentinelReceived
+      const endpointFile = path.join(tmpDir, 'agent-hooks', 'relay.sock', getEndpointFileName())
+      const endpointBeforeDuplicate = readFileSync(endpointFile, 'utf8')
 
+      let duplicateStderr = ''
+      const duplicate = spawnChild(
+        'node',
+        [relayEntry, '--detached', '--grace-time', '10', '--sock-path', sockPath],
+        { stdio: ['ignore', 'ignore', 'pipe'] }
+      )
+      duplicate.stderr!.on('data', (chunk: Buffer) => {
+        duplicateStderr += chunk.toString('utf8')
+      })
+
+      const duplicateExit = await waitForChildExit(duplicate, 5000)
+      expect(duplicateExit.code).toBe(1)
+      expect(duplicateStderr).toContain('Socket path already in use')
+      expect(readFileSync(endpointFile, 'utf8')).toBe(endpointBeforeDuplicate)
+
+      const bridge = spawn(['--connect', '--sock-path', sockPath])
+      try {
+        await bridge.sentinelReceived
+        const id = bridge.send('relay.status')
+        const resp = await bridge.waitForResponse(id)
+        expect(resp.error).toBeUndefined()
+        expect(
+          (resp.result as { socket: { path: string; acceptedConnections: number } }).socket
+        ).toMatchObject({
+          path: sockPath,
+          acceptedConnections: 1
+        })
+      } finally {
+        bridge.kill('SIGTERM')
+        await bridge.waitForExit().catch(() => {})
+      }
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'reclaims a socket path left behind by a killed detached relay',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-stale-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const first = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+      let bridge: RelayProcess | null = null
+      try {
+        await first.sentinelReceived
+
+        first.kill('SIGKILL')
+        await first.waitForExit(2000)
+        expect(existsSync(sockPath)).toBe(true)
+
+        relay = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+        await relay.sentinelReceived
+
+        bridge = spawn(['--connect', '--sock-path', sockPath])
+        await bridge.sentinelReceived
+        const id = bridge.send('relay.status')
+        const resp = await bridge.waitForResponse(id)
+        expect(resp.error).toBeUndefined()
+        expect(
+          resp.result as {
+            pid: number | undefined
+            socket: { path: string; owned: boolean; listening: boolean }
+          }
+        ).toMatchObject({
+          pid: relay.proc.pid,
+          socket: { path: sockPath, owned: true, listening: true }
+        })
+      } finally {
+        bridge?.kill('SIGTERM')
+        await bridge?.waitForExit().catch(() => {})
+        if (first.proc.exitCode === null && first.proc.signalCode === null) {
+          first.kill('SIGKILL')
+          await first.waitForExit().catch(() => {})
+        }
+      }
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not unlink a newer relay socket when an older relay exits',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-rebound-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const first = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+      let second: RelayProcess | null = null
+      let bridge: RelayProcess | null = null
+      try {
+        await first.sentinelReceived
+        unlinkSync(sockPath)
+
+        second = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+        await second.sentinelReceived
+
+        first.kill('SIGTERM')
+        await first.waitForExit(2000)
+
+        bridge = spawn(['--connect', '--sock-path', sockPath])
+        await bridge.sentinelReceived
+        const id = bridge.send('relay.status')
+        const resp = await bridge.waitForResponse(id)
+        expect(resp.error).toBeUndefined()
+        expect((resp.result as { pid: number }).pid).toBe(second.proc.pid)
+      } finally {
+        bridge?.kill('SIGTERM')
+        await bridge?.waitForExit().catch(() => {})
+        first.kill('SIGTERM')
+        await first.waitForExit().catch(() => {})
+        second?.kill('SIGTERM')
+        await second?.waitForExit().catch(() => {})
+      }
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'uses a short startup grace for empty detached relays before any client connects',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-empty-'))
+      relay = spawn(
+        ['--detached', '--grace-time', '10', '--sock-path', path.join(tmpDir, 'relay.sock')],
+        { ...process.env, ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '100' }
+      )
+      await relay.sentinelReceived
+
+      await relay.waitForExit(3000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'uses configured grace after a detached relay has accepted a socket client',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-connected-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      relay = spawn(['--detached', '--grace-time', '1', '--sock-path', sockPath], {
+        ...process.env,
+        ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '500'
+      })
+      await relay.sentinelReceived
+
+      const bridge = spawn(['--connect', '--sock-path', sockPath])
+      try {
+        await bridge.sentinelReceived
+      } finally {
+        bridge.kill('SIGTERM')
+        await bridge.waitForExit().catch(() => {})
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 650))
+      expect(relay.proc.exitCode).toBeNull()
+
+      await relay.waitForExit(2000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    10_000
+  )
+
+  it('reports relay diagnostics over relay.status', async () => {
     relay = spawn()
     await relay.sentinelReceived
 
-    const id = relay.send('session.registerRoot', { rootPath: tmpDir })
+    const id = relay.send('relay.status')
+    const resp = await relay.waitForResponse(id)
+    expect(resp.error).toBeUndefined()
+    const status = resp.result as {
+      pid: number
+      memory: { rss: number }
+      ptys: { active: number }
+      socket: { owned: boolean; listening: boolean; clients: number }
+    }
+    expect(status.pid).toBeGreaterThan(0)
+    expect(status.memory.rss).toBeGreaterThan(0)
+    expect(status.ptys.active).toBe(0)
+    expect(status.socket).toMatchObject({ owned: true, listening: true, clients: 0 })
+  }, 10_000)
+
+  it('session.registerRoot request returns ok acknowledgment', async () => {
+    // Why: session.registerRoot is a protocol-level no-op since the FS
+    // allowlist removal, but the request form still must reply { ok: true }
+    // for back-compat with mains during the upgrade window. See
+    // docs/relay-fs-allowlist-removal.md.
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const id = relay.send('session.registerRoot', { rootPath: '/tmp/anything' })
     const resp = await relay.waitForResponse(id)
 
     expect(resp.error).toBeUndefined()
     expect(resp.result).toEqual({ ok: true })
-
-    const statId = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const statResp = await relay.waitForResponse(statId)
-    expect(statResp.error).toBeUndefined()
-    expect((statResp.result as { type: string }).type).toBe('file')
   }, 10_000)
 
-  it('rejects fs operations when no roots are registered', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const resp = await relay.waitForResponse(id)
-
-    expect(resp.error).toBeDefined()
-    expect(resp.error!.message).toContain('No workspace roots registered yet')
-  }, 10_000)
-
-  it('rejects paths outside registered roots', async () => {
+  it('reads files outside any registered root', async () => {
+    // Regression test for the architecture change in docs/relay-fs-allowlist-removal.md:
+    // the relay no longer enforces a workspace allowlist.
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
-    writeFileSync(path.join(outsideDir, 'secret.txt'), 'secret')
+    writeFileSync(path.join(outsideDir, 'secret.txt'), 'visible')
 
     relay = spawn()
     await relay.sentinelReceived
-    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
-    const id = relay.send('fs.stat', { filePath: path.join(outsideDir, 'secret.txt') })
+    const id = relay.send('fs.readFile', { filePath: path.join(outsideDir, 'secret.txt') })
     const resp = await relay.waitForResponse(id)
 
-    expect(resp.error).toBeDefined()
-    expect(resp.error!.message).toContain('Path outside authorized workspace')
+    expect(resp.error).toBeUndefined()
+    expect((resp.result as { content: string }).content).toBe('visible')
+
+    await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
+  }, 10_000)
+
+  it('reads files via symlinks resolving outside the workspace', async () => {
+    // Regression test for issue #1661: a symlink under the workspace pointing
+    // to a directory outside it must resolve transparently. The pre-removal
+    // relay rejected this with "Path outside authorized workspace".
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+    const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
+    writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
+    const { symlinkSync } = require('fs')
+    symlinkSync(outsideDir, path.join(tmpDir, 'link'))
+
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const id = relay.send('fs.readFile', {
+      filePath: path.join(tmpDir, 'link', 'data.txt')
+    })
+    const resp = await relay.waitForResponse(id)
+
+    expect(resp.error).toBeUndefined()
+    expect((resp.result as { content: string }).content).toBe('symlinked-target')
 
     await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
   }, 10_000)

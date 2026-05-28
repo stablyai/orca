@@ -9,11 +9,49 @@ export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024
 
 export const MessageType = {
   Regular: 1,
+  Handshake: 2,
   KeepAlive: 9
 } as const
 
+// Why: a pre-dispatcher envelope on a freshly-accepted Unix socket. The daemon
+// reads exactly one Handshake frame before attaching the JSON-RPC dispatcher,
+// to refuse mismatched-version --connect bridges that would otherwise drive a
+// stale daemon.
+export type HandshakeMessage =
+  | { type: 'orca-relay-handshake'; version: string }
+  | { type: 'orca-relay-handshake-ok'; version: string }
+  | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
+
+export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
+  const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
+  return encodeFrame(MessageType.Handshake, 0, 0, payload)
+}
+
+export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
+  const msg = JSON.parse(payload.toString('utf-8')) as HandshakeMessage
+  const t = (msg as { type?: string }).type
+  if (
+    t !== 'orca-relay-handshake' &&
+    t !== 'orca-relay-handshake-ok' &&
+    t !== 'orca-relay-handshake-mismatch'
+  ) {
+    throw new Error(`Unknown handshake type: ${t}`)
+  }
+  return msg
+}
+
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
+
+// ── Streaming constants (see docs/relay-file-stream-design.md) ─────
+
+export const STREAM_CHUNK_SIZE = 256 * 1024
+export const MAX_CONCURRENT_STREAMS = 16
+
+export const RelayErrorCode = {
+  TooManyStreams: -33006,
+  StreamProtocolError: -33007
+} as const
 
 export type JsonRpcRequest = {
   jsonrpc: '2.0'
@@ -124,6 +162,16 @@ export class FrameDecoder {
 
   reset(): void {
     this.buffer = Buffer.alloc(0)
+  }
+
+  // Why: at the handshake → dispatcher transition, the next consumer must
+  // pick up any bytes that arrived in the same TCP chunk as the handshake
+  // frame. This returns and clears the decoder's internal residue so the
+  // caller can hand it to the dispatcher (or stdout pipe) without loss.
+  drain(): Buffer {
+    const out = this.buffer
+    this.buffer = Buffer.alloc(0)
+    return out
   }
 }
 

@@ -4,7 +4,14 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 
-import { getDefaultBaseRef, getRemoteCount, searchBaseRefs } from './repo'
+import {
+  getDefaultBaseRef,
+  getBranchConflictKind,
+  getRemoteCount,
+  parseAndFilterSearchRefDetails,
+  searchBaseRefDetails,
+  searchBaseRefs
+} from './repo'
 
 // Why: these tests exercise real git state (not mocked gitExecFileAsync)
 // because the change under test is in the `for-each-ref` glob argument
@@ -100,6 +107,109 @@ describe('searchBaseRefs (widened glob)', () => {
     const results = await searchBaseRefs(tmpDir, 'local')
 
     expect(results).toContain('local-only')
+  })
+
+  // Why: a single-word query must match a term in ANY segment of a slashed
+  // branch name (`user/feature`), not just the leaf. fnmatch `*` does not
+  // cross `/`, so the glob must use `**` to span ref segments.
+  it('finds a local slashed branch when the query lands in a deep segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in a deep segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in an ancestor segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
+  it('returns the local branch name for a remote ref with slashes', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'origin/feature/something')
+
+    expect(results).toContainEqual({
+      refName: 'origin/feature/something',
+      localBranchName: 'feature/something'
+    })
+  })
+
+  it('keeps local branch names unchanged in detailed search results', async () => {
+    git(tmpDir, ['branch', 'feature/something'])
+
+    const results = await searchBaseRefDetails(tmpDir, 'feature/something')
+
+    expect(results).toContainEqual({
+      refName: 'feature/something',
+      localBranchName: 'feature/something'
+    })
+  })
+
+  it('allows creating a local branch from the selected matching remote base ref', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+
+    const result = await getBranchConflictKind(
+      tmpDir,
+      'feature/something',
+      'origin/feature/something'
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+    createRemoteRef(tmpDir, 'upstream/feature/something', sha)
+
+    const result = await getBranchConflictKind(
+      tmpDir,
+      'feature/something',
+      'origin/feature/something'
+    )
+
+    expect(result).toBe('remote')
+  })
+
+  it('uses the longest configured remote name when deriving local branch names', () => {
+    const results = parseAndFilterSearchRefDetails(
+      'refs/remotes/foo/bar/feature/something\u0000foo/bar/feature/something\n',
+      10,
+      ['foo', 'foo/bar']
+    )
+
+    expect(results).toEqual([
+      {
+        refName: 'foo/bar/feature/something',
+        localBranchName: 'feature/something'
+      }
+    ])
   })
 
   it('returns [] for a repo with no matching refs', async () => {

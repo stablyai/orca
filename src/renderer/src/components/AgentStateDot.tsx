@@ -17,6 +17,7 @@ export type AgentDotState =
   | 'working'
   | 'blocked'
   | 'waiting'
+  | 'interrupted'
   | 'done'
   | 'idle'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
@@ -33,6 +34,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Blocked'
     case 'waiting':
       return 'Waiting for input'
+    case 'interrupted':
+      return 'Interrupted'
     case 'done':
       return 'Done'
     case 'idle':
@@ -97,7 +100,10 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn(
           'block rounded-full',
           inner,
-          state === 'blocked' || state === 'waiting' || state === 'permission'
+          state === 'blocked' ||
+            state === 'waiting' ||
+            state === 'permission' ||
+            state === 'interrupted'
             ? 'bg-red-500'
             : 'bg-neutral-500/40'
         )}

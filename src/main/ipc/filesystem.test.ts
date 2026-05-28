@@ -15,15 +15,24 @@ const {
   lstatMock,
   commitChangesMock,
   getStatusMock,
+  abortMergeMock,
   getDiffMock,
   getBranchCompareMock,
   getBranchDiffMock,
+  getStagedCommitContextMock,
   stageFileMock,
   bulkStageFilesMock,
   unstageFileMock,
   bulkUnstageFilesMock,
+  bulkDiscardChangesMock,
   discardChangesMock,
+  checkIgnoredPathsMock,
   listWorktreesMock,
+  resolveCommitMessageSettingsMock,
+  generateCommitMessageFromContextMock,
+  discoverCommitMessageModelsLocalMock,
+  discoverCommitMessageModelsRemoteMock,
+  cancelGenerateCommitMessageLocalMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock
 } = vi.hoisted(() => ({
@@ -38,15 +47,24 @@ const {
   lstatMock: vi.fn(),
   commitChangesMock: vi.fn(),
   getStatusMock: vi.fn(),
+  abortMergeMock: vi.fn(),
   getDiffMock: vi.fn(),
   getBranchCompareMock: vi.fn(),
   getBranchDiffMock: vi.fn(),
+  getStagedCommitContextMock: vi.fn(),
   stageFileMock: vi.fn(),
   bulkStageFilesMock: vi.fn(),
   unstageFileMock: vi.fn(),
   bulkUnstageFilesMock: vi.fn(),
+  bulkDiscardChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
+  checkIgnoredPathsMock: vi.fn(),
   listWorktreesMock: vi.fn(),
+  resolveCommitMessageSettingsMock: vi.fn(),
+  generateCommitMessageFromContextMock: vi.fn(),
+  discoverCommitMessageModelsLocalMock: vi.fn(),
+  discoverCommitMessageModelsRemoteMock: vi.fn(),
+  cancelGenerateCommitMessageLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn()
 }))
@@ -73,14 +91,21 @@ vi.mock('fs/promises', () => ({
 vi.mock('../git/status', () => ({
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
+  abortMerge: abortMergeMock,
   getDiff: getDiffMock,
   getBranchCompare: getBranchCompareMock,
   getBranchDiff: getBranchDiffMock,
+  getStagedCommitContext: getStagedCommitContextMock,
   stageFile: stageFileMock,
   bulkStageFiles: bulkStageFilesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
+  bulkDiscardChanges: bulkDiscardChangesMock,
   discardChanges: discardChangesMock
+}))
+
+vi.mock('../git/check-ignored-paths', () => ({
+  checkIgnoredPaths: checkIgnoredPathsMock
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -88,11 +113,32 @@ vi.mock('../git/worktree', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
+  requireSshFilesystemProvider: (connectionId: string) => {
+    const provider = getSshFilesystemProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    }
+    return provider
+  }
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+}))
+
+vi.mock('../text-generation/commit-message-text-generation', () => ({
+  resolveCommitMessageSettings: resolveCommitMessageSettingsMock,
+  generateCommitMessageFromContext: generateCommitMessageFromContextMock,
+  discoverCommitMessageModelsLocal: discoverCommitMessageModelsLocalMock,
+  discoverCommitMessageModelsRemote: discoverCommitMessageModelsRemoteMock,
+  cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -158,12 +204,19 @@ describe('registerFilesystemHandlers', () => {
       getDiffMock,
       getBranchCompareMock,
       getBranchDiffMock,
+      getStagedCommitContextMock,
       stageFileMock,
       bulkStageFilesMock,
       unstageFileMock,
       bulkUnstageFilesMock,
+      bulkDiscardChangesMock,
       discardChangesMock,
       listWorktreesMock,
+      resolveCommitMessageSettingsMock,
+      generateCommitMessageFromContextMock,
+      discoverCommitMessageModelsLocalMock,
+      discoverCommitMessageModelsRemoteMock,
+      cancelGenerateCommitMessageLocalMock,
       getSshFilesystemProviderMock,
       getSshGitProviderMock
     ]) {
@@ -201,6 +254,16 @@ describe('registerFilesystemHandlers', () => {
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
   })
 
+  it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
+    ).rejects.toThrow(
+      'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    )
+  })
+
   it('rejects readFile when the real path escapes allowed roots', async () => {
     const linkPath = path.resolve('/workspace/repo/link.txt')
     realpathMock.mockImplementation(async (targetPath: string) => {
@@ -213,6 +276,93 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
+      'Access denied: path resolves outside allowed directories'
+    )
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('allows readDir when a registered worktree resolves to a macOS canonical alias', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      return targetPath
+    })
+    readdirMock.mockResolvedValue([dirEntry({ name: 'README.md', file: true })])
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: aliasWorktreePath })
+    ).resolves.toEqual([{ name: 'README.md', isDirectory: false, isSymlink: false }])
+
+    expect(readdirMock).toHaveBeenCalledWith(canonicalWorktreePath, { withFileTypes: true })
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('reports symlinked directories from readDir as directories', async () => {
+    const modelLinkPath = path.join(REPO_PATH, 'Model')
+    readdirMock.mockResolvedValue([
+      dirEntry({ name: 'README.md', file: true }),
+      dirEntry({ name: 'Model', symlink: true })
+    ])
+    statMock.mockImplementation(async (targetPath: string) => ({
+      size: 10,
+      isDirectory: () => targetPath === modelLinkPath,
+      mtimeMs: 123
+    }))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })).resolves.toEqual([
+      { name: 'Model', isDirectory: true, isSymlink: true },
+      { name: 'README.md', isDirectory: false, isSymlink: false }
+    ])
+  })
+
+  it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    const aliasFilePath = path.join(aliasWorktreePath, 'README.md')
+    const canonicalFilePath = path.join(canonicalWorktreePath, 'README.md')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      return targetPath
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('fs:deletePath')!(null, { targetPath: aliasFilePath })
+
+    expect(trashItemMock).toHaveBeenCalledWith(canonicalFilePath)
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects readFile when a symlink in a canonical alias worktree escapes the registered root', async () => {
+    const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
+    const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
+    const aliasLinkPath = path.join(aliasWorktreePath, 'link.txt')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
+    realpathMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath === aliasWorktreePath) {
+        return canonicalWorktreePath
+      }
+      if (targetPath === aliasLinkPath) {
+        return path.resolve('/private/secret.txt')
+      }
+      return targetPath
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })).rejects.toThrow(
       'Access denied: path resolves outside allowed directories'
     )
 
@@ -360,7 +510,96 @@ describe('registerFilesystemHandlers', () => {
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(realpathMock).not.toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
-    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
+  })
+
+  it('allows git operations on the known repo root without rebuilding the worktree cache', async () => {
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: REPO_PATH })
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(realpathMock).not.toHaveBeenCalledWith(REPO_PATH)
+    expect(getStatusMock).toHaveBeenCalledWith(REPO_PATH, { includeIgnored: false })
+  })
+
+  it('forwards includeIgnored through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      includeIgnored: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      includeIgnored: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
+  })
+
+  it('checks ignored paths through local and SSH git providers', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    checkIgnoredPathsMock.mockResolvedValue(['dist/bundle.js'])
+    const sshProvider = {
+      checkIgnoredPaths: vi.fn().mockResolvedValue(['build/output.js'])
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:checkIgnored')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        paths: ['dist/bundle.js', 'src/index.ts']
+      })
+    ).resolves.toEqual(['dist/bundle.js'])
+    await expect(
+      handlers.get('git:checkIgnored')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1',
+        paths: ['build/output.js']
+      })
+    ).resolves.toEqual(['build/output.js'])
+
+    expect(checkIgnoredPathsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
+      path.join('dist', 'bundle.js'),
+      path.join('src', 'index.ts')
+    ])
+    expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
+      path.join('build', 'output.js')
+    ])
+  })
+
+  it('routes abort merge through local and SSH git providers', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    abortMergeMock.mockResolvedValue(undefined)
+    const sshProvider = {
+      abortMerge: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:abortMerge')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    await handlers.get('git:abortMerge')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })
+
+    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(sshProvider.abortMerge).toHaveBeenCalledWith('/remote/repo')
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {
@@ -406,6 +645,22 @@ describe('registerFilesystemHandlers', () => {
     ])
   })
 
+  it('normalizes git file paths for bulk discard requests', async () => {
+    bulkDiscardChangesMock.mockResolvedValue(undefined)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscard')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+    })
+
+    expect(bulkDiscardChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
+      path.join('src', 'file.ts'),
+      path.join('nested', 'child.ts')
+    ])
+  })
+
   it('rejects bulk unstage requests that escape the selected worktree', async () => {
     registerFilesystemHandlers(store as never)
 
@@ -417,6 +672,19 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
 
     expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects bulk discard requests that escape the selected worktree', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:bulkDiscard')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        filePaths: ['src/file.ts', '../outside.txt']
+      })
+    ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
+
+    expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 
   it('lists markdown documents recursively for a registered worktree', async () => {
@@ -600,6 +868,372 @@ describe('registerFilesystemHandlers', () => {
     ).resolves.toEqual({ success: false, error: 'hook failed' })
   })
 
+  it('generates a local commit message from main-process staged context', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: true, message: 'Update README' })
+
+    expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
+      kind: 'local',
+      cwd: WORKTREE_FEATURE_PATH
+    })
+  })
+
+  it('prepares the selected Codex account home before local generation', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => '/managed/codex-home'
+    })
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+      })
+    )
+  })
+
+  it('prepares the Orca-managed Codex home for the default system selection', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => '/orca-managed/codex-home'
+    })
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: '/orca-managed/codex-home' })
+      })
+    )
+  })
+
+  it('returns a sanitized error when local agent account preparation fails', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => {
+        throw new Error('failed to read /Users/alice/.codex/auth.json')
+      }
+    })
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({
+      success: false,
+      error: 'Failed to prepare the selected agent account for commit message generation.'
+    })
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('prepares the selected Claude auth environment before local generation', async () => {
+    const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'do-not-leak-managed-auth-conflict'
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'claude', model: 'haiku' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    try {
+      registerFilesystemHandlers(store as never, {
+        prepareForClaudeLaunch: async () => ({
+          configDir: '/managed/claude',
+          envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
+          stripAuthEnv: true,
+          provenance: 'managed:account-1'
+        })
+      })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      const target = generateCommitMessageFromContextMock.mock.calls[0]?.[2] as
+        | { env?: NodeJS.ProcessEnv }
+        | undefined
+      expect(target?.env).toEqual(
+        expect.objectContaining({
+          CLAUDE_CONFIG_DIR: '/managed/claude'
+        })
+      )
+      expect(target?.env?.ANTHROPIC_API_KEY).toBeUndefined()
+    } finally {
+      if (previousAnthropicApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousAnthropicApiKey
+      }
+    }
+  })
+
+  it('passes per-agent command overrides into local model discovery', async () => {
+    discoverCommitMessageModelsLocalMock.mockResolvedValue({
+      success: true,
+      capability: {
+        id: 'codex',
+        label: 'Codex',
+        modelSource: 'dynamic',
+        defaultModelId: 'gpt-5.5',
+        models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }]
+      },
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }],
+      defaultModelId: 'gpt-5.5'
+    })
+    const storeWithOverride = {
+      ...store,
+      getSettings: () => ({
+        workspaceDir: WORKSPACE_DIR,
+        agentCmdOverrides: { codex: 'npx codex' }
+      })
+    }
+
+    registerFilesystemHandlers(storeWithOverride as never)
+
+    await handlers.get('git:discoverCommitMessageModels')!(null, { agentId: 'codex' })
+
+    expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+      'codex',
+      undefined,
+      'npx codex'
+    )
+  })
+
+  it('routes SSH model discovery through the remote git provider', async () => {
+    discoverCommitMessageModelsRemoteMock.mockResolvedValue({
+      success: true,
+      capability: {
+        id: 'cursor',
+        label: 'Cursor',
+        modelSource: 'dynamic',
+        defaultModelId: 'auto',
+        models: [{ id: 'auto', label: 'Auto' }]
+      },
+      models: [{ id: 'auto', label: 'Auto' }],
+      defaultModelId: 'auto'
+    })
+    const executeCommitMessagePlan = vi.fn()
+    getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan })
+    const storeWithOverride = {
+      ...store,
+      getSettings: () => ({
+        workspaceDir: WORKSPACE_DIR,
+        agentCmdOverrides: { cursor: 'npx cursor-agent' }
+      })
+    }
+
+    registerFilesystemHandlers(storeWithOverride as never)
+
+    await handlers.get('git:discoverCommitMessageModels')!(null, {
+      agentId: 'cursor',
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1'
+    })
+
+    expect(discoverCommitMessageModelsRemoteMock).toHaveBeenCalledWith(
+      'cursor',
+      '/remote/repo',
+      expect.any(Function),
+      'npx cursor-agent'
+    )
+    const execute = discoverCommitMessageModelsRemoteMock.mock.calls[0]?.[2] as (
+      plan: unknown,
+      cwd: string,
+      timeoutMs: number
+    ) => Promise<unknown>
+    await execute({ binary: 'cursor-agent', args: ['--list-models'] }, '/remote/repo', 60_000)
+    expect(executeCommitMessagePlan).toHaveBeenCalledWith(
+      { binary: 'cursor-agent', args: ['--list-models'] },
+      '/remote/repo',
+      60_000
+    )
+    expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
+  })
+
+  it('generates an SSH commit message using remote staged context and relay execution', async () => {
+    const context = {
+      branch: 'main',
+      stagedSummary: 'A\tremote.txt',
+      stagedPatch: '+remote'
+    }
+    const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+    const executeCommitMessagePlan = vi.fn()
+    const prepareForCodexLaunch = vi.fn(() => '/managed/codex-home')
+    const prepareForClaudeLaunch = vi.fn()
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan
+    })
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Add remote file'
+    })
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch,
+      prepareForClaudeLaunch
+    })
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({ success: true, message: 'Add remote file' })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'remote',
+        cwd: '/remote/repo',
+        missingBinaryLocation: 'remote PATH'
+      })
+    )
+    const target = generateCommitMessageFromContextMock.mock.calls[0]?.[2]
+    await target.execute(
+      { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
+      '/cwd',
+      1
+    )
+    expect(executeCommitMessagePlan).toHaveBeenCalledWith(
+      { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
+      '/cwd',
+      1
+    )
+    expect(prepareForCodexLaunch).not.toHaveBeenCalled()
+    expect(prepareForClaudeLaunch).not.toHaveBeenCalled()
+  })
+
+  it('does not call the generator when no staged changes exist', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getStagedCommitContextMock.mockResolvedValue(null)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: false, error: 'No staged changes to summarize.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes local staged-context read failures before returning to the renderer', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getStagedCommitContextMock.mockRejectedValue(new Error('fatal: /secret/repo failed'))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes SSH staged-context read failures before returning to the renderer', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockRejectedValue(new Error('fatal: /remote/secret failed'))
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
   it('routes ssh git:commit through the SSH provider instead of local commitChanges', async () => {
     const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
     getSshGitProviderMock.mockReturnValue({ commit: sshCommitMock })
@@ -616,6 +1250,22 @@ describe('registerFilesystemHandlers', () => {
 
     expect(sshCommitMock).toHaveBeenCalledWith('/remote/repo', 'feat: remote commit')
     expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('routes ssh git:bulkDiscard through the SSH provider', async () => {
+    const sshBulkDiscardMock = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ bulkDiscardChanges: sshBulkDiscardMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscard')!(null, {
+      worktreePath: '/remote/repo',
+      filePaths: ['a.ts', 'b.ts'],
+      connectionId: 'conn-1'
+    })
+
+    expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
+    expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:commit with empty message and does not call commitChanges', async () => {

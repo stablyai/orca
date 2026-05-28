@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  getSshGitProviderMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   ghExecFileAsync: vi.fn()
+}))
+
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: getSshGitProviderMock
 }))
 
 import {
@@ -15,13 +20,17 @@ import {
   classifyListIssuesError,
   getIssueOwnerRepo,
   getOwnerRepo,
+  getOwnerRepoForRemote,
+  parseGitHubRemoteIdentity,
   parseGitHubOwnerRepo,
+  resolvePRRepositoryCandidates,
   resolveIssueSource
 } from './gh-utils'
 
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
   })
 
@@ -39,6 +48,20 @@ describe('github owner/repo resolution', () => {
       repo: 'boring.notch'
     })
     expect(parseGitHubOwnerRepo('git@example.com:stablyai/orca.git')).toBeNull()
+  })
+
+  it('parses GitHub Enterprise host identity', () => {
+    expect(parseGitHubRemoteIdentity('https://ghe.acme.internal/acme/orca.git')).toEqual({
+      host: 'ghe.acme.internal',
+      owner: 'acme',
+      repo: 'orca'
+    })
+    expect(parseGitHubRemoteIdentity('git@ghe.acme.internal:acme/orca.git')).toEqual({
+      host: 'ghe.acme.internal',
+      owner: 'acme',
+      repo: 'orca'
+    })
+    expect(parseGitHubOwnerRepo('https://ghe.acme.internal/acme/orca.git')).toBeNull()
   })
 
   it('keeps getOwnerRepo origin-based', async () => {
@@ -85,11 +108,93 @@ describe('github owner/repo resolution', () => {
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
   })
+
+  it('resolves SSH repo remotes through the registered SSH git provider', async () => {
+    const sshProvider = {
+      exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    await expect(getOwnerRepo('/home/user/orca', 'openclaw-2')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
+    expect(sshProvider.exec).toHaveBeenCalledWith(
+      ['remote', 'get-url', 'origin'],
+      '/home/user/orca'
+    )
+  })
+
+  it('keeps local and SSH owner/repo cache entries separate for the same path', async () => {
+    const sshProvider = {
+      exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:remote/orca.git\n', stderr: '' })
+    }
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'git@github.com:local/orca.git\n' })
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'local', repo: 'orca' })
+    await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
+  })
+
+  it('resolves PR candidates as upstream then origin and de-dupes matching slugs', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:Acme/Orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/orca.git\n' })
+
+    await expect(resolvePRRepositoryCandidates('/repo')).resolves.toEqual({
+      candidates: [{ owner: 'Acme', repo: 'Orca' }],
+      headRepo: { owner: 'acme', repo: 'orca' }
+    })
+  })
+
+  it('ignores non-GitHub upstream while keeping origin as the head repo', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@example.com:Acme/Orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@github.com:fork/orca.git\n' })
+
+    await expect(resolvePRRepositoryCandidates('/repo')).resolves.toEqual({
+      candidates: [{ owner: 'fork', repo: 'orca' }],
+      headRepo: { owner: 'fork', repo: 'orca' }
+    })
+  })
+
+  it('expires cached remote owner/repo entries after the TTL', async () => {
+    vi.useFakeTimers()
+    try {
+      gitExecFileAsyncMock
+        .mockResolvedValueOnce({ stdout: 'git@github.com:old/orca.git\n' })
+        .mockResolvedValueOnce({ stdout: 'git@github.com:new/orca.git\n' })
+
+      await expect(getOwnerRepoForRemote('/repo', 'origin')).resolves.toEqual({
+        owner: 'old',
+        repo: 'orca'
+      })
+      await expect(getOwnerRepoForRemote('/repo', 'origin')).resolves.toEqual({
+        owner: 'old',
+        repo: 'orca'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(30_001)
+
+      await expect(getOwnerRepoForRemote('/repo', 'origin')).resolves.toEqual({
+        owner: 'new',
+        repo: 'orca'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('resolveIssueSource', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
   })
 

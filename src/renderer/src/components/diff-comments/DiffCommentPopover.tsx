@@ -12,6 +12,7 @@ type Props = {
   lineNumber: number
   startLine?: number
   top: number
+  left?: number
   title?: string
   placeholder?: string
   submitLabel?: string
@@ -24,6 +25,7 @@ export function DiffCommentPopover({
   lineNumber,
   startLine,
   top,
+  left,
   title,
   placeholder = 'Add note for the AI',
   submitLabel = 'Add note',
@@ -110,7 +112,7 @@ export function DiffCommentPopover({
     <div
       ref={popoverRef}
       className="orca-diff-comment-popover"
-      style={{ top: `${top}px` }}
+      style={{ top: `${top}px`, ...(left == null ? {} : { left: `${left}px` }) }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelId}

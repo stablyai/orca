@@ -1,4 +1,9 @@
 import { FileKey } from 'lucide-react'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
+} from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -13,6 +18,7 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   relayGracePeriodSeconds: string
+  relayKeepAliveUntilReset: boolean
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -24,7 +30,8 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: '300'
+  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
+  relayKeepAliveUntilReset: false
 }
 
 type SshTargetFormProps = {
@@ -127,17 +134,35 @@ export function SshTargetForm({
         <div className="col-span-2 space-y-1.5">
           <Label>Relay Grace Period (seconds)</Label>
           <Input
-            type="number"
-            value={form.relayGracePeriodSeconds}
+            type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
+            value={form.relayKeepAliveUntilReset ? 'Until reset' : form.relayGracePeriodSeconds}
             onChange={(e) =>
               onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
             }
-            placeholder="300"
-            min={60}
-            max={3600}
+            placeholder={String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)}
+            min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
+            max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
+            disabled={form.relayKeepAliveUntilReset}
           />
+          <label className="flex cursor-pointer items-start gap-2.5 py-1 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-3.5 shrink-0 accent-foreground"
+              checked={form.relayKeepAliveUntilReset}
+              onChange={(e) =>
+                onFormChange((f) => ({ ...f, relayKeepAliveUntilReset: e.target.checked }))
+              }
+            />
+            <span className="space-y-0.5">
+              <span className="block font-medium text-foreground">Keep alive until reset</span>
+              <span className="block text-muted-foreground">
+                Remote terminals stay available until you end them or reset the relay.
+              </span>
+            </span>
+          </label>
           <p className="text-[11px] text-muted-foreground">
-            How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
+            How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours).
+            Maximum: {MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} (7 days).
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 export type ClaudeUsageProcessedFile = {
   path: string
   mtimeMs: number
+  size: number
   lineCount: number
 }
 
@@ -50,7 +51,8 @@ export type ClaudeUsageDailyAggregate = {
 
 export type ClaudeUsagePersistedState = {
   schemaVersion: number
-  processedFiles: ClaudeUsageProcessedFile[]
+  worktreeFingerprint: string | null
+  processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
   scanState: {
@@ -59,6 +61,11 @@ export type ClaudeUsagePersistedState = {
     lastScanCompletedAt: number | null
     lastScanError: string | null
   }
+}
+
+export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
+  sessions: ClaudeUsageSession[]
+  dailyAggregates: ClaudeUsageDailyAggregate[]
 }
 
 export type ClaudeUsageParsedTurn = {

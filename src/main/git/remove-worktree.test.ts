@@ -32,7 +32,12 @@ vi.mock('fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
-import { addSparseWorktree, listWorktrees, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  assertWorktreeCleanForRemoval,
+  listWorktrees,
+  removeWorktree
+} from './worktree'
 
 type MockResult = {
   error?: Error
@@ -117,6 +122,29 @@ branch refs/heads/main
     )
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
     expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+  })
+
+  it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
+
+    const calls = getGitCalls()
+    expect(calls).toEqual(
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git worktree prune'])
+    )
+    expect(calls).not.toContain('git branch -D feature/test')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
@@ -292,6 +320,46 @@ branch refs/heads/main
   })
 })
 
+describe('assertWorktreeCleanForRemoval', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('returns without checking git status for force removals', async () => {
+    await expect(assertWorktreeCleanForRemoval('/repo-feature', true)).resolves.toBeUndefined()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('passes when git status output is empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { cwd: '/repo-feature' }
+    )
+  })
+
+  it('throws a dedicated dirty/untracked error when status output is non-empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? scratch.txt\n', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toMatchObject({
+      message: 'Worktree has uncommitted or untracked changes.',
+      stdout: '?? scratch.txt\n'
+    })
+  })
+
+  it('rethrows preflight subprocess failures as-is', async () => {
+    const error = Object.assign(new Error('fatal: not a git repository'), {
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+    })
+    gitExecFileAsyncMock.mockRejectedValueOnce(error)
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)
+  })
+})
+
 describe('listWorktrees', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -359,6 +427,25 @@ describe('listWorktrees', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[git/worktree] repo path missing; skipping worktree list: /workspace/deleted-repo'
     )
+    warnSpy.mockRestore()
+  })
+
+  it('returns no worktrees when the path exists but is not a git repo', async () => {
+    const warnSpy = vi.spyOn(console, 'warn')
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: git worktree list --porcelain'), {
+        code: 128,
+        stdout: '',
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+
+    await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+      cwd: '/private/tmp/orca-issue-1582-test/my-repo'
+    })
+    expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 
@@ -444,6 +531,14 @@ describe('addSparseWorktree', () => {
 
   it('removes the worktree and deletes the created branch when sparse setup fails', async () => {
     mockGitCommands({
+      // Why: addWorktree probes push.autoSetupRemote after `worktree add` to
+      // decide whether to set it locally. Without an explicit mock the helper
+      // returns empty stdout and the production code skips the `--local` write,
+      // exercising the wrong branch. Throw with code 1 to mirror git's "key
+      // unset" exit, which is what worktree.ts treats as "needs to be set".
+      'git config --get push.autoSetupRemote': {
+        error: Object.assign(new Error('key unset'), { code: 1 })
+      },
       'git sparse-checkout set -- packages/web': {
         error: new Error('sparse setup failed')
       },
@@ -472,7 +567,9 @@ branch refs/heads/main
     const calls = getGitCalls()
     expect(calls).toEqual(
       expect.arrayContaining([
-        'git worktree add --no-checkout -b feature/test /repo-feature',
+        'git worktree add --no-checkout --no-track -b feature/test /repo-feature',
+        'git config --get push.autoSetupRemote',
+        'git config --local push.autoSetupRemote true',
         'git sparse-checkout init --cone',
         'git sparse-checkout set -- packages/web',
         'git worktree remove --force /repo-feature',

@@ -4,24 +4,42 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
-import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
+import ProjectAddedDialog from './ProjectAddedDialog'
+import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
+import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
+// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
+  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
 
-function Sidebar(): React.JSX.Element {
+type SidebarProps = {
+  worktreeScrollOffsetRef: React.MutableRefObject<number>
+  worktreeScrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+}
+
+function Sidebar({
+  worktreeScrollOffsetRef,
+  worktreeScrollAnchorRef
+}: SidebarProps): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+
+  const setLiveSidebarWidth = React.useCallback((width: number) => {
+    document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
+  }, [])
 
   // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
@@ -37,8 +55,13 @@ function Sidebar(): React.JSX.Element {
     minWidth: MIN_WIDTH,
     maxWidth: MAX_WIDTH,
     deltaSign: 1,
-    setWidth: setSidebarWidth
+    setWidth: setSidebarWidth,
+    onDraftWidthChange: setLiveSidebarWidth
   })
+
+  useEffect(() => {
+    setLiveSidebarWidth(sidebarWidth)
+  }, [setLiveSidebarWidth, sidebarWidth])
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -46,28 +69,41 @@ function Sidebar(): React.JSX.Element {
         ref={containerRef}
         className="relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
       >
-        {/* Fixed controls */}
-        <SidebarNav />
-        <SidebarHeader />
+        {sidebarOpen && (
+          <>
+            {/* Fixed controls */}
+            <SidebarNav />
+            <SidebarHeader />
 
-        <WorktreeList />
+            <WorktreeList
+              scrollOffsetRef={worktreeScrollOffsetRef}
+              scrollAnchorRef={worktreeScrollAnchorRef}
+            />
 
-        {/* Fixed bottom toolbar */}
-        <SidebarToolbar />
+            <SetupScriptPromptCard />
+
+            {/* Fixed bottom toolbar */}
+            <SidebarToolbar />
+          </>
+        )}
 
         {/* Resize handle */}
-        <div
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
-          onMouseDown={onResizeStart}
-        />
+        {sidebarOpen && (
+          <div
+            data-sidebar-resize-handle=""
+            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
+            onMouseDown={onResizeStart}
+          />
+        )}
       </div>
 
       {/* Dialog (rendered outside sidebar to avoid clipping) */}
       <WorktreeMetaDialog />
-      <DeleteWorktreeDialog />
       <NonGitFolderDialog />
       <RemoveFolderDialog />
       <AddRepoDialog />
+      <ProjectAddedDialog />
+      <WorktreeVisibilityDialog />
       <OrcaYamlTrustDialog />
     </TooltipProvider>
   )

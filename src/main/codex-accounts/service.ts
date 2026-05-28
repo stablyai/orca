@@ -106,7 +106,7 @@ export class CodexAccountService {
         activeCodexManagedAccountId: account.id
       })
       this.safeSyncCanonicalConfigToManagedHomes()
-      this.runtimeHome.clearLastWrittenAuthJson()
+      this.runtimeHome.clearLastWrittenAuthJson(account.id)
       this.runtimeHome.syncForCurrentSelection()
 
       // Why: the new account becomes active, so the previous active account is
@@ -150,7 +150,7 @@ export class CodexAccountService {
       codexManagedAccounts: updatedAccounts
     })
     this.safeSyncCanonicalConfigToManagedHomes()
-    this.runtimeHome.clearLastWrittenAuthJson()
+    this.runtimeHome.clearLastWrittenAuthJson(accountId)
     this.runtimeHome.syncForCurrentSelection()
 
     // Why: re-auth can change which actual Codex identity the managed home

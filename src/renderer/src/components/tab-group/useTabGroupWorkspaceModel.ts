@@ -2,7 +2,6 @@
    group-scoped activation, close, split, and tab-order rules together so the extracted
    controller cannot drift from the TabGroupPanel surface it coordinates. */
 import { useCallback, useMemo } from 'react'
-import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
@@ -12,13 +11,17 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import { useAllWorktrees } from '../../store/selectors'
-import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
-import { getConnectionId } from '../../lib/connection-context'
-import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '../../runtime/web-runtime-session'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -26,19 +29,9 @@ export type GroupBrowserItem = BrowserTabState & { tabId: string }
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
-const EMPTY_RUNTIME_TERMINAL_TABS: readonly TerminalTab[] = []
+const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 
-type TerminalTabItem = {
-  id: string
-  unifiedTabId: string
-  ptyId: null
-  worktreeId: string
-  title: string
-  customTitle: string | null
-  color: string | null
-  sortOrder: number
-  createdAt: number
-}
+type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
 export function useTabGroupWorkspaceModel({
   groupId,
@@ -47,7 +40,6 @@ export function useTabGroupWorkspaceModel({
   groupId: string
   worktreeId: string
 }) {
-  const allWorktrees = useAllWorktrees()
   const worktreeState = useAppStore(
     useShallow((state) => ({
       // Why: Zustand v5 expects selector snapshots to be referentially stable
@@ -57,9 +49,9 @@ export function useTabGroupWorkspaceModel({
       // and blanks the window as soon as TabGroupPanel mounts.
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
+      terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-      runtimeTerminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_RUNTIME_TERMINAL_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId
     }))
   )
@@ -74,6 +66,15 @@ export function useTabGroupWorkspaceModel({
   const setActiveFile = useAppStore((state) => state.setActiveFile)
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
+  const openNewBrowserTabInActiveWorkspace = useAppStore(
+    (state) => state.openNewBrowserTabInActiveWorkspace
+  )
+  const openNewMarkdownInActiveWorkspace = useAppStore(
+    (state) => state.openNewMarkdownInActiveWorkspace
+  )
+  const openNewTerminalTabInActiveWorkspace = useAppStore(
+    (state) => state.openNewTerminalTabInActiveWorkspace
+  )
   const closeFile = useAppStore((state) => state.closeFile)
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
@@ -83,16 +84,10 @@ export function useTabGroupWorkspaceModel({
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
-  const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const openFile = useAppStore((state) => state.openFile)
 
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
     [groupId, worktreeState.groups]
-  )
-  const worktree = useMemo(
-    () => allWorktrees.find((candidate) => candidate.id === worktreeId) ?? null,
-    [allWorktrees, worktreeId]
   )
   const groupTabs = useMemo(
     () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
@@ -100,23 +95,36 @@ export function useTabGroupWorkspaceModel({
   )
   const activeItemId = group?.activeTabId ?? null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
+  // Why: split groups render tab labels from unified tabs, but terminal shell
+  // identity lives on the terminal tab so icons survive default-shell changes.
+  const terminalTabById = useMemo(
+    () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
+    [worktreeState.terminalTabs]
+  )
 
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
       groupTabs
         .filter((item) => item.contentType === 'terminal')
-        .map((item) => ({
-          id: item.entityId,
-          unifiedTabId: item.id,
-          ptyId: null,
-          worktreeId,
-          title: item.label,
-          customTitle: item.customLabel ?? null,
-          color: item.color ?? null,
-          sortOrder: item.sortOrder,
-          createdAt: item.createdAt
-        })),
-    [groupTabs, worktreeId]
+        .map((item) => {
+          const terminalTab = terminalTabById.get(item.entityId)
+          return {
+            id: item.entityId,
+            unifiedTabId: item.id,
+            ptyId: terminalTab?.ptyId ?? null,
+            worktreeId,
+            title: item.label,
+            defaultTitle: terminalTab?.defaultTitle,
+            customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
+            color: item.color ?? terminalTab?.color ?? null,
+            sortOrder: item.sortOrder,
+            createdAt: item.createdAt,
+            generation: terminalTab?.generation,
+            shellOverride: terminalTab?.shellOverride,
+            pendingActivationSpawn: terminalTab?.pendingActivationSpawn
+          }
+        }),
+    [groupTabs, terminalTabById, worktreeId]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(
@@ -146,11 +154,6 @@ export function useTabGroupWorkspaceModel({
         })
         .filter((item): item is GroupBrowserItem => item !== null),
     [groupTabs, worktreeState.browserTabs]
-  )
-
-  const runtimeTerminalTabById = useMemo(
-    () => new Map(worktreeState.runtimeTerminalTabs.map((tab) => [tab.id, tab])),
-    [worktreeState.runtimeTerminalTabs]
   )
 
   const closeEditorIfUnreferenced = useCallback(
@@ -201,6 +204,22 @@ export function useTabGroupWorkspaceModel({
       if (!item) {
         return
       }
+      const runtimeEnvironmentId = useAppStore
+        .getState()
+        .settings?.activeRuntimeEnvironmentId?.trim()
+      if (
+        (item.contentType === 'terminal' || item.contentType === 'browser') &&
+        isWebRuntimeSessionActive(runtimeEnvironmentId)
+      ) {
+        // Why: paired web clients mirror host-owned tabs. Closing locally races
+        // the host session snapshot and leaves stale terminal/browser handles.
+        void closeWebRuntimeSessionTab({
+          worktreeId,
+          tabId: item.contentType === 'browser' ? item.id : item.entityId,
+          environmentId: runtimeEnvironmentId
+        })
+        return
+      }
       if (item.contentType === 'terminal') {
         closeTab(item.entityId)
       } else if (item.contentType === 'browser') {
@@ -223,7 +242,8 @@ export function useTabGroupWorkspaceModel({
       closeTab,
       closeUnifiedTab,
       groupTabs,
-      leaveWorktreeIfEmpty
+      leaveWorktreeIfEmpty,
+      worktreeId
     ]
   )
 
@@ -232,6 +252,20 @@ export function useTabGroupWorkspaceModel({
       for (const itemId of itemIds) {
         const item = groupTabs.find((candidate) => candidate.id === itemId)
         if (!item) {
+          continue
+        }
+        const runtimeEnvironmentId = useAppStore
+          .getState()
+          .settings?.activeRuntimeEnvironmentId?.trim()
+        if (
+          (item.contentType === 'terminal' || item.contentType === 'browser') &&
+          isWebRuntimeSessionActive(runtimeEnvironmentId)
+        ) {
+          void closeWebRuntimeSessionTab({
+            worktreeId,
+            tabId: item.contentType === 'browser' ? item.id : item.entityId,
+            environmentId: runtimeEnvironmentId
+          })
           continue
         }
         if (item.contentType === 'terminal') {
@@ -247,7 +281,7 @@ export function useTabGroupWorkspaceModel({
         }
       }
     },
-    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs]
+    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
   )
 
   const activateTerminal = useCallback(
@@ -260,10 +294,45 @@ export function useTabGroupWorkspaceModel({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
+      const runtimeEnvironmentId = useAppStore
+        .getState()
+        .settings?.activeRuntimeEnvironmentId?.trim()
+      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId,
+          tabId: terminalId,
+          environmentId: runtimeEnvironmentId
+        })
+      }
       setActiveTab(terminalId)
       setActiveTabType('terminal')
+      // Why: clicking the tab button gives the browser focus to the tab strip
+      // after pointerdown; explicitly return it to xterm on the next frames.
+      focusTerminalTabSurface(terminalId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveTab, setActiveTabType, worktreeId]
+  )
+
+  const toggleTerminalPaneExpand = useCallback(
+    (terminalId: string) => {
+      const item = groupTabs.find(
+        (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
+      )
+      if (!item) {
+        return
+      }
+      // Why: the tab-bar collapse icon stops pointer propagation, so it does
+      // not run the normal tab activation handler before toggling pane layout.
+      activateTerminal(terminalId)
+      requestAnimationFrame(() => {
+        window.dispatchEvent(
+          new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
+            detail: { tabId: terminalId }
+          })
+        )
+      })
+    },
+    [activateTerminal, groupTabs]
   )
 
   const activateEditor = useCallback(
@@ -290,6 +359,16 @@ export function useTabGroupWorkspaceModel({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
+      const runtimeEnvironmentId = useAppStore
+        .getState()
+        .settings?.activeRuntimeEnvironmentId?.trim()
+      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId,
+          tabId: item.id,
+          environmentId: runtimeEnvironmentId
+        })
+      }
       setActiveBrowserTab(browserTabId)
       setActiveTabType('browser')
     },
@@ -437,8 +516,6 @@ export function useTabGroupWorkspaceModel({
     terminalTabs,
     tabBarOrder,
     groupTabs,
-    worktreePath: worktree?.path,
-    runtimeTerminalTabById,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
     commands: {
       focusGroup: () => {
@@ -452,59 +529,67 @@ export function useTabGroupWorkspaceModel({
       closeItem,
       closeOthers,
       closeToRight,
-      consumeSuppressedPtyExit,
       createSplitGroup,
       newBrowserTab: () => {
-        const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-        createBrowserTab(worktreeId, defaultUrl, {
-          title: 'New Browser Tab',
-          focusAddressBar: true
-        })
+        void openNewBrowserTabInActiveWorkspace(groupId)
       },
       duplicateBrowserTab: (browserTabId: string) => {
-        const state = useAppStore.getState()
-        const tabs = state.browserTabsByWorktree[worktreeId] ?? []
-        const source = tabs.find((t) => t.id === browserTabId)
-        if (!source) {
-          return
-        }
-        createBrowserTab(worktreeId, source.url, {
-          title: source.title,
-          sessionProfileId: source.sessionProfileId
-        })
+        void (async () => {
+          const state = useAppStore.getState()
+          const tabs = state.browserTabsByWorktree[worktreeId] ?? []
+          const source = tabs.find((t) => t.id === browserTabId)
+          if (!source) {
+            return
+          }
+          if (
+            await createWebRuntimeSessionBrowserTab({
+              worktreeId,
+              url: source.url,
+              profileId: source.sessionProfileId,
+              targetGroupId: groupId
+            })
+          ) {
+            return
+          }
+          createBrowserTab(worktreeId, source.url, {
+            title: source.title,
+            sessionProfileId: source.sessionProfileId,
+            targetGroupId: groupId
+          })
+        })()
       },
       // Why: split-group actions must target their owning group explicitly.
       // Relying on the ambient activeGroupIdByWorktree breaks keyboard and
       // assistive-tech activation because the "+" menu can be triggered from
       // an unfocused panel without first updating global group focus.
       newFileTab: async () => {
-        const path = worktree?.path
-        if (!path) {
-          return
-        }
-        try {
-          const connectionId = getConnectionId(worktreeId) ?? undefined
-          const fileInfo = await createUntitledMarkdownFile(path, worktreeId, connectionId)
-          openFile(fileInfo, { preview: false, targetGroupId: groupId })
-        } catch (err) {
-          toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
-        }
+        await openNewMarkdownInActiveWorkspace(groupId)
       },
       newTerminalTab: () => {
-        const terminal = createTab(worktreeId, groupId)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
-        focusTerminalTabSurface(terminal.id)
+        void openNewTerminalTabInActiveWorkspace(groupId)
       },
       newTerminalWithShell: (shellOverride: string) => {
-        const terminal = createTab(worktreeId, groupId, shellOverride)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
-        focusTerminalTabSurface(terminal.id)
+        void (async () => {
+          if (
+            await createWebRuntimeSessionTerminal({
+              worktreeId,
+              targetGroupId: groupId,
+              command: shellOverride,
+              activate: true
+            })
+          ) {
+            return
+          }
+          const terminal = createTab(worktreeId, groupId, shellOverride)
+          setActiveTab(terminal.id)
+          setActiveTabType('terminal')
+          focusTerminalTabSurface(terminal.id)
+        })()
       },
       pinFile,
       setTabColor,
-      setTabCustomTitle
+      setTabCustomTitle,
+      toggleTerminalPaneExpand
     }
   }
 }

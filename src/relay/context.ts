@@ -1,7 +1,5 @@
-import { resolve, relative, isAbsolute } from 'path'
+import { resolve } from 'path'
 import { homedir } from 'os'
-import { realpathSync } from 'fs'
-import { realpath } from 'fs/promises'
 
 // Why: Node's fs APIs don't understand shell tilde expansion. Old repos may
 // have been stored with `~` or `~/…` paths before the client-side fix, so the
@@ -16,69 +14,18 @@ export function expandTilde(p: string): string {
   return p
 }
 
-// Why: mutating FS operations on the remote must be scoped to workspace roots
-// registered by the main process. Without this, a compromised or buggy client
-// could delete arbitrary files on the remote host.
+// Why: the relay runs as the SSH user and trusts the renderer process. A
+// compromised renderer can already weaponize pty.spawn and git.exec to reach
+// any path the SSH user can reach, so the FS-side allowlist provided friction
+// without meaningfully narrowing the blast radius. See
+// docs/relay-fs-allowlist-removal.md.
+//
+// registerRoot is retained as a no-op so existing session.registerRoot RPC
+// calls (notification + request) remain valid during the relay-deploy upgrade
+// window where an old main may still call into a new relay (and vice versa).
+// Tracked for deletion once the relay-version floor moves past the cutover.
 export class RelayContext {
-  readonly authorizedRoots = new Set<string>()
-
-  // Why: before any root is registered there is a race window where
-  // authorizedRoots is empty. If we allowed all paths during that window a
-  // compromised client could read or mutate arbitrary files before the first
-  // workspace root is registered. We track registration explicitly and reject
-  // every validatePath call until at least one root has been added.
-  private rootsRegistered = false
-
-  registerRoot(rootPath: string): void {
-    const resolved = resolve(expandTilde(rootPath))
-    this.authorizedRoots.add(resolved)
-    // Why: on macOS, /tmp is a symlink to /private/tmp. If a root is registered
-    // as /tmp/workspace, validatePathResolved would resolve it to /private/tmp/
-    // workspace, which fails the textual root check. Register both forms so the
-    // resolved path also passes validation.
-    try {
-      const real = realpathSync(resolved)
-      if (real !== resolved) {
-        this.authorizedRoots.add(real)
-      }
-    } catch {
-      // Root doesn't exist yet — textual form is sufficient
-    }
-    this.rootsRegistered = true
-  }
-
-  validatePath(targetPath: string): void {
-    if (!this.rootsRegistered) {
-      throw new Error('No workspace roots registered yet — path validation denied')
-    }
-
-    const resolved = resolve(expandTilde(targetPath))
-    for (const root of this.authorizedRoots) {
-      const rel = relative(root, resolved)
-      if (!rel.startsWith('..') && !isAbsolute(rel)) {
-        return
-      }
-    }
-    throw new Error(`Path outside authorized workspace: ${targetPath}`)
-  }
-
-  // Why: validatePath only normalizes `..` textually. A symlink inside the
-  // workspace pointing outside it (e.g., workspace/evil -> /etc/) would pass
-  // textual validation. This async variant resolves symlinks via realpath
-  // before checking the path, closing the symlink traversal vector.
-  async validatePathResolved(targetPath: string): Promise<void> {
-    this.validatePath(targetPath)
-    try {
-      const real = await realpath(targetPath)
-      this.validatePath(real)
-    } catch (err) {
-      // Why: ENOENT/ENOTDIR means the path doesn't exist yet (e.g., createFile)
-      // so the textual check above is sufficient. Other errors (EACCES, EIO)
-      // indicate real problems that should propagate.
-      const code = (err as NodeJS.ErrnoException).code
-      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-        throw err
-      }
-    }
+  registerRoot(_rootPath: string): void {
+    // intentionally empty
   }
 }

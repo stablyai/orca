@@ -5,8 +5,8 @@
  *
  * Why this module exists (design doc: docs/design/share-quick-open-file-listing.md):
  * Before extraction, the local and relay listFiles implementations had diverged
- * on blocklist, .env* handling, nested-worktree exclusions, timeout strategy,
- * and buffering. A home-dir worktree over SSH would descend into $HOME dotfile
+ * on blocklist, ignored-file handling, nested-worktree exclusions, timeout
+ * strategy, and buffering. A home-dir worktree over SSH would descend into $HOME dotfile
  * caches, hit a 10s timeout, and silently resolve with a partial result —
  * Quick Open showed "No matching files" even though the scan was incomplete.
  * Centralizing the policy prevents future drift.
@@ -223,8 +223,8 @@ export type RgArgsOptions = {
 export type RgArgs = {
   /** Main pass: all non-ignored files, hidden dotfiles included. */
   primary: string[]
-  /** Second pass: gitignored .env* files. */
-  envPass: string[]
+  /** Second pass: ignored files, hidden dotfiles included. */
+  ignoredPass: string[]
 }
 
 /**
@@ -258,25 +258,19 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     opts.searchRoot
   ]
 
-  // .env* pass: must include --no-ignore-vcs so rg surfaces gitignored .env
-  // files, which is the whole reason the second pass exists. Two positive
-  // globs (root-level and nested) because rg treats any positive --glob as a
-  // whitelist; no preceding negative pattern is needed.
-  const envPass = [
+  // Ignored pass: --no-ignore-vcs broadens traversal to gitignored and
+  // parent/global ignored files; blocklist globs remain the guardrail.
+  const ignoredPass = [
     '--files',
     '--hidden',
     '--no-ignore-vcs',
     ...sepArgs,
-    '--glob',
-    '.env*',
-    '--glob',
-    '**/.env*',
     ...hiddenDirGlobs,
     ...excludeGlobs,
     opts.searchRoot
   ]
 
-  return { primary, envPass }
+  return { primary, ignoredPass }
 }
 
 // ─── rg stdout line normalization ────────────────────────────────────
@@ -331,7 +325,7 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
 
 export type GitLsFilesArgs = {
   primary: string[]
-  envPass: string[]
+  ignoredPass: string[]
 }
 
 /**
@@ -340,9 +334,8 @@ export type GitLsFilesArgs = {
  * prepended so exclude-only pathspecs do not depend on git's edge-case
  * defaults.
  *
- * The `.env*` pass uses BOTH `.env*` (root-level) and `**\/.env*` (nested)
- * because the `**\/` prefix alone does not match a root-level `.env` file —
- * this was the silent bug in the prior local implementation.
+ * The ignored pass asks git for ignored untracked files. Non-git roots keep
+ * their existing non-git fallback limits in the callers.
  */
 export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
@@ -355,17 +348,6 @@ export function buildGitLsFilesArgsForQuickOpen(
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
 
   const primary = ['--cached', '--others', '--exclude-standard', ...trailingPathspecs]
-  // Second pass: untracked AND ignored .env* files. Do not pass
-  // --exclude-standard — that would re-hide gitignored .env files, which is
-  // the whole reason this pass exists.
-  // Why :(glob): default git pathspec uses fnmatch, where `*` crossing `/` is
-  // implementation-dependent. `:(glob)` pins the semantics explicitly so
-  // `**/.env*` reliably surfaces nested `.env` files across git versions.
-  const nestedEnvSpec = ':(glob)**/.env*'
-  const envPassPathspecs =
-    excludeSpecs.length > 0
-      ? ['--', '.env*', nestedEnvSpec, ...excludeSpecs]
-      : ['--', '.env*', nestedEnvSpec]
-  const envPass = ['--others', ...envPassPathspecs]
-  return { primary, envPass }
+  const ignoredPass = ['--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
+  return { primary, ignoredPass }
 }

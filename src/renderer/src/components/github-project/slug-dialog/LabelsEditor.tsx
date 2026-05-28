@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useAppStore } from '@/store'
 
 export function LabelsEditor({
   owner,
@@ -16,37 +18,8 @@ export function LabelsEditor({
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    // Why: guard against late responses overwriting newer state when the
-    // popover toggles owner/repo (or closes/reopens) while the IPC is still
-    // in flight. Mirrors the requestIdRef pattern used for the details fetch.
-    let cancelled = false
-    setLoading(true)
-    window.api.gh
-      .listLabelsBySlug({ owner, repo })
-      .then((res) => {
-        if (cancelled) {
-          return
-        }
-        if (res.ok) {
-          setOptions(res.labels)
-        }
-      })
-      .finally(() => {
-        if (cancelled) {
-          return
-        }
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, owner, repo])
+  const settings = useAppStore((s) => s.settings)
+  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, settings)
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
@@ -59,10 +32,10 @@ export function LabelsEditor({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
-        {loading ? (
+        {metadata.loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
         ) : (
-          options.map((name) => {
+          metadata.data.map((name) => {
             const isOn = selected.includes(name)
             return (
               <button

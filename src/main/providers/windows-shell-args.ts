@@ -1,4 +1,9 @@
 import { win32 as pathWin32 } from 'path'
+import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -20,6 +25,16 @@ export type WindowsShellLaunchArgs = {
   validationCwd: string
 }
 
+export type WindowsShellWslContext = {
+  distro: string
+}
+
+function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
+  const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
+  const shellArgs = ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`]
+  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
+
 /** Build the argv + effective cwd for a Windows shell launch.
  *
  *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly.
@@ -32,7 +47,8 @@ export type WindowsShellLaunchArgs = {
 export function resolveWindowsShellLaunchArgs(
   shellPath: string,
   cwd: string,
-  defaultCwd: string
+  defaultCwd: string,
+  wslContext?: WindowsShellWslContext
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
 
@@ -45,11 +61,14 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
+    // Why: foreground-process status on Windows depends on OSC 133 C/D, and
+    // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
       shellArgs: [
+        '-NoLogo',
         '-NoExit',
-        '-Command',
-        'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        '-EncodedCommand',
+        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
       effectiveCwd: cwd,
       validationCwd: cwd
@@ -57,11 +76,25 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'wsl.exe') {
+    const wslInfo = parseWslPath(cwd)
+    if (wslInfo) {
+      return {
+        shellArgs: buildWslShellArgs(wslInfo.linuxPath, wslInfo.distro),
+        effectiveCwd: defaultCwd,
+        validationCwd: cwd
+      }
+    }
+    if (wslContext && cwd.startsWith('/')) {
+      return {
+        shellArgs: buildWslShellArgs(cwd, wslContext.distro),
+        effectiveCwd: defaultCwd,
+        validationCwd: toWindowsWslPath(cwd, wslContext.distro)
+      }
+    }
     const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-    const linuxCwd = driveMatch ? `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}` : '/mnt/c'
-    const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
+    const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
     return {
-      shellArgs: ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`],
+      shellArgs: buildWslShellArgs(linuxCwd),
       effectiveCwd: defaultCwd,
       validationCwd: cwd
     }

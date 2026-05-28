@@ -3,6 +3,7 @@ import type {
   BrowserGrabPayload,
   BrowserGrabScreenshot
 } from '../../../../shared/browser-grab-types'
+import { isEditableKeyboardTarget } from './browser-keyboard'
 
 // ---------------------------------------------------------------------------
 // Grab mode state machine
@@ -193,6 +194,16 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && state !== 'idle') {
+        const element =
+          e.target && typeof e.target === 'object' && 'closest' in e.target
+            ? (e.target as { closest: (selector: string) => unknown })
+            : null
+        if (
+          isEditableKeyboardTarget(e.target) ||
+          element?.closest('[data-slot="select-trigger"], [data-slot="select-content"]')
+        ) {
+          return
+        }
         e.preventDefault()
         e.stopPropagation()
         cancel()

@@ -1,6 +1,12 @@
 ---
 name: orchestration
-description: Use the Orca CLI to coordinate multiple coding agents via inter-agent messaging, task DAGs, dispatch with preamble injection, decision gates, and coordinator loops. Use when an agent needs to send or check inter-agent messages; create, dispatch, or track orchestration tasks; coordinate multi-agent workflows; or act as a coordinator dispatching work across terminals. Triggers include "orchestrate agents", "dispatch task", "send message to agent", "check inbox", "coordinate agents", "multi-agent", "create task DAG", "worker_done", "escalation", or any task involving inter-agent coordination through Orca.
+description: >-
+  Use for Orca agent-to-agent coordination: send/ask/reply between agent
+  terminals, dispatch tasks to worker agents, wait for worker_done or
+  escalation messages, manage task DAGs with dependencies, run decision
+  gates, operate coordinator loops, or decompose a spec into parallel subtasks.
+  Use `orca-cli` instead for terminal control, shell commands, browser
+  automation, worktree management, and reading or waiting on terminals.
 ---
 
 # Orca Inter-Agent Orchestration
@@ -14,6 +20,10 @@ Use this skill when the task involves coordinating multiple coding agents throug
 - You need to dispatch tasks to worker agents with structured feedback
 - You need to act as a coordinator managing a multi-agent workflow
 - You need to create decision gates for human-in-the-loop checkpoints
+
+## When Not To Use
+
+Use `orca-cli` instead for ordinary terminal control, shell commands, browser automation, worktree management, or reading/waiting on terminals.
 
 ## Preconditions
 
@@ -143,7 +153,7 @@ orca terminal close [--terminal <handle>] [--json]
 
 Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree.
 
-Why: `--command "claude"` launches Claude Code in the new terminal. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
+Why: `--command "claude"` launches Claude Code in the new terminal. In local Orca sessions, `--command "codex"` launches Codex through Orca's visible terminal path automatically so Codex does not start as a headless/background PTY. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
 
 Why: `--for tui-idle` detects the working→idle OSC title transition for recognized agent CLIs (Claude Code, Gemini, Codex, etc.). Always pass `--timeout-ms` — real coding tasks routinely take 15-60 minutes.
 

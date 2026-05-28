@@ -77,6 +77,10 @@ export function requiredString(message: string) {
     .pipe(z.string().min(1, message))
 }
 
+export function requiredStringAllowingEmpty(message: string) {
+  return z.unknown().refine((value): value is string => typeof value === 'string', { message })
+}
+
 export function requiredNumber(message: string) {
   return z
     .unknown()

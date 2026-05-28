@@ -17,41 +17,77 @@ import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agen
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type {
   GitHubWorkItem,
+  GitPushTarget,
+  GitLabWorkItem,
   LinearIssue,
   OrcaHooks,
   SetupDecision,
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  WorktreeMeta,
+  WorkspaceStatus,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
+import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
-  ADD_ATTACHMENT_SHORTCUT,
   CLIENT_PLATFORM,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
-  IS_MAC,
   buildAgentPromptWithContext,
   ensureAgentStartupInTerminal,
   getAttachmentLabel,
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
+  isGitLabIssueUrl,
   PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
-  type LinkedWorkItemSummary
+  type LinkedWorkItemSummary,
+  type SetupConfig
 } from '@/lib/new-workspace'
+import {
+  getFullComposerCreateDisabled,
+  getQuickComposerCreateDisabled
+} from '@/lib/new-workspace-create-gates'
+import {
+  lookupSmartGitHubSubmitItem,
+  getSmartGitHubSubmitIntent,
+  getSmartGitHubSubmitResolution,
+  type SmartGitHubSubmitResolution
+} from '@/lib/smart-github-submit'
+import {
+  canUseRepoBackedComposerSources,
+  getSelectedRepoSshGate,
+  isSshConnectInProgress
+} from '@/lib/new-workspace-ssh-gate'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
+import { joinPath } from '@/lib/path'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import {
+  checkRuntimeHooks,
+  readRuntimeIssueCommand,
+  type HookCheckResult
+} from '@/runtime/runtime-hooks-client'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage,
+  type WorkspaceCreateErrorDisplay
+} from '@/lib/workspace-create-error-format'
+import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import { resolveComposerBranchSelection } from './composer-branch-selection'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
   initialName?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  initialWorkspaceStatus?: WorkspaceStatus
   /** Seed the Start-from selection when the composer opens. Used by the
    *  Create-from → Quick fallback path so a PR pick that needs a setup
    *  decision still lands with the resolved PR head as the base branch. */
@@ -73,22 +109,34 @@ export type UseComposerStateOptions = {
    *  `sidebar`, keyboard shortcut → `shortcut`). Omitted callers default
    *  to `unknown` at the IPC boundary. */
   telemetrySource?: WorkspaceCreateTelemetrySource
+  /** Quick-create launches a blank/draft agent session and does not run
+   *  issueCommand automation, so it can skip the issue-command probe that the
+   *  full composer needs for linked-item prompt previews. */
+  enableIssueAutomation?: boolean
+  createGateMode?: 'full' | 'quick'
 }
 
 export type ComposerCardProps = {
   eligibleRepos: ReturnType<typeof useAppStore.getState>['repos']
   repoId: string
+  selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
-  onSmartBranchSelect: (refName: string) => void
+  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
+  onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  /** GitLab parallel of onBaseBranchPrSelect. */
+  onBaseBranchMrSelect?: (
+    baseBranch: string,
+    item: GitLabWorkItem,
+    pushTarget?: GitPushTarget
+  ) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
-  onPromptKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
   /** Rendered issueCommand template to preview inside the empty prompt
    *  textarea when the user has linked a work item but not typed anything. */
   linkedOnlyTemplatePreview: string | null
@@ -96,7 +144,6 @@ export type ComposerCardProps = {
   getAttachmentLabel: (pathValue: string) => string
   onAddAttachment: () => void
   onRemoveAttachment: (pathValue: string) => void
-  addAttachmentShortcut: string
   linkedWorkItem: LinkedWorkItemSummary | null
   onRemoveLinkedWorkItem: () => void
   linkPopoverOpen: boolean
@@ -123,24 +170,33 @@ export type ComposerCardProps = {
   onBaseBranchChange: (next: string | undefined) => void
   /** Called when a PR is selected in the Start-from picker. Updates both
    *  baseBranch and linkedWorkItem/linkedPR in one pass. */
-  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
+  onBaseBranchPrSelect: (
+    baseBranch: string,
+    item: GitHubWorkItem,
+    pushTarget?: GitPushTarget
+  ) => void
   /** PR number selected via the Start-from picker (when applicable). Used so the
    *  field can render "PR #N" copy. */
   baseBranchLinkedPrNumber: number | null
   /** Absolute path of the selected repo, used by Start-from picker for SWR. */
   selectedRepoPath: string | null
-  /** True when the selected repo is a remote SSH repo; disables the PR tab in v1. */
+  /** True when the selected repo is a remote SSH repo. */
   selectedRepoIsRemote: boolean
+  selectedRepoConnectionId: string | null
+  selectedRepoSshStatus: SshConnectionStatus | null
+  selectedRepoRequiresConnection: boolean
+  selectedRepoConnectInProgress: boolean
+  onConnectSelectedRepo: () => Promise<void>
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
   startFromResetHint: string | null
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
-  createError: string | null
+  createError: WorkspaceCreateErrorDisplay | null
   canUseSparseCheckout: boolean
   /** Saved presets for the currently-selected repo. Empty array when no
    *  presets exist or when the repo is remote. */
@@ -179,12 +235,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialName = '',
     initialPrompt = '',
     initialLinkedWorkItem = null,
+    initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,
     onCreated,
     repoIdOverride,
     onRepoIdOverrideChange,
-    telemetrySource
+    telemetrySource,
+    enableIssueAutomation = true,
+    createGateMode = 'full'
   } = options
 
   // Why: each `useAppStore(s => s.someAction)` registers its own equality
@@ -198,8 +257,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       createWorktree: s.createWorktree,
       updateWorktreeMeta: s.updateWorktreeMeta,
       setSidebarOpen: s.setSidebarOpen,
-      setRightSidebarOpen: s.setRightSidebarOpen,
-      setRightSidebarTab: s.setRightSidebarTab,
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
       openSettingsTarget: s.openSettingsTarget,
@@ -213,8 +270,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createWorktree,
     updateWorktreeMeta,
     setSidebarOpen,
-    setRightSidebarOpen,
-    setRightSidebarTab,
     closeModal,
     openSettingsPage,
     openSettingsTarget,
@@ -228,8 +283,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
-  const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const eligibleRepos = useMemo(() => repos.filter((repo) => Boolean(repo.path)), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
+  const resolvedInitialWorkspaceStatus = useMemo(
+    () =>
+      initialWorkspaceStatus && isWorkspaceStatusId(initialWorkspaceStatus, workspaceStatuses)
+        ? initialWorkspaceStatus
+        : undefined,
+    [initialWorkspaceStatus, workspaceStatuses]
+  )
 
   const resolvedInitialRepoId =
     draftRepoId && eligibleRepos.some((repo) => repo.id === draftRepoId)
@@ -242,6 +307,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
   const repoId = repoIdOverride ?? internalRepoId
+  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
+  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const selectedRepoSshState = selectedRepoConnectionId
+    ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
+    : null
+  const { selectedRepoSshStatus, selectedRepoRequiresConnection, selectedRepoConnectInProgress } =
+    getSelectedRepoSshGate({
+      connectionId: selectedRepoConnectionId,
+      status: selectedRepoSshState?.status ?? null
+    })
+  const repoIdRef = useRef(repoId)
+  repoIdRef.current = repoId
   const setRepoId = useCallback(
     (value: string) => {
       if (onRepoIdOverrideChange) {
@@ -272,7 +350,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (persistDraft && newWorkspaceDraft?.linkedIssue) {
       return newWorkspaceDraft.linkedIssue
     }
-    if (initialLinkedWorkItem?.type === 'issue') {
+    if (
+      initialLinkedWorkItem?.type === 'issue' &&
+      !initialLinkedWorkItem.linearIdentifier &&
+      !isGitLabIssueUrl(initialLinkedWorkItem.url)
+    ) {
       return String(initialLinkedWorkItem.number)
     }
     return ''
@@ -283,9 +365,29 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
+  // Why: GitLab parallels of linkedIssue/linkedPR. Kept as separate state
+  // (rather than reusing the GitHub slots with a provider discriminator) so
+  // the existing GitHub auto-name / linked-badge / persistence code paths
+  // stay untouched.
+  const [linkedGitLabIssue, setLinkedGitLabIssue] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabIssue !== undefined) {
+      return newWorkspaceDraft.linkedGitLabIssue
+    }
+    return initialLinkedWorkItem?.type === 'issue' && isGitLabIssueUrl(initialLinkedWorkItem.url)
+      ? initialLinkedWorkItem.number
+      : null
+  })
+  const [linkedGitLabMR, setLinkedGitLabMR] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabMR !== undefined) {
+      return newWorkspaceDraft.linkedGitLabMR
+    }
+    return initialLinkedWorkItem?.type === 'mr' ? initialLinkedWorkItem.number : null
+  })
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
+  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
+  const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
   // instead of slipping past the user. Cleared on any subsequent selection.
@@ -304,9 +406,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: when the selected repo is remote (has a connectionId), read the
   // per-connection agent list instead of the local one. This ensures the
   // Create Workspace dialog shows agents installed on the SSH host, not the
-  // local machine. Derived from eligibleRepos directly because selectedRepo
-  // is declared later in this function.
-  const connectionId = eligibleRepos.find((r) => r.id === repoId)?.connectionId ?? null
+  // local machine.
+  const connectionId = selectedRepoConnectionId
   const isRemote = typeof connectionId === 'string'
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {
@@ -327,7 +428,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [hasLoadedIssueCommand, setHasLoadedIssueCommand] = useState(false)
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
   const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
+  const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(
     persistDraft ? Boolean((newWorkspaceDraft?.note ?? '').trim()) : false
   )
@@ -346,6 +447,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
+  const branchAutoNameRef = useRef<string>('')
   // Why: tracks the note value we auto-prefilled from a Start-from PR pick, so
   // a subsequent PR change can replace it without clobbering user-typed text.
   const lastAutoNoteRef = useRef<string>('')
@@ -365,8 +467,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // multi-instance routing).
   const agentPromptRef = useRef(agentPrompt)
   agentPromptRef.current = agentPrompt
-
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const connectionIdRef = useRef(connectionId)
+  connectionIdRef.current = connectionId
+  const selectedRepoConnectionIdRef = useRef(selectedRepoConnectionId)
+  selectedRepoConnectionIdRef.current = selectedRepoConnectionId
 
   // Why: resolves the selected repo's owner/repo slug so a PR URL pasted
   // into the workspace name field can be matched against the current repo.
@@ -377,14 +481,43 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     null
   )
   const selectedRepoPath = selectedRepo?.path
+  const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
+  selectedRepoPathRef.current = selectedRepoPath
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const hookCheckRef = useRef<{
+    key: string
+    promise: Promise<HookCheckResult>
+  } | null>(null)
+  const loadHookCheckForRepo = useCallback((targetRepoId: string): Promise<HookCheckResult> => {
+    const key = `${settingsRef.current?.activeRuntimeEnvironmentId ?? 'local'}:${targetRepoId}`
+    const existing = hookCheckRef.current
+    if (existing?.key === key) {
+      return existing.promise
+    }
+    const promise = checkRuntimeHooks(settingsRef.current, targetRepoId)
+    hookCheckRef.current = { key, promise }
+    return promise
+  }, [])
+  const commitHookCheckIfCurrent = useCallback(
+    (targetRepoId: string, hooks: OrcaHooks | null): boolean => {
+      if (repoIdRef.current !== targetRepoId) {
+        return false
+      }
+      setYamlHooks(hooks)
+      setCheckedHooksRepoId(targetRepoId)
+      return true
+    },
+    []
+  )
   useEffect(() => {
-    if (!selectedRepoPath) {
+    if (!selectedRepo || !selectedRepoPath || !selectedRepoIsGit) {
       setSelectedRepoSlug(null)
       return
     }
     let cancelled = false
     void (
-      window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath, repoId }) as Promise<{
         owner: string
         repo: string
       } | null>
@@ -403,7 +536,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [selectedRepoPath])
+  }, [repoId, selectedRepo, selectedRepoIsGit, selectedRepoPath])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -431,6 +564,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (!sparseEnabled) {
       return null
     }
+    if (!selectedRepoIsGit) {
+      return null
+    }
     if (selectedRepo?.connectionId) {
       return 'Sparse checkout is only supported for local repos right now.'
     }
@@ -443,7 +579,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return 'Use repo-relative directories, not root or parent paths.'
     }
     return null
-  }, [normalizedSparseDirectories, selectedRepo?.connectionId, sparseEnabled])
+  }, [normalizedSparseDirectories, selectedRepo?.connectionId, selectedRepoIsGit, sparseEnabled])
   const parsedLinkedIssueNumber = useMemo(
     () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
     [linkedIssue]
@@ -474,19 +610,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return null
   }, [linkedPR, name, selectedRepoSlug])
   const setupConfig = useMemo(
-    () => getSetupConfig(selectedRepo, yamlHooks),
-    [selectedRepo, yamlHooks]
+    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, yamlHooks) : null),
+    [selectedRepo, selectedRepoIsGit, yamlHooks]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  const hasIssueAutomationConfig = issueCommandTemplate.length > 0
-  const canOfferIssueAutomation = parsedLinkedIssueNumber !== null && hasIssueAutomationConfig
   // Why: the "no prompt + linked item" path below rehydrates the issueCommand
   // template into the main startup prompt. When that happens we suppress the
   // separate split pane that would otherwise run the same command twice.
-  const willApplyIssueCommandAsPrompt = !agentPrompt.trim() && Boolean(linkedWorkItem)
+  const willApplyIssueCommandAsPrompt =
+    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem)
   const shouldWaitForIssueAutomationCheck =
-    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) && !hasLoadedIssueCommand
-  const shouldRunIssueAutomation = canOfferIssueAutomation && !willApplyIssueCommandAsPrompt
+    enableIssueAutomation &&
+    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
+    !hasLoadedIssueCommand
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
   const resolvedSetupDecision =
     setupDecision ??
@@ -496,7 +632,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? 'run'
         : 'skip')
   const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
-  const shouldWaitForSetupCheck = Boolean(selectedRepo) && isSetupCheckPending
+  const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
 
   // Why: when the user leaves the workspace name blank and provides no other
   // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
@@ -524,7 +660,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // the common "paste a link and hit enter" flow produce a useful agent task
   // instead of a bare URL bullet.
   const shouldApplyLinkedOnlyTemplate =
-    !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
+    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
   const linkedOnlyTemplatePrompt = useMemo(() => {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
@@ -535,22 +671,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       artifactUrl: linkedWorkItem.url
     })
   }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
-  const startupPrompt = useMemo(() => {
-    if (shouldApplyLinkedOnlyTemplate) {
-      return buildAgentPromptWithContext(linkedOnlyTemplatePrompt, attachmentPaths, [])
-    }
-    return buildAgentPromptWithContext(
-      agentPrompt,
-      attachmentPaths,
-      linkedWorkItem?.url ? [linkedWorkItem.url] : []
-    )
-  }, [
-    agentPrompt,
-    attachmentPaths,
-    linkedOnlyTemplatePrompt,
-    linkedWorkItem?.url,
-    shouldApplyLinkedOnlyTemplate
-  ])
   const normalizedLinkQuery = useMemo(
     () => normalizeGitHubLinkQuery(linkDebouncedQuery),
     [linkDebouncedQuery]
@@ -597,6 +717,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       agent: tuiAgent,
       linkedIssue,
       linkedPR,
+      linkedGitLabIssue,
+      linkedGitLabMR,
       ...(baseBranch !== undefined ? { baseBranch } : {})
     })
   }, [
@@ -606,6 +728,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     linkedIssue,
     linkedPR,
+    linkedGitLabIssue,
+    linkedGitLabMR,
     linkedWorkItem,
     note,
     name,
@@ -624,19 +748,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: the compact sparse dropdown is always visible under Advanced, so
   // presets must load before sparse mode is enabled.
   useEffect(() => {
-    if (!repoId || selectedRepo?.connectionId) {
+    if (!repoId || !selectedRepoIsGit || selectedRepo?.connectionId) {
       return
     }
     if (sparsePresetsByRepo[repoId] !== undefined) {
       return
     }
     void fetchSparsePresets(repoId)
-  }, [fetchSparsePresets, repoId, selectedRepo?.connectionId, sparsePresetsByRepo])
+  }, [
+    fetchSparsePresets,
+    repoId,
+    selectedRepo?.connectionId,
+    selectedRepoIsGit,
+    sparsePresetsByRepo
+  ])
 
   // Why: detect agents for the selected repo. For local repos this runs once
   // on mount (deduped by the store). For remote repos it re-runs when the
   // selected repo changes so the agent list matches the SSH host.
   useEffect(() => {
+    if (isRemote && selectedRepoSshStatus !== 'connected') {
+      return
+    }
     let cancelled = false
     const detect = isRemote ? ensureRemoteDetectedAgents(connectionId) : ensureDetectedAgents()
     void detect.then((ids) => {
@@ -657,7 +790,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // detection targets the correct host. Draft/settings deps are intentionally
     // excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, isRemote])
+  }, [connectionId, isRemote, selectedRepoSshStatus])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
@@ -671,23 +804,34 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setYamlHooks(null)
     setCheckedHooksRepoId(null)
 
-    void window.api.hooks
-      .check({ repoId })
+    if (!selectedRepoIsGit) {
+      setHasLoadedIssueCommand(true)
+      setCheckedHooksRepoId(repoId)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    void loadHookCheckForRepo(repoId)
       .then((result) => {
         if (!cancelled) {
-          setYamlHooks(result.hooks)
-          setCheckedHooksRepoId(repoId)
+          commitHookCheckIfCurrent(repoId, result.hooks)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setYamlHooks(null)
-          setCheckedHooksRepoId(repoId)
+          commitHookCheckIfCurrent(repoId, null)
         }
       })
 
-    void window.api.hooks
-      .readIssueCommand({ repoId })
+    if (!enableIssueAutomation) {
+      setHasLoadedIssueCommand(true)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    void readRuntimeIssueCommand(settings, repoId)
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -704,17 +848,59 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [repoId])
+  }, [
+    commitHookCheckIfCurrent,
+    enableIssueAutomation,
+    loadHookCheckForRepo,
+    repoId,
+    selectedRepoIsGit,
+    settings
+  ])
+
+  const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
+    const targetId = selectedRepoConnectionIdRef.current
+    if (!targetId) {
+      return
+    }
+    const liveState = useAppStore.getState()
+    const liveRepo = liveState.repos.find((repo) => repo.id === repoIdRef.current)
+    if (liveRepo?.connectionId !== targetId) {
+      return
+    }
+    const liveStatus = liveState.sshConnectionStates.get(targetId)?.status ?? null
+    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
+      return
+    }
+
+    try {
+      await window.api.ssh.connect({ targetId })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to connect to project.')
+    }
+  }, [])
 
   // Why: warm the Start-from picker's PR cache on composer mount and whenever
   // the selected repo changes so opening the picker paints instantly from
-  // cache. Local repos only — remote SSH repos disable the PR tab in v1.
+  // cache.
+  const canPrefetchSelectedRepoWorkItems = canUseRepoBackedComposerSources({
+    connectionId: selectedRepoConnectionId,
+    status: selectedRepoSshStatus
+  })
+  const prefetchSshConnectedGeneration =
+    selectedRepoConnectionId && selectedRepoSshStatus === 'connected' ? sshConnectedGeneration : 0
   useEffect(() => {
-    if (!selectedRepo?.path || selectedRepo.connectionId) {
+    if (!selectedRepoIsGit || !selectedRepo?.path || !canPrefetchSelectedRepoWorkItems) {
       return
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
-  }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
+  }, [
+    canPrefetchSelectedRepoWorkItems,
+    prefetchSshConnectedGeneration,
+    prefetchWorkItems,
+    selectedRepo?.id,
+    selectedRepo?.path,
+    selectedRepoIsGit
+  ])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {
@@ -740,7 +926,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [linkQuery])
 
   useEffect(() => {
-    if (!linkPopoverOpen || !selectedRepo) {
+    if (!linkPopoverOpen || !selectedRepo || !selectedRepoIsGit) {
       return
     }
 
@@ -749,7 +935,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
     const lookupRepoId = selectedRepo.id
     void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
+      .listWorkItems({ repoPath: selectedRepo.path, repoId: selectedRepo.id, limit: 100 })
       .then((envelope) => {
         if (!cancelled) {
           // Why: IPC payload omits repoId — stamp it here from the repo we
@@ -796,10 +982,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, selectedRepo])
+  }, [linkPopoverOpen, selectedRepo, selectedRepoIsGit])
 
   useEffect(() => {
-    if (!linkPopoverOpen || !selectedRepo || normalizedLinkQuery.directNumber === null) {
+    if (
+      !linkPopoverOpen ||
+      !selectedRepo ||
+      !selectedRepoIsGit ||
+      normalizedLinkQuery.directNumber === null
+    ) {
       setLinkDirectItem(null)
       setLinkDirectLoading(false)
       return
@@ -813,7 +1004,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // text match in the recent-items list.
     const lookupRepoId = selectedRepo.id
     void window.api.gh
-      .workItem({ repoPath: selectedRepo.path, number: normalizedLinkQuery.directNumber })
+      .workItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        number: normalizedLinkQuery.directNumber
+      })
       .then((item) => {
         if (!cancelled) {
           setLinkDirectItem(
@@ -835,7 +1030,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo])
+  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, selectedRepoIsGit])
 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -857,6 +1052,88 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+      setBranchNameOverride(undefined)
+    },
+    [name]
+  )
+
+  const resolvePendingSmartGitHubSubmit =
+    useCallback(async (): Promise<SmartGitHubSubmitResolution | null> => {
+      if (linkedWorkItem || !selectedRepo || !selectedRepoIsGit) {
+        return null
+      }
+
+      const intent = getSmartGitHubSubmitIntent(name)
+      if (!intent) {
+        return null
+      }
+
+      const item = await lookupSmartGitHubSubmitItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        intent,
+        workItem: (args) => window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>,
+        workItemByOwnerRepo: (args) =>
+          window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>
+      })
+      if (!item) {
+        throw new Error('Could not resolve the GitHub item before creating the workspace.')
+      }
+
+      const resolution = getSmartGitHubSubmitResolution(item)
+      // Why: Create can be clicked before the debounced smart field commits
+      // its selected source. Commit the resolved item here so failures leave
+      // the form showing the title instead of the raw URL.
+      setLinkedIssue(
+        resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
+      )
+      setLinkedPR(resolution.linkedPR)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setLinkedWorkItem(resolution.linkedWorkItem)
+      setName(resolution.workspaceName)
+      lastAutoNameRef.current = resolution.workspaceName
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
+      setStartFromResetHint(null)
+      return resolution
+    }, [linkedWorkItem, name, selectedRepo, selectedRepoIsGit])
+
+  // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
+  // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
+  // so a workspace can in principle reference items from both providers.
+  // The auto-name logic mirrors the GitHub side (issue: number-and-title,
+  // MR: branch name) via getLinkedWorkItemSuggestedName, which already
+  // accepts both shapes structurally.
+  const applyLinkedGitLabWorkItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      if (item.type === 'issue') {
+        setLinkedGitLabIssue(item.number)
+        setLinkedGitLabMR(null)
+      } else {
+        setLinkedGitLabIssue(null)
+        setLinkedGitLabMR(item.number)
+      }
+      setLinkedWorkItem({
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      })
+      // Why: GitLabWorkItem.branchName lines up with GitHubWorkItem.branchName
+      // structurally; cast to the suggested-name helper's input shape so we
+      // reuse the existing naming heuristic without forking it.
+      const suggestedName = getLinkedWorkItemSuggestedName({
+        type: item.type === 'mr' ? 'pr' : 'issue',
+        number: item.number,
+        title: item.title,
+        branchName: item.branchName
+      } as unknown as GitHubWorkItem)
+      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+      setBranchNameOverride(undefined)
     },
     [name]
   )
@@ -901,28 +1178,174 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       } else if (name !== lastAutoNameRef.current) {
         lastAutoNameRef.current = ''
       }
+      if (branchNameOverride && nextName !== branchAutoNameRef.current) {
+        setBranchNameOverride(undefined)
+        branchAutoNameRef.current = ''
+      }
       setName(nextName)
       setCreateError(null)
     },
-    [name]
+    [branchNameOverride, name]
   )
+
+  const addComposerAttachments = useCallback((paths: string[]): void => {
+    if (paths.length === 0) {
+      return
+    }
+    setAttachmentPaths((current) => {
+      const next = [...current]
+      for (const pathValue of paths) {
+        if (!next.includes(pathValue)) {
+          next.push(pathValue)
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const insertComposerFolderPaths = useCallback((folderPaths: string[]): void => {
+    if (folderPaths.length === 0) {
+      return
+    }
+    // Why: de-dup within a single drop — the OS occasionally delivers the
+    // same folder twice when a user drags from a selection that includes both
+    // the item and its parent, and we don't want to insert it multiple times.
+    const uniqueFolderPaths = Array.from(new Set(folderPaths))
+    // Why: wrap paths containing shell metacharacters in double quotes (and
+    // escape embedded quotes) so inserted folder refs stay a single token if
+    // pasted into a terminal. Simple paths stay unadorned to match OS drops.
+    const formatPath = (p: string): string => {
+      if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
+        return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+      }
+      return p
+    }
+    const insertion = uniqueFolderPaths.map(formatPath).join(' ')
+    const textarea = promptTextareaRef.current
+    // Why: compute selection, insertion, and caret target OUTSIDE the
+    // setAgentPrompt updater so the updater stays pure. React Strict Mode
+    // double-invokes updaters in dev, and batching can delay execution.
+    const current = agentPromptRef.current
+    const selStart = textarea?.selectionStart ?? current.length
+    const selEnd = textarea?.selectionEnd ?? current.length
+    const before = current.slice(0, selStart)
+    const after = current.slice(selEnd)
+    // Why: pad with single spaces when the caret sits directly against other
+    // text so the folder path doesn't merge into an adjacent word.
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
+    const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
+    const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
+    const caret = before.length + padded.length
+    if (textarea) {
+      requestAnimationFrame(() => {
+        textarea.focus()
+        textarea.setSelectionRange(caret, caret)
+      })
+    }
+    // Why: pass a plain value (not an updater) since `before`/`after` were
+    // already resolved from `agentPromptRef.current`; this keeps the state
+    // write side-effect-free under Strict-Mode double-render.
+    setAgentPrompt(before + padded + after)
+  }, [])
+
+  const uploadComposerPaths = useCallback(
+    async (
+      sourcePaths: string[],
+      targetSettings = settings,
+      targetConnectionId = connectionId,
+      targetRepoPath = selectedRepoPath
+    ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
+      if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
+        return null
+      }
+      if (!targetRepoPath) {
+        toast.error('No remote project path is available for attachments.')
+        return { filePaths: [], folderPaths: [] }
+      }
+      const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const { results } = await importExternalPathsToRuntime(
+        {
+          settings: targetSettings,
+          worktreeId: targetRepoPath,
+          worktreePath: targetRepoPath,
+          connectionId: targetConnectionId ?? undefined
+        },
+        sourcePaths,
+        destinationDir,
+        { ensureDestinationDir: true }
+      )
+      const filePaths: string[] = []
+      const folderPaths: string[] = []
+      let skippedOrFailed = 0
+      for (const result of results) {
+        if (result.status !== 'imported') {
+          skippedOrFailed += 1
+          continue
+        }
+        if (result.kind === 'directory') {
+          folderPaths.push(result.destPath)
+        } else {
+          filePaths.push(result.destPath)
+        }
+      }
+      if (skippedOrFailed > 0) {
+        toast.error('Some attachments could not be uploaded.')
+      }
+      return { filePaths, folderPaths }
+    },
+    [connectionId, selectedRepoPath, settings]
+  )
+
   const handleAddAttachment = useCallback(async (): Promise<void> => {
     try {
       const selectedPath = await window.api.shell.pickAttachment()
       if (!selectedPath) {
         return
       }
-      setAttachmentPaths((current) => {
-        if (current.includes(selectedPath)) {
-          return current
-        }
-        return [...current, selectedPath]
-      })
+      const uploaded = await uploadComposerPaths([selectedPath])
+      if (uploaded) {
+        addComposerAttachments(uploaded.filePaths)
+        insertComposerFolderPaths(uploaded.folderPaths)
+        return
+      }
+      addComposerAttachments([selectedPath])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add attachment.'
       toast.error(message)
     }
-  }, [])
+  }, [addComposerAttachments, insertComposerFolderPaths, uploadComposerPaths])
+
+  const applyLocalComposerDrop = useCallback(
+    async (paths: string[]): Promise<void> => {
+      const fileAttachments: string[] = []
+      const folderPaths: string[] = []
+      for (const filePath of paths) {
+        try {
+          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          const stat = await window.api.fs.stat({ filePath })
+          if (stat.isDirectory) {
+            folderPaths.push(filePath)
+          } else {
+            fileAttachments.push(filePath)
+          }
+        } catch {
+          // Skip paths we cannot authorize or stat.
+        }
+      }
+
+      addComposerAttachments(fileAttachments)
+      insertComposerFolderPaths(folderPaths)
+    },
+    [addComposerAttachments, insertComposerFolderPaths]
+  )
+  const addComposerAttachmentsRef = useRef(addComposerAttachments)
+  addComposerAttachmentsRef.current = addComposerAttachments
+  const insertComposerFolderPathsRef = useRef(insertComposerFolderPaths)
+  insertComposerFolderPathsRef.current = insertComposerFolderPaths
+  const uploadComposerPathsRef = useRef(uploadComposerPaths)
+  uploadComposerPathsRef.current = uploadComposerPaths
+  const applyLocalComposerDropRef = useRef(applyLocalComposerDrop)
+  applyLocalComposerDropRef.current = applyLocalComposerDrop
 
   // Why: native OS file drops onto the composer are captured by the preload
   // bridge (see `data-native-file-drop-target="composer"` markers) and relayed
@@ -946,82 +1369,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       void (async () => {
-        const fileAttachments: string[] = []
-        const folderPaths: string[] = []
-        for (const filePath of data.paths) {
-          try {
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-            const stat = await window.api.fs.stat({ filePath })
-            if (stat.isDirectory) {
-              folderPaths.push(filePath)
-            } else {
-              fileAttachments.push(filePath)
-            }
-          } catch {
-            // Skip paths we cannot authorize or stat.
-          }
+        const uploaded = await uploadComposerPathsRef.current(
+          data.paths,
+          settingsRef.current,
+          connectionIdRef.current,
+          selectedRepoPathRef.current
+        )
+        if (uploaded) {
+          addComposerAttachmentsRef.current(uploaded.filePaths)
+          insertComposerFolderPathsRef.current(uploaded.folderPaths)
+          return
         }
-
-        if (fileAttachments.length > 0) {
-          setAttachmentPaths((current) => {
-            const next = [...current]
-            for (const p of fileAttachments) {
-              if (!next.includes(p)) {
-                next.push(p)
-              }
-            }
-            return next
-          })
-        }
-
-        if (folderPaths.length > 0) {
-          // Why: de-dup within a single drop — the OS occasionally delivers
-          // the same folder twice when a user drags from a selection that
-          // includes both the item and its parent, and we don't want to
-          // insert it multiple times.
-          const uniqueFolderPaths = Array.from(new Set(folderPaths))
-          // Why: wrap paths containing shell metacharacters in double quotes
-          // (and escape embedded quotes) so the inserted text reads as a
-          // single token if the user pastes it into a terminal. Simple paths
-          // stay unadorned to match how Finder/Explorer drops appear.
-          const formatPath = (p: string): string => {
-            if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
-              return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
-            }
-            return p
-          }
-          const insertion = uniqueFolderPaths.map(formatPath).join(' ')
-          const textarea = promptTextareaRef.current
-          // Why: compute selection, insertion, and caret target OUTSIDE the
-          // setAgentPrompt updater so the updater stays pure. React Strict
-          // Mode double-invokes updaters in dev, and batching can delay
-          // execution — reading `textarea.selectionStart` inside the updater
-          // risks seeing a shifted caret. Read `agentPromptRef.current` for
-          // the latest prompt because this effect subscribes once and the
-          // outer closure's `agentPrompt` would be stale.
-          const current = agentPromptRef.current
-          const selStart = textarea?.selectionStart ?? current.length
-          const selEnd = textarea?.selectionEnd ?? current.length
-          const before = current.slice(0, selStart)
-          const after = current.slice(selEnd)
-          // Why: pad with single spaces when the caret sits directly against
-          // other text so the folder path doesn't merge into an adjacent word.
-          const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
-          const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
-          const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
-          const caret = before.length + padded.length
-          if (textarea) {
-            // Restore the caret to the end of the inserted text after React flushes.
-            requestAnimationFrame(() => {
-              textarea.focus()
-              textarea.setSelectionRange(caret, caret)
-            })
-          }
-          // Why: pass a plain value (not an updater) since `before`/`after`
-          // were already resolved from `agentPromptRef.current`; this keeps
-          // the state write side-effect-free under Strict-Mode double-render.
-          setAgentPrompt(before + padded + after)
-        }
+        await applyLocalComposerDropRef.current(data.paths)
       })()
     })
     return () => {
@@ -1032,22 +1391,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     }
   }, [])
-
-  const handlePromptKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      const mod = IS_MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'u') {
-        return
-      }
-
-      // Why: the attachment picker should only steal Cmd/Ctrl+U while the user
-      // is composing a prompt, so the shortcut is scoped to the textarea rather
-      // than registered globally for the whole new-workspace surface.
-      event.preventDefault()
-      void handleAddAttachment()
-    },
-    [handleAddAttachment]
-  )
 
   const handleRepoChange = useCallback(
     (value: string): void => {
@@ -1061,12 +1404,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       let hint: string | null = null
       if (linkedWorkItem?.type === 'pr' && baseBranch) {
         hint = `was PR #${linkedWorkItem.number}`
+      } else if (linkedWorkItem?.type === 'mr' && baseBranch) {
+        // Why: GitLab MR convention is `!N`, not `#N` — match the
+        // upstream UI so the reset hint is recognizable.
+        hint = `was MR !${linkedWorkItem.number}`
       } else if (baseBranch) {
         hint = `was ${baseBranch}`
       }
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
       setLinkedWorkItem(null)
       setSparseEnabled(false)
       setSparseDirectories('')
@@ -1077,6 +1426,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // selection is meaningless in the new repo. Resetting to undefined
       // makes the field fall back to the new repo's effective base ref.
       setBaseBranch(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
       setStartFromResetHint(hint)
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
@@ -1096,12 +1447,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleBaseBranchChange = useCallback((next: string | undefined): void => {
     setBaseBranch(next)
+    setPushTarget(undefined)
+    setBranchNameOverride(undefined)
+    branchAutoNameRef.current = ''
     setStartFromResetHint(null)
   }, [])
 
   const handleBaseBranchPrSelect = useCallback(
-    (nextBaseBranch: string, item: GitHubWorkItem): void => {
+    (nextBaseBranch: string, item: GitHubWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
+      setPushTarget(nextPushTarget)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       // Why: per spec, a PR selection in the Start-from picker is also a
       // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
@@ -1123,19 +1480,104 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [applyLinkedWorkItem]
   )
 
+  // Why: GitLab parallel of handleBaseBranchPrSelect. Same shape, same
+  // semantics — except the note prefill uses GitLab's `!N` MR convention
+  // so a glance at the worktree sidebar makes the provider obvious.
+  const handleBaseBranchMrSelect = useCallback(
+    (nextBaseBranch: string, item: GitLabWorkItem, nextPushTarget?: GitPushTarget): void => {
+      setBaseBranch(nextBaseBranch)
+      setPushTarget(nextPushTarget)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
+      setStartFromResetHint(null)
+      applyLinkedGitLabWorkItem(item)
+      if (item.type === 'mr') {
+        const suggestedNote = `MR !${item.number} — ${item.title}`
+        const currentNote = noteRef.current
+        if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
+          setNote(suggestedNote)
+          lastAutoNoteRef.current = suggestedNote
+        }
+      }
+    },
+    [applyLinkedGitLabWorkItem]
+  )
+
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
-      applyLinkedWorkItem(item)
       setStartFromResetHint(null)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      applyLinkedWorkItem(item)
       if (item.type !== 'pr' || !repoForItem) {
+        setPushTarget(undefined)
+        return
+      }
+      setPushTarget(undefined)
+      const target = getActiveRuntimeTarget(settings)
+      const resolvePrBase =
+        target.kind === 'local'
+          ? window.api.worktrees.resolvePrBase({
+              repoId: repoForItem.id,
+              prNumber: item.number,
+              ...(item.branchName ? { headRefName: item.branchName } : {}),
+              ...(item.isCrossRepository !== undefined
+                ? { isCrossRepository: item.isCrossRepository }
+                : {})
+            })
+          : callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
+              target,
+              'worktree.resolvePrBase',
+              {
+                repo: repoForItem.id,
+                prNumber: item.number,
+                ...(item.branchName ? { headRefName: item.branchName } : {}),
+                ...(item.isCrossRepository !== undefined
+                  ? { isCrossRepository: item.isCrossRepository }
+                  : {})
+              },
+              { timeoutMs: 30_000 }
+            )
+      void resolvePrBase
+        .then((result) => {
+          if ('error' in result) {
+            setBaseBranch(undefined)
+            setPushTarget(undefined)
+            toast.error(result.error)
+            return
+          }
+          handleBaseBranchPrSelect(result.baseBranch, item, result.pushTarget)
+        })
+        .catch((error: unknown) => {
+          setBaseBranch(undefined)
+          setPushTarget(undefined)
+          toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
+        })
+    },
+    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo, settings]
+  )
+
+  // Why: GitLab parallel of handleSmartGitHubItemSelect. For a picked
+  // MR, resolves the base branch via worktrees:resolveMrBase (which uses
+  // refs/merge-requests/<iid>/head for fork MRs the same way the gh side
+  // uses refs/pull/<N>/head). Issue selections short-circuit since
+  // there's no branch-resolution step to run.
+  const handleSmartGitLabItemSelect = useCallback(
+    (item: GitLabWorkItem): void => {
+      applyLinkedGitLabWorkItem(item)
+      setStartFromResetHint(null)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
+      const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      if (item.type !== 'mr' || !repoForItem) {
         return
       }
       void window.api.worktrees
-        .resolvePrBase({
+        .resolveMrBase({
           repoId: repoForItem.id,
-          prNumber: item.number,
-          ...(item.branchName ? { headRefName: item.branchName } : {}),
+          mrIid: item.number,
+          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
           ...(item.isCrossRepository !== undefined
             ? { isCrossRepository: item.isCrossRepository }
             : {})
@@ -1144,19 +1586,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           if ('error' in result) {
             return
           }
-          handleBaseBranchPrSelect(result.baseBranch, item)
+          handleBaseBranchMrSelect(result.baseBranch, item, result.pushTarget)
         })
     },
-    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo]
+    [applyLinkedGitLabWorkItem, eligibleRepos, handleBaseBranchMrSelect, selectedRepo]
   )
 
   const handleSmartBranchSelect = useCallback(
-    (refName: string): void => {
-      setBaseBranch(refName)
+    (refName: string, localBranchName: string): void => {
+      const selection = resolveComposerBranchSelection({
+        refName,
+        localBranchName,
+        currentName: name,
+        lastAutoName: lastAutoNameRef.current
+      })
+      setBaseBranch(selection.baseBranch)
+      setPushTarget(undefined)
       setStartFromResetHint(null)
-      if (!name.trim() || name === lastAutoNameRef.current) {
-        setName(refName)
-        lastAutoNameRef.current = refName
+      if (selection.name !== undefined && selection.lastAutoName !== undefined) {
+        setName(selection.name)
+        lastAutoNameRef.current = selection.lastAutoName
+        branchAutoNameRef.current = selection.branchAutoName
+        setBranchNameOverride(selection.branchNameOverride)
+      } else {
+        setBranchNameOverride(selection.branchNameOverride)
+        branchAutoNameRef.current = selection.branchAutoName
       }
     },
     [name]
@@ -1179,6 +1633,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       // Why: match the GitHub issue/PR flow — paste only the URL as a draft
       // into the agent's input (no auto-submit). The launch path already
       // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
@@ -1193,6 +1649,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkedPR(null)
     setLinkedWorkItem(null)
     setBaseBranch(undefined)
+    setPushTarget(undefined)
+    setBranchNameOverride(undefined)
+    branchAutoNameRef.current = ''
     setStartFromResetHint(null)
     if (name === lastAutoNameRef.current) {
       setName('')
@@ -1234,14 +1693,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [closeModal, openSettingsPage, openSettingsTarget])
 
   const applyWorktreeMeta = useCallback(
-    async (
-      worktreeId: string,
-      meta: {
-        linkedIssue?: number
-        linkedPR?: number
-        comment?: string
-      }
-    ): Promise<void> => {
+    async (worktreeId: string, meta: Partial<WorktreeMeta>): Promise<void> => {
       if (Object.keys(meta).length === 0) {
         return
       }
@@ -1255,11 +1707,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const submit = useCallback(async (): Promise<void> => {
-    const workspaceName = workspaceSeedName
     if (
       !repoId ||
-      !workspaceName ||
+      !workspaceSeedName ||
       !selectedRepo ||
+      selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
       (requiresExplicitSetupChoice && !setupDecision) ||
@@ -1271,53 +1723,107 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreateError(null)
     setCreating(true)
     try {
-      const setupTrustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+      const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+      const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
+      const submitLinkedIssueNumber =
+        smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
+      const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
+      const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceSeedName
+      if (!workspaceName) {
+        return
+      }
+      const submitShouldApplyLinkedOnlyTemplate =
+        enableIssueAutomation &&
+        !agentPrompt.trim() &&
+        Boolean(submitLinkedWorkItem) &&
+        hasLoadedIssueCommand
+      const submitLinkedOnlyTemplatePrompt =
+        submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
+          ? renderIssueCommandTemplate(
+              issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE,
+              {
+                issueNumber:
+                  submitLinkedWorkItem.type === 'issue' ? submitLinkedWorkItem.number : null,
+                artifactUrl: submitLinkedWorkItem.url
+              }
+            )
+          : ''
+      const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
+        ? buildAgentPromptWithContext(submitLinkedOnlyTemplatePrompt, attachmentPaths, [])
+        : buildAgentPromptWithContext(
+            agentPrompt,
+            attachmentPaths,
+            submitLinkedWorkItem?.url ? [submitLinkedWorkItem.url] : []
+          )
+      const submitShouldRunIssueAutomation =
+        enableIssueAutomation &&
+        submitLinkedIssueNumber !== null &&
+        issueCommandTemplate.length > 0 &&
+        !submitShouldApplyLinkedOnlyTemplate
+
+      const setupTrustDecision = selectedRepoIsGit
+        ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+        : 'skip'
       const effectiveSetupDecision: SetupDecision =
         setupTrustDecision === 'skip'
           ? 'skip'
           : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
       let issueCommandTrustDecision: 'run' | 'skip' = 'run'
-      if (shouldRunIssueAutomation) {
+      if (selectedRepoIsGit && submitShouldRunIssueAutomation) {
         issueCommandTrustDecision =
           setupTrustDecision === 'skip'
             ? 'skip'
             : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
       }
 
+      const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
+      const effectiveBranchNameOverride =
+        branchNameOverride && workspaceName === branchAutoNameRef.current
+          ? branchNameOverride
+          : undefined
       const result = await createWorktree(
         repoId,
         workspaceName,
-        baseBranch,
+        selectedRepoIsGit ? baseBranch : undefined,
         effectiveSetupDecision,
-        sparseEnabled
+        selectedRepoIsGit && sparseEnabled
           ? {
               directories: normalizedSparseDirectories,
               ...(effectivePresetId ? { presetId: effectivePresetId } : {})
             }
           : undefined,
-        telemetrySource
+        telemetrySource,
+        smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+        submitLinkedIssueNumber ?? undefined,
+        submitLinkedPR ?? undefined,
+        pushTarget,
+        tuiAgent,
+        linkedLinearIssue,
+        effectiveBranchNameOverride,
+        resolvedInitialWorkspaceStatus,
+        linkedGitLabMR ?? undefined,
+        linkedGitLabIssue ?? undefined
       )
       const worktree = result.worktree
 
-      await applyWorktreeMeta(worktree.id, {
-        ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
-        ...(note.trim() ? { comment: note.trim() } : {})
-      })
+      const trimmedNote = note.trim()
+      // Why: linked source metadata is already included in createWorktree.
+      // Re-saving it here can trigger slow post-create PR push-target lookups.
+      await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
 
       const issueCommand =
-        shouldRunIssueAutomation && issueCommandTrustDecision === 'run'
+        submitShouldRunIssueAutomation && issueCommandTrustDecision === 'run'
           ? {
               command: renderIssueCommandTemplate(issueCommandTemplate, {
-                issueNumber: parsedLinkedIssueNumber,
-                artifactUrl: linkedWorkItem?.url ?? null
+                issueNumber: submitLinkedIssueNumber,
+                artifactUrl: submitLinkedWorkItem?.url ?? null
               })
             }
           : undefined
       const startupPlan = buildAgentStartupPlan({
         agent: tuiAgent,
-        prompt: startupPrompt,
+        prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         platform: CLIENT_PLATFORM
       })
@@ -1327,18 +1833,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // "create" path is the new-workspace surface; request_kind is
       // `'new'` because this is always a fresh session (issue/PR-driven
       // follow-ups go through launch-work-item-direct.ts).
+      // Why: when the composer is opened from onboarding, the first
+      // `agent_started` must attribute to `onboarding` so D1 activation
+      // can be measured against the funnel.
       const composerTelemetry: AgentStartedTelemetry = {
         agent_kind: tuiAgentToAgentKind(tuiAgent),
-        launch_source: 'new_workspace_composer',
+        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
         request_kind: 'new'
       }
       activateAndRevealWorktree(worktree.id, {
+        sidebarRevealBehavior: 'auto',
         setup: result.setup,
         issueCommand,
         ...(startupPlan
           ? {
               startup: {
                 command: startupPlan.launchCommand,
+                ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+                  ? {
+                      initialAgentStatus: {
+                        agent: tuiAgent,
+                        prompt: submitStartupPrompt.trim()
+                      }
+                    }
+                  : {}),
                 telemetry: composerTelemetry
               }
             }
@@ -1351,42 +1870,47 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
       }
       setSidebarOpen(true)
-      if (settings?.rightSidebarOpenByDefault) {
-        setRightSidebarTab('explorer')
-        setRightSidebarOpen(true)
-      }
       if (persistDraft) {
         clearNewWorkspaceDraft()
       }
       onCreated?.()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-      setCreateError(message)
-      toast.error(message)
+      const formattedError = formatWorkspaceCreateError(error)
+      setCreateError(formattedError)
+      toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
     } finally {
       setCreating(false)
     }
   }, [
+    agentPrompt,
+    attachmentPaths,
     baseBranch,
+    branchNameOverride,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
+    enableIssueAutomation,
     issueCommandTemplate,
     effectiveLinkedPR,
-    linkedWorkItem?.url,
+    hasLoadedIssueCommand,
+    linkedGitLabIssue,
+    linkedGitLabMR,
+    linkedWorkItem,
     normalizedSparseDirectories,
     note,
     onCreated,
     parsedLinkedIssueNumber,
     persistDraft,
+    pushTarget,
     repoId,
     requiresExplicitSetupChoice,
+    resolvePendingSmartGitHubSubmit,
     resolvedSetupDecision,
+    resolvedInitialWorkspaceStatus,
     selectedRepo,
+    selectedRepoIsGit,
+    selectedRepoRequiresConnection,
     settings?.agentCmdOverrides,
-    settings?.rightSidebarOpenByDefault,
-    setRightSidebarOpen,
-    setRightSidebarTab,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -1394,16 +1918,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     effectivePresetId,
     telemetrySource,
     tuiAgent,
-    shouldRunIssueAutomation,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
-    startupPrompt,
     workspaceSeedName
   ])
 
   const submitQuick = useCallback(
     async (agent: TuiAgent | null): Promise<void> => {
-      const workspaceName = getWorkspaceSeedName({
+      const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,
         prompt: '',
         linkedIssueNumber: parsedLinkedIssueNumber,
@@ -1412,9 +1934,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       })
       if (
         !repoId ||
-        !workspaceName ||
+        !workspaceNameSeed ||
         !selectedRepo ||
-        shouldWaitForSetupCheck ||
+        selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -1424,33 +1946,82 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
       setCreating(true)
       try {
-        const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+        const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
+        const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
+        const submitLinkedIssueNumber =
+          smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
+        const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
+        const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceNameSeed
+        if (!workspaceName) {
+          return
+        }
+
+        let submitSetupConfig = setupConfig
+        let submitResolvedSetupDecision = resolvedSetupDecision
+        if (selectedRepoIsGit && checkedHooksRepoId !== repoId) {
+          let hookCheck: HookCheckResult
+          try {
+            hookCheck = await loadHookCheckForRepo(repoId)
+          } catch {
+            hookCheck = { hasHooks: false, hooks: null, mayNeedUpdate: false }
+          }
+          if (!commitHookCheckIfCurrent(repoId, hookCheck.hooks)) {
+            return
+          }
+          submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
+          submitResolvedSetupDecision =
+            setupDecision ??
+            (!submitSetupConfig || setupPolicy === 'ask'
+              ? null
+              : setupPolicy === 'run-by-default'
+                ? 'run'
+                : 'skip')
+        }
+        if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
+          setAdvancedOpen(true)
+          return
+        }
+
+        const trustDecision = selectedRepoIsGit
+          ? await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+          : 'skip'
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
             ? 'skip'
-            : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
+            : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
+        const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
+        const effectiveBranchNameOverride =
+          branchNameOverride && workspaceName === branchAutoNameRef.current
+            ? branchNameOverride
+            : undefined
         const result = await createWorktree(
           repoId,
           workspaceName,
-          baseBranch,
+          selectedRepoIsGit ? baseBranch : undefined,
           effectiveSetupDecision,
-          sparseEnabled
+          selectedRepoIsGit && sparseEnabled
             ? {
                 directories: normalizedSparseDirectories,
                 ...(effectivePresetId ? { presetId: effectivePresetId } : {})
               }
             : undefined,
-          telemetrySource
+          telemetrySource,
+          smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+          submitLinkedIssueNumber ?? undefined,
+          submitLinkedPR ?? undefined,
+          pushTarget,
+          agent ?? undefined,
+          linkedLinearIssue,
+          effectiveBranchNameOverride,
+          resolvedInitialWorkspaceStatus,
+          linkedGitLabMR ?? undefined,
+          linkedGitLabIssue ?? undefined
         )
         const worktree = result.worktree
 
         const trimmedNote = note.trim()
-        await applyWorktreeMeta(worktree.id, {
-          ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
-          ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
-          ...(trimmedNote ? { comment: trimmedNote } : {})
-        })
+        await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
 
         // Why: when a linked work item is selected in the quick flow, launch
         // the agent with a blank prompt and type the URL into its input as a
@@ -1458,9 +2029,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // sending instead of auto-executing a "Complete <url>" template.
         // Falls back to the trimmed note when the linked item carries no
         // number/URL (Linear typed-only entries).
-        const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote)
+        const isLinearTypedOnly = submitLinkedWorkItem?.number === 0 && Boolean(trimmedNote)
         const quickPrompt = isLinearTypedOnly && trimmedNote ? trimmedNote : ''
-        const quickDraftPrompt = linkedWorkItem && !isLinearTypedOnly ? linkedWorkItem.url : null
+        const quickDraftPrompt =
+          submitLinkedWorkItem && !isLinearTypedOnly ? submitLinkedWorkItem.url : null
 
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
@@ -1527,16 +2099,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? null
             : {
                 agent_kind: tuiAgentToAgentKind(agent),
-                launch_source: 'new_workspace_composer',
+                launch_source:
+                  telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
         activateAndRevealWorktree(worktree.id, {
+          sidebarRevealBehavior: 'auto',
           setup: result.setup,
           ...(startupPlan
             ? {
                 startup: {
                   command: startupPlan.launchCommand,
                   ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                  ...(agent === 'command-code' && quickPrompt.trim().length > 0
+                    ? {
+                        initialAgentStatus: {
+                          agent,
+                          prompt: quickPrompt.trim()
+                        }
+                      }
+                    : {}),
                   ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
                 }
               }
@@ -1549,18 +2131,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           })
         }
         setSidebarOpen(true)
-        if (settings?.rightSidebarOpenByDefault) {
-          setRightSidebarTab('explorer')
-          setRightSidebarOpen(true)
-        }
         if (persistDraft) {
           clearNewWorkspaceDraft()
         }
         onCreated?.()
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-        setCreateError(message)
-        toast.error(message)
+        const formattedError = formatWorkspaceCreateError(error)
+        setCreateError(formattedError)
+        toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
       } finally {
         setCreating(false)
       }
@@ -1568,10 +2146,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [
       applyWorktreeMeta,
       baseBranch,
+      branchNameOverride,
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,
       effectiveLinkedPR,
+      linkedGitLabIssue,
+      linkedGitLabMR,
       linkedPR,
       linkedWorkItem,
       name,
@@ -1580,54 +2161,66 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       onCreated,
       parsedLinkedIssueNumber,
       persistDraft,
+      pushTarget,
       repoId,
       requiresExplicitSetupChoice,
+      resolvePendingSmartGitHubSubmit,
       resolvedSetupDecision,
+      resolvedInitialWorkspaceStatus,
       selectedRepo,
+      selectedRepoIsGit,
+      selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
-      settings?.rightSidebarOpenByDefault,
-      setRightSidebarOpen,
-      setRightSidebarTab,
       setSidebarOpen,
       setupDecision,
       sparseEnabled,
       sparseError,
       effectivePresetId,
       telemetrySource,
-      shouldWaitForSetupCheck
+      checkedHooksRepoId,
+      commitHookCheckIfCurrent,
+      loadHookCheckForRepo,
+      setupConfig,
+      setupPolicy
     ]
   )
 
+  const createGateInput = {
+    repoId,
+    workspaceSeedName,
+    creating,
+    shouldWaitForSetupCheck,
+    shouldWaitForIssueAutomationCheck,
+    requiresExplicitSetupChoice,
+    hasSetupDecision: Boolean(setupDecision),
+    selectedRepoRequiresConnection,
+    sparseError
+  }
   const createDisabled =
-    !repoId ||
-    !workspaceSeedName ||
-    creating ||
-    shouldWaitForSetupCheck ||
-    shouldWaitForIssueAutomationCheck ||
-    (requiresExplicitSetupChoice && !setupDecision) ||
-    sparseError !== null
-
+    createGateMode === 'quick'
+      ? getQuickComposerCreateDisabled(createGateInput)
+      : getFullComposerCreateDisabled(createGateInput)
   const cardProps: ComposerCardProps = {
     eligibleRepos,
     repoId,
+    selectedRepoIsGit,
     onRepoChange: handleRepoChange,
     name,
     onNameValueChange: handleNameValueChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
+    onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: handleSmartBranchSelect,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
-    onPromptKeyDown: handlePromptKeyDown,
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
-    addAttachmentShortcut: ADD_ATTACHMENT_SHORTCUT,
     linkedWorkItem,
     onRemoveLinkedWorkItem: handleRemoveLinkedWorkItem,
     linkPopoverOpen,
@@ -1651,10 +2244,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     onBaseBranchChange: handleBaseBranchChange,
     onBaseBranchPrSelect: handleBaseBranchPrSelect,
+    onBaseBranchMrSelect: handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
     selectedRepoPath: selectedRepo?.path ?? null,
     selectedRepoIsRemote: Boolean(selectedRepo?.connectionId),
+    selectedRepoConnectionId,
+    selectedRepoSshStatus,
+    selectedRepoRequiresConnection,
+    selectedRepoConnectInProgress,
+    onConnectSelectedRepo,
     startFromResetHint,
     note,
     onNoteChange: setNote,
@@ -1665,7 +2264,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForSetupCheck,
     resolvedSetupDecision,
     createError,
-    canUseSparseCheckout: !selectedRepo?.connectionId,
+    canUseSparseCheckout: selectedRepoIsGit && !selectedRepo?.connectionId,
     sparsePresets,
     sparseSelectedPresetId,
     onSparseSelectPreset: handleSparseSelectPreset

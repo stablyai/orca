@@ -1,12 +1,121 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { is } from '@electron-toolkit/utils'
+import type { AppIdentity } from '../../shared/app-identity'
+import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
+import type { Store } from '../persistence'
+import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
+import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { authorizeExternalPath } from './filesystem-auth'
+import {
+  ensureDefaultFloatingWorkspacePath,
+  grantFloatingWorkspaceDirectory,
+  resolveFloatingTerminalCwd
+} from './floating-workspace-directory'
+import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
 
 const execFileAsync = promisify(execFile)
 
-export function registerAppHandlers(): void {
+type RegisterAppHandlersOptions = {
+  onBeforeRelaunch?: () => void
+}
+
+async function pickFloatingMarkdownDocument(
+  event: IpcMainInvokeEvent
+): Promise<MarkdownDocument | null> {
+  const cwd = await ensureDefaultFloatingWorkspacePath()
+  const options = {
+    defaultPath: cwd,
+    properties: ['openFile'],
+    filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
+  } satisfies Electron.OpenDialogOptions
+  const parentWindow = BrowserWindow.fromWebContents(event.sender)
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  const filePath = result.filePaths[0]
+  if (!isMarkdownDocumentName(filePath)) {
+    throw new Error('Selected file is not a markdown document.')
+  }
+  authorizeExternalPath(filePath)
+  return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
+}
+
+async function pickFloatingWorkspaceDirectory(
+  event: IpcMainInvokeEvent,
+  store: Store
+): Promise<string | null> {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender)
+  const options = {
+    properties: ['openDirectory', 'createDirectory']
+  } satisfies Electron.OpenDialogOptions
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  const selectedDir = result.filePaths[0]
+  // Why: a user-approved picker selection is a trust grant for later Floating
+  // Workspace markdown creation, unlike arbitrary typed settings text.
+  await grantFloatingWorkspaceDirectory(store, selectedDir)
+  return selectedDir
+}
+
+function getFeatureWallAssetBaseUrl(): string {
+  const assetDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'onboarding', 'feature-wall')
+    : resolveDevFeatureWallAssetDir()
+
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
+    const vitePath = assetDir.split(path.sep).join('/')
+    const absoluteVitePath = vitePath.startsWith('/') ? vitePath : `/${vitePath}`
+    // Why: the dev renderer is served from http://localhost, where Chromium
+    // blocks file:// image loads. Vite's /@fs route serves the same local media.
+    return new URL(`/@fs${absoluteVitePath}/`, process.env.ELECTRON_RENDERER_URL).toString()
+  }
+
+  return `${pathToFileURL(assetDir).toString()}/`
+}
+
+function resolveDevFeatureWallAssetDir(): string {
+  const relativeDir = path.join('resources', 'onboarding', 'feature-wall')
+  const candidates = [
+    path.join(app.getAppPath(), relativeDir),
+    path.resolve(app.getAppPath(), '..', '..', relativeDir),
+    path.join(process.cwd(), relativeDir)
+  ]
+
+  // Why: E2E launches out/main/index.js, so app.getAppPath() can point at
+  // out/main even though development resources still live at the repo root.
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
+}
+
+export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
+  ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
+
+  ipcMain.handle('app:getIdentity', (): AppIdentity => {
+    const identity = getDevInstanceIdentity(is.dev)
+    return {
+      name: identity.name,
+      isDev: identity.isDev,
+      devLabel: identity.devLabel,
+      devBranch: identity.devBranch,
+      devWorktreeName: identity.devWorktreeName,
+      devRepoRoot: identity.devRepoRoot,
+      dockBadgeLabel: identity.dockBadgeLabel
+    }
+  })
+
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
 
@@ -61,9 +170,38 @@ export function registerAppHandlers(): void {
     // UI state before the window tears down. `app.relaunch()` schedules a
     // spawn; `app.exit(0)` triggers the actual quit without invoking
     // before-quit handlers that could block on confirmation dialogs.
+    // Mark shutdown first because app.exit() can bypass the usual quit latch.
+    options.onBeforeRelaunch?.()
     setTimeout(() => {
       app.relaunch()
       app.exit(0)
     }, 150)
   })
+
+  ipcMain.handle('app:restart', () => {
+    // Why: the hidden admin restart should mirror the update relaunch path:
+    // schedule a new Orca process, then use the normal quit pipeline so daemon
+    // checkpoints, runtime metadata, and telemetry flush before exit.
+    options.onBeforeRelaunch?.()
+    setTimeout(() => {
+      app.relaunch()
+      app.quit()
+    }, 150)
+  })
+
+  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
+    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
+  })
+
+  ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
+    resolveFloatingTerminalCwd(store, args)
+  )
+
+  ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
+
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
+
+  ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
+    pickFloatingWorkspaceDirectory(event, store)
+  )
 }

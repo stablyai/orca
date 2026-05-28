@@ -32,15 +32,15 @@ export type HostPreferences = {
 }
 
 const DEFAULT_PREFS: HostPreferences = {
-  sortMode: 'smart',
+  sortMode: 'recent',
   filterMode: 'all',
-  groupMode: 'none',
+  groupMode: 'repo',
   collapsedGroups: [],
   selectedRepos: []
 }
-const SORT_MODES = new Set(['smart', 'recent', 'name'])
+const SORT_MODES = new Set(['smart', 'recent', 'name', 'repo'])
 const FILTER_MODES = new Set(['all', 'active'])
-const GROUP_MODES = new Set(['none', 'repo', 'prStatus'])
+const GROUP_MODES = new Set(['none', 'workspaceStatus', 'repo', 'prStatus'])
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)

@@ -1,16 +1,30 @@
+/* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
+   preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
+import { statSync } from 'fs'
 import { win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
+import { DaemonProtocolError } from './types'
 import {
   getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   resolvePtyShellPath
 } from './shell-ready'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
-import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
+import {
+  ensureNodePtySpawnHelperExecutable,
+  getNodePtySpawnHelperCandidates,
+  validateWorkingDirectory
+} from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
+import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { parseWslPath } from '../wsl'
+import { getWslContextFromSessionId } from './wsl-session-context'
+
+const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -18,6 +32,7 @@ export type PtySubprocessOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
@@ -43,6 +58,113 @@ function getDefaultCwd(): string {
   return 'C:\\'
 }
 
+function removeUnspecifiedPaneIdentityEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
+      delete env[key]
+    }
+  }
+}
+
+function removeInheritedDevAgentHookEndpoint(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
+    // Why: the daemon inherits the app process env before per-PTY env is
+    // merged. Strip only stale parent endpoints; a fresh explicit endpoint is
+    // needed by hooks whose runners scrub token-like env vars before exec.
+    delete env.ORCA_AGENT_HOOK_ENDPOINT
+  }
+}
+
+function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
+  // Why: the daemon needs ELECTRON_RUN_AS_NODE=1 internally, but user shells
+  // must not inherit it or nested Electron commands run as plain Node.
+  delete env.ELECTRON_RUN_AS_NODE
+}
+
+function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
+  const detailName = kind === 'helper' ? 'helper' : 'cwd'
+  const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  return new DaemonProtocolError(
+    `Daemon's ${kind === 'helper' ? 'node-pty install' : 'working directory'} is gone ` +
+      `(worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT ` +
+      `(errno 2, No such file or directory) - ${detailName}='${path}'`
+  )
+}
+
+function preflightMacNodePtySpawnEnvironment(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  let daemonCwd: string
+  try {
+    daemonCwd = process.cwd()
+    if (!statSync(daemonCwd).isDirectory()) {
+      throw formatMissingDaemonPathError('cwd', daemonCwd)
+    }
+  } catch (error) {
+    if (error instanceof DaemonProtocolError) {
+      throw error
+    }
+    throw formatMissingDaemonPathError('cwd', '<unavailable>')
+  }
+
+  let candidates: string[]
+  try {
+    candidates = getNodePtySpawnHelperCandidates()
+  } catch {
+    throw formatMissingDaemonPathError('helper', '<unresolved>')
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (statSync(candidate).isFile()) {
+        return
+      }
+    } catch {
+      // Try the next node-pty native location.
+    }
+  }
+
+  throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+function isNativeWindowsPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+function preflightWindowsPtySpawnEnvironment(args: {
+  validationCwd: string
+  cwdWasExplicit: boolean
+}): void {
+  if (process.platform !== 'win32' || !args.cwdWasExplicit) {
+    return
+  }
+
+  if (!isNativeWindowsPath(args.validationCwd)) {
+    return
+  }
+
+  validateWorkingDirectory(args.validationCwd)
+}
+
+function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
+  const message = err instanceof Error ? err.message : String(err)
+  const formatted = new DaemonProtocolError(
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}`
+  )
+  if (err instanceof Error && err.stack) {
+    formatted.stack = err.stack
+  }
+  return formatted
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -64,6 +186,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  for (const key of opts.envToDelete ?? []) {
+    delete env[key]
+  }
+  // Why: the daemon is forked from Electron and can inherit the pane identity
+  // of the terminal that launched `pn dev`; each PTY must opt into its own.
+  removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  removeInheritedDevAgentHookEndpoint(env, opts.env)
+  removeInheritedElectronRunAsNode(env)
+  removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
 
@@ -71,9 +202,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // setting, relayed by main) takes priority over env.COMSPEC — otherwise
   // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
   // no matter which shell the user actually picked.
-  let shellPath = opts.shellOverride || resolvePtyShellPath(env)
+  const cwdWslInfo = process.platform === 'win32' ? parseWslPath(opts.cwd ?? '') : null
+  const sessionWslContext =
+    process.platform === 'win32' ? getWslContextFromSessionId(opts.sessionId) : undefined
+  // Why: WSL worktree cwd is the repo's execution environment. Older persisted
+  // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
+  // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
+  let shellPath =
+    cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let spawnCwd = opts.cwd || getDefaultCwd()
+  let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
@@ -102,13 +241,33 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Reuse the same shared launch-args helper after resolving the effective
     // PowerShell executable so daemon-backed terminals preserve parity with the
     // in-process PTY path.
-    const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
+    const resolved = resolveWindowsShellLaunchArgs(
+      shellPath,
+      spawnCwd,
+      getDefaultCwd(),
+      sessionWslContext
+    )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
+    validationCwd = resolved.validationCwd
+    if (
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
+      isHostCodexHomeForWsl(env.CODEX_HOME)
+    ) {
+      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
+      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+      delete env.CODEX_HOME
+    }
   } else {
+    // Why: any Orca-injected overlay env that user rc files can clobber
+    // needs the wrapper so the post-rc restore line runs.
     const shellLaunch = opts.command
       ? getShellReadyLaunchConfig(shellPath)
-      : env.ORCA_ATTRIBUTION_SHIM_DIR
+      : env.ORCA_ATTRIBUTION_SHIM_DIR ||
+          env.ORCA_OPENCODE_CONFIG_DIR ||
+          env.ORCA_PI_CODING_AGENT_DIR ||
+          env.ORCA_OMP_CODING_AGENT_DIR ||
+          env.ORCA_CODEX_HOME
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {
@@ -121,14 +280,27 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
-
-  const proc = pty.spawn(shellPath, shellArgs, {
-    name: 'xterm-256color',
-    cols: size.cols,
-    rows: size.rows,
-    cwd: spawnCwd,
-    env
+  preflightMacNodePtySpawnEnvironment()
+  preflightWindowsPtySpawnEnvironment({
+    validationCwd,
+    cwdWasExplicit: opts.cwd !== undefined
   })
+
+  let proc: pty.IPty
+  try {
+    proc = pty.spawn(shellPath, shellArgs, {
+      name: 'xterm-256color',
+      cols: size.cols,
+      rows: size.rows,
+      cwd: spawnCwd,
+      env
+    })
+  } catch (err) {
+    if (process.platform === 'win32') {
+      throw formatPtySpawnError(err, shellPath, spawnCwd)
+    }
+    throw err
+  }
 
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null

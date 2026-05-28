@@ -158,6 +158,16 @@ describe('resolveClaudeCommand', () => {
     expect(resolveClaudeCommand({ platform: 'darwin', pathEnv: '', homePath: root })).toBe(bunPath)
   })
 
+  it('finds native Windows claude.exe in user-local bin', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-claude-command-'))
+    const nativePath = join(root, '.local', 'bin', 'claude.exe')
+    makeExecutable(nativePath)
+
+    expect(resolveClaudeCommand({ platform: 'win32', pathEnv: '', homePath: root })).toBe(
+      nativePath
+    )
+  })
+
   it('returns the bare command when no filesystem candidate exists', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-claude-command-'))
 
@@ -194,5 +204,13 @@ describe('getVersionManagerBinPaths', () => {
 
     expect(paths).toContain(join(root, '.local', 'share', 'pnpm'))
     expect(paths).not.toContain(join(root, 'Library', 'pnpm'))
+  })
+
+  it('includes Windows user-local bin for native CLI installers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-vm-paths-'))
+    const paths = getVersionManagerBinPaths({ platform: 'win32', pathEnv: '', homePath: root })
+
+    expect(paths).toContain(join(root, '.local', 'bin'))
+    expect(paths).toContain(join(root, 'AppData', 'Roaming', 'npm'))
   })
 })

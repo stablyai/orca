@@ -1,8 +1,10 @@
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { CORE_HANDLERS } from './handlers/core'
+import { AUTOMATION_HANDLERS } from './handlers/automations'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
+import { FILE_HANDLERS } from './handlers/file'
 import { TERMINAL_HANDLERS } from './handlers/terminal'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
 import { BROWSER_INTERACT_HANDLERS } from './handlers/browser-interact'
@@ -13,6 +15,9 @@ import { BROWSER_CAPTURE_HANDLERS } from './handlers/browser-capture'
 import { BROWSER_ENV_HANDLERS } from './handlers/browser-env'
 import { BROWSER_STORAGE_HANDLERS } from './handlers/browser-storage'
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
+import { COMPUTER_HANDLERS } from './handlers/computer'
+import { ENVIRONMENT_HANDLERS } from './handlers/environment'
+import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -27,8 +32,10 @@ function buildHandlers(): Map<string, CommandHandler> {
   const table = new Map<string, CommandHandler>()
   const groups = [
     CORE_HANDLERS,
+    AUTOMATION_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
+    FILE_HANDLERS,
     TERMINAL_HANDLERS,
     BROWSER_NAV_HANDLERS,
     BROWSER_INTERACT_HANDLERS,
@@ -38,7 +45,10 @@ function buildHandlers(): Map<string, CommandHandler> {
     BROWSER_CAPTURE_HANDLERS,
     BROWSER_ENV_HANDLERS,
     BROWSER_STORAGE_HANDLERS,
-    ORCHESTRATION_HANDLERS
+    ORCHESTRATION_HANDLERS,
+    COMPUTER_HANDLERS,
+    AGENT_HOOK_HANDLERS,
+    ENVIRONMENT_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

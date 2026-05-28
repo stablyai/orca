@@ -1,8 +1,9 @@
 import { ipcMain } from 'electron'
 import { networkInterfaces } from 'os'
 import QRCode from 'qrcode'
+import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
 export type NetworkInterface = {
   name: string
@@ -34,6 +35,15 @@ function getLanAddress(): string | null {
   return ifaces.length > 0 ? ifaces[0]!.address : null
 }
 
+function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
+  return {
+    deviceId: device.deviceId,
+    name: device.name,
+    createdAt: device.pairedAt,
+    lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null
+  }
+}
+
 // Why: the mobile IPC handlers provide the renderer with QR code pairing data,
 // device management, and WebSocket readiness status. They depend on the
 // OrcaRuntimeRpcServer because it owns the device registry and TLS state.
@@ -43,54 +53,79 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     interfaces: getNetworkInterfaces()
   }))
 
-  ipcMain.handle('mobile:getPairingQR', async (_event, args?: { address?: string }) => {
-    const rawEndpoint = rpcServer.getWebSocketEndpoint()
-    const registry = rpcServer.getDeviceRegistry()
-    if (!rawEndpoint || !registry) {
-      return { available: false as const }
+  ipcMain.handle(
+    'mobile:getPairingQR',
+    async (_event, args?: { address?: string; rotate?: boolean }) => {
+      // Why: allow the caller to specify which network interface address to
+      // embed in the QR code. This supports overlay networks (Tailscale,
+      // ZeroTier) where the default LAN IP isn't reachable from the phone.
+      const ip = args?.address ?? getLanAddress()
+      if (!ip) {
+        return { available: false as const }
+      }
+
+      // Why: coalesce repeated QR regenerations onto a single never-scanned
+      // pending token so the copy-button flow doesn't accumulate orphaned
+      // device credentials forever. The token graduates to a real entry when
+      // a phone actually connects (lastSeenAt > 0). When the caller passes
+      // `rotate: true` (explicit "Regenerate" intent because the prior token
+      // may have been exposed), we discard any pending token and mint a fresh
+      // one so the new QR carries a different credential.
+      const offer = rpcServer.createPairingOffer({
+        address: ip,
+        rotate: args?.rotate,
+        name: `Mobile ${new Date().toLocaleDateString()}`,
+        scope: 'mobile'
+      })
+      if (!offer.available) {
+        return { available: false as const }
+      }
+
+      const qrDataUrl = await QRCode.toDataURL(offer.pairingUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 256
+      })
+
+      return {
+        available: true as const,
+        qrDataUrl,
+        pairingUrl: offer.pairingUrl,
+        endpoint: offer.endpoint,
+        deviceId: offer.deviceId
+      }
     }
+  )
 
-    // Why: allow the caller to specify which network interface address to
-    // embed in the QR code. This supports overlay networks (Tailscale,
-    // ZeroTier) where the default LAN IP isn't reachable from the phone.
-    const ip = args?.address ?? getLanAddress()
-    if (!ip) {
-      return { available: false as const }
+  ipcMain.handle(
+    'mobile:getRuntimePairingUrl',
+    async (_event, args?: { address?: string; rotate?: boolean }) => {
+      const ip = args?.address ?? getLanAddress()
+      if (!ip) {
+        return { available: false as const }
+      }
+
+      // Why: web/desktop runtime clients need full runtime access, not the
+      // mobile allowlist used by phone QR pairing.
+      const offer = rpcServer.createPairingOffer({
+        address: ip,
+        rotate: args?.rotate,
+        name: `Runtime ${new Date().toLocaleDateString()}`,
+        scope: 'runtime'
+      })
+      if (!offer.available) {
+        return { available: false as const }
+      }
+
+      return {
+        available: true as const,
+        pairingUrl: offer.pairingUrl,
+        webClientUrl: offer.webClientUrl,
+        endpoint: offer.endpoint,
+        deviceId: offer.deviceId
+      }
     }
-    const endpoint = rawEndpoint.replace('0.0.0.0', ip)
-
-    // Why: coalesce repeated QR regenerations onto a single never-scanned
-    // pending token so the copy-button flow doesn't accumulate orphaned
-    // device credentials forever. The token graduates to a real entry when
-    // a phone actually connects (lastSeenAt > 0).
-    const device = registry.getOrCreatePendingDevice(`Mobile ${new Date().toLocaleDateString()}`)
-
-    const publicKeyB64 = rpcServer.getE2EEPublicKey()
-    if (!publicKeyB64) {
-      return { available: false as const }
-    }
-
-    const url = encodePairingOffer({
-      v: PAIRING_OFFER_VERSION,
-      endpoint,
-      deviceToken: device.token,
-      publicKeyB64
-    })
-
-    const qrDataUrl = await QRCode.toDataURL(url, {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      width: 256
-    })
-
-    return {
-      available: true as const,
-      qrDataUrl,
-      pairingUrl: url,
-      endpoint,
-      deviceId: device.deviceId
-    }
-  })
+  )
 
   ipcMain.handle('mobile:listDevices', () => {
     const registry = rpcServer.getDeviceRegistry()
@@ -103,7 +138,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     return {
       devices: registry
         .listDevices()
-        .filter((d) => d.lastSeenAt > 0)
+        .filter((d) => d.scope === 'mobile' && d.lastSeenAt > 0)
         .map((d) => ({
           deviceId: d.deviceId,
           name: d.name,
@@ -113,12 +148,36 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     }
   })
 
+  ipcMain.handle('mobile:listRuntimeAccessGrants', () => {
+    const registry = rpcServer.getDeviceRegistry()
+    if (!registry) {
+      return { grants: [] }
+    }
+    // Why: generated web/runtime links are bearer credentials even before a
+    // client first connects, so pending runtime grants must stay revocable.
+    return {
+      grants: registry
+        .listDevices()
+        .filter((d) => d.scope === 'runtime')
+        .sort((a, b) => b.pairedAt - a.pairedAt)
+        .map(toRuntimeAccessGrant)
+    }
+  })
+
   ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: registry.removeDevice(args.deviceId) }
+    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+  })
+
+  ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
+    const registry = rpcServer.getDeviceRegistry()
+    if (!registry) {
+      return { revoked: false }
+    }
+    return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
   })
 
   ipcMain.handle('mobile:isWebSocketReady', () => {

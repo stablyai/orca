@@ -11,6 +11,10 @@ const BEL = '\x07'
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
+function flushPtySideEffects(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
@@ -74,6 +78,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -96,6 +101,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
       id: 'pty-pi',
       data: `assistant output line 1\r\n${workingFrame('⠋')}more body text`
     })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -121,6 +127,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     onTitleChange.mockClear()
 
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -143,6 +150,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     const workingIdx = seenTitles.findIndex((t) => t === '⠋ Pi')
@@ -177,6 +185,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠙ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     // The two bare "Cursor Agent" titles must NOT reach the title-change
@@ -200,6 +209,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠋ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor ready${BEL}${BEL}` })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Cursor Agent')

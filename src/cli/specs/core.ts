@@ -10,6 +10,25 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca open', 'orca open --json']
   },
   {
+    path: ['serve'],
+    summary: 'Start an Orca runtime server without opening a desktop window',
+    usage:
+      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'mobile-pairing', 'no-pairing'],
+    notes: [
+      'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
+      'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
+      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
+      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
+    ],
+    examples: [
+      'orca serve',
+      'orca serve --json',
+      'orca serve --port 6768 --pairing-address 100.64.1.20',
+      'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
+    ]
+  },
+  {
     path: ['status'],
     summary: 'Show app/runtime/graph readiness',
     usage: 'orca status [--json]',
@@ -72,19 +91,48 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'name', 'base-branch', 'issue', 'comment', 'run-hooks'],
+      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'name',
+      'base-branch',
+      'issue',
+      'comment',
+      'parent-worktree',
+      'no-parent',
+      'run-hooks',
+      'activate'
+    ],
     notes: [
-      'By default this matches the Orca UI flow and activates the new worktree in the app.',
-      'Repo-defined orca.yaml hooks are skipped unless --run-hooks is passed.'
+      'By default, Orca records the new worktree as a child of the caller workspace when it can infer one from the Orca terminal or current directory.',
+      'For related work, use the inferred parent or pass --parent-worktree active to make the current workspace relationship explicit.',
+      'Use --no-parent when the new worktree should be independent of the current workspace.',
+      'By default this creates the worktree and its first terminal without switching the active Orca workspace.',
+      'Repo-defined setup hooks follow the repository setup policy; pass --run-hooks to force them.',
+      'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
+      'Passing --run-hooks reveals the worktree so the setup hook can run in its first terminal.'
+    ],
+    examples: [
+      'orca worktree create --repo id:<repoId> --name related-task --json',
+      'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
+      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
     ]
   },
   {
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'display-name', 'issue', 'comment']
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'worktree',
+      'display-name',
+      'issue',
+      'comment',
+      'parent-worktree',
+      'no-parent'
+    ]
   },
   {
     path: ['worktree', 'rm'],
@@ -114,16 +162,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor'],
+    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
+      'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
       'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --json'
+      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json'
     ]
   },
   {
@@ -148,13 +197,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'create'],
-    summary: 'Create a new terminal tab in the current worktree',
+    summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+    notes: [
+      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.'
+    ],
     examples: [
       'orca terminal create --json',
-      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"'
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
+      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
     ]
   },
   {

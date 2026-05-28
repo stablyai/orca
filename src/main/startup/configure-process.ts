@@ -5,6 +5,10 @@ import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 
+function getProcessPathDelimiter(): string {
+  return process.platform === 'win32' ? ';' : ':'
+}
+
 function requestDevParentShutdown(): void {
   app.quit()
 
@@ -21,9 +25,10 @@ function requestDevParentShutdown(): void {
 }
 
 export function installUncaughtPipeErrorGuard(): void {
-  process.on('uncaughtException', (error) => {
+  const onUncaughtException = (error: unknown): void => {
     if (
       error &&
+      typeof error === 'object' &&
       'code' in error &&
       ((error as NodeJS.ErrnoException).code === 'EIO' ||
         (error as NodeJS.ErrnoException).code === 'EPIPE')
@@ -31,40 +36,52 @@ export function installUncaughtPipeErrorGuard(): void {
       return
     }
 
-    throw error
-  })
+    process.off('uncaughtException', onUncaughtException)
+    // Why: throwing inside an uncaughtException handler makes Node exit with
+    // status 7, hiding the original fault. Re-throw on the next tick so the
+    // default fatal-exception path reports the real status and stack.
+    setImmediate(() => {
+      throw error
+    })
+  }
+
+  process.on('uncaughtException', onUncaughtException)
 }
 
 export function patchPackagedProcessPath(): void {
-  if (!app.isPackaged || process.platform === 'win32') {
+  if (!app.isPackaged) {
     return
   }
 
   const home = process.env.HOME ?? ''
-  const extraPaths = [
-    '/opt/homebrew/bin',
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',
-    '/usr/local/sbin',
-    '/snap/bin',
-    '/home/linuxbrew/.linuxbrew/bin',
-    '/nix/var/nix/profiles/default/bin'
-  ]
+  const extraPaths: string[] = []
 
-  if (home) {
+  if (process.platform !== 'win32') {
     extraPaths.push(
-      join(home, 'bin'),
-      join(home, '.local/bin'),
-      join(home, '.nix-profile/bin'),
-      // Why: several agent CLIs ship install scripts that drop binaries into
-      // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
-      // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
-      // without shell rc files, so these stay invisible to `which` probes — and
-      // the Agents settings page reports them as "Not installed" even when the
-      // user can run them from Terminal. See stablyai/orca#829.
-      join(home, '.opencode/bin'),
-      join(home, '.vite-plus/bin')
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      '/usr/local/bin',
+      '/usr/local/sbin',
+      '/snap/bin',
+      '/home/linuxbrew/.linuxbrew/bin',
+      '/nix/var/nix/profiles/default/bin'
     )
+
+    if (home) {
+      extraPaths.push(
+        join(home, 'bin'),
+        join(home, '.local/bin'),
+        join(home, '.nix-profile/bin'),
+        // Why: several agent CLIs ship install scripts that drop binaries into
+        // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
+        // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
+        // without shell rc files, so these stay invisible to `which` probes — and
+        // the Agents settings page reports them as "Not installed" even when the
+        // user can run them from Terminal. See stablyai/orca#829.
+        join(home, '.opencode/bin'),
+        join(home, '.vite-plus/bin')
+      )
+    }
   }
 
   // Why: CLI tools installed via Node version managers (nvm, volta, asdf, fnm,
@@ -72,14 +89,20 @@ export function patchPackagedProcessPath(): void {
   // resolveCodexCommand() can locate the codex binary in these directories, but
   // spawning it still fails if node itself isn't in PATH. Adding version manager
   // bin paths here fixes all spawn sites (login, rate limits, usage tracking).
+  // On Windows this also seeds user-local installer dirs, since shell hydration
+  // is POSIX-only and Start Menu launches can miss user-level PATH updates.
   extraPaths.push(...getVersionManagerBinPaths())
 
-  const currentPath = process.env.PATH ?? ''
-  const existing = new Set(currentPath.split(':'))
+  const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
+  const currentPath = process.env[pathKey] ?? ''
+  const pathDelimiter = getProcessPathDelimiter()
+  const existing = new Set(currentPath.split(pathDelimiter))
   const missing = extraPaths.filter((path) => !existing.has(path))
 
   if (missing.length > 0) {
-    process.env.PATH = [...missing, ...currentPath.split(':').filter(Boolean)].join(':')
+    process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(
+      pathDelimiter
+    )
   }
 }
 
@@ -110,6 +133,17 @@ export function configureDevUserDataPath(isDev: boolean): void {
   // `pnpm dev` can overwrite the packaged app's runtime pointer and make the
   // public `orca` CLI look broken even though the packaged app is still open.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
+}
+
+export function shouldInstallManagedHooks(isDev: boolean): boolean {
+  void isDev
+  // Why: managed hook installation now targets Orca-owned, environment-scoped
+  // homes for Codex rather than the user's default ~/.codex state, so plain
+  // dev runs need the install path enabled to keep hook-backed agent statuses
+  // accurate without an opt-in flag. The remaining agents still rely on the
+  // shared startup installer loop, so keep the policy uniformly on until
+  // they are migrated to more granular ownership seams.
+  return true
 }
 
 export function installDevParentDisconnectQuit(isDev: boolean): void {
@@ -170,6 +204,16 @@ export function installDevParentWatchdog(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
+  if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
+    // Why: Ubuntu/Xvfb runners can fail Electron startup with
+    // "GPU process isn't usable" before Playwright sees the first window.
+    // E2E coverage does not depend on GPU compositing, so keep CI on the
+    // software path instead of retrying around a crashed app process.
+    app.disableHardwareAcceleration()
+    app.commandLine.appendSwitch('disable-gpu')
+    return
+  }
+
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags

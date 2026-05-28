@@ -1,0 +1,212 @@
+import { describe, expect, it, vi } from 'vitest'
+import { getDefaultUIState } from '../../../../shared/constants'
+import type { PersistedUIState } from '../../../../shared/types'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { RpcRequest } from '../core'
+import { RpcDispatcher } from '../dispatcher'
+import { CLIENT_UI_METHODS } from './client-ui'
+
+function makeRequest(method: string, params?: unknown): RpcRequest {
+  return { id: 'req-1', authToken: 'tok', method, params }
+}
+
+describe('client UI RPC methods', () => {
+  it('returns the runtime host agent settings needed by mobile create flows', async () => {
+    const settings = {
+      defaultTuiAgent: 'codex',
+      agentCmdOverrides: { codex: 'codex --profile work' },
+      defaultTaskSource: 'gitlab',
+      defaultTaskViewPreset: 'my-prs',
+      visibleTaskProviders: ['github', 'gitlab'],
+      defaultRepoSelection: ['repo-1'],
+      defaultLinearTeamSelection: ['team-1'],
+      githubProjects: {
+        pinned: [],
+        recent: [],
+        lastViewByProject: {},
+        activeProject: null
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getClientSettings: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('settings.get'))
+
+    expect(runtime.getClientSettings).toHaveBeenCalledTimes(1)
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
+  it('persists the runtime host task source setting for mobile Tasks', async () => {
+    const settings = {
+      defaultTuiAgent: null,
+      agentCmdOverrides: {},
+      defaultTaskSource: 'linear',
+      defaultTaskViewPreset: 'issues',
+      visibleTaskProviders: ['github', 'linear'],
+      defaultRepoSelection: ['repo-1', 'repo-2'],
+      defaultLinearTeamSelection: ['team-1', 'team-2'],
+      githubProjects: {
+        pinned: [],
+        recent: [],
+        lastViewByProject: {
+          'organization:stablyai:1': { viewId: 'view-1' }
+        },
+        activeProject: { owner: 'stablyai', ownerType: 'organization', number: 1 }
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        defaultTuiAgent: 'codex',
+        defaultTaskSource: 'linear',
+        defaultTaskViewPreset: 'my-prs',
+        defaultRepoSelection: settings.defaultRepoSelection,
+        defaultLinearTeamSelection: ['team-1', 'team-2'],
+        githubProjects: settings.githubProjects
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      defaultTuiAgent: 'codex',
+      defaultTaskSource: 'linear',
+      defaultTaskViewPreset: 'my-prs',
+      defaultRepoSelection: settings.defaultRepoSelection,
+      defaultLinearTeamSelection: ['team-1', 'team-2'],
+      githubProjects: settings.githubProjects
+    })
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
+  it('returns the runtime host persisted UI state', async () => {
+    const ui: PersistedUIState = {
+      ...getDefaultUIState(),
+      groupBy: 'none',
+      sortBy: 'smart',
+      showActiveOnly: true,
+      filterRepoIds: ['repo-1']
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getUIState: vi.fn(() => ui)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ui.get'))
+
+    expect(runtime.getUIState).toHaveBeenCalledTimes(1)
+    expect(response).toMatchObject({ ok: true, result: { ui } })
+  })
+
+  it('persists UI updates on the runtime host and returns the updated state', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      rightSidebarOpen: false,
+      rightSidebarTab: 'checks',
+      showActiveOnly: true,
+      filterRepoIds: ['repo-1']
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', {
+        rightSidebarOpen: false,
+        rightSidebarTab: 'checks',
+        showActiveOnly: true,
+        hideSleepingWorkspaces: true,
+        filterRepoIds: ['repo-1']
+      })
+    )
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      rightSidebarOpen: false,
+      rightSidebarTab: 'checks',
+      showActiveOnly: true,
+      hideSleepingWorkspaces: true,
+      filterRepoIds: ['repo-1']
+    })
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
+  it('accepts persisted literal UI arrays and nested UI state', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      worktreeCardProperties: ['status', 'inline-agents'],
+      statusBarItems: ['codex'],
+      taskResumeState: {
+        githubMode: 'items',
+        githubItemsQuery: 'is:open',
+        githubProjectHiddenFieldIdsByView: {
+          'project-1:view-1': ['field-1']
+        }
+      },
+      workspaceCleanup: {
+        dismissals: {
+          'repo::/worktree': {
+            worktreeId: 'repo::/worktree',
+            dismissedAt: 123,
+            fingerprint: 'abc',
+            classifierVersion: 2
+          }
+        }
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const payload = {
+      worktreeCardProperties: ['status', 'inline-agents'],
+      statusBarItems: ['codex'],
+      taskResumeState: {
+        githubMode: 'items',
+        githubItemsQuery: 'is:open',
+        githubProjectHiddenFieldIdsByView: {
+          'project-1:view-1': ['field-1']
+        }
+      },
+      workspaceCleanup: {
+        dismissals: {
+          'repo::/worktree': {
+            worktreeId: 'repo::/worktree',
+            dismissedAt: 123,
+            fingerprint: 'abc',
+            classifierVersion: 2
+          }
+        }
+      }
+    }
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
+  it('rejects unknown and malformed UI update fields', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { showActiveOnly: 'yes', unknownField: true })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+})

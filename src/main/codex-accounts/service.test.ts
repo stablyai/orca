@@ -25,16 +25,19 @@ vi.mock('node:os', async () => {
 
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
+  const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
+    markdownReviewToolsEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
@@ -60,15 +63,22 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
-    showTitlebarAgentActivity: true,
+    sourceControlViewMode: 'list',
+    showTitlebarAppName: true,
     showTasksButton: true,
+    floatingTerminalEnabled: false,
+    floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
+    combinedDiffFileTreeVisibleByDefault: false,
     notifications: {
       enabled: true,
       agentTaskComplete: true,
       terminalBell: false,
       suppressWhenFocused: true,
-      customSoundPath: null
+      customSoundId: 'system',
+      customSoundPath: null,
+      customSoundVolume: 100
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
@@ -79,25 +89,31 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
+    skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
+    visibleTaskProviders: ['github', 'gitlab', 'linear'],
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    keepComputerAwakeWhileAgentsRun: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
-    experimentalSidekick: false,
+    experimentalPet: false,
+    experimentalActivity: true,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
-    appFontFamily
+    appFontFamily,
+    agentStatusHooksEnabled
   }
 }
 

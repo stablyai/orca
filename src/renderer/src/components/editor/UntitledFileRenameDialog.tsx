@@ -10,12 +10,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { getRelativePathInsideRoot } from '@/lib/path'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
   currentName: string
   worktreePath: string
   externalError?: string | null
+  disableBrowse?: boolean
   onClose: () => void
   onConfirm: (newRelativePath: string) => void
 }
@@ -25,6 +27,7 @@ export function UntitledFileRenameDialog({
   currentName,
   worktreePath,
   externalError,
+  disableBrowse = false,
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
@@ -67,21 +70,19 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const trimmedDir = dir.trim().replace(/\/+$/, '')
+    const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
     if (!trimmedDir) {
       setError('Folder path cannot be empty')
       return
     }
 
-    // Why: strict prefix check with trailing '/' prevents partial directory
-    // name matches (e.g. "/project-backup" matching "/project").
-    if (trimmedDir !== worktreePath && !trimmedDir.startsWith(`${worktreePath}/`)) {
+    const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
+    if (relDir === null) {
       setError('Folder must be inside the current workspace')
       return
     }
 
     const fileName = `${trimmedName}.md`
-    const relDir = trimmedDir.slice(worktreePath.length).replace(/^\/+/, '')
     const relativePath = relDir ? `${relDir}/${fileName}` : fileName
     onConfirm(relativePath)
   }, [name, dir, worktreePath, onConfirm])
@@ -143,8 +144,11 @@ export function UntitledFileRenameDialog({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
+                disabled={disableBrowse}
                 onClick={() => void handleBrowse()}
-                title="Browse folders"
+                title={
+                  disableBrowse ? 'Folder picker unavailable for remote files' : 'Browse folders'
+                }
               >
                 <FolderOpen className="size-3.5" />
               </Button>

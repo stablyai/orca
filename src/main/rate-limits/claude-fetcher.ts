@@ -1,15 +1,28 @@
+/* eslint-disable max-lines -- Why: this module keeps Claude credential source
+ordering, OAuth usage fetch semantics, and PTY fallback behavior together so
+subscription usage state cannot drift across code paths. */
 import { readFile } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net, session } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { readManagedClaudeKeychainCredentials } from '../claude-accounts/keychain'
+import {
+  readActiveClaudeKeychainCredentials,
+  readActiveClaudeKeychainCredentialsStrict,
+  readManagedClaudeKeychainCredentials
+} from '../claude-accounts/keychain'
+import {
+  readClaudeManagedAuthFile,
+  resolveOwnedClaudeManagedAuthPath
+} from '../claude-accounts/managed-auth-path'
+import { createOAuthUsageError, OAuthUsageError } from './claude-oauth-usage-error'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
+const CLAUDE_CODE_USER_AGENT = 'claude-code/2.1.0'
 const API_TIMEOUT_MS = 10_000
 
 let proxyConfigured = false
@@ -61,72 +74,95 @@ async function ensureProxyFromEnv(): Promise<void> {
 // Credential reading — tries multiple sources for an OAuth bearer token
 // ---------------------------------------------------------------------------
 
-type ClaudeCredentials = {
-  claudeAiOauth?: {
-    accessToken?: string
-    refreshToken?: string
-    expiresAt?: number // unix ms
-  }
-}
-
 type KeychainCredentials = {
   claudeAiOauth?: {
     accessToken?: string
+    refreshToken?: string
     expiresAt?: number
   }
 }
 
+type OAuthCredentialReadResult = {
+  token: string | null
+  hasRefreshableCredentials: boolean
+}
+
 // Why: factored out so both the active-account Keychain reader and the
-// managed-account reader share the same JSON parsing + expiry check.
-function parseOAuthTokenFromCredentialsJson(raw: string): string | null {
+// managed-account reader share the same JSON parsing + refreshability check.
+function parseOAuthCredentialsJson(raw: string): OAuthCredentialReadResult {
   try {
     const parsed = JSON.parse(raw) as KeychainCredentials
-    const token = parsed?.claudeAiOauth?.accessToken
+    const oauth = parsed?.claudeAiOauth
+    const token = oauth?.accessToken
+    const refreshToken = oauth?.refreshToken
+    const hasRefreshableCredentials = typeof refreshToken === 'string' && refreshToken.trim() !== ''
     if (!token || typeof token !== 'string') {
-      return null
+      return {
+        token: null,
+        hasRefreshableCredentials
+      }
     }
-    const expiresAt = parsed.claudeAiOauth?.expiresAt
-    if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
-      return null
+    // Why: Claude's local expiresAt metadata is not authoritative for the
+    // /api/oauth/usage endpoint. Real Claude Code 2.1 credentials have been
+    // observed authenticating there after expiresAt, so let the server decide.
+    return {
+      token,
+      hasRefreshableCredentials
     }
-    return token
   } catch {
-    return null
+    return emptyOAuthCredentialReadResult()
+  }
+}
+
+function emptyOAuthCredentialReadResult(): OAuthCredentialReadResult {
+  return {
+    token: null,
+    hasRefreshableCredentials: false
   }
 }
 
 /**
  * Read OAuth token from macOS Keychain.
- * Why: Claude Code v2.x+ stores OAuth credentials in the macOS Keychain
- * under service "Claude Code-credentials". This is the standard location
- * for Claude Max/Pro OAuth tokens. Only returns a token if the keychain
- * entry has a `claudeAiOauth.accessToken` — API key users won't have this.
+ * Why: Claude Code 2.1+ scopes OAuth Keychain services by CLAUDE_CONFIG_DIR;
+ * older builds used the legacy unsuffixed service. The shared reader handles both.
  */
-async function readFromKeychain(): Promise<string | null> {
+async function readFromKeychain(configDir?: string): Promise<OAuthCredentialReadResult> {
   if (process.platform !== 'darwin') {
-    return null
+    return emptyOAuthCredentialReadResult()
   }
 
-  return new Promise<string | null>((resolve) => {
-    const user = process.env.USER ?? ''
-    if (!user) {
-      resolve(null)
-      return
+  if (configDir) {
+    const scopedCredentials = await readCredentialsFromStrictKeychain(configDir)
+    if (scopedCredentials.token) {
+      return scopedCredentials
     }
+    if (scopedCredentials.hasRefreshableCredentials) {
+      return scopedCredentials
+    }
+    const legacyCredentials = await readCredentialsFromStrictKeychain()
+    if (legacyCredentials.token) {
+      return legacyCredentials
+    }
+    return scopedCredentials.hasRefreshableCredentials ? scopedCredentials : legacyCredentials
+  }
 
-    execFile(
-      'security',
-      ['find-generic-password', '-s', 'Claude Code-credentials', '-a', user, '-w'],
-      { timeout: 3_000 },
-      (err, stdout) => {
-        if (err || !stdout.trim()) {
-          resolve(null)
-          return
-        }
-        resolve(parseOAuthTokenFromCredentialsJson(stdout.trim()))
-      }
-    )
-  })
+  try {
+    const credentials = await readActiveClaudeKeychainCredentials(configDir)
+    return credentials ? parseOAuthCredentialsJson(credentials) : emptyOAuthCredentialReadResult()
+  } catch {
+    return emptyOAuthCredentialReadResult()
+  }
+}
+
+async function readCredentialsFromStrictKeychain(
+  configDir?: string
+): Promise<OAuthCredentialReadResult> {
+  try {
+    const credentials = await readActiveClaudeKeychainCredentialsStrict(configDir)
+    return credentials ? parseOAuthCredentialsJson(credentials) : emptyOAuthCredentialReadResult()
+  } catch {
+    return emptyOAuthCredentialReadResult()
+  }
 }
 
 /**
@@ -134,24 +170,13 @@ async function readFromKeychain(): Promise<string | null> {
  * Why: older Claude CLI versions store credentials in this plain JSON
  * file. We keep it as a fallback for compatibility.
  */
-async function readFromCredentialsFile(configDir?: string): Promise<string | null> {
+async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredentialReadResult> {
   const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
   try {
     const raw = await readFile(credPath, 'utf-8')
-    const parsed = JSON.parse(raw) as ClaudeCredentials
-    const token = parsed?.claudeAiOauth?.accessToken
-    if (!token || typeof token !== 'string') {
-      return null
-    }
-
-    const expiresAt = parsed.claudeAiOauth?.expiresAt
-    if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
-      return null
-    }
-
-    return token
+    return parseOAuthCredentialsJson(raw)
   } catch {
-    return null
+    return emptyOAuthCredentialReadResult()
   }
 }
 
@@ -161,20 +186,26 @@ async function readFromCredentialsFile(configDir?: string): Promise<string | nul
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(configDir?: string): Promise<string | null> {
+async function readOAuthCredentials(configDir?: string): Promise<OAuthCredentialReadResult> {
   // 1. macOS Keychain (Claude Max/Pro OAuth)
-  const fromKeychain = await readFromKeychain()
-  if (fromKeychain) {
+  const fromKeychain = await readFromKeychain(configDir)
+  if (fromKeychain.token) {
+    return fromKeychain
+  }
+  if (fromKeychain.hasRefreshableCredentials) {
     return fromKeychain
   }
 
   // 2. Legacy credentials file
   const fromFile = await readFromCredentialsFile(configDir)
-  if (fromFile) {
+  if (fromFile.token) {
+    return fromFile
+  }
+  if (fromFile.hasRefreshableCredentials) {
     return fromFile
   }
 
-  return null
+  return emptyOAuthCredentialReadResult()
 }
 
 // ---------------------------------------------------------------------------
@@ -242,13 +273,16 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
     const res = await net.fetch(OAUTH_USAGE_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'anthropic-beta': OAUTH_BETA_HEADER
+        'anthropic-beta': OAUTH_BETA_HEADER,
+        // Why: Claude's OAuth usage endpoint is the Claude Code usage API;
+        // matching the CLI user-agent keeps Orca aligned with that contract.
+        'User-Agent': CLAUDE_CODE_USER_AGENT
       },
       signal: controller.signal
     })
 
     if (!res.ok) {
-      throw new Error(`OAuth API returned ${res.status}`)
+      throw await createOAuthUsageError(res)
     }
 
     const data = (await res.json()) as OAuthUsageResponse
@@ -274,21 +308,30 @@ export async function fetchClaudeRateLimits(options?: {
   authPreparation?: ClaudeRuntimeAuthPreparation
 }): Promise<ProviderRateLimits> {
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthToken = await readOAuthCredentials(
-    options?.authPreparation?.envPatch.CLAUDE_CONFIG_DIR
-  )
-  if (oauthToken) {
+  const oauthCredentials = await readOAuthCredentials(options?.authPreparation?.configDir)
+  if (oauthCredentials.token) {
     try {
-      return await fetchViaOAuth(oauthToken)
-    } catch {
+      return await fetchViaOAuth(oauthCredentials.token)
+    } catch (err) {
+      if (err instanceof OAuthUsageError && err.skipPtyFallback) {
+        return {
+          provider: 'claude',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: withMacTailscaleDnsHint(err.message),
+          status: 'error'
+        }
+      }
       // OAuth API failed — fall through to PTY scraping as a backup
       // for subscription users whose token may still be valid for the CLI.
     }
+  }
 
-    // Path B: PTY fallback — only for subscription plan users (Max/Pro)
-    // whose OAuth token we found but the API call failed. The CLI's
-    // `/usage` command is subscription-only, so there's no point
-    // attempting PTY for API key users.
+  // Path B: PTY fallback — only for subscription plan users (Max/Pro)
+  // whose OAuth credentials exist. This remains a fallback for older Claude
+  // auth shapes and transient OAuth failures.
+  if (oauthCredentials.token || oauthCredentials.hasRefreshableCredentials) {
     try {
       return await fetchViaPty({ authPreparation: options?.authPreparation })
     } catch (err) {
@@ -298,7 +341,7 @@ export async function fetchClaudeRateLimits(options?: {
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: message,
+        error: withMacTailscaleDnsHint(message),
         status: 'error'
       }
     }
@@ -332,14 +375,21 @@ export type InactiveClaudeAccountInfo = {
 // Using ClaudeRuntimeAuthService would overwrite the active account's auth.
 async function readManagedOAuthToken(account: InactiveClaudeAccountInfo): Promise<string | null> {
   try {
+    const managedAuthPath = resolveOwnedClaudeManagedAuthPath(account.id, account.managedAuthPath, {
+      adoptLegacyMarker: true
+    })
+    if (!managedAuthPath) {
+      return null
+    }
     if (process.platform === 'darwin') {
       const raw = await readManagedClaudeKeychainCredentials(account.id)
       if (raw) {
-        return parseOAuthTokenFromCredentialsJson(raw)
+        return parseOAuthCredentialsJson(raw).token
       }
       return null
     }
-    return await readFromCredentialsFile(account.managedAuthPath)
+    const raw = readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
+    return raw ? parseOAuthCredentialsJson(raw).token : null
   } catch {
     return null
   }

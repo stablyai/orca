@@ -1,3 +1,7 @@
+export type ShutdownBufferCaptureOptions = {
+  includeLocalBuffers?: boolean
+}
+
 /** Map of tabId → buffer-capture callback, one per mounted TerminalPane.
  *  The beforeunload handler in App.tsx invokes every callback to populate
  *  Zustand with serialized buffers before flushing the session to disk.
@@ -12,4 +16,7 @@
  *  create a cycle (slice → TerminalPane → store → slice) that breaks the
  *  Zustand store at module-init time. A leaf module with zero imports
  *  has no cycle. */
-export const shutdownBufferCaptures = new Map<string, () => void>()
+export const shutdownBufferCaptures = new Map<
+  string,
+  (options?: ShutdownBufferCaptureOptions) => void
+>()

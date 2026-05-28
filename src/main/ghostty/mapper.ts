@@ -261,6 +261,13 @@ export function mapGhosttyToOrca(
         return null
       }
       return { key: 'terminalFocusFollowsMouse', value: v === 'true' }
+    },
+
+    'middle-click-action': (v) => {
+      if (v !== 'primary-paste' && v !== 'ignore') {
+        return null
+      }
+      return { key: 'primarySelectionMiddleClickPaste', value: v === 'primary-paste' }
     }
   }
 

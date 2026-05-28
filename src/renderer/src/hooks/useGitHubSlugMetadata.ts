@@ -5,7 +5,18 @@
 // existing repoPath-keyed hooks stay focused on the local-workspace flow
 // and so this file remains under the lint line cap.
 import { useEffect, useRef, useState } from 'react'
-import type { GitHubAssignableUser } from '../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types'
+import type {
+  ListAssignableUsersBySlugResult,
+  ListLabelsBySlugResult
+} from '../../../shared/github-project-types'
+import {
+  clearMetadataRequestStore,
+  createMetadataRequestStore,
+  getFreshMetadata,
+  loadMetadata
+} from './metadata-request-cache'
 
 type MetadataState<T> = {
   data: T
@@ -13,26 +24,18 @@ type MetadataState<T> = {
   error: string | null
 }
 
-const METADATA_TTL = 300_000 // 5 min
-
-type CachedMetadata<T> = { data: T; fetchedAt: number }
-
-const slugLabelCache = new Map<string, CachedMetadata<string[]>>()
-const slugAssigneeCache = new Map<string, CachedMetadata<GitHubAssignableUser[]>>()
-
-function isCacheFresh<T>(cache: Map<string, CachedMetadata<T>>, key: string): boolean {
-  const entry = cache.get(key)
-  return !!entry && Date.now() - entry.fetchedAt < METADATA_TTL
-}
+const slugLabelStore = createMetadataRequestStore<string[]>()
+const slugAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function clearGitHubSlugMetadataCache(): void {
-  slugLabelCache.clear()
-  slugAssigneeCache.clear()
+  clearMetadataRequestStore(slugLabelStore)
+  clearMetadataRequestStore(slugAssigneeStore)
 }
 
 export function useRepoLabelsBySlug(
   owner: string | null,
-  repo: string | null
+  repo: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -45,10 +48,14 @@ export function useRepoLabelsBySlug(
     if (!owner || !repo) {
       return
     }
-    const key = `${owner}/${repo}`
+    const target = getActiveRuntimeTarget(settings)
+    const key =
+      target.kind === 'environment'
+        ? `runtime:${target.environmentId}:${owner}/${repo}`
+        : `${owner}/${repo}`
 
-    const cached = slugLabelCache.get(key)
-    if (cached && isCacheFresh(slugLabelCache, key)) {
+    const cached = getFreshMetadata(slugLabelStore, key)
+    if (cached) {
       // Why: always seed state from cache. A remount with the same key
       // resets local state to defaults but `activeKeyRef.current` from the
       // new ref instance is null on first run — the previous gate that
@@ -66,18 +73,26 @@ export function useRepoLabelsBySlug(
       loading: true,
       error: null
     }))
-    window.api.gh
-      .listLabelsBySlug({ owner, repo })
-      .then((res) => {
+    loadMetadata(slugLabelStore, key, () =>
+      (target.kind === 'environment'
+        ? callRuntimeRpc<ListLabelsBySlugResult>(
+            target,
+            'github.project.listLabelsBySlug',
+            { owner, repo },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listLabelsBySlug({ owner, repo })
+      ).then((res) => {
+        if (!res.ok) {
+          throw new Error(res.error.message)
+        }
+        return res.labels
+      })
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        if (!res.ok) {
-          setState((s) => ({ ...s, loading: false, error: res.error.message }))
-          return
-        }
-        const data = res.labels
-        slugLabelCache.set(key, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -91,7 +106,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo])
+  }, [owner, repo, settings])
 
   return state
 }
@@ -99,7 +114,8 @@ export function useRepoLabelsBySlug(
 export function useRepoAssigneesBySlug(
   owner: string | null,
   repo: string | null,
-  seedLogins?: string[]
+  seedLogins?: string[],
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -116,10 +132,14 @@ export function useRepoAssigneesBySlug(
     if (!owner || !repo) {
       return
     }
-    const key = `${owner}/${repo}#${seedKey}`
+    const target = getActiveRuntimeTarget(settings)
+    const key =
+      target.kind === 'environment'
+        ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
+        : `${owner}/${repo}#${seedKey}`
 
-    const cached = slugAssigneeCache.get(key)
-    if (cached && isCacheFresh(slugAssigneeCache, key)) {
+    const cached = getFreshMetadata(slugAssigneeStore, key)
+    if (cached) {
       // Why: see useRepoLabelsBySlug — always seed state from cache so a
       // remount with the same key picks up cached data instead of staying
       // at the empty default.
@@ -136,22 +156,31 @@ export function useRepoAssigneesBySlug(
       loading: true,
       error: null
     }))
-    window.api.gh
-      .listAssignableUsersBySlug({
-        owner,
-        repo,
-        ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
+    const args = {
+      owner,
+      repo,
+      ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
+    }
+    loadMetadata(slugAssigneeStore, key, () =>
+      (target.kind === 'environment'
+        ? callRuntimeRpc<ListAssignableUsersBySlugResult>(
+            target,
+            'github.project.listAssignableUsersBySlug',
+            args,
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listAssignableUsersBySlug(args)
+      ).then((res) => {
+        if (!res.ok) {
+          throw new Error(res.error.message)
+        }
+        return res.users
       })
-      .then((res) => {
+    )
+      .then((data) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        if (!res.ok) {
-          setState((s) => ({ ...s, loading: false, error: res.error.message }))
-          return
-        }
-        const data = res.users
-        slugAssigneeCache.set(key, { data, fetchedAt: Date.now() })
         setState({ data, loading: false, error: null })
       })
       .catch((err) => {
@@ -165,7 +194,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey])
+  }, [owner, repo, seedKey, settings])
 
   return state
 }

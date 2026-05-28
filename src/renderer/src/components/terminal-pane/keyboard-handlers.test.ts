@@ -1,6 +1,6 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect } from 'vitest'
-import { matchSearchNavigate } from './keyboard-handlers'
+import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -9,14 +9,16 @@ function makeKeyEvent(
     ctrlKey: boolean
     shiftKey: boolean
     altKey: boolean
+    repeat: boolean
   }>
-): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'> {
+): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'> {
   return {
     key: 'g',
     metaKey: false,
     ctrlKey: false,
     shiftKey: false,
     altKey: false,
+    repeat: false,
     ...overrides
   }
 }
@@ -70,5 +72,75 @@ describe('matchSearchNavigate', () => {
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
+  })
+})
+
+describe('matchFileSearchShortcut', () => {
+  it('matches Cmd+Shift+F on macOS', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin')
+    ).toBe(true)
+  })
+
+  it('matches Ctrl+Shift+F on Linux/Windows', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), 'linux')
+    ).toBe(true)
+  })
+
+  it('rejects repeats, alt, and the wrong platform modifier', () => {
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, repeat: true }),
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, altKey: true }),
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), 'darwin')
+    ).toBe(false)
+  })
+
+  it('follows customized file-search bindings', () => {
+    const overrides = { 'sidebar.search.toggle': ['Ctrl+Alt+S'] }
+
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 's', ctrlKey: true, altKey: true }),
+        'linux',
+        overrides
+      )
+    ).toBe(true)
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }),
+        'linux',
+        overrides
+      )
+    ).toBe(false)
+  })
+
+  it('lets terminal-first pass the file-search shortcut through to the terminal', () => {
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }),
+        'darwin',
+        undefined,
+        'terminal-first'
+      )
+    ).toBe(false)
+  })
+
+  it('does not match when file search is disabled', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin', {
+        'sidebar.search.toggle': []
+      })
+    ).toBe(false)
   })
 })

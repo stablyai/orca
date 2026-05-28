@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
 import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'
+import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 
 const CONNECT_TIMEOUT_MS = 5000
 const REQUEST_TIMEOUT_MS = 30000
@@ -220,7 +221,9 @@ export class DaemonClient {
           if (response.ok) {
             resolve()
           } else {
-            reject(new DaemonProtocolError(response.error ?? 'Hello rejected'))
+            reject(
+              new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
+            )
           }
         } catch {
           reject(new DaemonProtocolError('Invalid hello response'))
@@ -248,7 +251,7 @@ export class DaemonClient {
             if (response.ok) {
               pending.resolve(response.payload)
             } else {
-              pending.reject(new DaemonProtocolError(response.error))
+              pending.reject(new DaemonProtocolError(addNodePtyRecoveryHint(response.error)))
             }
           }
         }

@@ -7,6 +7,8 @@ Local development uses two processes:
 - Orca desktop/Electron from the repo root. This hosts the mobile WebSocket RPC server on port `6768`.
 - Expo Metro from `mobile/`. This serves the React Native app on port `8081`.
 
+Unless a command says otherwise, run mobile app commands from the `mobile/` directory.
+
 ## Prerequisites
 
 - Node.js 24+

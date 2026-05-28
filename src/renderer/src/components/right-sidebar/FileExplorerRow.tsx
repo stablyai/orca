@@ -1,6 +1,9 @@
+/* eslint-disable max-lines -- File Explorer rows own dense context-menu and drag/drop interactions. */
 import React, { useCallback, useEffect, useRef } from 'react'
+import { basename } from '@/lib/path'
 import {
   ChevronRight,
+  CircleSlash,
   Copy,
   ExternalLink,
   Eye,
@@ -10,10 +13,14 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Globe,
+  ListCollapse,
   Loader2,
   Pencil,
+  Search,
   Trash2
 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -24,13 +31,20 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { openFileInBrowserTab } from '@/lib/file-preview'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_PATH_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
-
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -41,6 +55,16 @@ const revealLabel = isMac
   : isLinux
     ? 'Open Containing Folder'
     : 'Reveal in File Explorer'
+
+function stopRightButtonMenuSelection(event: React.PointerEvent): void {
+  if (event.button !== 2) {
+    return
+  }
+  // Why: Radix opens context menus under the pointer; on some macOS/Electron
+  // paths the right-button release lands on the first item and selects it.
+  event.preventDefault()
+  event.stopPropagation()
+}
 
 export type InlineInput = {
   parentPath: string
@@ -194,18 +218,24 @@ type FileExplorerRowProps = {
   isLoading: boolean
   isSelected: boolean
   isFlashing: boolean
+  selectedPaths: Set<string>
   nodeStatus: GitFileStatus | null
   statusColor: string | null
+  isIgnored: boolean
   deleteShortcutLabel: string
   targetDir: string
   targetDepth: number
-  onClick: () => void
+  selectionSize: number
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: () => void
-  onSelect: () => void
+  onContextMenuSelect: () => void
+  onCopyPaths: (pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
   onRequestDelete: () => void
+  onCollapseFolderSubtree: () => void
+  onFindInFolder: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -214,24 +244,38 @@ type FileExplorerRowProps = {
   onNativeDragExpandDir: (dirPath: string) => void
 }
 
+export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
+  return node.isDirectory && isExpanded
+}
+
+export function shouldShowFindInFolderAction(node: TreeNode): boolean {
+  return node.isDirectory
+}
+
 export function FileExplorerRow({
   node,
   isExpanded,
   isLoading,
   isSelected,
   isFlashing,
+  selectedPaths,
   nodeStatus,
   statusColor,
+  isIgnored,
   deleteShortcutLabel,
   targetDir,
   targetDepth,
+  selectionSize,
   onClick,
   onDoubleClick,
-  onSelect,
+  onContextMenuSelect,
+  onCopyPaths,
   onStartNew,
   onStartRename,
   onDuplicate,
   onRequestDelete,
+  onCollapseFolderSubtree,
+  onFindInFolder,
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
@@ -241,6 +285,10 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
+  const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
+  const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
+  const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
     rowDropDir,
@@ -253,6 +301,15 @@ export function FileExplorerRow({
     onNativeDragExpandDir,
     onMoveDrop
   })
+  const handleOpenInOrcaBrowser = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const result = openFileInBrowserTab({ filePath: node.path, worktreeId: activeWorktreeId })
+    if (result.status === 'unsupported') {
+      toast.error(result.message)
+    }
+  }, [activeWorktreeId, node.path])
 
   return (
     <ContextMenu>
@@ -267,20 +324,69 @@ export function FileExplorerRow({
           data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {
-            event.dataTransfer.setData(ORCA_PATH_MIME, node.path)
-            // Allow both file explorer moving and copying to terminal
+            const paths =
+              selectedPaths.has(node.path) && selectedPaths.size > 1
+                ? [...selectedPaths]
+                : [node.path]
+            event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
+            if (paths.length > 1) {
+              event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
+            }
             event.dataTransfer.effectAllowed = 'copyMove'
             onDragSourceChange(node.path)
+
+            if (paths.length > 1) {
+              const MAX_SHOWN = 5
+              const btn = event.currentTarget
+              const rowW = btn.getBoundingClientRect().width
+
+              // Why: drag images are detached DOM nodes, so inline the same
+              // file glyph the real row renders.
+              const FILE_ICON =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/></svg>'
+
+              const makeRow = (label: string, faded = false): HTMLDivElement => {
+                const row = document.createElement('div')
+                row.style.cssText = `display:flex;align-items:center;gap:4px;height:26px;padding:4px 8px;width:${rowW}px;box-sizing:border-box;font-size:12px;border-radius:2px;background:var(--accent);color:var(--accent-foreground);${faded ? 'opacity:0.6;' : ''}`
+                const spacer = document.createElement('span')
+                spacer.style.cssText = 'width:12px;height:12px;flex-shrink:0;'
+                row.appendChild(spacer)
+                const icon = document.createElement('span')
+                icon.style.cssText =
+                  'width:12px;height:12px;flex-shrink:0;display:flex;align-items:center;color:var(--muted-foreground);'
+                icon.innerHTML = FILE_ICON
+                row.appendChild(icon)
+                const name = document.createElement('span')
+                name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+                name.textContent = label
+                row.appendChild(name)
+                return row
+              }
+
+              const ghost = document.createElement('div')
+              ghost.style.cssText =
+                'position:fixed;top:-9999px;left:-9999px;pointer-events:none;display:flex;flex-direction:column;gap:1px;'
+
+              for (const p of paths.slice(0, MAX_SHOWN)) {
+                ghost.appendChild(makeRow(basename(p)))
+              }
+              if (paths.length > MAX_SHOWN) {
+                ghost.appendChild(makeRow(`+${paths.length - MAX_SHOWN} more`, true))
+              }
+
+              document.body.appendChild(ghost)
+              event.dataTransfer.setDragImage(ghost, 12, 12)
+              setTimeout(() => document.body.removeChild(ghost), 0)
+            }
           }}
           onDragEnd={() => onDragSourceChange(null)}
           onDragOver={handleDragOver}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={onClick}
+          onClick={(e) => onClick(e)}
           onDoubleClick={onDoubleClick}
-          onFocus={onSelect}
-          onContextMenu={onSelect}
+          onContextMenu={onContextMenuSelect}
         >
           {node.isDirectory ? (
             <>
@@ -301,12 +407,22 @@ export function FileExplorerRow({
           ) : (
             <>
               <span className="size-3 shrink-0" />
-              <File className="size-3 shrink-0 text-muted-foreground" />
+              <FileIcon className="size-3 shrink-0 text-muted-foreground" />
             </>
           )}
           <span
-            className={cn('truncate', isSelected && !nodeStatus && 'text-accent-foreground')}
-            style={nodeStatus ? { color: statusColor ?? undefined } : undefined}
+            className={cn(
+              'truncate',
+              isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
+              isIgnored && 'italic'
+            )}
+            style={
+              nodeStatus
+                ? { color: statusColor ?? undefined }
+                : isIgnored
+                  ? { color: 'var(--git-decoration-ignored)' }
+                  : undefined
+            }
             onDoubleClick={(e) => {
               // Why: the row itself swallows double-click for "pin preview" /
               // directory toggle. Scope rename to the filename text only so
@@ -318,18 +434,25 @@ export function FileExplorerRow({
           >
             {node.name}
           </span>
-          {nodeStatus && (
+          {nodeStatus ? (
             <span
               className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}
             >
               {STATUS_LABELS[nodeStatus]}
             </span>
-          )}
+          ) : isIgnored ? (
+            <CircleSlash
+              aria-label="Ignored by .gitignore"
+              className="ml-auto size-3 shrink-0 mr-2"
+              style={{ color: 'var(--git-decoration-ignored)' }}
+            />
+          ) : null}
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent
         className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
+        onPointerUpCapture={stopRightButtonMenuSelection}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
@@ -341,20 +464,30 @@ export function FileExplorerRow({
           New Folder
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(node.path)}>
+        <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
-          Copy Path
-          <ContextMenuShortcut>{isMac ? '⌥⌘C' : 'Shift+Alt+C'}</ContextMenuShortcut>
+          {selectionSize > 1 ? 'Copy Paths' : 'Copy Path'}
+          {copyPathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(node.relativePath)}>
+        <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
           <Copy />
-          Copy Relative Path
-          <ContextMenuShortcut>{isMac ? '⌥⇧⌘C' : 'Ctrl+Shift+Alt+C'}</ContextMenuShortcut>
+          {selectionSize > 1 ? 'Copy Relative Paths' : 'Copy Relative Path'}
+          {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
         {!node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && activeWorktreeId && (
+          <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
+            <Globe />
+            Open in Orca Browser
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
@@ -372,7 +505,41 @@ export function FileExplorerRow({
             Open Markdown Preview
           </ContextMenuItem>
         )}
-        <ContextMenuItem onSelect={() => window.api.shell.openPath(node.path)}>
+        {shouldShowCollapseFolderAction(node, isExpanded) && (
+          <ContextMenuItem onSelect={onCollapseFolderSubtree}>
+            <ListCollapse />
+            Collapse Folder
+          </ContextMenuItem>
+        )}
+        {shouldShowFindInFolderAction(node) && (
+          <ContextMenuItem onSelect={onFindInFolder}>
+            <Search />
+            Find in Folder
+            {findInFolderShortcutLabel !== 'Unassigned' ? (
+              <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
+            ) : null}
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem
+          onSelect={() => {
+            const state = useAppStore.getState()
+            const activeWorktree = Object.values(state.worktreesByRepo)
+              .flat()
+              .find((worktree) => worktree.id === activeWorktreeId)
+            const activeRepo = activeWorktree
+              ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+              : null
+            if (
+              isLocalPathOpenBlocked(state.settings, {
+                connectionId: activeRepo?.connectionId ?? null
+              })
+            ) {
+              showLocalPathOpenBlockedToast()
+              return
+            }
+            window.api.shell.openPath(node.path)
+          }}
+        >
           <ExternalLink />
           {revealLabel}
         </ContextMenuItem>

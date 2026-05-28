@@ -95,3 +95,43 @@ export function buildFolderStatusMap(entries: GitStatusEntry[]): Map<string, Git
 export function shouldPropagateStatus(status: GitFileStatus): boolean {
   return status !== 'deleted'
 }
+
+export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
+  if (ignored.size === 0) {
+    return false
+  }
+  if (ignored.has(relativePath)) {
+    return true
+  }
+  let candidate = relativePath
+  for (;;) {
+    const idx = candidate.lastIndexOf('/')
+    if (idx <= 0) {
+      return false
+    }
+    candidate = candidate.slice(0, idx)
+    if (ignored.has(candidate)) {
+      return true
+    }
+  }
+}
+
+export function shouldShowIgnoredDecoration(
+  nodeStatus: GitFileStatus | null,
+  ignored: Set<string>,
+  relativePath: string
+): boolean {
+  return !nodeStatus && isPathIgnored(ignored, relativePath)
+}
+
+export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
+  const set = new Set<string>()
+  if (!ignoredPaths) {
+    return set
+  }
+  for (const rawPath of ignoredPaths) {
+    const trimmed = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath
+    set.add(normalizeRelativePath(trimmed))
+  }
+  return set
+}

@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Design System
+
+All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
+
 ## Code Comments: Document the "Why", Briefly
 
 When writing or modifying code driven by a design doc or non-obvious constraint, add a comment explaining **why** the code behaves the way it does.
@@ -26,9 +30,14 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 
 All changes must consider the SSH use case. Don't assume local-only execution.
 
+## Git Provider Compatibility
+
+Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
+
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
+Never commit PR evidence images; attach them to the PR conversation instead.
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 

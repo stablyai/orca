@@ -1,85 +1,83 @@
 /* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BarChart3,
-  Bell,
-  Bot,
-  FlaskConical,
-  GitBranch,
-  Globe,
-  Keyboard,
-  Lock,
-  ShieldCheck,
-  Palette,
-  Server,
-  SlidersHorizontal,
-  Blocks,
-  SquareTerminal,
-  UserCog
-} from 'lucide-react'
+import { toast } from 'sonner'
+import { Info } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
-import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
-import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
-import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
-import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
-import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
+import { GeneralPane } from './GeneralPane'
+import { BrowserPane } from './BrowserPane'
+import { AppearancePane } from './AppearancePane'
+import { InputPane } from './InputPane'
+import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
+import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
-import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
-import { getTerminalPaneSearchEntries } from './terminal-search'
-import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
-import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
-import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
-import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
-import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
-import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
-import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
-import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
-import {
-  DeveloperPermissionsPane,
-  DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
-} from './DeveloperPermissionsPane'
+import { RepositoryPane } from './RepositoryPane'
+import { GitPane } from './GitPane'
+import { CommitMessageAiPane } from './CommitMessageAiPane'
+import { NotificationsPane } from './NotificationsPane'
+import { VoicePane } from './VoicePane'
+import { SshPane } from './SshPane'
+import { ExperimentalPane } from './ExperimentalPane'
+import { AgentsPane } from './AgentsPane'
+import { OrchestrationPane } from './OrchestrationPane'
+import { AccountsPane } from './AccountsPane'
+import { StatsPane } from '../stats/StatsPane'
+import { IntegrationsPane } from './IntegrationsPane'
+import { TasksPane } from './TasksPane'
+import { QuickCommandsPane } from './QuickCommandsPane'
+import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
+import { ComputerUsePane } from './ComputerUsePane'
+import { MobileSettingsPane } from './MobileSettingsPane'
+import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
-import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
-import { SettingsSection } from './SettingsSection'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
+import { matchesSettingsSearch } from './settings-search'
+import { cn } from '@/lib/utils'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import {
+  isWebClientLocation,
+  useSettingsNavigationMetadata
+} from '@/hooks/useSettingsNavigationMetadata'
+import type {
+  SettingsNavGroup,
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/lib/settings-navigation-types'
+import {
+  deriveNeededRepoIds,
+  deriveNeededSectionIds,
+  getInitialMountedSectionIds,
+  getRuntimeTargetIdentity
+} from './settings-load-performance'
 
-type SettingsNavTarget =
-  | 'general'
-  | 'integrations'
-  | 'accounts'
-  | 'browser'
-  | 'git'
-  | 'appearance'
-  | 'terminal'
-  | 'notifications'
-  | 'developer-permissions'
-  | 'privacy'
-  | 'shortcuts'
-  | 'stats'
-  | 'ssh'
-  | 'experimental'
-  | 'agents'
-  | 'mobile'
-  | 'repo'
+const SETTINGS_NAV_GROUPS = [
+  { id: 'setup', title: 'Set Up' },
+  { id: 'workflows', title: 'Workflows' },
+  { id: 'interface', title: 'Interface' },
+  { id: 'capabilities', title: 'AI Capabilities' },
+  { id: 'remote', title: 'Remote Access' },
+  { id: 'safety', title: 'Safety' },
+  { id: 'experimental', title: 'Experimental' }
+] as const
 
-type SettingsNavSection = {
-  id: string
-  title: string
-  description: string
-  icon: typeof SlidersHorizontal
-  searchEntries: SettingsSearchEntry[]
-  badge?: string
-}
+const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
+const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 
 function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
   if (pane === 'repo' && repoId) {
@@ -92,39 +90,44 @@ function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavS
   return sections.at(0)
 }
 
-// Why: after a sidebar jump the target section is now in the viewport center
-// rather than the top, which can make it less obvious which section just
-// scrolled into view. Pulsing the border for a moment reassures the user that
-// their click landed on the right section.
-const SECTION_FLASH_CLASS = 'settings-section-flash'
-const SECTION_FLASH_DURATION_MS = 900
-
-function scrollSectionIntoView(sectionId: string, container: HTMLElement | null): void {
-  const target = document.getElementById(sectionId)
-  if (!target) {
-    return
+function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }): string {
+  if (args.isWindows) {
+    return 'Windows'
   }
-  // Why: centering a tall section pushes its heading above the viewport,
-  // which defeats the purpose of jumping to it. Only center when the whole
-  // section fits; otherwise align to the top so the title is always visible.
-  const fitsInViewport = container
-    ? target.getBoundingClientRect().height <= container.clientHeight
-    : true
-  target.scrollIntoView({ block: fitsInViewport ? 'center' : 'start' })
+  if (!args.isMac) {
+    return 'Linux'
+  }
+  return 'This platform'
 }
 
-function flashSectionHighlight(sectionId: string): void {
-  const target = document.getElementById(sectionId)
+function getSettingsScrollTarget(
+  sectionId: string,
+  container?: HTMLElement | null
+): HTMLElement | null {
+  return (
+    container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
+    document.getElementById(sectionId)
+  )
+}
+
+function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
+  // Why: deep links into Settings can target a specific subsection inside a
+  // pane (e.g. a particular row). The pane itself is now swapped in
+  // wholesale, so this only needs to nudge the inner scroll if the pane has
+  // grown taller than the viewport.
+  const target = getSettingsScrollTarget(targetId, container)
   if (!target) {
     return
   }
-  target.classList.remove(SECTION_FLASH_CLASS)
-  // Force a reflow so re-adding the class restarts the animation.
-  void target.offsetWidth
-  target.classList.add(SECTION_FLASH_CLASS)
-  window.setTimeout(() => {
-    target.classList.remove(SECTION_FLASH_CLASS)
-  }, SECTION_FLASH_DURATION_MS)
+  if (!container) {
+    target.scrollIntoView({ block: 'start' })
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetTop = targetRect.top - containerRect.top + container.scrollTop
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+  container.scrollTo({ top: Math.min(Math.max(0, targetTop - 16), maxScrollTop) })
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -140,14 +143,18 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const removeRepo = useAppStore((s) => s.removeRepo)
+  const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
+  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
 
@@ -157,35 +164,31 @@ function Settings(): React.JSX.Element {
   const systemPrefersDark = useSystemPrefersDark()
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
+  const isWebClient = isWebClientLocation()
+  const showDesktopOnlySettings = !isWebClient
+  const showComputerUsePreviewTooltip = !isMac
+  const computerUsePlatform = computerUsePlatformLabel({ isWindows, isMac })
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
-  const terminalPaneSearchEntries = useMemo(
-    () => getTerminalPaneSearchEntries({ isWindows, isMac }),
-    [isWindows, isMac]
-  )
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
   // Why: lifted out of TerminalPane so the Terminal section header can render
   // the import trigger as a headerAction. The modal itself still lives inside
   // TerminalPane, driven by this shared state.
   const ghostty = useGhosttyImport(updateSettings, settings)
-  const [wslAvailable, setWslAvailable] = useState(false)
-  const [pwshAvailable, setPwshAvailable] = useState(false)
-  useEffect(() => {
-    if (!isWindows) {
-      setWslAvailable(false)
-      setPwshAvailable(false)
-      return
-    }
-
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-    void window.api.pwsh.isAvailable().then(setPwshAvailable)
-  }, [isWindows])
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
+    getInitialMountedSectionIds
+  )
+  const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
+  const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
+  const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
+  const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
   // Not persisted on purpose: it's a power-user affordance we don't want to
@@ -196,14 +199,67 @@ function Settings(): React.JSX.Element {
   const terminalFontsLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+  const repoHooksRequestSeqRef = useRef(0)
+  const repoHooksRuntimeIdentityRef = useRef<string>('local')
+  const shortcutsEscapeConfirmUntilRef = useRef(0)
+
+  const confirmDiscardCommitPromptChanges = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedCommitPromptChanges) {
+      return true
+    }
+    const shouldDiscard = await confirm({
+      title: 'Discard unsaved Source Control AI prompt changes?',
+      description: 'You have unsaved Source Control AI prompt changes. Leaving will discard them.',
+      confirmLabel: 'Discard',
+      confirmVariant: 'destructive'
+    })
+    if (shouldDiscard) {
+      setCommitPromptDiscardSignal((signal) => signal + 1)
+      setHasUnsavedCommitPromptChanges(false)
+    }
+    return shouldDiscard
+  }, [confirm, hasUnsavedCommitPromptChanges])
+
+  const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
+    if (!(await confirmDiscardCommitPromptChanges())) {
+      return
+    }
+    closeSettingsPage()
+  }, [closeSettingsPage, confirmDiscardCommitPromptChanges])
 
   useEffect(() => {
     fetchSettings()
-  }, [fetchSettings])
+    fetchKeybindings()
+  }, [fetchKeybindings, fetchSettings])
+
+  const runtimeTargetIdentity = getRuntimeTargetIdentity(settings)
 
   useEffect(() => {
+    const hasVisibleOverlay = (): boolean =>
+      Array.from(
+        document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"]')
+      ).some((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false
+        }
+        if (element.closest('[aria-hidden="true"]')) {
+          return false
+        }
+        const style = window.getComputedStyle(element)
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          element.getClientRects().length > 0
+        )
+      })
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      // Why: nested dialogs and menus own Escape before Settings page-level
+      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
+      if (hasVisibleOverlay()) {
         return
       }
       // Why: Escape in an editable control usually means "cancel this edit",
@@ -214,22 +270,50 @@ function Settings(): React.JSX.Element {
       if (isEditableTarget(event.target)) {
         return
       }
-      closeSettingsPage()
+      if (activeSectionId === 'shortcuts') {
+        event.preventDefault()
+        const now = Date.now()
+        if (now <= shortcutsEscapeConfirmUntilRef.current) {
+          shortcutsEscapeConfirmUntilRef.current = 0
+          toast.dismiss(SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID)
+          void closeSettingsPageWithPromptGuard()
+          return
+        }
+        shortcutsEscapeConfirmUntilRef.current = now + SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
+        toast.info('Press ESC again to exit settings', {
+          id: SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
+          duration: SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS,
+          className: 'whitespace-nowrap'
+        })
+        return
+      }
+      void closeSettingsPageWithPromptGuard()
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [closeSettingsPage])
+  }, [activeSectionId, closeSettingsPageWithPromptGuard])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (isIntentionalAppRestartInProgress()) {
+        return
+      }
+      if (!hasUnsavedCommitPromptChanges) {
+        return
+      }
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedCommitPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.altKey || event.shiftKey) {
+      if (event.defaultPrevented) {
         return
       }
-      // Why: Cmd on Mac, Ctrl elsewhere — matches the rest of the app's
-      // mod-key convention (see App.tsx) and aligns with platform Find norms.
-      const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.key.toLowerCase() !== 'f') {
+      if (!keybindingMatchesAction('settings.search', event, getShortcutPlatform(), keybindings)) {
         return
       }
       const input = searchInputRef.current
@@ -243,7 +327,7 @@ function Settings(): React.JSX.Element {
 
     document.addEventListener('keydown', handleFindShortcut)
     return () => document.removeEventListener('keydown', handleFindShortcut)
-  }, [isMac])
+  }, [keybindings])
 
   useEffect(
     () => () => {
@@ -255,7 +339,7 @@ function Settings(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!settingsNavigationTarget) {
+    if (!settings || !settingsNavigationTarget) {
       return
     }
 
@@ -265,37 +349,20 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    clearSettingsTarget()
-  }, [clearSettingsTarget, settingsNavigationTarget])
-
-  useEffect(() => {
-    if (terminalFontsLoadedRef.current) {
-      return
+    if (settingsNavigationTarget.intent === 'add-quick-command') {
+      setQuickCommandAddIntentSignal((signal) => signal + 1)
     }
-
-    let stale = false
-
-    const loadFontSuggestions = async (): Promise<void> => {
-      try {
-        const fonts = await window.api.settings.listFonts()
-        if (stale || fonts.length === 0) {
-          return
-        }
-        terminalFontsLoadedRef.current = true
-        setFontSuggestions((prev) =>
-          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
-        )
-      } catch {
-        // Fall back to curated cross-platform suggestions.
+    setMountedSectionIds((previous) => {
+      if (previous.has(paneSectionId)) {
+        return previous
       }
-    }
-
-    void loadFontSuggestions()
-
-    return () => {
-      stale = true
-    }
-  }, [])
+      return new Set(previous).add(paneSectionId)
+    })
+    // Why: target consumption stores refs, so bump state to guarantee the
+    // scroll effect runs even when the visible section set is otherwise stable.
+    setPendingNavRequestTick((tick) => tick + 1)
+    clearSettingsTarget()
+  }, [clearSettingsTarget, settings, settingsNavigationTarget])
 
   // Why: only recompute scrollback mode when the byte value actually changes,
   // not on every unrelated settings mutation.
@@ -311,284 +378,247 @@ function Settings(): React.JSX.Element {
     }
   }
 
-  useEffect(() => {
-    let stale = false
-
-    const checkHooks = async (): Promise<void> => {
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          if (isFolderRepo(repo)) {
-            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
-          }
-          try {
-            const result = await window.api.hooks.check({ repoId: repo.id })
-            return [repo.id, result] as const
-          } catch {
-            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
-          }
-        })
-      )
-
-      if (!stale) {
-        setRepoHooksMap(
-          Object.fromEntries(results) as Record<
-            string,
-            { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }
-          >
-        )
-      }
-    }
-
-    if (repos.length > 0) {
-      void checkHooks()
-    } else {
-      setRepoHooksMap({})
-    }
-
-    return () => {
-      stale = true
-    }
-  }, [repos])
-
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     applyDocumentTheme(theme)
   }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
-
-  const navSections = useMemo<SettingsNavSection[]>(
-    () => [
-      {
-        id: 'general',
-        title: 'General',
-        description: 'Workspace, editor, and updates.',
-        icon: SlidersHorizontal,
-        searchEntries: GENERAL_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'agents',
-        title: 'Agents',
-        description: 'Manage AI agents, set a default, and customize commands.',
-        icon: Bot,
-        searchEntries: AGENTS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'accounts',
-        title: 'Agent Accounts',
-        description: 'Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts.',
-        icon: UserCog,
-        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'git',
-        title: 'Git',
-        description: 'Branch naming and local ref behavior.',
-        icon: GitBranch,
-        searchEntries: GIT_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'appearance',
-        title: 'Appearance',
-        description: 'Theme and UI scaling.',
-        icon: Palette,
-        searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'terminal',
-        title: 'Terminal',
-        description: 'Terminal appearance, previews, and defaults for new panes.',
-        icon: SquareTerminal,
-        searchEntries: terminalPaneSearchEntries
-      },
-      {
-        id: 'browser',
-        title: 'Browser',
-        description: 'Home page, link routing, and session cookies.',
-        icon: Globe,
-        searchEntries: BROWSER_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'notifications',
-        title: 'Notifications',
-        description: 'Native desktop notifications for agent and terminal events.',
-        icon: Bell,
-        searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
-      },
-      ...(isMac
-        ? [
-            {
-              id: 'developer-permissions' as const,
-              title: 'Permissions',
-              description: 'macOS privacy access for terminal-launched developer tools.',
-              icon: ShieldCheck,
-              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
-            }
-          ]
-        : []),
-      {
-        id: 'privacy',
-        title: 'Privacy & Telemetry',
-        description: 'Anonymous usage data and telemetry controls.',
-        icon: Lock,
-        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'shortcuts',
-        title: 'Shortcuts',
-        description: 'Keyboard shortcuts for common actions.',
-        icon: Keyboard,
-        searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'integrations',
-        title: 'Integrations',
-        description: 'GitHub, Linear, and other service connections.',
-        icon: Blocks,
-        searchEntries: INTEGRATIONS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'stats',
-        title: 'Stats & Usage',
-        description: 'Orca stats and Claude usage analytics.',
-        icon: BarChart3,
-        searchEntries: STATS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'ssh',
-        title: 'SSH',
-        description: 'Remote SSH connections.',
-        icon: Server,
-        searchEntries: SSH_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'experimental',
-        title: 'Experimental',
-        description: 'New features that are still taking shape. Give them a try.',
-        icon: FlaskConical,
-        searchEntries: EXPERIMENTAL_PANE_SEARCH_ENTRIES
-      },
-      ...repos.map((repo) => ({
-        id: `repo-${repo.id}`,
-        title: repo.displayName,
-        description: `${getRepoKindLabel(repo)} • ${repo.path}`,
-        icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(repo)
-      }))
-    ],
-    [isMac, repos, terminalPaneSearchEntries]
+  const navSections = useSettingsNavigationMetadata()
+  const navSectionById = useMemo(
+    () => new Map(navSections.map((section) => [section.id, section] as const)),
+    [navSections]
   )
+  const getSectionSearchEntries = (sectionId: string) =>
+    navSectionById.get(sectionId)?.searchEntries ?? []
 
   const visibleNavSections = useMemo(
     () =>
       navSections.filter((section) =>
-        matchesSettingsSearch(settingsSearchQuery, section.searchEntries)
+        section.id === 'git' && hasUnsavedCommitPromptChanges
+          ? true
+          : matchesSettingsSearch(settingsSearchQuery, [
+              { title: section.title, description: section.description },
+              ...section.searchEntries
+            ])
       ),
-    [navSections, settingsSearchQuery]
+    [hasUnsavedCommitPromptChanges, navSections, settingsSearchQuery]
   )
+  const visibleSectionIds = useMemo(
+    () => new Set(visibleNavSections.map((section) => section.id)),
+    [visibleNavSections]
+  )
+  const neededSectionIds = useMemo(
+    () =>
+      deriveNeededSectionIds({
+        navSectionIds: navSections.map((section) => section.id),
+        mountedSectionIds,
+        activeSectionId,
+        pendingSectionId: pendingNavSectionRef.current,
+        query: settingsSearchQuery,
+        visibleSectionIds
+      }),
+    [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
+  )
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    isWindows && neededSectionIds.has('terminal')
+  )
+
+  useEffect(() => {
+    setMountedSectionIds((previous) => {
+      let changed = false
+      const next = new Set(previous)
+      for (const id of neededSectionIds) {
+        if (!next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+      }
+      return changed ? next : previous
+    })
+  }, [neededSectionIds])
+
+  useEffect(() => {
+    if (!neededSectionIds.has('appearance') && !neededSectionIds.has('terminal')) {
+      return
+    }
+    if (terminalFontsLoadedRef.current) {
+      return
+    }
+
+    let stale = false
+    const loadFontSuggestions = async (): Promise<void> => {
+      try {
+        const fonts = await window.api.settings.listFonts()
+        if (stale || fonts.length === 0) {
+          return
+        }
+        terminalFontsLoadedRef.current = true
+        setFontSuggestions((prev) =>
+          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
+        )
+      } catch {
+        // Fall back to curated cross-platform suggestions.
+      }
+    }
+    void loadFontSuggestions()
+    return () => {
+      stale = true
+    }
+  }, [neededSectionIds])
+
+  const neededRepoIds = useMemo(
+    () => deriveNeededRepoIds(repos, neededSectionIds),
+    [neededSectionIds, repos]
+  )
+
+  useEffect(() => {
+    const repoIdSet = new Set(repos.map((repo) => repo.id))
+    setRepoHooksMap((previous) => {
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([repoId]) => repoIdSet.has(repoId))
+      ) as Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next
+    })
+  }, [repos])
+
+  useEffect(() => {
+    if (repoHooksRuntimeIdentityRef.current !== runtimeTargetIdentity) {
+      repoHooksRuntimeIdentityRef.current = runtimeTargetIdentity
+      repoHooksRequestSeqRef.current += 1
+      setRepoHooksMap({})
+    }
+  }, [runtimeTargetIdentity])
+
+  useEffect(() => {
+    if (neededRepoIds.length === 0) {
+      return
+    }
+
+    let stale = false
+    const requestSeq = ++repoHooksRequestSeqRef.current
+    const repoById = new Map(repos.map((repo) => [repo.id, repo] as const))
+
+    void Promise.all(
+      neededRepoIds.map(async (repoId) => {
+        const repo = repoById.get(repoId)
+        if (!repo) {
+          return
+        }
+        if (isFolderRepo(repo)) {
+          setRepoHooksMap((previous) => {
+            if (previous[repoId]) {
+              return previous
+            }
+            return {
+              ...previous,
+              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            }
+          })
+          return
+        }
+        try {
+          const result = await checkRuntimeHooks(
+            runtimeTargetIdentity === 'local'
+              ? { activeRuntimeEnvironmentId: null }
+              : { activeRuntimeEnvironmentId: runtimeTargetIdentity },
+            repoId
+          )
+          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+            return
+          }
+          setRepoHooksMap((previous) => {
+            if (!repos.some((entry) => entry.id === repoId)) {
+              return previous
+            }
+            return { ...previous, [repoId]: result }
+          })
+        } catch {
+          // Keep last known value on transient failures.
+          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+            return
+          }
+          setRepoHooksMap((previous) => {
+            if (!repos.some((entry) => entry.id === repoId)) {
+              return previous
+            }
+            if (previous[repoId]) {
+              return previous
+            }
+            return {
+              ...previous,
+              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            }
+          })
+        }
+      })
+    )
+
+    return () => {
+      stale = true
+    }
+  }, [neededRepoIds, repos, runtimeTargetIdentity])
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
-    const visibleIds = new Set(visibleNavSections.map((section) => section.id))
-
-    if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
-      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
-      flashSectionHighlight(scrollTargetId)
-      setActiveSectionId(pendingNavSectionId)
-      pendingNavSectionRef.current = null
-      pendingScrollTargetRef.current = null
-      return
-    }
 
     if (scrollTargetId && pendingNavSectionId && settingsSearchQuery.trim() !== '') {
       setSettingsSearchQuery('')
       return
     }
 
-    if (!visibleIds.has(activeSectionId) && visibleNavSections.length > 0) {
-      setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
-    }
-  }, [activeSectionId, setSettingsSearchQuery, settingsSearchQuery, visibleNavSections])
-
-  useEffect(() => {
-    const container = contentScrollRef.current
-    if (!container) {
+    if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
+      // Why: inactive Settings panes no longer render in the empty-search view.
+      // Activate the pane first, then wait for the next render before looking
+      // for any subsection target inside it.
+      if (activeSectionId !== pendingNavSectionId) {
+        setActiveSectionId(pendingNavSectionId)
+        return
+      }
+      const container = contentScrollRef.current
+      if (container) {
+        container.scrollTo({ top: 0 })
+      }
+      // Why: deep links can target a row inside the pane; the pane itself is
+      // already in view because the sidebar swap rendered just it.
+      if (scrollTargetId !== pendingNavSectionId) {
+        // Why: target navigation can arrive before the lazy section has mounted;
+        // keep the pending refs alive until the mounted-section update commits.
+        if (!getSettingsScrollTarget(scrollTargetId, container)) {
+          return
+        }
+        const scrollToSubsection = (): void => {
+          scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
+        }
+        scrollToSubsection()
+        requestAnimationFrame(scrollToSubsection)
+      }
+      setActiveSectionId(pendingNavSectionId)
+      pendingNavSectionRef.current = null
+      pendingScrollTargetRef.current = null
       return
     }
 
-    const updateActiveSection = (): void => {
-      const sections = Array.from(
-        container.querySelectorAll<HTMLElement>('[data-settings-section]')
-      )
-      if (sections.length === 0) {
-        return
-      }
-
-      // Why: highlight the section that the user is actually reading.
-      // We pick the section whose body crosses a probe line ~40% down the
-      // viewport (roughly the middle, biased slightly up toward where the
-      // eye naturally focuses). Earlier logic used the first section with
-      // its top near the container top, which lagged badly — a section
-      // could still fill most of the viewport while the sidebar had already
-      // advanced to the next one.
-      const containerRect = container.getBoundingClientRect()
-      const probeY = containerRect.top + containerRect.height * 0.4
-
-      // If we've scrolled to the very bottom, force-highlight the last
-      // section even when it's too short to reach the probe line.
-      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2
-
-      let candidate: HTMLElement | undefined
-      if (atBottom) {
-        candidate = sections.at(-1)
-      } else {
-        for (const section of sections) {
-          const rect = section.getBoundingClientRect()
-          if (rect.top <= probeY && rect.bottom > probeY) {
-            candidate = section
-            break
-          }
-          if (rect.top <= probeY) {
-            // Last section whose heading is above the probe line — used
-            // when no section straddles the probe (e.g. between sections,
-            // or when the probe sits in the gutter above the first one).
-            candidate = section
-          }
-        }
-        candidate ??= sections.at(0)
-      }
-      if (!candidate) {
-        return
-      }
-      setActiveSectionId(candidate.dataset.settingsSection ?? candidate.id)
+    if (!visibleSectionIds.has(activeSectionId) && visibleNavSections.length > 0) {
+      setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
-
-    let rafId: number | null = null
-    const throttledUpdateActiveSection = (): void => {
-      if (rafId !== null) {
-        return
-      }
-      rafId = requestAnimationFrame(() => {
-        rafId = null
-        updateActiveSection()
-      })
-    }
-
-    updateActiveSection()
-    container.addEventListener('scroll', throttledUpdateActiveSection, { passive: true })
-    return () => {
-      container.removeEventListener('scroll', throttledUpdateActiveSection)
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
-    }
-  }, [visibleNavSections])
+  }, [
+    activeSectionId,
+    pendingNavRequestTick,
+    setSettingsSearchQuery,
+    settingsSearchQuery,
+    visibleSectionIds,
+    visibleNavSections
+  ])
 
   const scrollToSection = useCallback(
-    (
+    async (
       sectionId: string,
       modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
-    ) => {
+    ): Promise<void> => {
+      if (sectionId !== activeSectionId && !(await confirmDiscardCommitPromptChanges())) {
+        return
+      }
       // Why: Shift-clicking the Experimental sidebar entry unlocks a hidden
       // power-user group. Keep this scoped to the Experimental row so normal
       // shortcut combos on other rows don't accidentally flip state. The
@@ -597,12 +627,40 @@ function Settings(): React.JSX.Element {
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
       }
-      scrollSectionIntoView(sectionId, contentScrollRef.current)
-      flashSectionHighlight(sectionId)
+      const container = contentScrollRef.current
+      if (container) {
+        container.scrollTo({ top: 0 })
+      }
+      if (settingsSearchQuery.trim() !== '') {
+        // Why: sidebar search is a discovery tool. Once a user selects a
+        // section from the filtered results, show the actual pane instead of
+        // keeping another matching pane rendered by the stale query.
+        setSettingsSearchQuery('')
+      }
       setActiveSectionId(sectionId)
     },
-    []
+    [
+      activeSectionId,
+      confirmDiscardCommitPromptChanges,
+      setSettingsSearchQuery,
+      settingsSearchQuery
+    ]
   )
+
+  const openComputerUseFromBrowser = useCallback(async () => {
+    if (!(await confirmDiscardCommitPromptChanges())) {
+      return
+    }
+    pendingNavSectionRef.current = 'computer-use'
+    pendingScrollTargetRef.current = 'computer-use'
+    if (settingsSearchQuery !== '') {
+      setSettingsSearchQuery('')
+      return
+    }
+    // Why: the pending section refs do not schedule a render by themselves.
+    // When search is already clear, this reruns the centralized jump effect.
+    setPendingNavRequestTick((tick) => tick + 1)
+  }, [confirmDiscardCommitPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
 
   if (!settings) {
     return (
@@ -613,104 +671,153 @@ function Settings(): React.JSX.Element {
   }
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
+  const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    sections: generalNavSections.filter((section) => section.group === group.id)
+  })).filter((group) => group.sections.length > 0)
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
       const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
-      return { ...section, badgeColor: repo?.badgeColor, isRemote: !!repo?.connectionId }
+      return {
+        ...section,
+        badgeColor: repo?.badgeColor,
+        isRemote: !!repo?.connectionId,
+        repoIcon: repo?.repoIcon
+      }
     })
+  const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
+  const isFocusedShortcutsPane =
+    activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
 
   return (
     <div className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background">
       <SettingsSidebar
         activeSectionId={activeSectionId}
-        generalSections={generalNavSections}
+        generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchQuery}
+        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
-        onBack={closeSettingsPage}
+        onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div ref={contentScrollRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-          <div className="flex w-full max-w-5xl flex-col gap-10 px-8 py-10">
+        <div
+          ref={contentScrollRef}
+          className={cn(
+            'min-h-0 flex-1',
+            isFocusedShortcutsPane ? 'overflow-hidden' : 'overflow-y-auto scrollbar-sleek'
+          )}
+        >
+          <div
+            className={cn(
+              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
+              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
+            )}
+          >
             {visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
                 No settings found for &quot;{settingsSearchQuery.trim()}&quot;
               </div>
             ) : (
-              <>
+              <ActiveSettingsSectionProvider value={activeSectionId}>
                 <SettingsSection
                   id="general"
                   title="General"
-                  description="Workspace, editor, and updates."
-                  searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
+                  description="Workspace defaults, app setup, and maintenance."
+                  searchEntries={getSectionSearchEntries('general')}
                 >
-                  <GeneralPane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="integrations"
-                  title="Integrations"
-                  description="GitHub, Linear, and other service connections."
-                  searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
-                >
-                  <IntegrationsPane />
+                  {isSectionMounted('general') ? (
+                    <GeneralPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="agents"
                   title="Agents"
                   description="Manage AI agents, set a default, and customize commands."
-                  searchEntries={AGENTS_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('agents')}
                 >
-                  <AgentsPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('agents') ? (
+                    <AgentsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="accounts"
-                  title="Agent Accounts"
-                  description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
-                  searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
+                  title="AI Provider Accounts"
+                  description="Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them."
+                  badge="Optional"
+                  searchEntries={getSectionSearchEntries('accounts')}
                 >
-                  <AccountsPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('accounts') ? (
+                    <AccountsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="integrations"
+                  title="Integrations"
+                  description="Connect GitHub, GitLab, Linear, and source-hosting services."
+                  searchEntries={getSectionSearchEntries('integrations')}
+                >
+                  {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="git"
-                  title="Git"
-                  description="Branch naming and local ref behavior."
-                  searchEntries={GIT_PANE_SEARCH_ENTRIES}
+                  title="Git & Source Control"
+                  description="Branch naming, base refs, attribution, and Source Control AI."
+                  searchEntries={getSectionSearchEntries('git')}
+                  forceVisible={hasUnsavedCommitPromptChanges}
                 >
-                  <GitPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    displayedGitUsername={displayedGitUsername}
-                  />
+                  {isSectionMounted('git') ? (
+                    <>
+                      <GitPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        displayedGitUsername={displayedGitUsername}
+                      />
+                      <CommitMessageAiPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
+                        customPromptDiscardSignal={commitPromptDiscardSignal}
+                      />
+                    </>
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
-                  id="appearance"
-                  title="Appearance"
-                  description="Theme and UI scaling."
-                  searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
+                  id="tasks"
+                  title="Task Sources"
+                  description="Choose which task providers appear in the Tasks page and sidebar."
+                  searchEntries={getSectionSearchEntries('tasks')}
                 >
-                  <AppearancePane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    applyTheme={applyTheme}
-                    fontSuggestions={fontSuggestions}
-                  />
+                  {isSectionMounted('tasks') ? (
+                    <TasksPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="floating-workspace"
+                  title="Floating Workspace"
+                  description="Global terminal, browser, and markdown tabs."
+                  searchEntries={getSectionSearchEntries('floating-workspace')}
+                >
+                  {isSectionMounted('floating-workspace') ? (
+                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Terminal appearance, previews, and defaults for new panes."
-                  searchEntries={terminalPaneSearchEntries}
+                  description="Shells, terminal appearance, and pane behavior."
+                  searchEntries={getSectionSearchEntries('terminal')}
                   headerAction={
                     <Button
                       variant="outline"
@@ -723,47 +830,233 @@ function Settings(): React.JSX.Element {
                     </Button>
                   }
                 >
-                  <TerminalPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    systemPrefersDark={systemPrefersDark}
-                    terminalFontSuggestions={fontSuggestions.filter(
-                      (font) => font !== DEFAULT_APP_FONT_FAMILY
-                    )}
-                    scrollbackMode={scrollbackMode}
-                    setScrollbackMode={setScrollbackMode}
-                    ghostty={ghostty}
-                    wslAvailable={wslAvailable}
-                    pwshAvailable={pwshAvailable}
-                  />
+                  {isSectionMounted('terminal') ? (
+                    <TerminalPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      systemPrefersDark={systemPrefersDark}
+                      terminalFontSuggestions={fontSuggestions.filter(
+                        (font) => font !== DEFAULT_APP_FONT_FAMILY
+                      )}
+                      scrollbackMode={scrollbackMode}
+                      setScrollbackMode={setScrollbackMode}
+                      ghostty={ghostty}
+                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
-                  id="browser"
-                  title="Browser"
-                  description="Home page, link routing, and session cookies."
-                  searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
+                  id="quick-commands"
+                  title="Quick Commands"
+                  description="Saved terminal commands, scoped globally or per project."
+                  searchEntries={getSectionSearchEntries('quick-commands')}
                 >
-                  <BrowserPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('quick-commands') ? (
+                    <QuickCommandsPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      addCommandIntentSignal={quickCommandAddIntentSignal}
+                    />
+                  ) : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="browser"
+                    title="Browser"
+                    description="Home page, link routing, and session cookies."
+                    searchEntries={getSectionSearchEntries('browser')}
+                  >
+                    {isSectionMounted('browser') ? (
+                      <BrowserPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onOpenComputerUse={openComputerUseFromBrowser}
+                      />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                <SettingsSection
+                  id="appearance"
+                  title="Appearance"
+                  description="Theme, zoom, app font, sidebars, and status bar."
+                  searchEntries={getSectionSearchEntries('appearance')}
+                >
+                  {isSectionMounted('appearance') ? (
+                    <AppearancePane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      applyTheme={applyTheme}
+                      fontSuggestions={fontSuggestions}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
-                  id="notifications"
-                  title="Notifications"
-                  description="Native desktop notifications for agent activity and terminal events."
-                  searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
+                  id="input"
+                  title="Input & Editing"
+                  description="Selection and editing behavior."
+                  searchEntries={getSectionSearchEntries('input')}
                 >
-                  <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                  <InputPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
-                {isMac ? (
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="notifications"
+                    title="Notifications"
+                    description="Native desktop notifications for agent activity and terminal events."
+                    searchEntries={getSectionSearchEntries('notifications')}
+                  >
+                    {isSectionMounted('notifications') ? (
+                      <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                <SettingsSection
+                  id="shortcuts"
+                  title="Shortcuts"
+                  description="Keyboard shortcuts for common actions."
+                  searchEntries={getSectionSearchEntries('shortcuts')}
+                  className={
+                    isFocusedShortcutsPane
+                      ? 'flex min-h-0 flex-1 flex-col space-y-0 gap-6'
+                      : undefined
+                  }
+                  bodyClassName={
+                    isFocusedShortcutsPane ? 'min-h-0 flex-1 overflow-hidden' : undefined
+                  }
+                >
+                  {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="stats"
+                  title="Stats & Usage"
+                  description="Orca stats plus Claude, Codex, and OpenCode usage analytics."
+                  searchEntries={getSectionSearchEntries('stats')}
+                >
+                  {isSectionMounted('stats') ? <StatsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={getSectionSearchEntries('orchestration')}
+                >
+                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="computer-use"
+                      title="Computer Use"
+                      badge="Beta"
+                      badgeAccessory={
+                        showComputerUsePreviewTooltip ? (
+                          <TooltipProvider delayDuration={250}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground transition-colors hover:text-foreground"
+                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                                <span>
+                                  {computerUsePlatform} Computer Use is an early preview. Some apps
+                                  and desktop environments may behave inconsistently.
+                                </span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : null
+                      }
+                      description="Enable agents to control any app on your computer."
+                      searchEntries={getSectionSearchEntries('computer-use')}
+                    >
+                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="voice"
+                      title="Voice"
+                      badge="Beta"
+                      description="Local speech-to-text dictation with on-device models."
+                      searchEntries={getSectionSearchEntries('voice')}
+                    >
+                      {isSectionMounted('voice') ? (
+                        <VoicePane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
+                    </SettingsSection>
+                  </>
+                ) : null}
+
+                <SettingsSection
+                  id="servers"
+                  title="Remote Orca Servers"
+                  badge="Beta"
+                  description={
+                    isWebClient
+                      ? 'Connect this browser to a saved Orca server.'
+                      : 'Switch between local desktop mode and paired remote Orca runtimes.'
+                  }
+                  searchEntries={getSectionSearchEntries('servers')}
+                >
+                  {isSectionMounted('servers') ? (
+                    <RuntimeEnvironmentsPane
+                      settings={settings}
+                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      canGeneratePairingUrl={!isWebClient}
+                      allowLocalRuntime={!isWebClient}
+                    />
+                  ) : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="ssh"
+                      title="SSH Hosts"
+                      description="Remote SSH hosts for files, terminals, and git."
+                      searchEntries={getSectionSearchEntries('ssh')}
+                    >
+                      {isSectionMounted('ssh') ? <SshPane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="mobile"
+                      title="Mobile"
+                      badge="Beta"
+                      description="Control terminals and agents from your phone."
+                      searchEntries={getSectionSearchEntries('mobile')}
+                    >
+                      {isSectionMounted('mobile') ? (
+                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
+                    </SettingsSection>
+                  </>
+                ) : null}
+
+                {showDesktopOnlySettings && isMac ? (
                   <SettingsSection
                     id="developer-permissions"
-                    title="Permissions"
+                    title="macOS Permissions"
                     description="macOS privacy access for terminal-launched developer tools."
-                    searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
+                    searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
-                    <DeveloperPermissionsPane />
+                    {isSectionMounted('developer-permissions') ? (
+                      <DeveloperPermissionsPane />
+                    ) : null}
                   </SettingsSection>
                 ) : null}
 
@@ -771,49 +1064,24 @@ function Settings(): React.JSX.Element {
                   id="privacy"
                   title="Privacy & Telemetry"
                   description="Anonymous usage data and telemetry controls."
-                  searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('privacy')}
                 >
-                  <PrivacyPane settings={settings} />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="shortcuts"
-                  title="Shortcuts"
-                  description="Keyboard shortcuts for common actions."
-                  searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
-                >
-                  <ShortcutsPane />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="stats"
-                  title="Stats"
-                  description="How much Orca has helped you."
-                  searchEntries={STATS_PANE_SEARCH_ENTRIES}
-                >
-                  <StatsPane />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="ssh"
-                  title="SSH"
-                  description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
-                  searchEntries={SSH_PANE_SEARCH_ENTRIES}
-                >
-                  <SshPane />
+                  {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="experimental"
                   title="Experimental"
                   description="New features that are still taking shape. Give them a try."
-                  searchEntries={EXPERIMENTAL_PANE_SEARCH_ENTRIES}
+                  searchEntries={getSectionSearchEntries('experimental')}
                 >
-                  <ExperimentalPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    hiddenExperimentalUnlocked={hiddenExperimentalUnlocked}
-                  />
+                  {isSectionMounted('experimental') ? (
+                    <ExperimentalPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      hiddenExperimentalUnlocked={hiddenExperimentalUnlocked}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 {repos.map((repo) => {
@@ -824,22 +1092,25 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       key={repo.id}
                       id={repoSectionId}
-                      title={repo.displayName}
+                      title={`Project Settings > ${repo.displayName}`}
                       description={repo.path}
-                      searchEntries={getRepositoryPaneSearchEntries(repo)}
+                      searchEntries={getSectionSearchEntries(repoSectionId)}
                     >
-                      <RepositoryPane
-                        repo={repo}
-                        yamlHooks={repoHooksState?.hooks ?? null}
-                        hasHooksFile={repoHooksState?.hasHooks ?? false}
-                        mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
-                        updateRepo={updateRepo}
-                        removeRepo={removeRepo}
-                      />
+                      {isSectionMounted(repoSectionId) ? (
+                        <RepositoryPane
+                          repo={repo}
+                          yamlHooks={repoHooksState?.hooks ?? null}
+                          hasHooksFile={repoHooksState?.hasHooks ?? false}
+                          hooksInspectionReady={Boolean(repoHooksState)}
+                          mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
+                          updateRepo={updateRepo}
+                          removeProject={removeProject}
+                        />
+                      ) : null}
                     </SettingsSection>
                   )
                 })}
-              </>
+              </ActiveSettingsSectionProvider>
             )}
           </div>
         </div>

@@ -61,6 +61,46 @@ describe('OrchestrationDb', () => {
       expect(filtered[0].type).toBe('worker_done')
     })
 
+    it('excludes already-delivered rows from getUndeliveredUnreadMessages', () => {
+      const d = createDb()
+      const m1 = d.insertMessage({ from: 'a', to: 'b', subject: 'one' })
+      const m2 = d.insertMessage({ from: 'a', to: 'b', subject: 'two' })
+
+      d.markAsDelivered([m1.id])
+
+      // Push delivery query: only undelivered, unread.
+      const pending = d.getUndeliveredUnreadMessages('b')
+      expect(pending).toHaveLength(1)
+      expect(pending[0].id).toBe(m2.id)
+
+      // Explicit `check` still sees both (they are still unread).
+      const unread = d.getUnreadMessages('b')
+      expect(unread).toHaveLength(2)
+    })
+
+    it('creates the undelivered inbox index used by push delivery', () => {
+      const d = createDb()
+      const sqlite = (d as unknown as { db: Database.Database }).db
+
+      const indexes = sqlite
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name = 'idx_messages_undelivered_inbox'`
+        )
+        .all()
+
+      expect(indexes).toHaveLength(1)
+    })
+
+    it('filters getUndeliveredUnreadMessages by type', () => {
+      const d = createDb()
+      d.insertMessage({ from: 'a', to: 'b', subject: 's', type: 'status' })
+      const wd = d.insertMessage({ from: 'a', to: 'b', subject: 'd', type: 'worker_done' })
+
+      const filtered = d.getUndeliveredUnreadMessages('b', ['worker_done'])
+      expect(filtered).toHaveLength(1)
+      expect(filtered[0].id).toBe(wd.id)
+    })
+
     it('marks messages as read', () => {
       const d = createDb()
       const m1 = d.insertMessage({ from: 'a', to: 'b', subject: 'one' })
@@ -130,6 +170,17 @@ describe('OrchestrationDb', () => {
       expect(task.id).toMatch(/^task_/)
       expect(task.status).toBe('ready')
       expect(task.deps).toBe('[]')
+    })
+
+    it('persists the creating terminal handle for task-created worktrees', () => {
+      const d = createDb()
+      const task = d.createTask({
+        spec: 'spawn related workspace',
+        createdByTerminalHandle: 'term_creator'
+      })
+
+      expect(task.created_by_terminal_handle).toBe('term_creator')
+      expect(d.getTask(task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
     it('creates a task with deps as pending', () => {
@@ -729,6 +780,7 @@ describe('OrchestrationDb', () => {
       const names = new Set(indexes.map((r) => r.name))
       expect(names.has('idx_messages_id')).toBe(true)
       expect(names.has('idx_inbox')).toBe(true)
+      expect(names.has('idx_messages_undelivered_inbox')).toBe(true)
       expect(names.has('idx_thread')).toBe(true)
 
       // v1 data preserved

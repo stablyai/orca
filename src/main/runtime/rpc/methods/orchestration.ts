@@ -81,7 +81,8 @@ const InboxParams = z.object({
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
   deps: OptionalString,
-  parent: OptionalString
+  parent: OptionalString,
+  callerTerminalHandle: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -135,11 +136,23 @@ const AskParams = z.object({
   from: OptionalString
 })
 
-const ResetParams = z.object({
-  all: OptionalBoolean,
-  tasks: OptionalBoolean,
-  messages: OptionalBoolean
-})
+const ResetParams = z
+  .object({
+    all: OptionalBoolean,
+    tasks: OptionalBoolean,
+    messages: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    const selectedScopeCount = [params.all, params.tasks, params.messages].filter(
+      (scope) => scope === true
+    ).length
+    if (selectedScopeCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose exactly one reset scope: --all, --tasks, or --messages.'
+      })
+    }
+  })
 
 export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
@@ -241,6 +254,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { messages, count: messages.length }
       }
 
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       const result = readAndReturn()
       if (result.count > 0 || !params.wait) {
         return result
@@ -257,6 +273,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         timeoutMs: params.timeoutMs ?? undefined,
         signal
       })
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       return readAndReturn()
     }
   }),
@@ -322,7 +341,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const task = db.createTask({
         spec: params.spec,
         deps,
-        parentId: params.parent
+        parentId: params.parent,
+        createdByTerminalHandle: params.callerTerminalHandle
       })
       return { task }
     }
@@ -574,8 +594,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         db.resetMessages()
         return { reset: 'messages' }
       }
-      db.resetAll()
-      return { reset: 'all' }
+      throw new Error('Invalid reset scope')
     }
   })
 ]

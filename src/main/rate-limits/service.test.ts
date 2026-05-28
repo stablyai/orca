@@ -5,13 +5,14 @@ Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
-import { fetchClaudeRateLimits } from './claude-fetcher'
+import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 
 vi.mock('./claude-fetcher', () => ({
-  fetchClaudeRateLimits: vi.fn()
+  fetchClaudeRateLimits: vi.fn(),
+  fetchManagedAccountUsage: vi.fn()
 }))
 
 vi.mock('./codex-fetcher', () => ({
@@ -370,5 +371,74 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
+
+  it('does not recache an inactive Claude account removed during fetch-on-open', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [{ id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }]
+    service.setInactiveClaudeAccountsResolver(() => inactiveAccounts)
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/tmp/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    await service.refresh()
+    vi.mocked(fetchManagedAccountUsage).mockReturnValueOnce(accountFetch.promise)
+
+    const fetchOnOpen = service.fetchInactiveClaudeAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveClaudeAccounts).toEqual([
+      { accountId: 'account-1', claude: null, updatedAt: 0, isFetching: true }
+    ])
+
+    service.evictInactiveClaudeCache('account-1')
+    inactiveAccounts = [{ id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }]
+    await service.refreshForClaudeAccountChange('account-1')
+    expect(service.getState().inactiveClaudeAccounts[0]?.accountId).toBe('account-1')
+
+    inactiveAccounts = []
+    service.evictInactiveClaudeCache('account-1')
+    accountFetch.resolve(okProvider('claude', 42))
+    await fetchOnOpen
+
+    expect(service.getState().inactiveClaudeAccounts).toEqual([])
+  })
+
+  it('does not overwrite inactive Claude cache from a stale same-id fetch', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/tmp/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    await service.refresh()
+    vi.mocked(fetchManagedAccountUsage).mockReturnValueOnce(accountFetch.promise)
+
+    const fetchOnOpen = service.fetchInactiveClaudeAccountsOnOpen()
+    await Promise.resolve()
+
+    await service.refreshForClaudeAccountChange('account-1')
+    accountFetch.resolve(okProvider('claude', 42))
+    await fetchOnOpen
+
+    expect(service.getState().inactiveClaudeAccounts).toEqual([
+      {
+        accountId: 'account-1',
+        claude: expect.objectContaining({
+          session: expect.objectContaining({ usedPercent: 7 })
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
   })
 })

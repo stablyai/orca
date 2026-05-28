@@ -172,8 +172,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'switch'],
     summary: 'Switch the active browser tab',
-    usage:
-      'orca tab switch (--index <n> | --page <id>) [--worktree <selector>] [--focus] [--json]',
+    usage: 'orca tab switch (--index <n> | --page <id>) [--worktree <selector>] [--focus] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'index', 'worktree', 'focus']
   },
   {

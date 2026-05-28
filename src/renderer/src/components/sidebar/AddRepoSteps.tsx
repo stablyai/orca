@@ -14,16 +14,27 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
-import type { Repo } from '../../../../shared/types'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
-  closeModal: () => void
+  closeModal: () => void,
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void,
+  scanNestedRepos?: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>,
+  showNestedRepoReview?: (
+    scan: NestedRepoScanResult,
+    selectedPath: string,
+    connectionId: string,
+    attemptId: string
+  ) => void,
+  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -99,12 +110,20 @@ export function useRemoteRepo(
       return
     }
 
+    const trimmedRemotePath = remotePath.trim()
     setIsAddingRemote(true)
     setRemoteError(null)
     try {
+      const attemptId = createNestedRepoTelemetryAttemptId()
+      const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId)
+      onNestedScanResult?.(scan ?? null, attemptId)
+      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId)
+        return
+      }
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
-        remotePath: remotePath.trim()
+        remotePath: trimmedRemotePath
       })
       if ('error' in result) {
         throw new Error(result.error)
@@ -126,6 +145,7 @@ export function useRemoteRepo(
 
       toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
+      setExistingWorkspaceSource?.('ssh_remote_path')
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
@@ -136,7 +156,7 @@ export function useRemoteRepo(
         // silently adding as a folder.
         closeModal()
         useAppStore.getState().openModal('confirm-non-git-folder', {
-          folderPath: remotePath.trim(),
+          folderPath: trimmedRemotePath,
           connectionId: selectedTargetId
         })
         return
@@ -145,7 +165,18 @@ export function useRemoteRepo(
     } finally {
       setIsAddingRemote(false)
     }
-  }, [selectedTargetId, remotePath, fetchWorktrees, setStep, setAddedRepo, closeModal])
+  }, [
+    selectedTargetId,
+    remotePath,
+    scanNestedRepos,
+    showNestedRepoReview,
+    onNestedScanResult,
+    fetchWorktrees,
+    setStep,
+    setAddedRepo,
+    closeModal,
+    setExistingWorkspaceSource
+  ])
 
   return {
     sshTargets,
@@ -240,7 +271,7 @@ export function RemoteStep({
               </Button>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
               {sshTargets.map((target) => (
                 <SshTargetRow
                   key={target.id}
@@ -306,6 +337,7 @@ type CloneStepProps = {
   cloneError: string | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
+  disableDestinationPicker?: boolean
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -318,6 +350,7 @@ export function CloneStep({
   cloneError,
   cloneProgress,
   isCloning,
+  disableDestinationPicker = false,
   onUrlChange,
   onDestChange,
   onPickDestination,
@@ -369,7 +402,8 @@ export function CloneStep({
               size="sm"
               className="h-8 px-2 shrink-0"
               onClick={onPickDestination}
-              disabled={isCloning}
+              disabled={isCloning || disableDestinationPicker}
+              title={disableDestinationPicker ? 'Enter a server path manually' : 'Choose folder'}
             >
               <Folder className="size-3.5" />
             </Button>

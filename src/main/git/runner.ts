@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: command routing, WSL translation, and
+git/gh/glab wrappers must stay co-located so platform behavior remains
+consistent across every repo-scoped subprocess call. */
 /**
  * Centralized git/gh/command runner with transparent WSL support.
  *
@@ -8,7 +11,9 @@
  */
 import { execFile, execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process'
 import { promisify } from 'util'
-import { parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import { withGitSpan } from '../observability/instrumentation'
+import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 
 const execFileAsync = promisify(execFile)
 
@@ -50,6 +55,92 @@ function translateArgsForWsl(args: string[]): string[] {
 
     return arg
   })
+}
+
+function hasExplicitRepoArg(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    if (
+      (args[i] === '--repo' || args[i] === '-R') &&
+      typeof args[i + 1] === 'string' &&
+      args[i + 1].trim()
+    ) {
+      return true
+    }
+    if (args[i].startsWith('--repo=') || args[i].startsWith('-R=')) {
+      return args[i].slice(args[i].indexOf('=') + 1).trim().length > 0
+    }
+    if (args[i].startsWith('-R') && args[i].length > 2) {
+      return args[i].slice(2).trim().length > 0
+    }
+  }
+  return false
+}
+
+function argsUseGhApiPlaceholders(args: string[]): boolean {
+  return args.some(
+    (arg) => arg.includes('{owner}') || arg.includes('{repo}') || arg.includes('{branch}')
+  )
+}
+
+function canRunGitHubCliWithoutRepoCwd(args: string[]): boolean {
+  if (hasExplicitRepoArg(args)) {
+    return true
+  }
+  if (args[0] === 'api') {
+    return !argsUseGhApiPlaceholders(args)
+  }
+  return args[0] === 'auth'
+}
+
+function isMissingCommandInWsl(stderr: string, command: string): boolean {
+  const s = stderr.toLowerCase()
+  const c = command.toLowerCase()
+  return s.includes(`${c}: command not found`) || s.includes(`${c}: not found`)
+}
+
+function canFallBackToHostGitHubCli(
+  command: 'gh',
+  args: string[],
+  resolved: ResolvedCommand,
+  stderr: string
+): boolean {
+  return (
+    process.platform === 'win32' &&
+    resolved.wsl !== null &&
+    isMissingCommandInWsl(stderr, command) &&
+    canRunGitHubCliWithoutRepoCwd(args)
+  )
+}
+
+function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCommand {
+  return {
+    binary: command,
+    args,
+    // Why: host gh cannot use a WSL UNC cwd reliably. We only fall back
+    // for commands with explicit repo/API context, so no repo cwd is required.
+    cwd: undefined,
+    wsl: null
+  }
+}
+
+function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
+  const distro = getDefaultWslDistro()
+  return distro ? resolveCommand(command, args, undefined, distro) : null
+}
+
+function isHostCommandMissing(err: unknown, command: 'gh' | 'glab'): boolean {
+  if (!err || typeof err !== 'object') {
+    return false
+  }
+  const e = err as { code?: unknown; message?: unknown; syscall?: unknown; path?: unknown }
+  if (e.code === 'ENOENT') {
+    return true
+  }
+  const message = typeof e.message === 'string' ? e.message.toLowerCase() : ''
+  return (
+    message.includes('enoent') &&
+    (message.includes(command) || e.path === command || e.syscall === 'spawn')
+  )
 }
 
 /**
@@ -123,6 +214,148 @@ type GitExecOptions = {
   env?: NodeJS.ProcessEnv
 }
 
+type CommandExecOptions = {
+  cwd?: string
+  encoding?: BufferEncoding
+  maxBuffer?: number
+  timeout?: number
+  env?: NodeJS.ProcessEnv
+  signal?: AbortSignal
+}
+
+function isMissingCommandError(error: unknown): boolean {
+  return Boolean(
+    error && typeof error === 'object' && (error as { code?: unknown }).code === 'ENOENT'
+  )
+}
+
+function hasPathSeparator(command: string): boolean {
+  return command.includes('/') || command.includes('\\')
+}
+
+function shouldRetryWindowsCommandShim(error: unknown, resolved: ResolvedCommand): boolean {
+  return (
+    process.platform === 'win32' &&
+    resolved.wsl === null &&
+    isMissingCommandError(error) &&
+    !hasPathSeparator(resolved.binary) &&
+    !/\.[A-Za-z0-9]+$/.test(resolved.binary)
+  )
+}
+
+function createAbortError(): Error {
+  const error = new Error('The operation was aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
+function killSpawnedCommandTree(child: ChildProcess): void {
+  const pid = child.pid
+  if (!pid || process.platform !== 'win32') {
+    child.kill()
+    return
+  }
+  try {
+    // Why: Windows package-manager CLIs are often .cmd shims. Killing only
+    // cmd.exe leaves the underlying node/npm/pnpm child running.
+    const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    killer.on('error', () => child.kill())
+    killer.unref()
+  } catch {
+    child.kill()
+  }
+}
+
+async function spawnCommandCapture(
+  command: string,
+  args: string[],
+  options: CommandExecOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
+  return new Promise((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(createAbortError())
+      return
+    }
+    let settled = false
+    let stdout = ''
+    let stderr = ''
+    let stdoutBytes = 0
+    let stderrBytes = 0
+    const child = spawn(spawnCmd, spawnArgs, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+    let timer: NodeJS.Timeout | null = null
+    const onAbort = (): void => {
+      killSpawnedCommandTree(child)
+      finish(createAbortError())
+    }
+    const finish = (error: Error | null): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      options.signal?.removeEventListener('abort', onAbort)
+      if (error) {
+        reject(Object.assign(error, { stdout, stderr }))
+        return
+      }
+      resolve({ stdout, stderr })
+    }
+    timer = options.timeout
+      ? setTimeout(() => {
+          killSpawnedCommandTree(child)
+          finish(new Error(`${command} timed out.`))
+        }, options.timeout)
+      : null
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutBytes += chunk.byteLength
+      if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
+        killSpawnedCommandTree(child)
+        finish(new Error(`${command} stdout exceeded maxBuffer.`))
+        return
+      }
+      stdout += chunk.toString(options.encoding ?? 'utf-8')
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderrBytes += chunk.byteLength
+      if (options.maxBuffer && stderrBytes > options.maxBuffer) {
+        killSpawnedCommandTree(child)
+        finish(new Error(`${command} stderr exceeded maxBuffer.`))
+        return
+      }
+      stderr += chunk.toString(options.encoding ?? 'utf-8')
+    })
+    child.on('error', finish)
+    child.on('close', (code) => {
+      if (code === 0) {
+        finish(null)
+        return
+      }
+      finish(new Error(`${command} exited with ${code}.`))
+    })
+  })
+}
+
+export function gitOptionalLocksDisabledEnv(
+  env: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GIT_OPTIONAL_LOCKS: '0'
+  }
+}
+
 /**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.
@@ -131,15 +364,67 @@ export async function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolved = resolveCommand('git', args, options.cwd)
-  const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
-    cwd: resolved.cwd,
-    encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-    maxBuffer: options.maxBuffer,
-    timeout: options.timeout,
-    env: options.env
-  })
-  return { stdout: stdout as string, stderr: stderr as string }
+  // Why wrap here: the resolved binary path / WSL detection is internal
+  // detail; the span attributes track the user-visible `git <subcommand>
+  // <args…>` form so dashboards group cleanly by intent rather than by
+  // platform-conditional binary path.
+  return withGitSpan(
+    { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
+    async () => {
+      const resolved = resolveCommand('git', args, options.cwd)
+      const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+        maxBuffer: options.maxBuffer,
+        timeout: options.timeout,
+        env: options.env
+      })
+      return { stdout: stdout as string, stderr: stderr as string }
+    }
+  )
+}
+
+/**
+ * Async command execution with the same WSL cwd translation as repo-scoped git.
+ * Keep this for fixed binary+argv call sites; never pass shell fragments.
+ */
+export async function commandExecFileAsync(
+  command: string,
+  args: string[],
+  options: CommandExecOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  const resolved = resolveCommand(command, args, options.cwd)
+  const binary =
+    resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
+  if (isWindowsBatchScript(binary)) {
+    return spawnCommandCapture(binary, resolved.args, {
+      ...options,
+      cwd: resolved.cwd
+    })
+  }
+  try {
+    const { stdout, stderr } = await execFileAsync(binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: options.encoding ?? 'utf-8',
+      maxBuffer: options.maxBuffer,
+      timeout: options.timeout,
+      env: options.env,
+      signal: options.signal
+    })
+    return { stdout: stdout as string, stderr: stderr as string }
+  } catch (error) {
+    if (shouldRetryWindowsCommandShim(error, resolved)) {
+      return spawnCommandCapture(
+        resolveWindowsCommand(`${resolved.binary}.cmd`, options.env),
+        resolved.args,
+        {
+          ...options,
+          cwd: resolved.cwd
+        }
+      )
+    }
+    throw error
+  }
 }
 
 /**
@@ -224,6 +509,7 @@ const NON_IDEMPOTENT_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 const NON_IDEMPOTENT_GH_VERBS = new Set([
   'create',
   'edit',
+  'update',
   'delete',
   'close',
   'reopen',
@@ -242,6 +528,8 @@ const NON_IDEMPOTENT_GH_VERBS = new Set([
 function argsLookIdempotent(args: string[]): boolean {
   let explicitMethodSeen = false
   let hasApiBodyField = false
+  let hasGraphQlQuery = false
+  const isGraphQlApi = args[0] === 'api' && args[1] === 'graphql'
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '-X' || a === '--method') {
@@ -275,6 +563,7 @@ function argsLookIdempotent(args: string[]): boolean {
     // `gh api graphql -f query=mutation(...){ ... }` — detect mutation queries
     // so writes via the GraphQL endpoint also fail fast on transient errors.
     if (a.startsWith('query=')) {
+      hasGraphQlQuery = true
       const trimmed = a.slice('query='.length).trimStart().toLowerCase()
       if (trimmed.startsWith('mutation')) {
         return false
@@ -283,8 +572,14 @@ function argsLookIdempotent(args: string[]): boolean {
   }
   // `gh api ... -f foo=bar` with no explicit method: gh switches to POST.
   // Treat as non-idempotent so a transient 5xx after the server applied
-  // the write doesn't retry and duplicate it.
-  if (args[0] === 'api' && hasApiBodyField && !explicitMethodSeen) {
+  // the write doesn't retry and duplicate it. GraphQL reads are the exception:
+  // gh sends them as POST body fields, but a query operation is idempotent.
+  if (
+    args[0] === 'api' &&
+    hasApiBodyField &&
+    !explicitMethodSeen &&
+    !(isGraphQlApi && hasGraphQlQuery)
+  ) {
     return false
   }
   // `gh issue close`, `gh pr edit`, `gh pr merge`, etc. The first arg is the
@@ -420,8 +715,10 @@ export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
+  let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
   let lastError: unknown
+  let attemptedHostFallback = false
+  let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
       const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
@@ -435,6 +732,30 @@ export async function ghExecFileAsync(
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+      if (
+        process.platform === 'win32' &&
+        !attemptedDefaultWslFallback &&
+        resolved.wsl === null &&
+        !options.cwd &&
+        !options.wslDistro &&
+        isHostCommandMissing(err, 'gh')
+      ) {
+        const wslResolved = resolveDefaultWslCli('gh', args)
+        if (wslResolved) {
+          // Why: WSL-only Windows installs have no gh.exe on the host PATH, but
+          // global calls like rate_limit/auth do not carry a repo cwd to route by.
+          resolved = wslResolved
+          attemptedDefaultWslFallback = true
+          attempt = -1
+          continue
+        }
+      }
+      if (!attemptedHostFallback && canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
+        resolved = resolveHostGitHubCli('gh', args)
+        attemptedHostFallback = true
+        attempt = -1
+        continue
+      }
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
       // Why: only retry idempotent calls. A 5xx/socket reset can arrive
       // after the server already applied a POST/PATCH/PUT/DELETE; retrying
@@ -464,6 +785,84 @@ export async function ghExecFileAsync(
     }
   }
   // Unreachable: the loop either returns or throws. Here for TS exhaustiveness.
+  throw lastError
+}
+
+// ─── glab CLI runner ────────────────────────────────────────────────
+// Why: parallel to gh CLI runner above. GitLab support is added by
+// cloning gh's surface rather than abstracting both behind a generic
+// runner — keeping them as parallel implementations matches the
+// project's clone-and-adapt approach for new providers and avoids
+// touching the working gh path. Reuses the shared retry/transient
+// helpers since HTTP-status- and TCP-error-based classification is
+// provider-agnostic.
+
+type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
+  cwd?: string
+  wslDistro?: string
+  idempotent?: boolean
+}
+
+/**
+ * Async glab CLI execution. Drop-in replacement for
+ * `execFileAsync('glab', args, { cwd, encoding, ... })`.
+ *
+ * Retry policy mirrors ghExecFileAsync.
+ */
+export async function glabExecFileAsync(
+  args: string[],
+  options: GlabExecOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
+  let lastError: unknown
+  let attemptedDefaultWslFallback = false
+  for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const { stdout, stderr } = await execFileAsync(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+        maxBuffer: options.maxBuffer,
+        timeout: options.timeout,
+        env: options.env
+      })
+      return { stdout: stdout as string, stderr: stderr as string }
+    } catch (err) {
+      lastError = err
+      const { stderr } = extractExecError(err)
+      if (
+        process.platform === 'win32' &&
+        !attemptedDefaultWslFallback &&
+        resolved.wsl === null &&
+        !options.cwd &&
+        !options.wslDistro &&
+        isHostCommandMissing(err, 'glab')
+      ) {
+        const wslResolved = resolveDefaultWslCli('glab', args)
+        if (wslResolved) {
+          // Why: mirror gh's WSL-only fallback for global GitLab project/auth calls.
+          resolved = wslResolved
+          attemptedDefaultWslFallback = true
+          attempt = -1
+          continue
+        }
+      }
+      const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
+      // Why: mirror gh's write-safety gate. A transient error after GitLab
+      // applies a POST/PATCH/PUT/DELETE must not create duplicate comments,
+      // issues, or merge actions through an automatic retry.
+      const idempotent = options.idempotent ?? argsLookIdempotent(args)
+      if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
+        const retryAfterMs = parseRetryAfterMs(stderr)
+        const delayMs =
+          retryAfterMs !== null
+            ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
+            : GH_RETRY_DELAYS_MS[attempt]
+        await sleep(delayMs)
+        continue
+      }
+      throw err
+    }
+  }
   throw lastError
 }
 

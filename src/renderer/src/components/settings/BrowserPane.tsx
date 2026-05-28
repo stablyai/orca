@@ -18,21 +18,23 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES } from './browser-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
+import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
-
-export const BROWSER_PANE_SEARCH_ENTRIES = [
-  ...BROWSER_USE_PANE_SEARCH_ENTRIES,
-  ...BROWSER_CORE_SEARCH_ENTRIES
-]
+export { BROWSER_PANE_SEARCH_ENTRIES }
 
 type BrowserPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  onOpenComputerUse?: () => void
 }
 
-export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): React.JSX.Element {
+export function BrowserPane({
+  settings,
+  updateSettings,
+  onOpenComputerUse
+}: BrowserPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
@@ -87,14 +89,19 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
 
   return (
     <div className="space-y-6">
-      {showBrowserUse ? <BrowserUseSetup onConfigureMoreBrowsers={scrollToSessionCookies} /> : null}
+      {showBrowserUse ? (
+        <BrowserUseSetup
+          onConfigureMoreBrowsers={scrollToSessionCookies}
+          onOpenComputerUse={onOpenComputerUse}
+        />
+      ) : null}
 
       {showHomePage ? (
         <SearchableSetting
           title="Default Home Page"
           description="URL opened when creating a new browser tab. Leave empty to open a blank tab."
           keywords={['browser', 'home', 'homepage', 'default', 'url', 'new tab', 'blank']}
-          className="flex items-start justify-between gap-4 px-1 py-2"
+          className="flex items-start justify-between gap-4 py-2"
         >
           <div className="min-w-0 shrink space-y-0.5">
             <Label>Default Home Page</Label>
@@ -152,7 +159,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
             'token',
             'omnibox'
           ]}
-          className="flex items-start justify-between gap-4 px-1 py-2"
+          className="flex items-start justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
             <Label>Default Search Engine</Label>
@@ -198,7 +205,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
             'file',
             'editor'
           ]}
-          className="flex items-center justify-between gap-4 px-1 py-2"
+          className="flex items-center justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
             <Label>Link Routing</Label>
@@ -228,7 +235,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
         <SearchableSetting
           id="browser-session-cookies"
           title="Session & Cookies"
-          description="Manage browser profiles and import cookies from Chrome, Edge, or other browsers."
+          description="Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers."
           keywords={[
             'cookies',
             'session',
@@ -240,7 +247,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
             'arc',
             'profile'
           ]}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
