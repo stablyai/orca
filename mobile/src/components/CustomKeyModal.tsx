@@ -61,6 +61,7 @@ type Props = {
   visible: boolean
   onClose: () => void
   onKeysChanged: (keys: CustomKey[]) => void
+  onManageShortcuts?: () => void
 }
 
 export async function loadCustomKeys(): Promise<CustomKey[]> {
@@ -76,7 +77,7 @@ export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
   await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
-export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
+export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
@@ -216,6 +217,18 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
             <Text style={styles.rowLabel}>Text Macro</Text>
             <Text style={styles.rowHint}>Send custom text command</Text>
           </Pressable>
+          {onManageShortcuts ? (
+            <>
+              <View style={styles.separator} />
+              <Pressable
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                onPress={onManageShortcuts}
+              >
+                <Text style={styles.rowLabel}>Manage Shortcuts</Text>
+                <Text style={styles.rowHint}>Show or hide default shortcut keys</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       )}
 

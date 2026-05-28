@@ -1854,6 +1854,11 @@ export default function SessionScreen() {
     [customKeys]
   )
 
+  const handleManageShortcuts = useCallback(() => {
+    setShowCustomKeyModal(false)
+    router.push('/terminal-settings')
+  }, [router])
+
   useEffect(() => {
     clearTerminalCache()
     activeHandleRef.current = null
@@ -3814,6 +3819,7 @@ export default function SessionScreen() {
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
+        onManageShortcuts={handleManageShortcuts}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}
