@@ -3,6 +3,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
   Worktree,
   WorkspaceVisibleTabType,
@@ -34,6 +36,25 @@ export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
+function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
+}
+
+function getActivationSpawnSuppression(layout: TerminalLayoutSnapshot | undefined): true | number {
+  const paneCount = Math.max(
+    1,
+    countTerminalLayoutLeaves(layout?.root),
+    Object.keys(layout?.ptyIdsByLeafId ?? {}).length
+  )
+  return paneCount === 1 ? true : paneCount
+}
 
 function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
   if (!result || result.status === 'updated') {
@@ -1875,12 +1896,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 [worktreeId!]: tabs.map((tab) => ({
                   ...tab,
                   ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  // Why: the allDead generation bump remounts the pane and
-                  // fresh-spawns a PTY — a click side-effect, not real activity.
-                  // Tag it (not just first activations) so the respawn doesn't
-                  // stamp lastActivityAt and bounce the worktree to the top of
-                  // Recent on every re-click of a slept/disconnected worktree.
-                  ...(allDead || shouldTagTabs ? { pendingActivationSpawn: true } : {})
+                  // Why: the allDead generation bump remounts panes and may
+                  // fresh-spawn PTYs — click side-effects, not real activity.
+                  // Split layouts remount several panes, so count the expected
+                  // pane events instead of suppressing only the first one.
+                  ...(allDead || shouldTagTabs
+                    ? {
+                        pendingActivationSpawn: getActivationSpawnSuppression(
+                          s.terminalLayoutsByTabId[tab.id]
+                        )
+                      }
+                    : {})
                 }))
               }
             }

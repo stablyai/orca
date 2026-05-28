@@ -409,11 +409,11 @@ export type TerminalTab = {
    *  not by the user doing work. Without this flag the resulting
    *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
    *  sidebar's recency sort on every click — the reorder-on-click bug. The
-   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
-   *  `updateTabPtyId` that follows, which then suppresses the activity bump
-   *  and the `sortEpoch` increment. Never persisted — it is a transient
-   *  handoff between the two calls. */
-  pendingActivationSpawn?: boolean
+   *  flag is set by `setActiveWorktree` and consumed by the activation-driven
+   *  PTY lifecycle calls that follow, which then suppress activity bumps and
+   *  `sortEpoch` increments. Split layouts use a numeric count because one tab
+   *  can remount several panes. Never persisted — it is a transient handoff. */
+  pendingActivationSpawn?: boolean | number
 }
 
 export type BrowserHistoryEntry = {

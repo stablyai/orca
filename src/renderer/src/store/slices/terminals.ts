@@ -61,6 +61,23 @@ function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
 }
 
+function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
+  if (value === true) {
+    return 1
+  }
+  return typeof value === 'number' && value > 0 ? value : 0
+}
+
+function consumePendingActivationSpawn(
+  value: boolean | number | undefined
+): boolean | number | undefined {
+  const count = getPendingActivationSpawnCount(value)
+  if (count <= 1) {
+    return undefined
+  }
+  return count === 2 ? true : count - 1
+}
+
 function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
   return (
     tab.customTitle?.trim() ||
@@ -1139,15 +1156,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         worktreeId = wId
         const tab = tabs[index]
-        if (tab.pendingActivationSpawn) {
+        if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
           wasActivationSpawn = true
         }
-        // Why: consume pendingActivationSpawn here. The flag is set by
-        // setActiveWorktree when it bumps generation on all-dead tabs, and
-        // must be cleared on the first PTY that comes back or a later
-        // legitimate respawn (e.g. the user restarting a codex tab) would
-        // also be classified as activation and silently dropped from the
-        // recency sort.
+        // Why: consume one pendingActivationSpawn unit here. Split layouts can
+        // remount several panes for one click, and each pane's activation-time
+        // PTY callback must be suppressed without hiding later real activity.
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         // Why: tab.ptyId is the single-pane fallback used by legacy attach
@@ -1155,9 +1169,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // primary binding from the original pane or remount/close flows can
         // reattach the tab to the wrong PTY and appear to "reset" panes.
         const nextTabPtyId = tab.ptyId ?? nextPtyIds[0] ?? null
+        const nextPendingActivationSpawn = consumePendingActivationSpawn(tab.pendingActivationSpawn)
         if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
           const nextTabs = [...tabs]
-          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabs[index] = {
+            ...rest,
+            ...(nextPendingActivationSpawn
+              ? { pendingActivationSpawn: nextPendingActivationSpawn }
+              : {}),
+            ptyId: nextTabPtyId
+          }
           nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
         }
         break
@@ -1210,24 +1231,34 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         worktreeId = wId
         const tab = tabs[index]
-        if (tab.pendingActivationSpawn) {
+        if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
           wasActivationSpawn = true
         }
         if (!ptyId) {
           isRemoteRuntimeMirror =
             existingPtyIds.length > 0 && existingPtyIds.every((id) => isRemoteRuntimePtyId(id))
         }
-        // Why: consume pendingActivationSpawn here too. Panes tearing down
-        // during a worktree switch (e.g. the previously-active worktree
-        // unmounting its panes) fire onExit → clearTabPtyId, which must
-        // not count as activity. Strip the flag on consumption so later
-        // legitimate exits still bump.
+        // Why: consume pendingActivationSpawn for real activation-time clears,
+        // but keep it when clearing a stale wake-hint id that was not live in
+        // ptyIdsByTabId. That path immediately falls back to a fresh spawn,
+        // and the spawn still needs the click-driven suppression.
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+        const shouldRetainActivationSpawn =
+          wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
+        const nextPendingActivationSpawn = shouldRetainActivationSpawn
+          ? tab.pendingActivationSpawn
+          : consumePendingActivationSpawn(tab.pendingActivationSpawn)
         if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
           const nextTabs = [...tabs]
-          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabs[index] = {
+            ...rest,
+            ...(nextPendingActivationSpawn
+              ? { pendingActivationSpawn: nextPendingActivationSpawn }
+              : {}),
+            ptyId: nextTabPtyId
+          }
           nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
         }
         break
