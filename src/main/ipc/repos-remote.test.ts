@@ -234,6 +234,65 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('imports a small selection from a large nested SSH scan', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoPaths = Array.from(
+      { length: 87 },
+      (_, index) => `/srv/platform/service-${String(index + 1).padStart(2, '0')}`
+    )
+    const selectedPaths = [repoPaths[2], repoPaths[41], repoPaths[86]]
+    mockStore.addRepo.mockClear()
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: repoPaths.includes(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? repoPaths.map((repoPath) => ({
+            name: repoPath.split('/').at(-1) ?? repoPath,
+            isDirectory: true,
+            isSymlink: false
+          }))
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: selectedPaths,
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({
+      importedCount: 3,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[0], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[1], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[2], projectGroupId: group.id })
+    )
+  })
+
   it('sanitizes unexpected nested import errors before returning results', async () => {
     const group = {
       id: 'group-1',

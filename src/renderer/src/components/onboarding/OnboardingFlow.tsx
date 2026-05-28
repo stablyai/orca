@@ -287,7 +287,9 @@ export default function OnboardingFlow({
                     currentStep.id === 'agentSetup'
                       ? 'mt-4'
                       : currentStep.id === 'repo'
-                        ? 'mt-6'
+                        ? flow.nestedScan
+                          ? 'mt-6 overflow-hidden'
+                          : 'mt-6'
                         : 'mt-10'
                   )
             )}

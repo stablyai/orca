@@ -421,6 +421,16 @@ export function buildRows(
     }
     grouped.get(key)!.items.push(w)
   }
+  if (groupBy === 'repo' && projectGroups.length > 0) {
+    for (const repo of repoMap.values()) {
+      const key = `repo:${repo.id}`
+      if (!grouped.has(key)) {
+        // Why: nested repo imports can persist repos before their worktree rows
+        // are available; the sidebar still needs a project row to expand to.
+        grouped.set(key, { label: repo.displayName, items: [], repo })
+      }
+    }
+  }
 
   const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
   if (groupBy === 'pr-status') {
@@ -576,15 +586,6 @@ export function buildRows(
     )
   }
 
-  const getProjectGroupSubtreeCount = (groupId: string): number => {
-    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
-    const children = childGroupsByParentId.get(groupId) ?? []
-    return children.reduce(
-      (count, child) => count + getProjectGroupSubtreeCount(child.id),
-      directCount
-    )
-  }
-
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
@@ -593,7 +594,7 @@ export function buildRows(
       type: 'header',
       key,
       label: projectGroup.name,
-      count: getProjectGroupSubtreeCount(projectGroup.id),
+      count: repoEntries.length + childGroups.length,
       tone: PROJECT_GROUP_META.tone,
       icon: PROJECT_GROUP_META.icon,
       projectGroup,
@@ -612,22 +613,7 @@ export function buildRows(
     appendProjectGroup(projectGroup, 0)
   }
 
-  const ungrouped = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? [])
-  if (ungrouped.length > 0) {
-    const key = getProjectGroupHeaderKey(null)
-    result.push({
-      type: 'header',
-      key,
-      label: 'Ungrouped',
-      count: ungrouped.length,
-      tone: PROJECT_GROUP_META.tone,
-      icon: PROJECT_GROUP_META.icon,
-      projectGroup: { id: null, name: 'Ungrouped', tabOrder: Number.MAX_SAFE_INTEGER }
-    })
-    if (!collapsedGroups.has(key)) {
-      appendOrderedGroups(ungrouped, 1)
-    }
-  }
+  appendOrderedGroups(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? []), 0)
 
   return result
 }
@@ -686,10 +672,5 @@ export function getGroupKeysForWorktree(
     const parentId = groupsById.get(currentGroupId)?.parentGroupId ?? null
     currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
   }
-  return [
-    ...(groupIds.length > 0
-      ? groupIds.map((id) => getProjectGroupHeaderKey(id))
-      : [getProjectGroupHeaderKey(null)]),
-    groupKey
-  ]
+  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]
 }

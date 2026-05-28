@@ -289,7 +289,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           .filter((projectId): projectId is string => typeof projectId === 'string')
         const firstRepoId = importedRepoIds[0]
         if (!firstRepoId) {
-          toast.error('No repositories imported')
+          const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
+          toast.error('No repositories imported', {
+            description: firstFailure ?? undefined
+          })
           return
         }
         for (const projectId of importedRepoIds) {
@@ -581,7 +584,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className={`min-w-0 overflow-hidden sm:max-w-lg [&>*]:min-w-0 ${
+          step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
+        }`}
+      >
         {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
         <div className="flex items-center justify-center -mt-1">
           {(step === 'clone' || step === 'remote' || step === 'create') && (
@@ -822,8 +829,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+            <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
+              <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border border-border bg-muted/30 p-3">
                 <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
                   <FolderTree className="size-4" />
                 </div>
@@ -837,7 +844,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
                 <Input
                   value={nestedGroupName}
@@ -851,13 +858,14 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 selectedPaths={nestedSelectedPaths}
                 onSelectedPathsChange={setNestedSelectedPaths}
                 disabled={isAdding}
+                className="flex-1"
               />
               {nestedScan.truncated || nestedScan.timedOut ? (
                 <div className="text-[11px] text-muted-foreground">
                   Showing partial results from a bounded scan.
                 </div>
               ) : null}
-              <div className="flex items-center gap-2">
+              <div className="shrink-0 flex items-center gap-2">
                 <Button onClick={handleBack} disabled={isAdding} variant="ghost">
                   <ArrowLeft className="size-3.5" />
                   Back

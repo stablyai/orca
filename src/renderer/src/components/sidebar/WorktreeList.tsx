@@ -3407,7 +3407,9 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [handleRevealCurrentWorkspaceRequest])
 
-  if (worktrees.length === 0) {
+  // Why: Project Group headers can be renderable before any workspace rows are
+  // loaded, especially after importing many nested repos from a folder scan.
+  if (rows.length === 0) {
     return (
       <div data-worktree-sidebar-container className="relative min-h-0 flex-1">
         <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">

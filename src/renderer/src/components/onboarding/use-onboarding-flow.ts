@@ -694,7 +694,10 @@ export function useOnboardingFlow(
             .filter((projectId): projectId is string => typeof projectId === 'string') ?? []
         const projectId = importedRepoIds[0]
         if (!projectId) {
-          throw new Error('No repositories imported')
+          const firstFailure = result?.projects.find((entry) => entry.status === 'failed')?.error
+          throw new Error(
+            firstFailure ? `No repositories imported: ${firstFailure}` : 'No repositories imported'
+          )
         }
         for (const importedRepoId of importedRepoIds) {
           await fetchWorktrees(importedRepoId)
