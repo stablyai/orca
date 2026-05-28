@@ -330,16 +330,18 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
-  it('rejects a write with missing content instead of truncating the file', async () => {
+  it.each([
+    ['missing content', { worktree: 'id:wt-1', relativePath: 'src/index.ts' }],
+    ['null content', { worktree: 'id:wt-1', relativePath: 'src/index.ts', content: null }],
+    ['non-string content', { worktree: 'id:wt-1', relativePath: 'src/index.ts', content: 0 }]
+  ])('rejects a write with %s instead of truncating the file', async (_name, params) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-    const response = await dispatcher.dispatch(
-      makeRequest('files.write', { worktree: 'id:wt-1', relativePath: 'src/index.ts' })
-    )
+    const response = await dispatcher.dispatch(makeRequest('files.write', params))
 
     expect(response).toMatchObject({ ok: false })
     expect(runtime.writeFileExplorerFile).not.toHaveBeenCalled()
@@ -360,7 +362,7 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
-  it('rejects a base64 write with missing content', async () => {
+  it('allows writing explicit empty base64 content', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
@@ -368,14 +370,42 @@ describe('file RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('files.writeBase64', { worktree: 'id:wt-1', relativePath: 'assets/logo.png' })
+      makeRequest('files.writeBase64', {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/logo.png',
+        contentBase64: ''
+      })
     )
+
+    expect(runtime.writeFileExplorerFileBase64).toHaveBeenCalledWith(
+      'id:wt-1',
+      'assets/logo.png',
+      ''
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it.each([
+    ['missing content', { worktree: 'id:wt-1', relativePath: 'assets/logo.png' }],
+    ['null content', { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: null }],
+    [
+      'non-string content',
+      { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: 0 }
+    ]
+  ])('rejects a base64 write with %s', async (_name, params) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('files.writeBase64', params))
 
     expect(response).toMatchObject({ ok: false })
     expect(runtime.writeFileExplorerFileBase64).not.toHaveBeenCalled()
   })
 
-  it('rejects a base64 chunk write with missing content (inherits the schema)', async () => {
+  it('allows writing an explicit empty base64 chunk', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
@@ -386,9 +416,55 @@ describe('file RPC methods', () => {
       makeRequest('files.writeBase64Chunk', {
         worktree: 'id:wt-1',
         relativePath: 'assets/video.mov',
+        contentBase64: '',
         append: true
       })
     )
+
+    expect(runtime.writeFileExplorerFileBase64Chunk).toHaveBeenCalledWith(
+      'id:wt-1',
+      'assets/video.mov',
+      '',
+      true
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it.each([
+    [
+      'missing content',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        append: true
+      }
+    ],
+    [
+      'null content',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        contentBase64: null,
+        append: true
+      }
+    ],
+    [
+      'non-string content',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        contentBase64: 0,
+        append: true
+      }
+    ]
+  ])('rejects a base64 chunk write with %s (inherits the schema)', async (_name, params) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('files.writeBase64Chunk', params))
 
     expect(response).toMatchObject({ ok: false })
     expect(runtime.writeFileExplorerFileBase64Chunk).not.toHaveBeenCalled()
