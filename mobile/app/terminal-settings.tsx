@@ -11,7 +11,13 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Smartphone } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Smartphone, X } from 'lucide-react-native'
+import {
+  CustomKeyModal,
+  loadCustomKeys,
+  saveCustomKeys,
+  type CustomKey
+} from '../src/components/CustomKeyModal'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
@@ -131,6 +137,9 @@ export default function TerminalSettingsScreen() {
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const hostClients = useAllHostClients(hostIds)
 
+  const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+
   // Why: per-host current value, lazily fetched. We keep state at the
   // screen level rather than per-row so the picker can render at root
   // level — embedding PickerModal inside a row clipped its BottomDrawer
@@ -165,18 +174,35 @@ export default function TerminalSettingsScreen() {
     })
   }, [])
 
+  const refreshCustomKeys = useCallback(() => {
+    void loadCustomKeys().then(setCustomKeys)
+  }, [])
+
+  const handleDeleteCustomKey = useCallback(
+    async (key: CustomKey) => {
+      const updated = customKeys.filter((k) => k.id !== key.id)
+      setCustomKeys(updated)
+      await saveCustomKeys(updated)
+    },
+    [customKeys]
+  )
+
   useFocusEffect(
     useCallback(() => {
       refreshShortcutLayout()
-    }, [refreshShortcutLayout])
+      refreshCustomKeys()
+    }, [refreshShortcutLayout, refreshCustomKeys])
   )
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') refreshShortcutLayout()
+      if (s === 'active') {
+        refreshShortcutLayout()
+        refreshCustomKeys()
+      }
     })
     return () => sub.remove()
-  }, [refreshShortcutLayout])
+  }, [refreshShortcutLayout, refreshCustomKeys])
 
   const toggleBuiltInKey = useCallback(
     (id: string, visible: boolean) => {
@@ -314,6 +340,52 @@ export default function TerminalSettingsScreen() {
             </View>
           </Pressable>
         </View>
+
+        <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          {customKeys.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+            </View>
+          ) : (
+            customKeys.map((key, idx) => (
+              <View key={key.id}>
+                {idx > 0 && <View style={styles.separator} />}
+                <View style={styles.row}>
+                  <View style={styles.keycap}>
+                    <Text style={styles.keycapText}>{key.label}</Text>
+                  </View>
+                  <View style={styles.rowContent}>
+                    <Text style={styles.rowLabel}>{key.label}</Text>
+                    <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
+                      {key.bytes.replace(/\r/g, ' ↵')}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.deleteButton,
+                      pressed && styles.deleteButtonPressed
+                    ]}
+                    onPress={() => handleDeleteCustomKey(key)}
+                  >
+                    <X size={16} color={colors.statusRed} />
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => setShowCustomKeyModal(true)}
+          >
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
+              <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            </View>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
       </ScrollView>
 
       <PickerModal<RestoreValue>
@@ -325,6 +397,14 @@ export default function TerminalSettingsScreen() {
           if (pickerHost) void selectValue(pickerHost.id, v)
         }}
         onClose={() => setPickerHostId(null)}
+      />
+
+      <CustomKeyModal
+        visible={showCustomKeyModal}
+        onClose={() => setShowCustomKeyModal(false)}
+        onKeysChanged={(keys) => {
+          setCustomKeys(keys)
+        }}
       />
     </View>
   )
@@ -429,5 +509,21 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
+  },
+  emptyContainer: {
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)'
+  },
+  deleteButtonPressed: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)'
   }
 })

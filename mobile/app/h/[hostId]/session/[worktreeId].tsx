@@ -25,6 +25,7 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   Eraser,
   Folder,
   File,
@@ -3323,15 +3324,16 @@ export default function SessionScreen() {
                       : 'Switch to live terminal input'
                   }
                 >
-                  <Text
-                    style={[
-                      styles.accessoryKeyText,
-                      liveInputEnabled && styles.accessoryKeyTextActive,
-                      !canSend && styles.accessoryKeyTextDisabled
-                    ]}
-                  >
-                    Live
-                  </Text>
+                  <ChevronsRight
+                    size={14}
+                    color={
+                      liveInputEnabled
+                        ? colors.bgBase
+                        : canSend
+                          ? colors.textSecondary
+                          : colors.textMuted
+                    }
+                  />
                 </Pressable>
                 {canPaste && (
                   <Pressable
@@ -3427,12 +3429,9 @@ export default function SessionScreen() {
                 onPress={focusLiveInput}
                 accessibilityLabel="Focus live terminal input"
               >
-                <View style={styles.liveInputBadge}>
-                  <KeyboardIcon size={13} color={colors.textPrimary} strokeWidth={2.2} />
-                  <Text style={styles.liveInputBadgeText}>Live</Text>
-                </View>
+                <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
                 <Text style={styles.liveInputHint} numberOfLines={1}>
-                  Keyboard input goes to terminal
+                  Keyboard input directly goes to terminal
                 </Text>
                 <TextInput
                   ref={liveInputRef}
@@ -4239,7 +4238,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle
   },
   accessoryKeyActive: {
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.textPrimary
   },
   customAccessoryKey: {
     borderWidth: 1,
@@ -4254,7 +4253,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   accessoryKeyTextActive: {
-    color: colors.textPrimary,
+    color: colors.bgBase,
     fontWeight: '700'
   },
   accessoryKeyTextDisabled: {
@@ -4263,6 +4262,7 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 46,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderTopWidth: 1,
@@ -4271,11 +4271,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: 34,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 0,
     fontSize: 14,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
@@ -4283,21 +4284,7 @@ const styles = StyleSheet.create({
   liveInputBar: {
     gap: spacing.sm
   },
-  liveInputBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accentBlue,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button
-  },
-  liveInputBadgeText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: typography.monoFamily
-  },
+
   liveInputHint: {
     flex: 1,
     color: colors.textSecondary,
