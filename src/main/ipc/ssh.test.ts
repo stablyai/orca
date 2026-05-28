@@ -15,8 +15,12 @@ const {
   mockPtyProvider,
   mockFsProvider,
   mockGitProvider,
-  mockPortForwardManager
+  mockPortForwardManager,
+  connectionManagerCtorMock,
+  portForwardManagerCtorMock
 } = vi.hoisted(() => ({
+  connectionManagerCtorMock: vi.fn(),
+  portForwardManagerCtorMock: vi.fn(),
   handleMock: vi.fn(),
   powerMonitorOffMock: vi.fn(),
   powerMonitorOnMock: vi.fn(),
@@ -89,6 +93,7 @@ vi.mock('../ssh/ssh-connection-store', () => ({
 vi.mock('../ssh/ssh-connection', () => ({
   SshConnectionManager: class MockSshConnectionManager {
     constructor() {
+      connectionManagerCtorMock()
       return mockConnectionManager
     }
   }
@@ -161,6 +166,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 vi.mock('../ssh/ssh-port-forward', () => ({
   SshPortForwardManager: class MockPortForwardManager {
     constructor() {
+      portForwardManagerCtorMock()
       return mockPortForwardManager
     }
   }
@@ -255,6 +261,20 @@ describe('SSH IPC handlers', () => {
     expect(channels).toContain('ssh:resetRelay')
     expect(channels).toContain('ssh:getState')
     expect(channels).toContain('ssh:testConnection')
+  })
+
+  it('does not reconstruct managers on re-registration (window reactivation)', () => {
+    // Why: recreating the connection/port-forward managers on macOS window
+    // reactivation would orphan live sessions' port forwards (the new empty
+    // managers can't list/remove/rebind them). beforeEach already registered
+    // once; a second registration must reuse the existing managers.
+    const connCtorCalls = connectionManagerCtorMock.mock.calls.length
+    const forwardCtorCalls = portForwardManagerCtorMock.mock.calls.length
+
+    registerSshHandlers(mockStore as never, () => mockWindow as never)
+
+    expect(connectionManagerCtorMock.mock.calls.length).toBe(connCtorCalls)
+    expect(portForwardManagerCtorMock.mock.calls.length).toBe(forwardCtorCalls)
   })
 
   it('ssh:listTargets returns targets from store', async () => {

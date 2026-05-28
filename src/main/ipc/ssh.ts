@@ -45,6 +45,16 @@ let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined
 let persistedStore: Store | null = null
 let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
 let powerMonitorUnsubscribe: (() => void) | null = null
+// Why: the connection/port-forward managers persist for the process lifetime
+// (recreating them on macOS window reactivation would strand live sessions'
+// port forwards). Their callbacks therefore read the current main window and the
+// credential-tracking set through these module refs rather than per-call closures.
+let currentGetMainWindow: () => BrowserWindow | null = () => null
+// Why: tracks whether a credential prompt was triggered during the current
+// ssh:connect call, so startup reconnect can defer passphrase-protected targets.
+// Module-scoped so the persistent manager callbacks and re-registered handlers
+// share one set across window reactivation.
+const credentialRequestedForTarget = new Set<string>()
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
@@ -370,21 +380,20 @@ export function registerSshHandlers(
     ipcMain.removeHandler(ch)
   }
 
+  // Why: point the persistent manager callbacks at the current window. On macOS
+  // reactivation getMainWindow is a fresh closure over the new BrowserWindow.
+  currentGetMainWindow = getMainWindow
+
   sshStore = new SshConnectionStore(store)
   persistedStore = store
   registerAdvertisedUrlRefresh(getMainWindow)
 
   registerCredentialHandler(getMainWindow)
 
-  // Why: tracks whether a credential prompt was triggered during the current
-  // ssh:connect call. Used to set lastRequiredPassphrase on the target so
-  // startup reconnect can defer passphrase-protected targets to tab focus.
-  const credentialRequestedForTarget = new Set<string>()
-
   const callbacks: SshConnectionCallbacks = {
     onCredentialRequest: (targetId, kind, detail) => {
       credentialRequestedForTarget.add(targetId)
-      return requestCredential(getMainWindow, targetId, kind, detail)
+      return requestCredential(currentGetMainWindow, targetId, kind, detail)
     },
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {
@@ -407,7 +416,7 @@ export function registerSshHandlers(
         // Why: SSH is connected before the relay providers are rebuilt. Keep
         // renderer actions gated until SshRelaySession reaches ready again.
         publishRelayOverride(
-          getMainWindow,
+          currentGetMainWindow,
           targetId,
           'reconnecting',
           'Relay channel reconnecting...',
@@ -415,7 +424,7 @@ export function registerSshHandlers(
         )
       } else {
         clearRelayStateOverride(targetId)
-        broadcastSshState(getMainWindow, targetId, state)
+        broadcastSshState(currentGetMainWindow, targetId, state)
       }
 
       if (!session) {
@@ -435,8 +444,12 @@ export function registerSshHandlers(
     }
   }
 
-  connectionManager = new SshConnectionManager(callbacks)
-  portForwardManager = new SshPortForwardManager()
+  // Why: create once and reuse for the process lifetime. Replacing these on
+  // window reactivation would orphan live sessions' port forwards — the new
+  // empty managers can't list/remove/rebind forwards bound by the old ones.
+  // The callbacks read currentGetMainWindow so they still target the new window.
+  connectionManager ??= new SshConnectionManager(callbacks)
+  portForwardManager ??= new SshPortForwardManager()
   registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
 
