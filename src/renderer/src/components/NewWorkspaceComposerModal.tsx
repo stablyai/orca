@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -137,12 +137,34 @@ function QuickTabBody({
       return null
     }
     if (pref) {
-      return pref
+      if (cardProps.detectedAgentIds === null) {
+        return isTuiAgentEnabled(pref, settings?.disabledTuiAgents) ? pref : null
+      }
+      return pickTuiAgent(pref, cardProps.detectedAgentIds ?? [], settings?.disabledTuiAgents)
     }
     const detected = cardProps.detectedAgentIds
-    return AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id))?.id ?? null
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
+    return detected === null ? null : pickTuiAgent(null, detected, settings?.disabledTuiAgents)
+  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
   const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
+
+  useEffect(() => {
+    if (
+      quickAgentOverride !== undefined &&
+      quickAgentOverride !== null &&
+      pickTuiAgent(
+        quickAgentOverride,
+        cardProps.detectedAgentIds ?? [],
+        settings?.disabledTuiAgents
+      ) === null
+    ) {
+      setQuickAgentOverride(preferredQuickAgent)
+    }
+  }, [
+    cardProps.detectedAgentIds,
+    preferredQuickAgent,
+    quickAgentOverride,
+    settings?.disabledTuiAgents
+  ])
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)

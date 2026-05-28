@@ -65,7 +65,7 @@ import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { pickTuiAgent } from '../../shared/tui-agent-selection'
+import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
 import {
@@ -453,6 +453,7 @@ type RuntimeStore = {
     branchPrefix: string
     branchPrefixCustom: string
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
+    disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
@@ -1333,6 +1334,7 @@ export class OrcaRuntimeService {
   getClientSettings(): Pick<
     GlobalSettings,
     | 'defaultTuiAgent'
+    | 'disabledTuiAgents'
     | 'agentCmdOverrides'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
@@ -1348,6 +1350,7 @@ export class OrcaRuntimeService {
     const settings = this.store.getSettings()
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
+      disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
@@ -1363,6 +1366,8 @@ export class OrcaRuntimeService {
     updates: Pick<
       Partial<GlobalSettings>,
       | 'agentStatusHooksEnabled'
+      | 'defaultTuiAgent'
+      | 'disabledTuiAgents'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
       | 'defaultRepoSelection'
@@ -1372,6 +1377,7 @@ export class OrcaRuntimeService {
   ): Pick<
     GlobalSettings,
     | 'defaultTuiAgent'
+    | 'disabledTuiAgents'
     | 'agentCmdOverrides'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
@@ -7017,7 +7023,10 @@ export class OrcaRuntimeService {
       // workspace, so linked task drafts must not auto-pick a detected agent.
       return null
     }
-    let agent = isTuiAgent(preferredAgent) ? preferredAgent : null
+    let agent =
+      isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)
+        ? preferredAgent
+        : null
     if (!agent) {
       let detected: string[] = []
       try {
@@ -7028,7 +7037,7 @@ export class OrcaRuntimeService {
         detected = []
       }
       const typedDetected = detected.filter(isTuiAgent)
-      agent = pickTuiAgent(null, typedDetected)
+      agent = pickTuiAgent(null, typedDetected, settings.disabledTuiAgents)
     }
     if (!agent) {
       return null

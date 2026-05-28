@@ -15,6 +15,7 @@ import {
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -396,10 +397,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // null/blank), so 'blank' preferences from global settings must collapse to
   // the Claude default here — the blank-terminal affordance only lives in the
   // quick-create flow.
+  const enabledCatalogAgents = useMemo(
+    () =>
+      filterEnabledTuiAgents(
+        AGENT_CATALOG.map((agent) => agent.id),
+        settings?.disabledTuiAgents
+      ),
+    [settings?.disabledTuiAgents]
+  )
   const fallbackDefaultAgent: TuiAgent =
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
+    settings?.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
       ? settings.defaultTuiAgent
-      : 'claude'
+      : (enabledCatalogAgents[0] ?? 'claude')
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
@@ -776,11 +787,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (cancelled) {
         return
       }
-      if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && ids.length > 0) {
-        const firstInCatalogOrder = AGENT_CATALOG.find((a) => ids.includes(a.id))
+      const enabledIds = filterEnabledTuiAgents(ids, settings?.disabledTuiAgents)
+      if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
+        const firstInCatalogOrder = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
         if (firstInCatalogOrder) {
           setTuiAgent(firstInCatalogOrder.id)
         }
+      } else if (!isTuiAgentEnabled(tuiAgent, settings?.disabledTuiAgents)) {
+        const firstEnabledDetected = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
+        setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
     return () => {
@@ -790,7 +805,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // detection targets the correct host. Draft/settings deps are intentionally
     // excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, isRemote, selectedRepoSshStatus])
+  }, [connectionId, isRemote, selectedRepoSshStatus, settings?.disabledTuiAgents])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
@@ -1719,6 +1734,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ) {
       return
     }
+    if (!isTuiAgentEnabled(tuiAgent, settings?.disabledTuiAgents)) {
+      setTuiAgent(fallbackDefaultAgent)
+      toast.error('Selected agent is disabled. Choose an enabled agent before creating.')
+      return
+    }
 
     setCreateError(null)
     setCreating(true)
@@ -1917,6 +1937,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     sparseError,
     effectivePresetId,
     telemetrySource,
+    fallbackDefaultAgent,
+    settings?.disabledTuiAgents,
     tuiAgent,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
@@ -1924,7 +1946,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   ])
 
   const submitQuick = useCallback(
-    async (agent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: TuiAgent | null): Promise<void> => {
+      const agent =
+        requestedAgent && isTuiAgentEnabled(requestedAgent, settings?.disabledTuiAgents)
+          ? requestedAgent
+          : null
       const workspaceNameSeed = getWorkspaceSeedName({
         explicitName: name,
         prompt: '',
@@ -2171,6 +2197,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoIsGit,
       selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
+      settings?.disabledTuiAgents,
       setSidebarOpen,
       setupDecision,
       sparseEnabled,

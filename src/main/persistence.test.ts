@@ -1769,6 +1769,25 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('normalizes disabled TUI agents on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          disabledTuiAgents: ['codex', 'not-real', 'codex', 'claude']
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude'])
+
+    const updated = store.updateSettings({
+      disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
+    })
+    expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+  })
+
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {
     const store = await createStore()
     const current = store.getSettings().sourceControlAi!

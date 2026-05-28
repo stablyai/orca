@@ -110,6 +110,7 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
+import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -1267,6 +1268,7 @@ export class Store {
   private writeGeneration = 0
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
+  private settingsChangeListeners = new Set<(settings: GlobalSettings) => void>()
 
   constructor() {
     const loaded = this.load()
@@ -1572,6 +1574,7 @@ export class Store {
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
+            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
@@ -2625,8 +2628,24 @@ export class Store {
     return this.state.settings
   }
 
+  onSettingsChanged(listener: (settings: GlobalSettings) => void): () => void {
+    this.settingsChangeListeners.add(listener)
+    return () => {
+      this.settingsChangeListeners.delete(listener)
+    }
+  }
+
+  private notifySettingsChanged(): void {
+    for (const listener of this.settingsChangeListeners) {
+      listener(this.state.settings)
+    }
+  }
+
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    if ('disabledTuiAgents' in updates) {
+      sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
@@ -2697,6 +2716,7 @@ export class Store {
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
+    this.notifySettingsChanged()
     return this.state.settings
   }
 

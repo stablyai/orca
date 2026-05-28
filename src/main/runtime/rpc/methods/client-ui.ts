@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { PersistedUIState } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
@@ -75,6 +76,10 @@ const SettingsUpdate = z
       .transform((value) =>
         value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
       )
+      .optional(),
+    disabledTuiAgents: z
+      .unknown()
+      .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
     defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
     defaultTaskViewPreset: z
