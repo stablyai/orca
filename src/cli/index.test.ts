@@ -1311,6 +1311,54 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
+  it('passes all reset scope explicitly for no-flag orchestration reset', async () => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset: 'all' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'reset'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', {
+      all: true,
+      tasks: undefined,
+      messages: undefined
+    })
+  })
+
+  it.each([
+    {
+      args: ['orchestration', 'reset', '--all'],
+      params: { all: true, tasks: undefined, messages: undefined },
+      reset: 'all'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks'],
+      params: { all: undefined, tasks: true, messages: undefined },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--messages'],
+      params: { all: undefined, tasks: undefined, messages: true },
+      reset: 'messages'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks', '--messages'],
+      params: { all: undefined, tasks: true, messages: true },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--all', '--tasks'],
+      params: { all: true, tasks: true, messages: undefined },
+      reset: 'all'
+    }
+  ])('passes explicit reset flags through for $args', async ({ args, params, reset }) => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(args, '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', params)
+  })
+
   it('rejects unknown task-update status with an enum-aware error', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
