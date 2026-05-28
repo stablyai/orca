@@ -42,9 +42,10 @@ import {
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
-import { useRepoMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -98,6 +99,11 @@ import {
 } from '../../../shared/linear-links'
 import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import {
+  findGithubPrWorkspaceAttachment,
+  getGithubPrWorkspaceAttachmentLabel
+} from '@/lib/github-pr-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
 import PullRequestPage from '@/components/PullRequestPage'
@@ -1957,6 +1963,7 @@ export default function TaskPage(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
+  const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
@@ -3797,6 +3804,26 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForItem]
   )
 
+  const handleOpenOrUseGitHubPR = useCallback(
+    (item: GitHubWorkItem): void => {
+      const currentAttached = findGithubPrWorkspaceAttachment(
+        useAppStore.getState().allWorktrees(),
+        item.repoId,
+        item.number
+      )
+      if (!currentAttached) {
+        handleUseWorkItem(item)
+        return
+      }
+
+      const result = activateAndRevealWorktree(currentAttached.id)
+      if (result === false) {
+        toast.error('Unable to open the workspace attached to this pull request.')
+      }
+    },
+    [handleUseWorkItem]
+  )
+
   const openComposerForGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
@@ -5144,6 +5171,13 @@ export default function TaskPage(): React.JSX.Element {
                   {!showGitHubTaskSkeletons &&
                     filteredWorkItems.map((item) => {
                       const itemRepo = repoMap.get(item.repoId) ?? null
+                      const attachedWorkspace =
+                        item.type === 'pr'
+                          ? findGithubPrWorkspaceAttachment(allWorktrees, item.repoId, item.number)
+                          : null
+                      const attachedWorkspaceLabel = attachedWorkspace
+                        ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+                        : null
                       return (
                         // Why: the row is a clickable container rather than a
                         // <button> because it holds nested interactive elements
@@ -5226,6 +5260,12 @@ export default function TaskPage(): React.JSX.Element {
                                   {formatPRDelta(item)}
                                 </span>
                               ) : null}
+                              {attachedWorkspaceLabel ? (
+                                <span className="inline-flex min-w-0 items-center gap-1">
+                                  <FolderKanban className="size-3 shrink-0" />
+                                  <span className="truncate">{attachedWorkspaceLabel}</span>
+                                </span>
+                              ) : null}
                               {item.labels.slice(0, 3).map((label) => (
                                 <span
                                   key={label}
@@ -5283,37 +5323,96 @@ export default function TaskPage(): React.JSX.Element {
                           </Tooltip>
 
                           <div className="flex items-center justify-start gap-1 lg:justify-end">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                handleUseWorkItem(item)
-                              }}
-                              className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
-                            >
-                              Start
-                              <ArrowRight className="size-3" />
-                            </button>
-                            <DropdownMenu modal={false}>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
+                            {item.type === 'pr' ? (
+                              <DropdownMenu modal={false}>
+                                <ButtonGroup>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="xs"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      handleOpenOrUseGitHubPR(item)
+                                    }}
+                                    className="bg-background/80"
+                                    aria-label={
+                                      attachedWorkspace
+                                        ? 'Open workspace attached to PR'
+                                        : 'Start workspace from PR'
+                                    }
+                                  >
+                                    {attachedWorkspace ? 'Open' : 'Start'}
+                                    <ArrowRight className="size-3" />
+                                  </Button>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon-xs"
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="bg-background/80"
+                                      aria-label="More PR actions"
+                                    >
+                                      <ChevronDown className="size-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                </ButtonGroup>
+                                <DropdownMenuContent
+                                  align="end"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  {attachedWorkspace ? (
+                                    <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
+                                      <Plus className="size-4" />
+                                      Start new workspace
+                                    </DropdownMenuItem>
+                                  ) : null}
+                                  <DropdownMenuItem
+                                    onSelect={() => window.api.shell.openUrl(item.url)}
+                                  >
+                                    <ExternalLink className="size-4" />
+                                    Open in browser
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleUseWorkItem(item)
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
+                              >
+                                Start
+                                <ArrowRight className="size-3" />
+                              </button>
+                            )}
+                            {item.type !== 'pr' ? (
+                              <DropdownMenu modal={false}>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+                                    aria-label="More actions"
+                                  >
+                                    <EllipsisVertical className="size-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
-                                  aria-label="More actions"
                                 >
-                                  <EllipsisVertical className="size-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                <DropdownMenuItem
-                                  onSelect={() => window.api.shell.openUrl(item.url)}
-                                >
-                                  <ExternalLink className="size-4" />
-                                  Open in browser
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                  <DropdownMenuItem
+                                    onSelect={() => window.api.shell.openUrl(item.url)}
+                                  >
+                                    <ExternalLink className="size-4" />
+                                    Open in browser
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : null}
                           </div>
                         </div>
                       )

@@ -25,6 +25,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  FolderKanban,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -34,6 +35,7 @@ import {
   MessageSquarePlus,
   PanelLeftOpen,
   Pencil,
+  Plus,
   RefreshCw,
   Send,
   UndoDot,
@@ -98,6 +100,7 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -108,6 +111,10 @@ import {
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  findGithubPrWorkspaceAttachment,
+  getGithubPrWorkspaceAttachmentLabel
+} from '@/lib/github-pr-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -125,8 +132,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
-  TuiAgent,
-  Worktree
+  TuiAgent
 } from '../../../shared/types'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
@@ -3355,19 +3361,6 @@ function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[
   ].join('\n')
 }
 
-function findWorkspaceAttachedToPR(
-  worktrees: Worktree[],
-  repoId: string,
-  prNumber: number
-): Worktree | null {
-  return (
-    worktrees.find(
-      (worktree) =>
-        worktree.repoId === repoId && worktree.linkedPR === prNumber && !worktree.isArchived
-    ) ?? null
-  )
-}
-
 function pickDefaultAgent(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
   detectedAgents: TuiAgent[]
@@ -3533,7 +3526,7 @@ function ChecksTab({
     try {
       const prompt = buildFixBrokenChecksPrompt(item, list)
       const store = useAppStore.getState()
-      const attachedWorkspace = findWorkspaceAttachedToPR(
+      const attachedWorkspace = findGithubPrWorkspaceAttachment(
         store.allWorktrees(),
         targetRepoId,
         item.number
@@ -4955,6 +4948,17 @@ export default function PullRequestPage({
   const workItemLabels = workItem?.labels
   const workItemType = workItem?.type
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const allWorktrees = useAllWorktrees()
+  const attachedWorkspace = useMemo(
+    () =>
+      workItem?.type === 'pr'
+        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        : null,
+    [allWorktrees, effectiveRepoId, workItem]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+    : null
 
   // Why: the cache key has to include the issue source preference so a user
   // toggling between origin/upstream for the same issue number doesn't read
@@ -4994,6 +4998,39 @@ export default function PullRequestPage({
     const nextTab = workItemType === 'pr' ? (initialTab ?? 'conversation') : 'conversation'
     setTab(nextTab)
   }, [workItemId, workItemType, initialTab])
+
+  const handleUseWorkItem = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    const targetRepoId = effectiveRepoId
+    onUse(
+      targetRepoId && targetRepoId !== workItem.repoId
+        ? { ...workItem, repoId: targetRepoId }
+        : workItem
+    )
+  }, [effectiveRepoId, onUse, workItem])
+
+  const handleOpenOrUsePR = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    const targetRepoId = effectiveRepoId
+    const currentAttached = findGithubPrWorkspaceAttachment(
+      useAppStore.getState().allWorktrees(),
+      targetRepoId,
+      workItem.number
+    )
+    if (!currentAttached) {
+      handleUseWorkItem()
+      return
+    }
+
+    const result = activateAndRevealWorktree(currentAttached.id)
+    if (result === false) {
+      toast.error('Unable to open the workspace attached to this pull request.')
+    }
+  }, [effectiveRepoId, handleUseWorkItem, workItem])
 
   // Why: track comments added optimistically before the detail fetch resolves
   // so they can be merged into the fetch result instead of being overwritten.
@@ -5413,16 +5450,39 @@ export default function PullRequestPage({
           <div className="flex shrink-0 items-center gap-2">
             {/* Why: Orca's signature affordance — keep this primary so it stands out
                 against GitHub's familiar surface. */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onUse(workItem)}
-              className="gap-1.5 whitespace-nowrap"
-              aria-label="Start workspace from PR"
-            >
-              Start workspace from PR
-              <ArrowRight className="size-3.5" />
-            </Button>
+            <DropdownMenu modal={false}>
+              <ButtonGroup>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUsePR}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={
+                    attachedWorkspace ? 'Open workspace attached to PR' : 'Start workspace from PR'
+                  }
+                >
+                  {attachedWorkspace ? 'Open workspace' : 'Start workspace from PR'}
+                  <ArrowRight className="size-3.5" />
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="icon-sm" aria-label="More PR workspace actions">
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                {attachedWorkspace ? (
+                  <DropdownMenuItem onSelect={handleUseWorkItem}>
+                    <Plus className="size-4" />
+                    Start new workspace
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                  <ExternalLink className="size-4" />
+                  Open on GitHub
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
@@ -5457,6 +5517,12 @@ export default function PullRequestPage({
               · updated {formatRelativeTime(workItem.updatedAt)}
             </span>
           </span>
+          {attachedWorkspaceLabel ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <FolderKanban className="size-3.5 shrink-0" />
+              <span className="truncate">{attachedWorkspaceLabel}</span>
+            </span>
+          ) : null}
         </div>
       </div>
 
