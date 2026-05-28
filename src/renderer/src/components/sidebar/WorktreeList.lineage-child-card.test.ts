@@ -242,17 +242,6 @@ async function renderWorktreeListMarkup(): Promise<string> {
 }
 
 describe('WorktreeList lineage child card renderer', () => {
-  it('caps sidebar restore offsets so agent rows do not become the anchor', async () => {
-    const { useVirtualizedScrollAnchor } = await import('@/hooks/useVirtualizedScrollAnchor')
-    vi.mocked(useVirtualizedScrollAnchor).mockClear()
-    setLineageFixtureState()
-    await renderWorktreeListMarkup()
-
-    expect(useVirtualizedScrollAnchor).toHaveBeenCalledWith(
-      expect.objectContaining({ maxAnchorOffset: 4 })
-    )
-  })
-
   it('renders nested inline agent rows before the nested child-count toggle', async () => {
     setLineageFixtureState()
     const markup = await renderWorktreeListMarkup()

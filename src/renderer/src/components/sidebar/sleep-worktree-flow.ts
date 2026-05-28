@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/virtualizedScrollAnchorState'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)

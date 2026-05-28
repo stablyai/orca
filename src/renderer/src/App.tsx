@@ -110,7 +110,7 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import type { VirtualizedScrollAnchor } from './hooks/virtualizedScrollAnchorState'
+import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'

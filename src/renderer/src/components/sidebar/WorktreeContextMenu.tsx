@@ -38,7 +38,7 @@ import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flo
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/virtualizedScrollAnchorState'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'

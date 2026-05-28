@@ -14,7 +14,7 @@ import AddRepoDialog from './AddRepoDialog'
 import ProjectAddedDialog from './ProjectAddedDialog'
 import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
-import type { VirtualizedScrollAnchor } from '@/hooks/virtualizedScrollAnchorState'
+import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
