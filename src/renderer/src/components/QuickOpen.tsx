@@ -21,9 +21,10 @@ import {
  * within the target string (case-insensitive). Returns a score (lower = better)
  * or -1 if no match.
  */
-function fuzzyMatch(query: string, target: string): number {
-  const q = query.toLowerCase()
-  const t = target.toLowerCase()
+// Why: q, t, and filename are pre-lowercased by the caller. Lowercasing the
+// target (and filename) here would repeat that work over the entire file list
+// on every keystroke; the caller memoizes it per file instead.
+export function fuzzyMatch(q: string, t: string, filename: string): number {
   let qi = 0
   let score = 0
   let lastMatchIdx = -1
@@ -47,8 +48,6 @@ function fuzzyMatch(query: string, target: string): number {
   }
 
   // Prefer matches where query appears in the filename (last segment)
-  const lastSlash = target.lastIndexOf('/')
-  const filename = target.slice(lastSlash + 1).toLowerCase()
   if (filename.includes(q)) {
     score -= 100 // strong reward for filename match
   }
@@ -296,23 +295,34 @@ export default function QuickOpen(): React.JSX.Element | null {
     }
   }, [visible, activeWorktreeId, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
+  // Why: lowercase each path (and its filename segment) once per file-list
+  // change instead of re-lowercasing the whole list on every keystroke.
+  const searchableFiles = useMemo(
+    () =>
+      files.map((path) => {
+        const lower = path.toLowerCase()
+        return { path, lower, filename: lower.slice(lower.lastIndexOf('/') + 1) }
+      }),
+    [files]
+  )
+
   // Filter files by fuzzy match
   const filtered = useMemo(() => {
-    const normalizedQuery = deferredQuery.trim()
+    const normalizedQuery = deferredQuery.trim().toLowerCase()
     if (!normalizedQuery) {
       // Show first 50 files when no query
       return files.slice(0, 50).map((f) => ({ path: f, score: 0 }))
     }
     const results: { path: string; score: number }[] = []
-    for (const f of files) {
-      const score = fuzzyMatch(normalizedQuery, f)
+    for (const f of searchableFiles) {
+      const score = fuzzyMatch(normalizedQuery, f.lower, f.filename)
       if (score !== -1) {
-        results.push({ path: f, score })
+        results.push({ path: f.path, score })
       }
     }
     results.sort((a, b) => a.score - b.score)
     return results.slice(0, 50)
-  }, [deferredQuery, files])
+  }, [deferredQuery, files, searchableFiles])
 
   const handleSelect = useCallback(
     (relativePath: string) => {
