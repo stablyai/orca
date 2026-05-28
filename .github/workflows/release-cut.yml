@@ -64,13 +64,13 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
     steps:
       - name: Checkout ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
@@ -424,7 +424,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -492,18 +492,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
           cache: pnpm
@@ -526,7 +526,7 @@ jobs:
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.eb_cache_path }}
           key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -538,7 +538,7 @@ jobs:
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
       - name: Install dependencies
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -629,7 +629,7 @@ jobs:
       # don't require a manual re-run.
       - name: Publish release artifacts (macOS)
         if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 45
           max_attempts: 3
@@ -645,7 +645,7 @@ jobs:
 
       - name: Publish release artifacts
         if: matrix.platform != 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -705,10 +705,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
