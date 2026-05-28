@@ -375,6 +375,25 @@ describe('file RPC methods', () => {
     expect(runtime.writeFileExplorerFileBase64).not.toHaveBeenCalled()
   })
 
+  it('rejects a base64 chunk write with missing content (inherits the schema)', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.writeBase64Chunk', {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        append: true
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.writeFileExplorerFileBase64Chunk).not.toHaveBeenCalled()
+  })
+
   it('commits staged runtime uploads without clobbering the final destination', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
