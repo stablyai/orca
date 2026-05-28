@@ -56,6 +56,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -67,7 +68,7 @@ function mockStats(dev: number, ino: number) {
 
 function createRuntimeFileCommands() {
   const store = {
-    getRepo: vi.fn(() => undefined)
+    getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
@@ -212,6 +213,30 @@ describe('RuntimeFileCommands', () => {
       commands.renameFileExplorerPath('id:wt-1', 'src/README.md', 'docs/readme.md')
     ).rejects.toThrow("A file or folder named 'readme.md' already exists in this location")
 
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('routes runtime remote rename through the SSH no-clobber provider method', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')
+
+    expect(renameNoClobber).toHaveBeenCalledWith('/repo/old.ts', '/repo/new.ts')
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates runtime remote no-clobber rename failures', async () => {
+    const renameNoClobber = vi.fn().mockRejectedValue(new Error('destination exists'))
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
+      'destination exists'
+    )
     expect(renameMock).not.toHaveBeenCalled()
   })
 

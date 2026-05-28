@@ -140,6 +140,7 @@ export type IFilesystemProvider = {
   createDir(dirPath: string): Promise<void>
   createDirNoClobber(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
+  renameNoClobber(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>

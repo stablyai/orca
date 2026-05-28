@@ -53,7 +53,7 @@ import {
   getSshFilesystemProvider,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
-import { assertFileExplorerRenameDestinationAvailable } from '../../shared/file-explorer-rename-collision'
+import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
@@ -543,14 +543,14 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.rename(oldTarget.path, newTarget.path)
+      await provider.renameNoClobber(oldTarget.path, newTarget.path)
       return { ok: true }
     }
 
     const store = this.host.requireStore()
     const oldPath = await resolveAuthorizedPath(oldTarget.path, store, { preserveSymlink: true })
     const newPath = await resolveAuthorizedPath(newTarget.path, store, { preserveSymlink: true })
-    await assertFileExplorerRenameDestinationAvailable(oldPath, newPath)
+    await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
     await rename(oldPath, newPath)
     return { ok: true }
   }
