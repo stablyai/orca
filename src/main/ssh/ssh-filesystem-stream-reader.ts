@@ -167,7 +167,7 @@ export async function readFileViaStream(
         return
       }
       // Why: redundant given the per-chunk length + count checks, but kept as a
-      // last-line invariant guard — never resolve with fewer bytes than declared.
+      // last-line invariant guard; never resolve with fewer bytes than declared.
       if (bytesReceived !== totalSize) {
         fail(
           new StreamProtocolError(

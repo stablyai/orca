@@ -209,4 +209,31 @@ describe('SshFilesystemProvider readFile streaming', () => {
     })
     await expect(provider.readFile('/home/x.bin')).rejects.toThrow(/length mismatch/i)
   })
+
+  it('rejects a short non-final chunk before later chunks arrive', async () => {
+    const totalSize = 256 * 1024 * 2
+    mux.request.mockImplementation(async () => {
+      setImmediate(() => {
+        mux._emitMethod('fs.streamChunk', {
+          streamId: 1,
+          seq: 0,
+          data: Buffer.alloc(1).toString('base64')
+        })
+        mux._emitMethod('fs.streamChunk', {
+          streamId: 1,
+          seq: 1,
+          data: Buffer.alloc(256 * 1024).toString('base64')
+        })
+        mux._emitMethod('fs.streamEnd', { streamId: 1 })
+      })
+      return {
+        streamId: 1,
+        totalSize,
+        isBinary: true,
+        chunkEncoding: 'base64',
+        resultEncoding: 'base64'
+      }
+    })
+    await expect(provider.readFile('/home/x.bin')).rejects.toThrow(/length mismatch/i)
+  })
 })
