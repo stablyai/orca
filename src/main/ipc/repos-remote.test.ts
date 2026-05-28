@@ -581,14 +581,15 @@ function createMockCloneProcess(): MockCloneProcess {
 }
 
 async function waitForAssertion(assertion: () => void): Promise<void> {
+  const deadline = Date.now() + 2_000
   let lastError: unknown
-  for (let i = 0; i < 50; i++) {
+  while (Date.now() < deadline) {
     try {
       assertion()
       return
     } catch (error) {
       lastError = error
-      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setTimeout(resolve, 10))
     }
   }
   throw lastError
