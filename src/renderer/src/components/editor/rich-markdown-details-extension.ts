@@ -72,7 +72,7 @@ export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
   return true
 }
 
-export function deleteFromEmptyDetailsBodyIntoSummary(editor: Editor): boolean {
+export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
   const { state, view } = editor
   const { selection } = state
   const { $from, empty } = selection
@@ -91,7 +91,11 @@ export function deleteFromEmptyDetailsBodyIntoSummary(editor: Editor): boolean {
   }
 
   const detailsContentNode = $from.node(detailsContentDepth)
-  if (detailsContentNode.type.name !== 'detailsContent' || $from.index(detailsContentDepth) !== 0) {
+  if (
+    detailsContentNode.type.name !== 'detailsContent' ||
+    detailsContentNode.childCount !== 1 ||
+    $from.index(detailsContentDepth) !== 0
+  ) {
     return false
   }
 
@@ -110,16 +114,9 @@ export function deleteFromEmptyDetailsBodyIntoSummary(editor: Editor): boolean {
   const summaryStart = detailsStart + 1
   const summaryTextEnd = summaryStart + summaryNode.nodeSize - 1
 
-  if (summaryNode.content.size === 0) {
-    const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(summaryTextEnd), -1))
-    tr.scrollIntoView()
-    view.dispatch(tr)
-    return true
-  }
-
-  const deleteFrom = summaryTextEnd - 1
-  const tr = state.tr.delete(deleteFrom, summaryTextEnd)
-  tr.setSelection(TextSelection.near(tr.doc.resolve(deleteFrom), -1))
+  // Why: Backspace from an empty toggle body should first make the summary
+  // cursor visible; deletion is reserved for the next Backspace.
+  const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(summaryTextEnd), -1))
   tr.scrollIntoView()
   view.dispatch(tr)
 
@@ -224,7 +221,7 @@ const OrcaDetailsContent = DetailsContent.extend({
     return {
       ...parentShortcuts,
       Backspace: ({ editor }) =>
-        deleteFromEmptyDetailsBodyIntoSummary(editor) ||
+        moveFromEmptyDetailsBodyToSummary(editor) ||
         parentShortcuts.Backspace?.({ editor }) ||
         false
     }

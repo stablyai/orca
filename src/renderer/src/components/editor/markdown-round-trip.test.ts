@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
-import { deleteFromEmptyDetailsBodyIntoSummary } from './rich-markdown-details-extension'
+import { moveFromEmptyDetailsBodyToSummary } from './rich-markdown-details-extension'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import type { SlashCommandId } from './rich-markdown-commands'
 import { slashCommands } from './rich-markdown-commands'
@@ -174,14 +174,14 @@ describe('rich markdown round trip', () => {
     [
       'text toggle',
       '<details><summary>Toggle</summary><p></p></details>',
-      '<details class="orca-details">\n<summary>Toggl</summary>\n\n\n\n</details>'
+      '<details class="orca-details">\n<summary>Toggle</summary>\n\n\n\n</details>'
     ],
     [
       'heading toggle',
       '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p></p></details>',
-      '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggl</summary>\n\n\n\n</details>'
+      '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\n\n\n</details>'
     ]
-  ])('backspaces from an empty %s body into the summary', (_name, content, expected) => {
+  ])('moves backspace from an empty %s body to the summary', (_name, content, expected) => {
     const editor = new Editor({
       element: null,
       extensions: createRichMarkdownExtensions(),
@@ -192,9 +192,45 @@ describe('rich markdown round trip', () => {
     try {
       editor.commands.setTextSelection(firstDetailsBodyCursorPosition(editor))
 
-      expect(deleteFromEmptyDetailsBodyIntoSummary(editor)).toBe(true)
+      expect(moveFromEmptyDetailsBodyToSummary(editor)).toBe(true)
       expect(editor.getMarkdown().trimEnd()).toBe(expected)
       expect(editor.state.selection.$from.parent.type.name).toBe('detailsSummary')
+      expect(editor.state.selection.$from.parentOffset).toBe('Toggle'.length)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('does not hijack backspace when an empty first toggle body line has content after it', () => {
+    const editor = new Editor({
+      element: null,
+      extensions: createRichMarkdownExtensions(),
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'details',
+            attrs: { open: true, variant: null },
+            content: [
+              { type: 'detailsSummary', content: [{ type: 'text', text: 'Toggle' }] },
+              {
+                type: 'detailsContent',
+                content: [
+                  { type: 'paragraph' },
+                  { type: 'paragraph', content: [{ type: 'text', text: 'Body' }] }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    })
+
+    try {
+      editor.commands.setTextSelection(firstDetailsBodyCursorPosition(editor))
+
+      expect(moveFromEmptyDetailsBodyToSummary(editor)).toBe(false)
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
     } finally {
       editor.destroy()
     }
