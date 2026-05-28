@@ -242,6 +242,37 @@ describe('createIpcPtyTransport', () => {
     expect(onBell).toHaveBeenCalledTimes(1)
   })
 
+  it('bounds the eager buffer to its cap and keeps the most recent output', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // 8 x 100 KB = 800 KB of distinct chunks, exceeding the 512 KB cap; the
+    // earliest chunks must be dropped while the prompt-bearing tail is kept.
+    for (let i = 0; i < 8; i += 1) {
+      onData?.({ id: 'pty-restored', data: String.fromCharCode(65 + i).repeat(100 * 1024) })
+    }
+    onData?.({ id: 'pty-restored', data: 'PROMPT$' })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('PROMPT$')).toBe(true)
+    expect(flushed).not.toContain('A') // oldest chunk trimmed
+  })
+
+  it('caps a single oversized eager chunk to its most-recent tail', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // One chunk larger than the cap must not be stored whole.
+    onData?.({ id: 'pty-restored', data: `${'x'.repeat(cap)}TAIL$` })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('TAIL$')).toBe(true)
+  })
+
   it('routes eager-buffered bytes through onReplayData so the renderer can engage the replay guard', async () => {
     const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
 

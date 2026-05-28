@@ -170,16 +170,28 @@ export function registerEagerPtyBuffer(
 ): EagerPtyHandle {
   ensurePtyDispatcher()
 
-  const buffer: string[] = []
+  // Why: a head index instead of Array.shift() — shift() is O(n), making
+  // pre-attach buffering quadratic under many small chunks. Compaction is deferred.
+  const chunks: string[] = []
+  let head = 0
   let bufferBytes = 0
 
   const dataHandler = (data: string): void => {
-    buffer.push(data)
-    bufferBytes += data.length
-    // Trim from the front when the buffer exceeds the cap, keeping the
-    // most recent output which contains the shell prompt.
-    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && buffer.length > 1) {
-      bufferBytes -= buffer.shift()!.length
+    // A single chunk larger than the cap would otherwise bypass trimming and
+    // store the whole payload; keep only its most-recent tail.
+    const chunk = data.length > EAGER_BUFFER_MAX_BYTES ? data.slice(-EAGER_BUFFER_MAX_BYTES) : data
+    chunks.push(chunk)
+    bufferBytes += chunk.length
+    // Drop whole leading chunks (keeping the prompt-bearing tail) until within cap.
+    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && head < chunks.length - 1) {
+      bufferBytes -= chunks[head].length
+      chunks[head] = ''
+      head += 1
+    }
+    // Compact when dead slots reach half the array so it can't grow unbounded.
+    if (head > 0 && head * 2 >= chunks.length) {
+      chunks.splice(0, head)
+      head = 0
     }
   }
   const exitHandler = (code: number): void => {
@@ -197,8 +209,10 @@ export function registerEagerPtyBuffer(
 
   const handle: EagerPtyHandle = {
     flush() {
-      const data = buffer.join('')
-      buffer.length = 0
+      const data = chunks.slice(head).join('')
+      chunks.length = 0
+      head = 0
+      bufferBytes = 0
       return data
     },
     dispose() {
