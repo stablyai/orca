@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
