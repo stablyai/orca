@@ -409,10 +409,10 @@ export type TerminalTab = {
    *  not by the user doing work. Without this flag the resulting
    *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
    *  sidebar's recency sort on every click — the reorder-on-click bug. The
-   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
-   *  `updateTabPtyId` that follows, which then suppresses the activity bump
-   *  and the `sortEpoch` increment. Never persisted — it is a transient
-   *  handoff between the two calls. */
+   *  flag is set by `setActiveWorktree` and activation-created tabs. If the
+   *  tab has no live PTY, rendering defers the shell spawn until explicit
+   *  terminal intent; otherwise the first `updateTabPtyId` consumes it and
+   *  suppresses the activity bump and `sortEpoch` increment. Never persisted. */
   pendingActivationSpawn?: boolean
 }
 

@@ -9,6 +9,8 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import { shouldDeferActivationTerminalSpawn } from '../terminal/activation-terminal-spawn'
+import { DeferredActivationTerminal } from '../terminal/DeferredActivationTerminal'
 
 type TerminalOverlayAssignment = {
   groupId: string
@@ -21,8 +23,7 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
 
 type TerminalOverlaySlotProps = {
-  terminalTabId: string
-  terminalGeneration: number | undefined
+  terminalTab: TerminalTab
   worktreeId: string
   worktreePath: string
   groupId: string | undefined
@@ -32,12 +33,14 @@ type TerminalOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   closeTab: (tabId: string) => void
+  startPendingActivationTerminal: (tabId: string) => void
   leaveWorktreeIfEmpty: () => void
+  ptyIdsByTabId: Record<string, string[]>
+  hasQueuedLaunch: boolean
 }
 
 const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
-  terminalTabId,
-  terminalGeneration,
+  terminalTab,
   worktreeId,
   worktreePath,
   groupId,
@@ -47,8 +50,12 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
   closeTab,
-  leaveWorktreeIfEmpty
+  startPendingActivationTerminal,
+  leaveWorktreeIfEmpty,
+  ptyIdsByTabId,
+  hasQueuedLaunch
 }: TerminalOverlaySlotProps): React.JSX.Element {
+  const terminalTabId = terminalTab.id
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const [shouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
@@ -84,9 +91,21 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [groupId, onFocusOwningGroup])
 
-  const terminalPane = (
+  const shouldDeferSpawn =
+    activityTerminalPortal === null &&
+    shouldDeferActivationTerminalSpawn({
+      tab: terminalTab,
+      ptyIdsByTabId,
+      hasQueuedLaunch
+    })
+  const terminalPane = shouldDeferSpawn ? (
+    <DeferredActivationTerminal
+      key={`${terminalTabId}-deferred`}
+      onStart={() => startPendingActivationTerminal(terminalTabId)}
+    />
+  ) : (
     <TerminalPane
-      key={`${terminalTabId}-${terminalGeneration ?? 0}`}
+      key={`${terminalTabId}-${terminalTab.generation ?? 0}`}
       tabId={terminalTabId}
       worktreeId={worktreeId}
       cwd={worktreePath}
@@ -152,6 +171,15 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const closeTab = useAppStore((state) => state.closeTab)
+  const startPendingActivationTerminal = useAppStore(
+    (state) => state.startPendingActivationTerminal
+  )
+  const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
+  const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
+  const pendingSetupSplitByTabId = useAppStore((state) => state.pendingSetupSplitByTabId)
+  const pendingIssueCommandSplitByTabId = useAppStore(
+    (state) => state.pendingIssueCommandSplitByTabId
+  )
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
@@ -216,8 +244,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         return (
           <TerminalOverlaySlot
             key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
+            terminalTab={terminalTab}
             worktreeId={worktreeId}
             worktreePath={worktreePath}
             groupId={assignment?.groupId}
@@ -227,7 +254,14 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}
             closeTab={closeTab}
+            startPendingActivationTerminal={startPendingActivationTerminal}
             leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            ptyIdsByTabId={ptyIdsByTabId}
+            hasQueuedLaunch={
+              pendingStartupByTabId[terminalTab.id] !== undefined ||
+              pendingSetupSplitByTabId[terminalTab.id] !== undefined ||
+              pendingIssueCommandSplitByTabId[terminalTab.id] !== undefined
+            }
           />
         )
       })}

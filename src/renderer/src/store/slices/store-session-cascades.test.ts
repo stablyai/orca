@@ -1092,9 +1092,8 @@ describe('terminal slice behaviors', () => {
 
   // Why: first-visit worktrees (no tabs yet) trigger Terminal.tsx's activation
   // fallback which calls createTab(). That auto-created tab passes
-  // pendingActivationSpawn: true so its PTY spawn is suppressed — otherwise
-  // clicking a never-visited worktree in the sidebar would stamp lastActivityAt
-  // and reshuffle Recent/Smart (the user-reported bounce ~5s after click).
+  // pendingActivationSpawn: true so any live reattach is recency-suppressed
+  // and stale/dead PTYs can defer shell spawn until explicit terminal intent.
   it('does not bump lastActivityAt when createTab auto-creates for a first-visit worktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -1139,6 +1138,18 @@ describe('terminal slice behaviors', () => {
       })
     )
     // Flag is consumed — later legitimate respawns still bump.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
+  it('clears the activation-spawn deferral when the user starts the terminal', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const tab = store
+      .getState()
+      .createTab(worktreeId, undefined, undefined, { pendingActivationSpawn: true })
+
+    store.getState().startPendingActivationTerminal(tab.id)
+
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 

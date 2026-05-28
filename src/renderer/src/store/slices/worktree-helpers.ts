@@ -40,13 +40,12 @@ export type WorktreeSlice = {
   /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
-   * TerminalPane mounts for the first time, tabs reattach or fresh-spawn
-   * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
-   * are all side-effects of the click — not real activity. On first
-   * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. After the first activation we do NOT re-tag,
-   * so subsequent events on the worktree (codex restart, new pane spawn,
-   * agent output) count normally. Session-only; never persisted.
+   * terminal tabs may reattach or otherwise become eligible to spawn. On first
+   * activation we tag every terminal tab with `pendingActivationSpawn` so live
+   * reattach recency is suppressed and stale/dead PTYs defer shell spawn until
+   * explicit terminal intent. After the first activation we do NOT re-tag, so
+   * subsequent events (codex restart, new pane spawn, agent output) count
+   * normally. Session-only; never persisted.
    */
   everActivatedWorktreeIds: Set<string>
   /**

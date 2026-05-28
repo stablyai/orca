@@ -1793,12 +1793,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // and user input is silently dropped.
       //
       // Why pendingActivationSpawn + first-activation check: the first time a
-      // worktree is activated in this session, its TerminalPane mounts and
-      // each tab's PTY either reattaches (restored session) or fresh-spawns
-      // (never visited). Both paths call updateTabPtyId; neither is real
-      // activity — they are side-effects of the click. Tag every tab on the
-      // FIRST activation so the resulting updateTabPtyId suppresses both the
-      // activity bump and the sortEpoch bump.
+      // worktree is activated in this session, any terminal process work is a
+      // side effect of the click. Tag every tab on the FIRST activation so live
+      // reattaches suppress recency, and stale/dead tabs can defer shell spawn
+      // until explicit terminal intent.
       //
       // We can't use tab.ptyId==null as the guard (what the old `allDead`
       // check did): reconnectPersistedTerminals re-populates tab.ptyId with

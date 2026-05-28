@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname, join } from 'path'
+import { extname } from 'path'
 import type { ChildProcess } from 'child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -151,22 +151,17 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 async function isDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  resolveEntryPath: (entryPath: string) => Promise<string>
+  _resolveEntryPath: (entryPath: string) => Promise<string>
 ): Promise<boolean> {
   if (entry.isDirectory()) {
     return true
   }
-  if (!entry.isSymbolicLink()) {
-    return false
-  }
-  try {
-    // Why: directory symlinks inside a workspace should navigate like folders
-    // without bypassing the local authorized-path boundary.
-    const entryPath = await resolveEntryPath(join(dirPath, entry.name))
-    return (await stat(entryPath)).isDirectory()
-  } catch {
-    return false
-  }
+  // Why: following a symlink just to decorate readDir can touch macOS
+  // TCC-protected app containers. Treat links as file-like until the user
+  // explicitly opens them.
+  void dirPath
+  void _resolveEntryPath
+  return false
 }
 
 export function registerFilesystemHandlers(
