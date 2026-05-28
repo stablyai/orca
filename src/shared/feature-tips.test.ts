@@ -10,7 +10,7 @@ describe('feature tips', () => {
   it('orders new unseen tips before older unseen tips', () => {
     const tips = getOrderedUnseenFeatureTips({ seenTipIds: new Set<FeatureTipId>() })
 
-    expect(tips.map((tip) => tip.id)).toEqual(['voice-dictation'])
+    expect(tips.map((tip) => tip.id)).toEqual(['voice-dictation', 'agent-status-sidebar'])
   })
 
   it('skips tips the user has already seen', () => {
@@ -18,7 +18,7 @@ describe('feature tips', () => {
       seenTipIds: new Set<FeatureTipId>(['voice-dictation'])
     })
 
-    expect(tips.map((tip) => tip.id)).toEqual([])
+    expect(tips.map((tip) => tip.id)).toEqual(['agent-status-sidebar'])
   })
 
   it('skips tips for features the user has already completed', () => {
@@ -27,7 +27,7 @@ describe('feature tips', () => {
       completedTipIds: getCompletedFeatureTipIds({ voiceDictationEnabled: true })
     })
 
-    expect(tips.map((tip) => tip.id)).toEqual([])
+    expect(tips.map((tip) => tip.id)).toEqual(['agent-status-sidebar'])
   })
 
   it('normalizes persisted tip ids', () => {

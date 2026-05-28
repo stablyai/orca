@@ -68,7 +68,7 @@ describe('feature tip startup gate', () => {
     expect(
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
-        featureTipsSeenIds: ['voice-dictation'],
+        featureTipsSeenIds: ['voice-dictation', 'agent-status-sidebar'],
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
@@ -78,7 +78,7 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'skip' })
   })
 
-  it('does not open after voice dictation is already enabled', () => {
+  it('opens the next tip after voice dictation is already enabled', () => {
     expect(
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
@@ -89,6 +89,6 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(true),
         suppressedByOnboardingThisSession: false
       })
-    ).toEqual({ kind: 'skip' })
+    ).toEqual({ kind: 'open', tipId: 'agent-status-sidebar' })
   })
 })

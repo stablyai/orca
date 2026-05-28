@@ -1,18 +1,26 @@
-export type FeatureTipId = 'voice-dictation'
+export type FeatureTipId = 'voice-dictation' | 'agent-status-sidebar'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
-export type FeatureTipAction = 'enable-voice'
+export type FeatureTipAction = 'enable-voice' | 'open-agent-status-release-notes'
 
-export type FeatureTip = {
+type FeatureTipBase = {
   id: FeatureTipId
   priority: FeatureTipPriority
   eyebrow: string
   title: string
   description: string
-  action: FeatureTipAction
   ctaLabel: string
 }
+
+export type FeatureTip =
+  | (FeatureTipBase & {
+      action: 'enable-voice'
+    })
+  | (FeatureTipBase & {
+      action: 'open-agent-status-release-notes'
+      releaseNotesUrl: string
+    })
 
 export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
@@ -28,6 +36,17 @@ export const FEATURE_TIPS = [
       'Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.',
     action: 'enable-voice',
     ctaLabel: 'Set Up Voice'
+  },
+  {
+    id: 'agent-status-sidebar',
+    priority: 'new',
+    eyebrow: 'New in 1.3.41',
+    title: "See every agent's live status in the sidebar",
+    description:
+      'Worktree cards now show each agent inline with a status dot, so you can spot what is working and what is done without opening every terminal.',
+    action: 'open-agent-status-release-notes',
+    ctaLabel: "See What's New",
+    releaseNotesUrl: 'https://onorca.dev/changelog/1-3-41'
   }
 ] as const satisfies readonly FeatureTip[]
 

@@ -1407,6 +1407,80 @@
   transform-origin: center;
 }
 
+/* Why: feature-tip source GIFs are storyboard references; the app ships
+   token-driven authored motion that works offline and respects reduced motion. */
+@keyframes feature-tip-agent-row {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  18%,
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes feature-tip-agent-card-highlight {
+  0%,
+  100% {
+    border-color: var(--sidebar-border);
+  }
+  32%,
+  76% {
+    border-color: color-mix(in srgb, var(--ring) 45%, var(--sidebar-border));
+  }
+}
+
+@keyframes feature-tip-agent-terminal-line {
+  0%,
+  24% {
+    opacity: 0.35;
+    width: 4rem;
+  }
+  52%,
+  76% {
+    opacity: 0.9;
+    width: 7rem;
+  }
+  100% {
+    opacity: 0.55;
+    width: 5rem;
+  }
+}
+
+.feature-tip-agent-row {
+  animation: feature-tip-agent-row 3.8s cubic-bezier(0.32, 0.72, 0, 1) infinite both;
+}
+
+.feature-tip-agent-card-highlight {
+  animation: feature-tip-agent-card-highlight 3.8s ease-in-out infinite;
+}
+
+.feature-tip-agent-terminal-line {
+  animation: feature-tip-agent-terminal-line 3.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-waveform,
+  .feature-tip-agent-row,
+  .feature-tip-agent-card-highlight,
+  .feature-tip-agent-terminal-line {
+    animation: none !important;
+  }
+
+  .feature-tip-agent-row {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* ── Feature wall: agents-orchestration animations ───────────────── */
 
 /* Why: drives the supported-agents marquee on page 1 of the agents tile.

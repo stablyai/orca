@@ -36,7 +36,7 @@ describe('feature tip modal state', () => {
   it('returns no tip when every tip is already seen and no modal tip id is pinned', () => {
     const tip = getFeatureTipForModal({
       modalData: {},
-      seenTipIds: ['voice-dictation'],
+      seenTipIds: ['voice-dictation', 'agent-status-sidebar'],
       settings: makeSettings()
     })
 
