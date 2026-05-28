@@ -57,6 +57,13 @@ describe('shouldPollActiveGitStatus', () => {
     expect(shouldPollActiveGitStatus(pollArgs({ openFiles: [openFile] }))).toBe(true)
   })
 
+  it('treats missing open files as no editor-visible worktree', () => {
+    const args = pollArgs()
+    delete args.openFiles
+
+    expect(shouldPollActiveGitStatus(args)).toBe(false)
+  })
+
   it('keeps existing background polling for ordinary paths', () => {
     expect(shouldPollActiveGitStatus(pollArgs({ worktreePath: '/Users/me/dev/repo' }))).toBe(true)
   })

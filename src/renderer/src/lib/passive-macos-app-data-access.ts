@@ -21,7 +21,7 @@ export function shouldPollActiveGitStatus(args: {
   worktreePath: string | null
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
-  openFiles: OpenFile[]
+  openFiles?: OpenFile[]
   userAgent?: string
 }): boolean {
   if (!args.activeWorktreeId || !args.worktreePath) {
@@ -35,7 +35,7 @@ export function shouldPollActiveGitStatus(args: {
   ) {
     return true
   }
-  if (args.openFiles.some((file) => file.worktreeId === args.activeWorktreeId)) {
+  if ((args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)) {
     return true
   }
   // Why: macOS app-container paths can trigger the "data from other apps"
