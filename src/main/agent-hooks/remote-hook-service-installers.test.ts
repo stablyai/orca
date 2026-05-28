@@ -228,11 +228,12 @@ describe('remote hook service installers', () => {
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
-    for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'PreToolUse']) {
+    for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
       expect(command).toMatch(/^if \[ -x /)
     }
+    expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
     const antigravityConfig = JSON.parse(
       antigravity.fs.files.get('/home/dev/.gemini/config/hooks.json')!
@@ -359,6 +360,54 @@ describe('remote hook service installers', () => {
     )
     expect(postToolCommands).toContain('echo user-authored')
     expect(postToolCommands.some((command) => command.includes('antigravity-hook.sh'))).toBe(true)
+  })
+
+  it('removes stale remote Gemini PreToolUse hooks while preserving user-authored hooks', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.files.set(
+      '/home/dev/.gemini/settings.json',
+      `${JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command:
+                      "if [ -x '/tmp/old/agent-hooks/gemini-hook.sh' ]; then /bin/sh '/tmp/old/agent-hooks/gemini-hook.sh'; fi"
+                  }
+                ]
+              },
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'echo user-authored'
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )}\n`
+    )
+
+    await new GeminiHookService().installRemote(sftp, '/home/dev')
+
+    const config = JSON.parse(fs.files.get('/home/dev/.gemini/settings.json')!) as {
+      hooks: Record<string, { hooks?: { command: string }[] }[]>
+    }
+    const preToolCommands = config.hooks.PreToolUse.flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(preToolCommands).toEqual(['echo user-authored'])
+    const beforeToolCommands = config.hooks.BeforeTool.flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(beforeToolCommands.some((command) => command.includes('gemini-hook.sh'))).toBe(true)
   })
 
   it('installs remote Copilot hooks under the user-level hooks directory', async () => {

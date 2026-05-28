@@ -232,6 +232,24 @@ export class GeminiHookService {
       const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
+      const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+      // Why: remote installs must sweep legacy managed event buckets too.
+      // Otherwise stale PreToolUse entries keep warning in SSH Gemini sessions.
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName)) {
+          continue
+        }
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
 
       for (const eventName of GEMINI_EVENTS) {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []

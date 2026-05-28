@@ -47,6 +47,16 @@ describe('GeminiHookService', () => {
   })
 
   it('removes stale PreToolUse hooks when reinstalling managed Gemini hooks', () => {
+    const managedHookFileName = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
+    const staleManagedHookPath =
+      process.platform === 'win32'
+        ? `C:\\Users\\ramzi\\.orca\\agent-hooks\\${managedHookFileName}`
+        : `/Users/ramzi/.orca/agent-hooks/${managedHookFileName}`
+    const staleManagedCommand =
+      process.platform === 'win32'
+        ? staleManagedHookPath
+        : `if [ -x '${staleManagedHookPath}' ]; then /bin/sh '${staleManagedHookPath}'; fi`
+    const managedHookPath = join(homeDir, '.orca', 'agent-hooks', managedHookFileName)
     const configDir = join(homeDir, '.gemini')
     mkdirSync(configDir, { recursive: true })
     writeFileSync(
@@ -64,8 +74,7 @@ describe('GeminiHookService', () => {
                 hooks: [
                   {
                     type: 'command',
-                    command:
-                      "if [ -x '/Users/ramzi/.orca/agent-hooks/gemini-hook.sh' ]; then /bin/sh '/Users/ramzi/.orca/agent-hooks/gemini-hook.sh'; fi"
+                    command: staleManagedCommand
                   }
                 ]
               }
@@ -91,9 +100,9 @@ describe('GeminiHookService', () => {
     expect(config.hooks.PreToolUse).toBeUndefined()
     expect(config.hooks.BeforeAgent).toHaveLength(2)
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
-    expect(config.hooks.BeforeAgent[1].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
-    expect(config.hooks.AfterAgent[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
-    expect(config.hooks.AfterTool[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
-    expect(config.hooks.BeforeTool[0].hooks[0].command).toContain('agent-hooks/gemini-hook.sh')
+    expect(config.hooks.BeforeAgent[1].hooks[0].command).toContain(managedHookPath)
+    expect(config.hooks.AfterAgent[0].hooks[0].command).toContain(managedHookPath)
+    expect(config.hooks.AfterTool[0].hooks[0].command).toContain(managedHookPath)
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toContain(managedHookPath)
   })
 })
