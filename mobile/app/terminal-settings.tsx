@@ -1,14 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AppState,
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Switch,
+  type AppStateStatus
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
+import {
+  TERMINAL_ACCESSORY_KEYS,
+  type TerminalAccessoryKey
+} from '../src/terminal/terminal-accessory-keys'
+import {
+  getDefaultTerminalAccessoryBuiltInIds,
+  loadTerminalAccessoryLayout,
+  resetTerminalAccessoryBuiltInIds,
+  saveTerminalAccessoryLayout,
+  setTerminalAccessoryBuiltInVisible
+} from '../src/terminal/terminal-accessory-layout'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -74,6 +94,33 @@ function HostFitRow({
   )
 }
 
+function ShortcutBarRow({
+  shortcutKey,
+  visible,
+  onToggle
+}: {
+  shortcutKey: TerminalAccessoryKey
+  visible: boolean
+  onToggle: (visible: boolean) => void
+}): React.JSX.Element {
+  return (
+    <View style={styles.row}>
+      <View style={styles.keycap}>
+        <Text style={styles.keycapText}>{shortcutKey.label}</Text>
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
+      </View>
+      <Switch
+        value={visible}
+        onValueChange={onToggle}
+        trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
+        thumbColor={colors.textPrimary}
+      />
+    </View>
+  )
+}
+
 export default function TerminalSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -91,6 +138,62 @@ export default function TerminalSettingsScreen() {
   // drawer appear cut-off.
   const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
+  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
+    getDefaultTerminalAccessoryBuiltInIds
+  )
+  const layoutWriteChainRef = useRef<Promise<void>>(Promise.resolve())
+  const layoutWriteSeqRef = useRef(0)
+  const pendingLayoutWritesRef = useRef(0)
+
+  const persistLayout = useCallback((nextIds: string[]) => {
+    layoutWriteSeqRef.current += 1
+    pendingLayoutWritesRef.current += 1
+    layoutWriteChainRef.current = layoutWriteChainRef.current
+      .catch(() => {})
+      .then(() => saveTerminalAccessoryLayout(nextIds))
+      .catch(() => {})
+      .finally(() => {
+        pendingLayoutWritesRef.current -= 1
+      })
+  }, [])
+
+  const refreshShortcutLayout = useCallback(() => {
+    const refreshSeq = layoutWriteSeqRef.current
+    void loadTerminalAccessoryLayout().then((layout) => {
+      if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) return
+      setVisibleBuiltInIds(layout.visibleBuiltInIds)
+    })
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshShortcutLayout()
+    }, [refreshShortcutLayout])
+  )
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') refreshShortcutLayout()
+    })
+    return () => sub.remove()
+  }, [refreshShortcutLayout])
+
+  const toggleBuiltInKey = useCallback(
+    (id: string, visible: boolean) => {
+      setVisibleBuiltInIds((current) => {
+        const next = setTerminalAccessoryBuiltInVisible(current, id, visible)
+        persistLayout(next)
+        return next
+      })
+    },
+    [persistLayout]
+  )
+
+  const resetBuiltInKeys = useCallback(() => {
+    const next = resetTerminalAccessoryBuiltInIds()
+    setVisibleBuiltInIds(next)
+    persistLayout(next)
+  }, [persistLayout])
 
   useEffect(() => {
     let cancelled = false
@@ -143,6 +246,7 @@ export default function TerminalSettingsScreen() {
   }
 
   const pickerHost = pickerHostId ? hosts.find((h) => h.id === pickerHostId) : null
+  const visibleBuiltInSet = useMemo(() => new Set(visibleBuiltInIds), [visibleBuiltInIds])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -186,6 +290,30 @@ export default function TerminalSettingsScreen() {
             })}
           </View>
         )}
+
+        <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          {TERMINAL_ACCESSORY_KEYS.map((shortcutKey, idx) => (
+            <View key={shortcutKey.id}>
+              {idx > 0 && <View style={styles.separator} />}
+              <ShortcutBarRow
+                shortcutKey={shortcutKey}
+                visible={visibleBuiltInSet.has(shortcutKey.id)}
+                onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
+              />
+            </View>
+          ))}
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={resetBuiltInKeys}
+          >
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Reset Defaults</Text>
+              <Text style={styles.rowSublabel}>Show every built-in shortcut key</Text>
+            </View>
+          </Pressable>
+        </View>
       </ScrollView>
 
       <PickerModal<RestoreValue>
@@ -239,6 +367,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.xs
   },
+  groupTopGap: {
+    marginTop: spacing.xl
+  },
   groupDescription: {
     fontSize: typography.bodySize - 1,
     color: colors.textSecondary,
@@ -247,7 +378,7 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.card,
     overflow: 'hidden'
   },
   sectionTopGap: {
@@ -280,6 +411,19 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize - 2,
     color: colors.textSecondary,
     marginTop: 2
+  },
+  keycap: {
+    minWidth: 62,
+    alignItems: 'center',
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  keycapText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily
   },
   separator: {
     height: StyleSheet.hairlineWidth,

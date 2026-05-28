@@ -18,7 +18,7 @@ import {
   type TextStyle
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
@@ -59,7 +59,11 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
-import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
+import {
+  getDefaultTerminalAccessoryBuiltInIds,
+  getVisibleTerminalAccessoryKeys,
+  loadTerminalAccessoryLayout
+} from '../../../../src/terminal/terminal-accessory-layout'
 import {
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit
@@ -724,8 +728,15 @@ export default function SessionScreen() {
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
+    getDefaultTerminalAccessoryBuiltInIds
+  )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
+  const visibleBuiltInAccessoryKeys = useMemo(
+    () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
+    [visibleBuiltInIds]
+  )
   // Why: in Expo SDK 55 edge-to-edge mode the OS does NOT resize the window when
   // the IME opens — the keyboard draws on top of the app. We track the keyboard
   // height ourselves and translate the input/accessory area above the IME without
@@ -1714,6 +1725,34 @@ export default function SessionScreen() {
 
   useEffect(() => {
     void loadCustomKeys().then(setCustomKeys)
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      let stale = false
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (!stale) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+      return () => {
+        stale = true
+      }
+    }, [])
+  )
+
+  useEffect(() => {
+    let mounted = true
+    const refresh = () => {
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (mounted) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+    }
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') refresh()
+    })
+    return () => {
+      mounted = false
+      sub.remove()
+    }
   }, [])
 
   // Why: re-measure when non-keyboard layout-affecting state changes
@@ -3307,9 +3346,9 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {TERMINAL_ACCESSORY_KEYS.map((key) => (
+                {visibleBuiltInAccessoryKeys.map((key) => (
                   <Pressable
-                    key={key.label}
+                    key={key.id}
                     style={({ pressed }) => [
                       styles.accessoryKey,
                       pressed && styles.accessoryKeyPressed,
