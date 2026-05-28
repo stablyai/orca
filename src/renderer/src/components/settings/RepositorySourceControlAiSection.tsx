@@ -109,7 +109,11 @@ export function RepositorySourceControlAiSection({
   )
   const hostScope = getRuntimeGitScope(settings, repo.connectionId)
   const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(hostScope)
-  const agentId = resolveCommitMessageAgentChoice(source.agentId, settings?.defaultTuiAgent)
+  const agentId = resolveCommitMessageAgentChoice(
+    source.agentId,
+    settings?.defaultTuiAgent,
+    settings?.disabledTuiAgents
+  )
   const baseCapability =
     agentId && !isCustomAgentId(agentId) ? getCommitMessageAgentCapability(agentId) : null
   const discoveredModels =

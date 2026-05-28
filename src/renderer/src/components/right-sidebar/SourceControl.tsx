@@ -1170,8 +1170,13 @@ function SourceControlInner(): React.JSX.Element {
     return settings ? normalized : { ...normalized, enabled: false }
   }, [settings])
   const effectiveCommitMessageAgentId = useMemo(
-    () => resolveCommitMessageAgentChoice(sourceControlAi.agentId, settings?.defaultTuiAgent),
-    [sourceControlAi.agentId, settings?.defaultTuiAgent]
+    () =>
+      resolveCommitMessageAgentChoice(
+        sourceControlAi.agentId,
+        settings?.defaultTuiAgent,
+        settings?.disabledTuiAgents
+      ),
+    [sourceControlAi.agentId, settings?.defaultTuiAgent, settings?.disabledTuiAgents]
   )
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)

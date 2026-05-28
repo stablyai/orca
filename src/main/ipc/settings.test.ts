@@ -1,11 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { handleMock, previewGhosttyImportMock } = vi.hoisted(() => ({
+const { browserWindowGetAllWindowsMock, handleMock, previewGhosttyImportMock } = vi.hoisted(() => ({
+  browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
   previewGhosttyImportMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
   ipcMain: { handle: handleMock },
   nativeTheme: { themeSource: 'system' }
 }))
@@ -20,15 +22,18 @@ const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   getGitHubCache: vi.fn(),
-  setGitHubCache: vi.fn()
+  setGitHubCache: vi.fn(),
+  onSettingsChanged: vi.fn(() => () => {})
 }
 
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
     previewGhosttyImportMock.mockClear()
+    browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
+    store.onSettingsChanged.mockClear()
   })
 
   it('registers settings:previewGhosttyImport handler', () => {
@@ -49,6 +54,26 @@ describe('registerSettingsHandlers', () => {
     const result = await handler!(null, {})
     expect(result).toEqual(expected)
     expect(previewGhosttyImportMock).toHaveBeenCalledWith(store)
+  })
+
+  it('broadcasts store-level settings changes to open windows', () => {
+    const send = vi.fn()
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+      { isDestroyed: () => true, webContents: { send: vi.fn() } }
+    ])
+    registerSettingsHandlers(store as never)
+
+    const onSettingsChanged = store.onSettingsChanged as unknown as {
+      mock: { calls: [(settings: unknown) => void][] }
+    }
+    const listener = onSettingsChanged.mock.calls[0]?.[0]
+    if (!listener) {
+      throw new Error('settings change listener was not registered')
+    }
+    listener({ defaultTuiAgent: 'codex' })
+
+    expect(send).toHaveBeenCalledWith('settings:changed', { defaultTuiAgent: 'codex' })
   })
 
   it('updates the agent awake service when the keep-awake setting changes', () => {

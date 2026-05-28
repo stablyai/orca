@@ -93,7 +93,8 @@ export function useCreatePullRequestDialogFields({
     : { ...normalizedSourceControlAi, enabled: false }
   const effectiveCommitMessageAgentId = resolveCommitMessageAgentChoice(
     sourceControlAi.agentId,
-    settings?.defaultTuiAgent
+    settings?.defaultTuiAgent,
+    settings?.disabledTuiAgents
   )
   const resolvedPrDefaults = {
     ...DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,

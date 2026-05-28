@@ -1,4 +1,5 @@
 import type { TuiAgent } from './types'
+import { isTuiAgentEnabled } from './tui-agent-selection'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 
@@ -592,15 +593,22 @@ export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgent
 
 export function resolveCommitMessageAgentChoice(
   configuredAgentId: CommitMessageAgentChoice | null | undefined,
-  defaultTuiAgent: DefaultTuiAgentPreference
+  defaultTuiAgent: DefaultTuiAgentPreference,
+  disabledTuiAgents?: Iterable<unknown> | null
 ): CommitMessageAgentChoice | null {
   if (configuredAgentId) {
     return configuredAgentId
   }
-  if (defaultTuiAgent && defaultTuiAgent !== 'blank') {
+  if (
+    defaultTuiAgent &&
+    defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+  ) {
     return getCommitMessageAgentSpec(defaultTuiAgent) ? defaultTuiAgent : null
   }
-  return DEFAULT_COMMIT_MESSAGE_AGENT_ID
+  return isTuiAgentEnabled(DEFAULT_COMMIT_MESSAGE_AGENT_ID, disabledTuiAgents)
+    ? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    : null
 }
 
 export function getCommitMessageModel(

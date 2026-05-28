@@ -56,6 +56,8 @@ import {
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import {
+  filterWorkspaceAgents,
+  isWorkspaceAgentEnabled,
   pickWorkspaceAgent,
   workspaceAgentLabel,
   type WorkspaceAgentChoice
@@ -421,6 +423,7 @@ type TaskResumeState = {
 }
 type RuntimeTaskSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
+  disabledTuiAgents?: TuiAgent[]
   agentCmdOverrides?: Record<string, string>
   defaultTaskSource?: TaskProvider
   defaultTaskViewPreset?: GitHubPreset | 'all'
@@ -4514,15 +4517,18 @@ export default function MobileTasksScreen() {
     workspaceSparseDraftParsed !== null
 
   const workspaceAgentOptions = useMemo<PickerOption<WorkspaceAgentChoice>[]>(() => {
+    const enabledAgents = filterWorkspaceAgents(
+      MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
+      runtimeTaskSettings.disabledTuiAgents
+    )
     const availableAgents =
       workspaceDetectedAgentIds === null
-        ? new Set<TuiAgent>(MOBILE_TUI_AGENT_AUTO_PICK_ORDER)
-        : new Set<TuiAgent>(
-            MOBILE_TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => workspaceDetectedAgentIds.has(agent))
-          )
+        ? new Set<TuiAgent>(enabledAgents)
+        : new Set<TuiAgent>(enabledAgents.filter((agent) => workspaceDetectedAgentIds.has(agent)))
     if (
       workspaceAgent &&
       workspaceAgent !== 'blank' &&
+      isWorkspaceAgentEnabled(workspaceAgent, runtimeTaskSettings.disabledTuiAgents) &&
       (workspaceDetectedAgentIds === null || workspaceDetectedAgentIds.has(workspaceAgent))
     ) {
       availableAgents.add(workspaceAgent)
@@ -4542,7 +4548,7 @@ export default function MobileTasksScreen() {
         renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
       }
     ]
-  }, [workspaceAgent, workspaceDetectedAgentIds])
+  }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
 
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
@@ -5008,7 +5014,8 @@ export default function MobileTasksScreen() {
       workspaceDetectedAgentIds === null ||
       !workspaceAgent ||
       workspaceAgent === 'blank' ||
-      workspaceDetectedAgentIds.has(workspaceAgent)
+      (workspaceDetectedAgentIds.has(workspaceAgent) &&
+        isWorkspaceAgentEnabled(workspaceAgent, runtimeTaskSettings.disabledTuiAgents))
     ) {
       return
     }
@@ -5022,7 +5029,8 @@ export default function MobileTasksScreen() {
     tasksSupported,
     workspaceAgent,
     workspaceCreateDraft,
-    workspaceDetectedAgentIds
+    workspaceDetectedAgentIds,
+    runtimeTaskSettings.disabledTuiAgents
   ])
 
   const resolvedWorkspaceAgent = useMemo(
