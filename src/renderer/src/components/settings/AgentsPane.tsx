@@ -14,8 +14,8 @@ import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
+  SettingsSegmentedControl,
   SettingsSubsectionHeader,
-  SettingsSwitch,
   SettingsSwitchRow
 } from './SettingsFormControls'
 import {
@@ -48,6 +48,55 @@ type AgentCommandOverrideInputProps = {
   defaultCmd: string
   cmdOverride: string | undefined
   onSaveOverride: (value: string) => void
+}
+
+type AgentAvailability = 'enabled' | 'disabled'
+
+type AgentAvailabilityControlProps = {
+  label: string
+  isEnabled: boolean
+  onToggleEnabled: () => void
+}
+
+export function buildAgentEnabledSettingsUpdate(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
+  id: TuiAgent
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  const wasDisabled = latestDisabled.includes(id)
+  const nextDisabled = wasDisabled
+    ? latestDisabled.filter((agent) => agent !== id)
+    : [...latestDisabled, id]
+
+  return {
+    disabledTuiAgents: nextDisabled,
+    ...(settings.defaultTuiAgent === id && !wasDisabled ? { defaultTuiAgent: null } : {})
+  }
+}
+
+export function AgentAvailabilityControl({
+  label,
+  isEnabled,
+  onToggleEnabled
+}: AgentAvailabilityControlProps): React.JSX.Element {
+  const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
+
+  return (
+    <SettingsSegmentedControl<AgentAvailability>
+      value={value}
+      onChange={(next) => {
+        if (next !== value) {
+          onToggleEnabled()
+        }
+      }}
+      ariaLabel={`${label} availability`}
+      size="sm"
+      options={[
+        { value: 'enabled', label: 'Enabled' },
+        { value: 'disabled', label: 'Disabled' }
+      ]}
+    />
+  )
 }
 
 function AgentCommandOverrideInput({
@@ -121,15 +170,22 @@ function AgentRow({
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
+  const availabilityDescription = isEnabled
+    ? isDetected
+      ? 'Shown in launch and default choices.'
+      : 'Install to use in launch and default choices.'
+    : isDetected
+      ? 'Hidden from launch and default choices.'
+      : 'Hidden from launch and default choices if installed.'
 
   return (
-    <div className={cn('py-3', (!isDetected || !isEnabled) && 'opacity-60')}>
-      <div className="flex items-center gap-3">
+    <div className={cn('py-3', !isDetected && 'opacity-70')}>
+      <div className="flex flex-wrap items-start gap-3">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 sm:min-w-[12rem]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
             {isDetected ? (
@@ -149,13 +205,14 @@ function AgentRow({
               defaultCmd
             )}
           </div>
+          <div className="mt-1 text-[11px] text-muted-foreground">{availabilityDescription}</div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <SettingsSwitch
-            checked={isEnabled}
-            onChange={onToggleEnabled}
-            ariaLabel={`${isEnabled ? 'Disable' : 'Enable'} ${label}`}
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onToggleEnabled={onToggleEnabled}
           />
 
           {isDetected && isEnabled && (
@@ -281,15 +338,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
   const toggleEnabled = (id: TuiAgent): void => {
     const latestSettings = useAppStore.getState().settings ?? settings
-    const latestDisabled = normalizeDisabledTuiAgents(latestSettings.disabledTuiAgents)
-    const disabled = latestDisabled.includes(id)
-    const nextDisabled = disabled
-      ? latestDisabled.filter((agent) => agent !== id)
-      : [...latestDisabled, id]
-    updateSettings({
-      disabledTuiAgents: nextDisabled,
-      ...(latestSettings.defaultTuiAgent === id && !disabled ? { defaultTuiAgent: null } : {})
-    })
+    updateSettings(buildAgentEnabledSettingsUpdate(latestSettings, id))
   }
 
   const saveOverride = (id: TuiAgent, value: string): void => {
