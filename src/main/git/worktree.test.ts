@@ -829,7 +829,7 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // worktree list after prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -D (rollback force-deletes the fresh branch)
 
     await expect(
       addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['src'], 'origin/main')
@@ -841,9 +841,11 @@ describe('addWorktree', () => {
       '--unset-all',
       'branch.feature/test.base'
     ])
+    // Why: rolling back a failed creation force-deletes the just-created branch
+    // (`-D`) — it has no user commits to protect, unlike a user-initiated delete.
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
       'branch',
-      '-d',
+      '-D',
       'feature/test'
     ])
   })
@@ -853,6 +855,12 @@ describe('removeWorktree', () => {
   const beforeRemoval =
     'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
   const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockClear()
+  })
 
   it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
