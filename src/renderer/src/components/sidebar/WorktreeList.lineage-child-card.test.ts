@@ -237,7 +237,7 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
   }
 }
 
-function setProjectGroupWithoutWorktreeRowsState(): void {
+function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): void {
   const group: ProjectGroup = {
     id: 'group-1',
     name: 'Imported Services',
@@ -263,7 +263,7 @@ function setProjectGroupWithoutWorktreeRowsState(): void {
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
-    filterRepoIds: [],
+    filterRepoIds,
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -321,6 +321,15 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(markup).toContain('Imported Services')
     expect(markup).not.toContain('No workspaces found')
+  })
+
+  it('shows Clear Filters when filters exclude pre-worktree project groups', async () => {
+    setProjectGroupWithoutWorktreeRowsState(['another-repo'])
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('No workspaces found')
+    expect(markup).toContain('Clear Filters')
+    expect(markup).not.toContain('Imported Services')
   })
 
   it('renders nested inline agent rows before the nested child-count toggle', async () => {

@@ -59,8 +59,16 @@ async function createLargeNestedRepoFixture(): Promise<{
   })
 
   for (const repoPath of projectPaths) {
-    mkdirSync(path.join(repoPath, '.git'), { recursive: true })
+    mkdirSync(repoPath, { recursive: true })
+    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
+    execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
+      cwd: repoPath,
+      stdio: 'pipe'
+    })
+    execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
     writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
+    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
+    execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
   }
 
   return {
@@ -121,7 +129,7 @@ test.describe('Folder setup', () => {
     await expect
       .poll(
         () =>
-          orcaPage.evaluate((args) => {
+          orcaPage.evaluate(async (args) => {
             const state = window.__store?.getState()
             if (!state) {
               return null
@@ -206,7 +214,7 @@ test.describe('Folder setup', () => {
     await expect
       .poll(
         () =>
-          orcaPage.evaluate((args) => {
+          orcaPage.evaluate(async (args) => {
             const state = window.__store?.getState()
             if (!state) {
               return null
@@ -214,6 +222,7 @@ test.describe('Folder setup', () => {
             const importedRepos = state.repos.filter((repo) =>
               args.selectedProjectPaths.includes(repo.path)
             )
+            const fixtureRepos = state.repos.filter((repo) => args.projectPaths.includes(repo.path))
             const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
             const groupsById = new Map(state.projectGroups.map((entry) => [entry.id, entry]))
             const isInGroupSubtree = (groupId: string | null | undefined): boolean => {
@@ -226,11 +235,21 @@ test.describe('Folder setup', () => {
               }
               return false
             }
+            const worktreeCounts = await Promise.all(
+              importedRepos.map(async (repo) => {
+                const result = await window.api.worktrees.listDetected({ repoId: repo.id })
+                return result.worktrees.length
+              })
+            )
             return {
               importedCount: importedRepos.length,
+              fixtureImportCount: fixtureRepos.length,
               allSelectedInGroup:
                 group !== undefined &&
-                importedRepos.every((repo) => isInGroupSubtree(repo.projectGroupId))
+                importedRepos.every((repo) => isInGroupSubtree(repo.projectGroupId)),
+              allSelectedHaveWorktrees:
+                importedRepos.length === args.selectedProjectPaths.length &&
+                worktreeCounts.every((count) => count > 0)
             }
           }, fixture),
         {
@@ -240,7 +259,9 @@ test.describe('Folder setup', () => {
       )
       .toEqual({
         importedCount: 3,
-        allSelectedInGroup: true
+        fixtureImportCount: 3,
+        allSelectedInGroup: true,
+        allSelectedHaveWorktrees: true
       })
   })
 })

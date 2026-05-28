@@ -363,7 +363,8 @@ export function buildRows(
   ),
   nestLineage = false,
   settings?: AppState['settings'],
-  projectGroups: readonly ProjectGroup[] = []
+  projectGroups: readonly ProjectGroup[] = [],
+  placeholderRepoIds: ReadonlySet<string> = new Set()
 ): Row[] {
   const result: Row[] = []
 
@@ -422,12 +423,13 @@ export function buildRows(
     grouped.get(key)!.items.push(w)
   }
   if (groupBy === 'repo' && projectGroups.length > 0) {
-    for (const repo of repoMap.values()) {
-      const key = `repo:${repo.id}`
+    for (const repoId of placeholderRepoIds) {
+      const repo = repoMap.get(repoId)
+      const key = `repo:${repoId}`
       if (!grouped.has(key)) {
         // Why: nested repo imports can persist repos before their worktree rows
-        // are available; the sidebar still needs a project row to expand to.
-        grouped.set(key, { label: repo.displayName, items: [], repo })
+        // are available, but filters must not resurrect hidden repo headers.
+        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
       }
     }
   }
@@ -586,6 +588,15 @@ export function buildRows(
     )
   }
 
+  const getProjectGroupSubtreeCount = (groupId: string): number => {
+    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
+    const children = childGroupsByParentId.get(groupId) ?? []
+    return children.reduce(
+      (count, child) => count + getProjectGroupSubtreeCount(child.id),
+      directCount
+    )
+  }
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
@@ -594,7 +605,7 @@ export function buildRows(
       type: 'header',
       key,
       label: projectGroup.name,
-      count: repoEntries.length + childGroups.length,
+      count: getProjectGroupSubtreeCount(projectGroup.id),
       tone: PROJECT_GROUP_META.tone,
       icon: PROJECT_GROUP_META.icon,
       projectGroup,

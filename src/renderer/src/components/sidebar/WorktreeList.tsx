@@ -164,6 +164,7 @@ type ProjectGroupDeleteDialogState = {
 const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
+const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =
   GROUP_HEADER_ROW_HEIGHT + WORKTREE_REVEAL_TOP_CLEARANCE
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
@@ -3007,12 +3008,24 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why: manual repo header order is bound to state.repos. Recent/Smart derive
   // header order from the sorted visible worktree stream instead.
   const repos = useAppStore((s) => s.repos)
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const repoOrder = useMemo(() => {
     const map = new Map<string, number>()
     repos.forEach((r, i) => map.set(r.id, i))
     return map
   }, [repos])
+  const placeholderRepoIds = useMemo(() => {
+    if (groupBy !== 'repo' || projectGroups.length === 0) {
+      return new Set<string>()
+    }
+    const filterSet = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+    return new Set(
+      repos
+        .filter((repo) => (worktreesByRepo[repo.id]?.length ?? 0) === 0)
+        .filter((repo) => filterSet === null || filterSet.has(repo.id))
+        .map((repo) => repo.id)
+    )
+  }, [filterRepoIds, groupBy, projectGroups.length, repos, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
   const reorderReposAction = useAppStore((s) => s.reorderRepos)
   const projectGroupOrdering = getProjectGroupOrdering(groupBy, sortBy)
@@ -3033,7 +3046,8 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeMap,
         true,
         settings,
-        projectGroups
+        projectGroups,
+        placeholderRepoIds
       ),
     [
       groupBy,
@@ -3047,7 +3061,8 @@ const WorktreeList = React.memo(function WorktreeList({
       worktreeLineageById,
       worktreeMap,
       settings,
-      projectGroups
+      projectGroups,
+      placeholderRepoIds
     ]
   )
   // Why: header/mode changes can shift entire groups, so remount the
@@ -3407,9 +3422,10 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [handleRevealCurrentWorkspaceRequest])
 
-  // Why: Project Group headers can be renderable before any workspace rows are
-  // loaded, especially after importing many nested repos from a folder scan.
-  if (rows.length === 0) {
+  const filtersHideAllRows = hasFilters && worktrees.length === 0 && placeholderRepoIds.size === 0
+  // Why: Project Group headers can render before workspace rows load, but when
+  // active filters hide everything the Clear Filters empty state must win.
+  if (rows.length === 0 || filtersHideAllRows) {
     return (
       <div data-worktree-sidebar-container className="relative min-h-0 flex-1">
         <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">

@@ -491,7 +491,8 @@ describe('project groups', () => {
       new Map(),
       false,
       undefined,
-      [group]
+      [group],
+      new Set([groupedRepo.id])
     )
 
     expect(rows[0]).toMatchObject({
@@ -499,6 +500,43 @@ describe('project groups', () => {
       key: 'project-group:group-1',
       count: 1
     })
+  })
+
+  it('does not resurrect filtered repos as empty Project Group headers', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map([[groupedRepo.id, groupedRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1'
+    ])
+    expect(rows[0]).toMatchObject({ count: 0 })
   })
 
   it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {
@@ -720,7 +758,8 @@ describe('project groups', () => {
       undefined,
       false,
       undefined,
-      [rootGroup, platformGroup, servicesGroup]
+      [rootGroup, platformGroup, servicesGroup],
+      new Set([serviceA.id, serviceB.id])
     )
 
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
@@ -731,7 +770,7 @@ describe('project groups', () => {
       'repo:repo-service-b'
     ])
     expect(rows.filter((row) => row.type === 'header').map((row) => row.count)).toEqual([
-      1, 1, 2, 0, 0
+      2, 2, 2, 0, 0
     ])
   })
 
