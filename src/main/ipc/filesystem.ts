@@ -284,14 +284,17 @@ async function isDirectoryEntry(
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
   _resolveEntryPath: (entryPath: string) => Promise<string>
 ): Promise<boolean> {
-  if (entry.isDirectory()) {
-    return true
-  }
   // Why: following a symlink just to decorate readDir can touch macOS
   // TCC-protected app containers. Treat links as file-like until the user
   // explicitly opens them.
-  void dirPath
   void _resolveEntryPath
+  if (entry.isSymbolicLink()) {
+    void dirPath
+    return false
+  }
+  if (entry.isDirectory()) {
+    return true
+  }
   return false
 }
 

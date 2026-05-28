@@ -68,6 +68,8 @@ function FileExplorerInner(): React.JSX.Element {
     rootCache,
     rootError,
     loadDir,
+    statPath,
+    markPathAsDirectory,
     refreshTree,
     refreshDir,
     resetAndLoad
@@ -309,6 +311,9 @@ function FileExplorerInner(): React.JSX.Element {
     openFile,
     pinFile,
     toggleDir,
+    loadDir,
+    statPath,
+    markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
   })

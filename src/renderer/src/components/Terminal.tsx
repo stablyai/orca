@@ -51,8 +51,6 @@ import {
 } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
-import { shouldDeferActivationTerminalSpawn } from './terminal/activation-terminal-spawn'
-import { DeferredActivationTerminal } from './terminal/DeferredActivationTerminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
 import {
@@ -60,7 +58,6 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { shouldAutoCreateInitialTerminalForWorktreePath } from '@/lib/passive-macos-app-data-access'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
 import {
@@ -152,18 +149,9 @@ function Terminal(): React.JSX.Element | null {
   const reconcileWorktreeTabModel = useAppStore((s) => s.reconcileWorktreeTabModel)
 
   const markFileDirty = useAppStore((s) => s.markFileDirty)
-  const startPendingActivationTerminal = useAppStore((s) => s.startPendingActivationTerminal)
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
   const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
-  const pendingSetupSplitByTabId = useAppStore((s) => s.pendingSetupSplitByTabId)
-  const pendingIssueCommandSplitByTabId = useAppStore((s) => s.pendingIssueCommandSplitByTabId)
-  const activeWorktreePath = useMemo(
-    () => allWorktrees.find((worktree) => worktree.id === activeWorktreeId)?.path ?? null,
-    [activeWorktreeId, allWorktrees]
-  )
   // Why (anchored to selected thread, not active tab): the activity page
   // publishes the full {target, worktreeId, tabId} descriptor sourced from
   // its selectedThread. Deriving worktreeId/tabId from activeWorktreeId/
@@ -635,9 +623,6 @@ function Terminal(): React.JSX.Element | null {
     if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
       return
     }
-    if (!shouldAutoCreateInitialTerminalForWorktreePath(activeWorktreePath)) {
-      return
-    }
 
     // Why: this fallback exists to give a newly activated/restored worktree a
     // focusable surface when the reconciled tab model has nothing renderable.
@@ -655,7 +640,6 @@ function Terminal(): React.JSX.Element | null {
   }, [
     workspaceSessionReady,
     activeWorktreeId,
-    activeWorktreePath,
     activeRuntimeEnvironmentId,
     createTab,
     reconcileWorktreeTabModel
@@ -1610,22 +1594,7 @@ function Terminal(): React.JSX.Element | null {
                       const isActivityPortalTab = activityTerminalPortal !== null
                       const isActiveTerminalTab =
                         isVisible && tab.id === activeTabId && activeTabType === 'terminal'
-                      const shouldDeferSpawn =
-                        activityTerminalPortal === null &&
-                        shouldDeferActivationTerminalSpawn({
-                          tab,
-                          ptyIdsByTabId,
-                          hasQueuedLaunch:
-                            pendingStartupByTabId[tab.id] !== undefined ||
-                            pendingSetupSplitByTabId[tab.id] !== undefined ||
-                            pendingIssueCommandSplitByTabId[tab.id] !== undefined
-                        })
-                      const terminalPane = shouldDeferSpawn ? (
-                        <DeferredActivationTerminal
-                          key={`${tab.id}-deferred`}
-                          onStart={() => startPendingActivationTerminal(tab.id)}
-                        />
-                      ) : (
+                      const terminalPane = (
                         <TerminalPane
                           key={`${tab.id}-${tab.generation ?? 0}`}
                           tabId={tab.id}

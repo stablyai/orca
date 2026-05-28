@@ -241,7 +241,7 @@ export class RuntimeFileCommands {
         const entryPath = join(dirPath, entry.name)
         return {
           name: entry.name,
-          isDirectory: await isRuntimeDirectoryEntry(entryPath),
+          isDirectory: await isRuntimeDirectoryEntry(entry, entryPath),
           isSymlink: entry.isSymbolicLink()
         }
       })
@@ -884,12 +884,20 @@ function basenameFromRelativePath(relativePath: string): string {
   return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
-async function isRuntimeDirectoryEntry(entryPath: string): Promise<boolean> {
-  try {
-    return (await stat(entryPath)).isDirectory()
-  } catch {
+async function isRuntimeDirectoryEntry(
+  entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
+  _entryPath: string
+): Promise<boolean> {
+  // Why: runtime-backed file explorer listings are still passive UI reads.
+  // Do not stat symlink targets here; explicit open/expand can resolve them.
+  if (entry.isSymbolicLink()) {
+    void _entryPath
     return false
   }
+  if (entry.isDirectory()) {
+    return true
+  }
+  return false
 }
 
 function isBinaryBuffer(buffer: Buffer): boolean {

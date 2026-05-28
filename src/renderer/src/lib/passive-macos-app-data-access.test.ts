@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isMacAppDataPath,
-  shouldAutoCreateInitialTerminalForWorktreePath,
-  shouldPollActiveGitStatus
-} from './passive-macos-app-data-access'
+import { isMacAppDataPath, shouldPollActiveGitStatus } from './passive-macos-app-data-access'
 import type { OpenFile, RightSidebarTab } from '@/store/slices/editor'
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
@@ -63,20 +59,5 @@ describe('shouldPollActiveGitStatus', () => {
 
   it('keeps existing background polling for ordinary paths', () => {
     expect(shouldPollActiveGitStatus(pollArgs({ worktreePath: '/Users/me/dev/repo' }))).toBe(true)
-  })
-})
-
-describe('shouldAutoCreateInitialTerminalForWorktreePath', () => {
-  it('skips automatic terminal spawn for macOS app data paths', () => {
-    expect(
-      shouldAutoCreateInitialTerminalForWorktreePath(
-        '/Users/me/Library/Containers/com.apple.TextEdit/Data/Documents/repo',
-        MAC
-      )
-    ).toBe(false)
-  })
-
-  it('allows automatic terminal spawn for ordinary paths', () => {
-    expect(shouldAutoCreateInitialTerminalForWorktreePath('/Users/me/dev/repo', MAC)).toBe(true)
   })
 })

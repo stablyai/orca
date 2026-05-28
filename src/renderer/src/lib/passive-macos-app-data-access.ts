@@ -42,12 +42,3 @@ export function shouldPollActiveGitStatus(args: {
   // prompt. Keep terminal-only workspace switching from passively probing them.
   return !isMacAppDataPath(args.worktreePath, args.userAgent)
 }
-
-export function shouldAutoCreateInitialTerminalForWorktreePath(
-  worktreePath: string | null | undefined,
-  userAgent?: string
-): boolean {
-  // Why: auto-created terminals spawn a shell with cwd at the worktree root.
-  // For macOS app data folders that hidden cwd probe is enough to raise TCC.
-  return !isMacAppDataPath(worktreePath, userAgent)
-}

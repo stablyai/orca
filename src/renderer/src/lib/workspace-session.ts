@@ -256,9 +256,15 @@ export function buildWorkspaceSessionPayload(
     }
   }
 
-  // Why: pendingActivationSpawn is a renderer-only handoff for activation-
-  // caused terminal spawns; it must never persist. If it round-tripped to disk,
-  // the next session could defer or suppress a legitimate user-started shell.
+  // Why: pendingActivationSpawn is documented on TerminalTab as a transient
+  // renderer-only handoff between setActiveWorktree and the next updateTabPtyId
+  // — it must never be persisted. The main-process session:set handler writes
+  // the payload to disk without re-parsing it against the Zod schema, so if
+  // the flag were ever set and not consumed before a save (e.g. app quits
+  // mid-handoff), it would round-trip to disk and the next session would
+  // start with a stale suppression flag that drops the first legitimate PTY
+  // spawn from the sidebar's recency sort. Strip it here to enforce the
+  // type-level invariant at the persistence boundary.
   const sanitizedTabsByWorktree = Object.fromEntries(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,

@@ -308,7 +308,7 @@ describe('registerFilesystemHandlers', () => {
     const modelLinkPath = path.join(REPO_PATH, 'Model')
     readdirMock.mockResolvedValue([
       dirEntry({ name: 'README.md', file: true }),
-      dirEntry({ name: 'Model', symlink: true })
+      dirEntry({ name: 'Model', directory: true, symlink: true })
     ])
     statMock.mockImplementation(async (targetPath: string) => ({
       size: 10,
