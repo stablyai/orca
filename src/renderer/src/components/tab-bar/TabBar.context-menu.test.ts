@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const appStoreSnapshot: {
+  activeTabId: string | null
+  activeTabType: 'terminal' | 'editor' | 'browser' | null
+} = {
+  activeTabId: 'old-terminal',
+  activeTabType: 'terminal'
+}
+
 const useAppStoreMock = vi.fn(
   (
     selector: (state: {
+      activeTabId: string | null
+      activeTabType: 'terminal' | 'editor' | 'browser' | null
       gitStatusByWorktree: Record<string, never[]>
       settings: {
         terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
@@ -11,6 +21,8 @@ const useAppStoreMock = vi.fn(
     }) => unknown
   ) =>
     selector({
+      activeTabId: appStoreSnapshot.activeTabId,
+      activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
       settings: {
         terminalWindowsShell: 'powershell.exe',
@@ -53,8 +65,20 @@ vi.mock('@dnd-kit/sortable', () => ({
   }
 }))
 
+const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
+  useAppStoreMock(selector)
+useAppStoreExport.getState = vi.fn(() => ({
+  activeTabId: appStoreSnapshot.activeTabId,
+  activeTabType: appStoreSnapshot.activeTabType,
+  gitStatusByWorktree: {},
+  settings: {
+    terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPowerShellImplementation: 'auto'
+  }
+}))
+
 vi.mock('../../store', () => ({
-  useAppStore: (selector: Parameters<typeof useAppStoreMock>[0]) => useAppStoreMock(selector)
+  useAppStore: useAppStoreExport
 }))
 
 vi.mock('../right-sidebar/status-display', () => ({
@@ -209,10 +233,24 @@ describe('TabBar context menu wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    vi.useRealTimers()
+    appStoreSnapshot.activeTabId = 'old-terminal'
+    appStoreSnapshot.activeTabType = 'terminal'
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('window', {
+      setTimeout,
+      clearTimeout,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -250,5 +288,40 @@ describe('TabBar context menu wiring', () => {
     const onClose = editorTabs[0].props.onCloseToRight as () => void
     onClose()
     expect(onCloseToRight).toHaveBeenCalledWith('unified-editor-1')
+  })
+
+  it('waits for async menu-created terminals before focusing xterm', async () => {
+    vi.useFakeTimers()
+    Object.assign(window, { setTimeout, clearTimeout })
+    const { focusTerminalTabSurface } = await import('@/lib/focus-terminal-tab-surface')
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      activeTabId: 'old-terminal',
+      activeTabType: 'terminal',
+      onNewTerminalTab: () => {
+        window.setTimeout(() => {
+          appStoreSnapshot.activeTabId = 'new-terminal'
+          appStoreSnapshot.activeTabType = 'terminal'
+        }, 100)
+      }
+    })
+
+    const menuItems = findChildrenByType(element, 'DropdownMenuItem')
+    const newTerminalItem = menuItems[0]
+    const menuContent = findChildrenByType(element, 'DropdownMenuContent')[0]
+    expect(newTerminalItem).toBeTruthy()
+    expect(menuContent).toBeTruthy()
+
+    ;(newTerminalItem.props.onSelect as () => void)()
+    ;(menuContent.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
+
+    await vi.advanceTimersByTimeAsync(50)
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('new-terminal')
+    expect(focusTerminalTabSurface).not.toHaveBeenCalledWith('old-terminal')
   })
 })
