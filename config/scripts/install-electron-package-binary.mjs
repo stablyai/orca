@@ -40,6 +40,11 @@ async function main() {
   // Electron native-module rebuild path, which would undo the Node ABI rebuild.
   console.log('[electron-package] Electron package binary is missing; running Electron install.')
   resetPartialElectronInstall()
+  if (process.env.ORCA_ELECTRON_IMPORT_ONLY === '1') {
+    // Why: PR unit tests import `electron` under Node and only need the package
+    // entrypoint to resolve; launch paths use ensure-native-runtime.
+    writeElectronPathFile()
+  }
   await installElectronPackageBinary()
 
   repairElectronPathFile()
@@ -86,9 +91,13 @@ function repairElectronPathFile() {
   }
 
   if (currentPath !== platformPath) {
-    writeFileSync(pathFile, platformPath)
-    console.log(`[electron-package] Repaired Electron path.txt -> ${platformPath}`)
+    writeElectronPathFile()
   }
+}
+
+function writeElectronPathFile() {
+  writeFileSync(resolve(electronPackageDir, 'path.txt'), platformPath)
+  console.log(`[electron-package] Repaired Electron path.txt -> ${platformPath}`)
 }
 
 async function installElectronPackageBinary() {
@@ -123,7 +132,7 @@ async function installElectronPackageBinary() {
 function shouldUseRemoteChecksums() {
   return Boolean(
     process.env.electron_use_remote_checksums ||
-      process.env.npm_config_electron_use_remote_checksums
+    process.env.npm_config_electron_use_remote_checksums
   )
 }
 

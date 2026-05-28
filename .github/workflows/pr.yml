@@ -89,6 +89,8 @@ jobs:
       # Why: install intentionally blocks Electron's package postinstall, but
       # some unit tests import `electron` under Node and require path.txt.
       - name: Install Electron package binary for tests
+        env:
+          ORCA_ELECTRON_IMPORT_ONLY: '1'
         run: node config/scripts/install-electron-package-binary.mjs
 
       - name: Test

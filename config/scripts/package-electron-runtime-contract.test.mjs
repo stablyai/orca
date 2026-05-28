@@ -82,6 +82,7 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
+    expect(installStep.env.ORCA_ELECTRON_IMPORT_ONLY).toBe('1')
     expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mjs')
   })
 })
