@@ -192,18 +192,17 @@ export function ExperimentalPane({
 
       {showUnifiedNewTabLauncher ? (
         <SearchableSetting
-          title="Unified new tab launcher"
-          description="Searchable New Tab launcher for terminals, agents, URLs, and files."
+          title="Smart New Tab menu"
+          description="Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.unifiedNewTabLauncher.keywords}
           className="space-y-3 py-2"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
-              <Label>Unified new tab launcher</Label>
+              <Label>Smart New Tab menu</Label>
               <p className="text-xs text-muted-foreground">
-                Replaces the top of the New Tab menu with a searchable launcher. Press Enter on an
-                empty query for a terminal, type a detected agent name to launch it, or enter a URL
-                or file path.
+                Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or
+                open/create a file.
               </p>
             </div>
             <button

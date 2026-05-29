@@ -65,13 +65,16 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Unified new tab launcher',
+    title: 'Smart New Tab menu',
     description:
-      'Adds a searchable New Tab launcher for terminals, detected agents, URLs, and files.',
+      'Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file.',
     keywords: [
       'experimental',
+      'smart',
       'new tab',
+      'new tab menu',
       'launcher',
+      'unified',
       'plus',
       'terminal',
       'agents',
@@ -99,5 +102,5 @@ export const EXPERIMENTAL_SEARCH_ENTRY = {
   activity: findEntry('Agents View'),
   terminalAttention: findEntry('Terminal attention'),
   symlinks: findEntry('Symlinks on worktrees'),
-  unifiedNewTabLauncher: findEntry('Unified new tab launcher')
+  unifiedNewTabLauncher: findEntry('Smart New Tab menu')
 } as const
