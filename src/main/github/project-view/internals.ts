@@ -6,7 +6,13 @@ classification semantics. */
 // for gh calls. The legacy plain `execFileAsync` is NOT used here — routing
 // every gh call through the runner gives us transient-5xx retry, WSL path
 // translation, and a single hook point for future quota tracking.
-import { acquire, ghRepoExecOptions, githubRepoContext, release } from '../gh-utils'
+import {
+  acquire,
+  getGitHubApiHostForRepo,
+  ghRepoExecOptions,
+  githubRepoContext,
+  release
+} from '../gh-utils'
 import { extractExecError, ghExecFileAsync } from '../../git/runner'
 import { rateLimitGuard, noteRateLimitSpend, type RateLimitBucketKind } from '../rate-limit'
 import type { GitHubProjectViewError, GitHubRepoTarget } from '../../../shared/github-project-types'
@@ -14,16 +20,35 @@ import type { GitHubProjectViewError, GitHubRepoTarget } from '../../../shared/g
 export { acquire, release, extractExecError, ghExecFileAsync, rateLimitGuard, noteRateLimitSpend }
 export type { RateLimitBucketKind }
 
-// Why (issue #1715): translate the caller's repo target into the gh exec
-// cwd so multi-host setups (github.com + GHES) route to the right host.
-// Local repos get cwd:repoPath; SSH targets return undefined because the
-// path is meaningful only on the remote (the relay handles host inference
-// remotely). When neither is set, callers accept gh's globally-active host.
-export function targetToCwd(target: GitHubRepoTarget | undefined): string | undefined {
+export type GhApiRoute = { cwd?: string; hostname?: string }
+
+// Why (issue #1715): `gh api graphql` does not reliably infer the API host
+// from cwd for hostless GraphQL calls, so resolve the repo's git remote host
+// and pass it as `gh api --hostname`. Keep cwd for placeholder expansion and
+// for commands that still consult local repo context.
+export async function targetToGhApiRoute(
+  target: GitHubRepoTarget | undefined
+): Promise<GhApiRoute> {
   if (!target?.repoPath) {
-    return undefined
+    return {}
   }
-  return ghRepoExecOptions(githubRepoContext(target.repoPath, target.connectionId)).cwd
+  const cwd = ghRepoExecOptions(githubRepoContext(target.repoPath, target.connectionId)).cwd
+  const hostname = await getGitHubApiHostForRepo(target.repoPath, target.connectionId)
+  return {
+    ...(cwd ? { cwd } : {}),
+    ...(hostname ? { hostname } : {})
+  }
+}
+
+function normalizeGhApiRoute(route?: GhApiRoute | string): GhApiRoute {
+  if (!route) {
+    return {}
+  }
+  return typeof route === 'string' ? { cwd: route } : route
+}
+
+function ghApiArgs(route: GhApiRoute, endpoint: string): string[] {
+  return ['api', ...(route.hostname ? ['--hostname', route.hostname] : []), endpoint]
 }
 
 // ─── Slug validation ──────────────────────────────────────────────────
@@ -281,7 +306,7 @@ export type GraphqlVars = Record<string, string | number | boolean>
 export async function runGraphql<T>(
   query: string,
   vars: GraphqlVars,
-  cwd?: string
+  route?: GhApiRoute | string
 ): Promise<
   | { ok: true; data: T }
   | { ok: false; error: GitHubProjectViewError; raw: { stderr: string; stdout: string } }
@@ -293,7 +318,8 @@ export async function runGraphql<T>(
   // Why: build argv as an array. `-f` for strings (including numbers passed
   // as strings), `-F` coerces to typed. We use `-f` uniformly and coerce in
   // the query via Int! casts, because `gh` can confuse empty strings.
-  const args: string[] = ['api', 'graphql', '-f', `query=${query}`]
+  const ghRoute = normalizeGhApiRoute(route)
+  const args: string[] = [...ghApiArgs(ghRoute, 'graphql'), '-f', `query=${query}`]
   for (const [k, v] of Object.entries(vars)) {
     if (typeof v === 'number' || typeof v === 'boolean') {
       args.push('-F', `${k}=${String(v)}`)
@@ -306,7 +332,7 @@ export async function runGraphql<T>(
   try {
     const { stdout, stderr } = await ghExecFileAsync(args, {
       encoding: 'utf-8',
-      ...(cwd ? { cwd } : {})
+      ...(ghRoute.cwd ? { cwd: ghRoute.cwd } : {})
     })
     try {
       const parsed = JSON.parse(stdout) as { data?: T; errors?: GhGraphqlErrorShape[] }
@@ -350,7 +376,7 @@ export async function runGraphql<T>(
 
 export async function runRest<T>(
   args: string[],
-  cwd?: string,
+  route?: GhApiRoute | string,
   bucket: RateLimitBucketKind = 'core',
   options?: { expectEmpty?: boolean }
 ): Promise<{ ok: true; data: T } | { ok: false; error: GitHubProjectViewError }> {
@@ -360,11 +386,15 @@ export async function runRest<T>(
   }
   await acquire()
   noteRateLimitSpend(bucket)
+  const ghRoute = normalizeGhApiRoute(route)
   try {
-    const { stdout, stderr } = await ghExecFileAsync(['api', ...args], {
-      encoding: 'utf-8',
-      ...(cwd ? { cwd } : {})
-    })
+    const { stdout, stderr } = await ghExecFileAsync(
+      [...ghApiArgs(ghRoute, args[0]), ...args.slice(1)],
+      {
+        encoding: 'utf-8',
+        ...(ghRoute.cwd ? { cwd: ghRoute.cwd } : {})
+      }
+    )
     // Why: 204/empty-body endpoints (DELETE label, DELETE comment) return no
     // body. Treat empty stdout as success rather than misclassifying the
     // unparseable response as 'unknown' — which the caller would otherwise

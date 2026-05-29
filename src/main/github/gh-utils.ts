@@ -147,11 +147,13 @@ type OwnerRepoCacheEntry = {
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
 const ownerRepoInFlight = new Map<string, Promise<OwnerRepo | null>>()
+const repoHostCache = new Map<string, { value: string | null; expiresAt: number }>()
 
 /** @internal — exposed for tests only */
 export function _resetOwnerRepoCache(): void {
   ownerRepoCache.clear()
   ownerRepoInFlight.clear()
+  repoHostCache.clear()
 }
 
 /** @internal — exposed for tests only */
@@ -218,6 +220,72 @@ export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdenti
   } catch {
     return null
   }
+}
+
+function normalizeGitHubApiHost(host: string): string | null {
+  const normalized = host.trim().toLowerCase()
+  if (!/^[a-z0-9.-]+(?::[0-9]+)?$/.test(normalized)) {
+    return null
+  }
+  const hostname = normalized.split(':')[0]
+  // Why: ProjectV2 is GitHub-only. Do not reinterpret obvious non-GitHub
+  // remotes as GitHub Enterprise just because they have owner/repo-shaped URLs.
+  if (
+    hostname === 'gitlab.com' ||
+    hostname.endsWith('.gitlab.com') ||
+    hostname === 'bitbucket.org' ||
+    hostname.endsWith('.bitbucket.org') ||
+    hostname === 'dev.azure.com' ||
+    hostname.endsWith('.visualstudio.com')
+  ) {
+    return null
+  }
+  return normalized
+}
+
+function preferredGitHubApiHost(host: string): boolean {
+  const hostname = host.split(':')[0]
+  return hostname === 'github.com' || hostname.includes('github') || hostname.includes('ghe')
+}
+
+export async function getGitHubApiHostForRepo(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<string | null> {
+  const context = githubRepoContext(repoPath, connectionId)
+  const cacheKey = `${context.connectionId ?? 'local'}\0${context.repoPath}\0api-host`
+  const cached = repoHostCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+  if (cached) {
+    repoHostCache.delete(cacheKey)
+  }
+
+  let fallback: string | null = null
+  for (const remoteName of ['upstream', 'origin']) {
+    try {
+      const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+      const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
+      const host = identity ? normalizeGitHubApiHost(identity.host) : null
+      if (!host) {
+        continue
+      }
+      if (preferredGitHubApiHost(host)) {
+        repoHostCache.set(cacheKey, {
+          value: host,
+          expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS
+        })
+        return host
+      }
+      fallback ??= host
+    } catch {
+      // ignore missing remotes or non-git paths
+    }
+  }
+
+  repoHostCache.set(cacheKey, { value: fallback, expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS })
+  return fallback
 }
 
 export async function getRemoteUrlForRepo(

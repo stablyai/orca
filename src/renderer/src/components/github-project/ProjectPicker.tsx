@@ -45,7 +45,7 @@ type Props = {
   // Why (issue #1715): repo target hint so the picker's gh calls land on the
   // right host in multi-host setups (e.g. github.com + GHES). The wrapping
   // ProjectViewWrapper derives this from the active worktree's owning repo;
-  // gh uses cwd:repoPath to infer the host from the git remote. Omit both to
+  // main resolves the gh API host from that repo's git remote. Omit both to
   // accept gh's globally-active host (legitimate when no repo context exists).
   repoTarget?: GitHubRepoTarget
 }
@@ -57,6 +57,9 @@ type BrowseCacheEntry = {
   partialFailures?: { owner: string; message: string }[]
 }
 
+// Why (issue #1715): the cache is keyed by both the runtime scope AND the
+// repo-target routing key so a GHES vs github.com switch (or runtime switch)
+// can't serve projects discovered against the wrong host.
 const browseCacheByRuntimeScope = new Map<string, BrowseCacheEntry>()
 
 function getProjectPickerRuntimeScope(
@@ -64,6 +67,10 @@ function getProjectPickerRuntimeScope(
 ): string {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
+
+function repoTargetCacheKey(repoTarget: GitHubRepoTarget): string {
+  return `${repoTarget.connectionId ?? 'local'}:${repoTarget.repoPath ?? ''}`
 }
 
 async function listAccessibleProjectsForRuntime(
@@ -127,6 +134,7 @@ export default function ProjectPicker({
     }),
     [repoTarget?.repoPath, repoTarget?.connectionId]
   )
+  const ghRepoTargetKey = useMemo(() => repoTargetCacheKey(ghRepoTarget), [ghRepoTarget])
   const projectSettings: GitHubProjectSettings = useMemo(
     () =>
       settings?.githubProjects ?? {
@@ -142,7 +150,8 @@ export default function ProjectPicker({
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
-  const browseCache = browseCacheByRuntimeScope.get(getProjectPickerRuntimeScope(settings))
+  const browseCacheKey = `${getProjectPickerRuntimeScope(settings)}:${ghRepoTargetKey}`
+  const browseCache = browseCacheByRuntimeScope.get(browseCacheKey)
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -163,7 +172,7 @@ export default function ProjectPicker({
   const [viewLoading, setViewLoading] = useState(false)
 
   const loadBrowse = useCallback(async () => {
-    const cacheKey = getProjectPickerRuntimeScope(settings)
+    const cacheKey = `${getProjectPickerRuntimeScope(settings)}:${ghRepoTargetKey}`
     const cached = browseCacheByRuntimeScope.get(cacheKey) ?? null
     if (cached && Date.now() - cached.fetchedAt < BROWSE_CACHE_TTL_MS) {
       setBrowseProjects(cached.projects)
@@ -203,7 +212,21 @@ export default function ProjectPicker({
         setBrowseLoading(false)
       }
     }
-  }, [mountedRef, settings, ghRepoTarget])
+  }, [mountedRef, settings, ghRepoTarget, ghRepoTargetKey])
+
+  // Why (issue #1715): when the repo-target routing key changes (repo switch),
+  // rehydrate from the matching cache entry or clear so stale projects from
+  // the previous host don't linger.
+  useEffect(() => {
+    const cached = browseCacheByRuntimeScope.get(browseCacheKey)
+    if (cached) {
+      setBrowseProjects(cached.projects)
+      setPartialFailures(cached.partialFailures ?? [])
+      return
+    }
+    setBrowseProjects([])
+    setPartialFailures([])
+  }, [browseCacheKey])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -844,8 +867,8 @@ function parseProjectInput(
   try {
     const url = new URL(input)
     // Why (issue #1715): accept any host so GHES project URLs parse. The host
-    // itself is not propagated from this client-side validator; the main
-    // process resolver targets the right gh host via cwd:repoPath. We require
+    // itself is re-parsed by the main process resolver for explicit host
+    // routing. We require
     // at least one dot to reject obvious garbage hosts pasted by mistake.
     if (!url.hostname.includes('.')) {
       return null

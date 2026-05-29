@@ -27,6 +27,16 @@ export function SlugDialogBody({
   const { owner, repo, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
+  const activeRepo = useAppStore((s) =>
+    s.activeRepoId ? (s.repos.find((candidate) => candidate.id === s.activeRepoId) ?? null) : null
+  )
+  const repoTarget = useMemo(
+    () =>
+      activeRepo
+        ? { repoPath: activeRepo.path, connectionId: activeRepo.connectionId ?? null }
+        : {},
+    [activeRepo]
+  )
 
   // Why: the Project row is the source of truth for the list-side columns;
   // reading it reactively here keeps the dialog in sync with optimistic
@@ -57,6 +67,9 @@ export function SlugDialogBody({
     setError(null)
     setDetails(null)
     const target = getActiveRuntimeTarget(sourceSettings)
+    // Why (issue #1715): thread the repo-host routing hint through both the
+    // runtime RPC and the local IPC so the details lookup lands on the host
+    // that owns the active repo (github.com vs GHES).
     const request =
       target.kind === 'environment'
         ? callRuntimeRpc<
@@ -64,10 +77,10 @@ export function SlugDialogBody({
           >(
             target,
             'github.project.workItemDetailsBySlug',
-            { owner, repo, number, type },
+            { ...repoTarget, owner, repo, number, type },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, number, type })
+        : window.api.gh.projectWorkItemDetailsBySlug({ ...repoTarget, owner, repo, number, type })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {
@@ -91,7 +104,7 @@ export function SlugDialogBody({
         }
         setLoading(false)
       })
-  }, [owner, repo, number, type, sourceSettings])
+  }, [owner, repo, number, type, sourceSettings, repoTarget])
 
   const title = row?.content.title ?? details?.item.title ?? ''
   const url = row?.content.url ?? details?.item.url ?? null

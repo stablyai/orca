@@ -61,6 +61,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
+import { activeGitHubRepoTargetFromState } from '../../lib/github-active-repo-target'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -329,28 +330,20 @@ function countGitHubWorkItemsForRepo(
   })
 }
 
-// Why (issue #1715): derive a gh-host routing hint from the active repo so
-// project gh calls land on the host that owns the repo in multi-host setups
-// (github.com + GHES). Returns `{}` when no repo is active; callers then
-// accept gh's globally active host (legitimate for paste-to-add from a
-// foreign host with no repo context).
-function activeRepoTargetFromState(state: AppState): GitHubRepoTarget {
-  const repo = state.activeRepoId ? state.repos.find((r) => r.id === state.activeRepoId) : null
-  if (!repo) {
-    return {}
-  }
-  return { repoPath: repo.path, connectionId: repo.connectionId ?? null }
-}
-
 export function projectViewCacheKey(
   ownerType: GetProjectViewTableArgs['ownerType'],
   owner: string,
   projectNumber: number,
   resolvedViewId: string,
   queryOverride?: string,
-  sourceScope = 'local'
+  sourceScope = 'local',
+  // Why (issue #1715): the repo-host routing hint participates in the cache
+  // key so the same owner/project on github.com vs GHES can't reuse each
+  // other's cached table.
+  repoTarget?: GitHubRepoTarget
 ): string {
-  return `github-project:${sourceScope}:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
+  const targetKey = `${repoTarget?.connectionId ?? 'local'}:${repoTarget?.repoPath ?? ''}`
+  return `github-project:${sourceScope}:${targetKey}:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
 }
 
 function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope: string): string {
@@ -364,7 +357,8 @@ function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope: strin
       : args.viewName
         ? `name:${args.viewName}`
         : 'default'
-  return `${sourceScope}:${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
+  const targetKey = `${args.connectionId ?? 'local'}:${args.repoPath ?? ''}`
+  return `${sourceScope}:${targetKey}:${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
 }
 
 function projectViewSourceScope(settings: AppState['settings']): string {
@@ -1684,18 +1678,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   fetchProjectViewTable: async (args, options) => {
     const target = getActiveRuntimeTarget(get().settings)
     const sourceScope = projectViewSourceScope(get().settings)
-    const requestKey = projectViewRequestKey(args, sourceScope)
+    // Why (issue #1715): include the repo-host routing hint in both the
+    // request and cache identity so same owner/project numbers on different
+    // GitHub hosts cannot reuse each other's data.
+    const payload: GetProjectViewTableArgs = { ...activeGitHubRepoTargetFromState(get()), ...args }
+    const requestKey = projectViewRequestKey(payload, sourceScope)
 
     // Fast path: when the caller supplies `viewId`, we already know the
     // resolved cache key and can serve a fresh entry directly.
-    const maybeKnownKey = args.viewId
+    const maybeKnownKey = payload.viewId
       ? projectViewCacheKey(
-          args.ownerType,
-          args.owner,
-          args.projectNumber,
-          args.viewId,
-          args.queryOverride,
-          sourceScope
+          payload.ownerType,
+          payload.owner,
+          payload.projectNumber,
+          payload.viewId,
+          payload.queryOverride,
+          sourceScope,
+          payload
         )
       : null
     if (!options?.force && maybeKnownKey) {
@@ -1720,11 +1719,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
-        // Why (issue #1715): inject the active repo as a gh-host routing
-        // hint so the view-fetch GraphQL targets the host that owns the
-        // repo (github.com vs GHES). gh infers the host from the git
-        // remote when called with cwd:repoPath.
-        const payload: GetProjectViewTableArgs = { ...activeRepoTargetFromState(get()), ...args }
         const envelope =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetProjectViewTableResult>(
@@ -1741,8 +1735,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             table.project.owner,
             table.project.number,
             table.selectedView.id,
-            args.queryOverride,
-            sourceScope
+            payload.queryOverride,
+            sourceScope,
+            payload
           )
           set((s) => ({
             projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
@@ -1829,7 +1824,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // host that owns the active repo so GHES projects don't fall through
     // to gh's globally-active host (github.com) and 404 / mis-auth.
     const updatePayload = {
-      ...activeRepoTargetFromState(state),
+      ...activeGitHubRepoTargetFromState(state),
       projectId: table.project.id,
       itemId: rowId,
       fieldId,
@@ -1886,7 +1881,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // Why (issue #1715): same host-routing concern as updateProjectFieldValue
     // — clear-field GraphQL must hit the host that owns the active repo.
     const clearPayload = {
-      ...activeRepoTargetFromState(state),
+      ...activeGitHubRepoTargetFromState(state),
       projectId: table.project.id,
       itemId: rowId,
       fieldId
@@ -1993,11 +1988,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
+    // Why (issue #1715): the repo-host routing hint must also flow to the
+    // slug-addressed mutation so it lands on the host that owns the repo.
+    const repoTarget = activeGitHubRepoTargetFromState(state)
     if (
       previousRow.itemType === 'PULL_REQUEST' &&
       (updates.title !== undefined || updates.body !== undefined)
     ) {
       const args = {
+        ...repoTarget,
         owner,
         repo,
         number,
@@ -2029,6 +2028,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           (updates.title !== undefined || updates.body !== undefined)))
     ) {
       const args = {
+        ...repoTarget,
         owner,
         repo,
         number,
@@ -2121,7 +2121,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
+    // Why (issue #1715): also thread the repo-host routing hint into the
+    // slug-addressed issue-type mutation.
+    const repoTarget = activeGitHubRepoTargetFromState(state)
     const args = {
+      ...repoTarget,
       owner,
       repo,
       number,

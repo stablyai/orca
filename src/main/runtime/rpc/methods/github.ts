@@ -45,10 +45,6 @@ const SlugRepo = z.object({
   repo: requiredString('Missing repo')
 })
 
-const SlugAssignableUsers = SlugRepo.extend({
-  seedLogins: z.array(z.string()).optional()
-})
-
 const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
@@ -199,11 +195,16 @@ const ProjectOwnerType = z.enum(['organization', 'user'])
 // Why (issue #1715): repo target lets the renderer hint which gh host to
 // route to in multi-host setups. Both fields optional — callers without a
 // repo context (e.g. paste-to-add from a foreign host) accept gh's globally
-// active host. `repoPath` is the local checkout path used as gh's cwd so
-// it infers the host from the git remote.
+// active host. `repoPath` lets main resolve the git remote host for
+// `gh api --hostname`; local repos also use it as cwd for repo placeholders.
 const RepoTarget = z.object({
   repoPath: OptionalString,
   connectionId: OptionalString.nullable().optional()
+})
+
+const RoutedSlugRepo = RepoTarget.merge(SlugRepo)
+const RoutedSlugAssignableUsers = RoutedSlugRepo.extend({
+  seedLogins: z.array(z.string()).optional()
 })
 
 const ProjectViewTable = RepoTarget.extend({
@@ -216,7 +217,7 @@ const ProjectViewTable = RepoTarget.extend({
   queryOverride: OptionalString
 })
 
-const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
+const ProjectWorkItemDetailsBySlug = RoutedSlugRepo.extend({
   number: z.number().int().positive(),
   type: z.enum(['issue', 'pr'])
 })
@@ -244,16 +245,12 @@ const ClearProjectItemField = RepoTarget.extend({
   fieldId: requiredString('Missing field ID')
 })
 
-const SlugIssueUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugIssueUpdate = RoutedSlugRepo.extend({
   number: z.number().int().positive(),
   updates: IssueUpdate
 })
 
-const SlugPullRequestUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugPullRequestUpdate = RoutedSlugRepo.extend({
   number: z.number().int().positive(),
   updates: z.object({
     state: z.enum(['open', 'closed']).optional(),
@@ -262,30 +259,22 @@ const SlugPullRequestUpdate = z.object({
   })
 })
 
-const SlugIssueTypeUpdate = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugIssueTypeUpdate = RoutedSlugRepo.extend({
   number: z.number().int().positive(),
   issueTypeId: z.string().nullable()
 })
 
-const SlugIssueComment = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugIssueComment = RoutedSlugRepo.extend({
   number: z.number().int().positive(),
   body: requiredString('Comment body required')
 })
 
-const SlugIssueCommentEdit = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugIssueCommentEdit = RoutedSlugRepo.extend({
   commentId: z.number().int().positive(),
   body: requiredString('Comment body required')
 })
 
-const SlugIssueCommentDelete = z.object({
-  owner: requiredString('Missing owner'),
-  repo: requiredString('Missing repo'),
+const SlugIssueCommentDelete = RoutedSlugRepo.extend({
   commentId: z.number().int().positive()
 })
 
@@ -553,17 +542,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'github.project.listLabelsBySlug',
-    params: SlugRepo,
+    params: RoutedSlugRepo,
     handler: async (params, { runtime }) => runtime.listGitHubLabelsBySlug(params)
   }),
   defineMethod({
     name: 'github.project.listAssignableUsersBySlug',
-    params: SlugAssignableUsers,
+    params: RoutedSlugAssignableUsers,
     handler: async (params, { runtime }) => runtime.listGitHubAssignableUsersBySlug(params)
   }),
   defineMethod({
     name: 'github.project.listIssueTypesBySlug',
-    params: SlugRepo,
+    params: RoutedSlugRepo,
     handler: async (params, { runtime }) => runtime.listGitHubIssueTypesBySlug(params)
   }),
   defineMethod({

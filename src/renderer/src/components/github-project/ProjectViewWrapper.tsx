@@ -103,8 +103,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const projectViewSourceScope = useMemo(() => getProjectViewSourceScope(settings), [settings])
   // Why (issue #1715): pass the active repo as a gh-host hint to all
   // project-related gh calls (picker, project view fetch, mutations). gh
-  // infers the host from the git remote when invoked with cwd:repoPath;
-  // without this, GHES users hit github.com and see misleading scope errors.
+  // resolves the API host from that repo's git remote; without this, GHES
+  // users hit github.com and see misleading scope errors.
   const activeRepoTarget = useMemo<GitHubRepoTarget>(() => {
     const repo = activeRepoId ? repos.find((r) => r.id === activeRepoId) : null
     if (!repo) {
@@ -206,7 +206,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       activeProject.number,
       viewId,
       queryOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeRepoTarget
     )
     if (projectViewCache[cacheKey]?.data) {
       return
@@ -227,7 +228,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     projectViewCache,
     doFetch,
     appliedQueryByView,
-    projectViewSourceScope
+    projectViewSourceScope,
+    activeRepoTarget
   ])
 
   // Load the project's view list whenever the active project changes so the
@@ -346,9 +348,16 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       activeProject.number,
       viewId,
       currentAppliedOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeRepoTarget
     )
-  }, [activeProject, lastViewByProject, currentAppliedOverride, projectViewSourceScope])
+  }, [
+    activeProject,
+    lastViewByProject,
+    currentAppliedOverride,
+    projectViewSourceScope,
+    activeRepoTarget
+  ])
 
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)

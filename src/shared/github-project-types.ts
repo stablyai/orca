@@ -329,12 +329,11 @@ export type ListIssueTypesBySlugResult =
 
 /**
  * Repo target for routing `gh` to the correct host in multi-host setups
- * (e.g. github.com + GHES). Passed through to `gh` as `cwd: repoPath` for
- * local repos so `gh` infers the host from the git remote. When
- * `connectionId` is set the call is SSH-routed and `cwd` is omitted because
- * the path is meaningful only on the remote. Both optional — calls that
- * legitimately span hosts (paste-to-add a URL from a foreign host) leave
- * both unset and accept gh's globally-active host. See issue #1715.
+ * (e.g. github.com + GHES). Main resolves the repo's git remote host and
+ * passes it to `gh api --hostname`; local repos also keep `cwd: repoPath`
+ * for repo-context placeholders. When `connectionId` is set the path is read
+ * through the SSH git provider and local cwd is omitted. Both optional —
+ * calls with no repo context accept gh's globally-active host. See issue #1715.
  */
 export type GitHubRepoTarget = {
   repoPath?: string
@@ -357,7 +356,7 @@ export type GetProjectViewTableArgs = GitHubRepoTarget & {
   queryOverride?: string
 }
 
-export type ProjectWorkItemDetailsBySlugArgs = {
+export type ProjectWorkItemDetailsBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   number: number
@@ -377,57 +376,57 @@ export type ClearProjectItemFieldArgs = GitHubRepoTarget & {
   fieldId: string
 }
 
-export type UpdateIssueBySlugArgs = {
+export type UpdateIssueBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   number: number
   updates: GitHubIssueUpdate & { body?: string }
 }
 
-export type UpdatePullRequestBySlugArgs = {
+export type UpdatePullRequestBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   number: number
   updates: { title?: string; body?: string; state?: 'open' | 'closed' }
 }
 
-export type AddIssueCommentBySlugArgs = {
+export type AddIssueCommentBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   number: number
   body: string
 }
 
-export type UpdateIssueCommentBySlugArgs = {
+export type UpdateIssueCommentBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   commentId: number
   body: string
 }
 
-export type DeleteIssueCommentBySlugArgs = {
+export type DeleteIssueCommentBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   commentId: number
 }
 
-export type ListLabelsBySlugArgs = {
+export type ListLabelsBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
 }
 
-export type ListAssignableUsersBySlugArgs = {
+export type ListAssignableUsersBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   seedLogins?: string[]
 }
 
-export type ListIssueTypesBySlugArgs = {
+export type ListIssueTypesBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
 }
 
-export type UpdateIssueTypeBySlugArgs = {
+export type UpdateIssueTypeBySlugArgs = GitHubRepoTarget & {
   owner: string
   repo: string
   number: number

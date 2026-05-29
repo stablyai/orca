@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { activeGitHubRepoTargetFromState } from '@/lib/github-active-repo-target'
 import type {
   GitHubIssueType,
   GitHubProjectField,
@@ -323,6 +324,15 @@ function IssueTypeCell({
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<GitHubIssueType[]>([])
   const [loading, setLoading] = useState(false)
+  // Why (issue #1715): route the issue-type lookup to the host that owns the
+  // active repo. Memoized on primitive ids so a fresh target per render
+  // doesn't refire the effect.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const repoTarget = React.useMemo(
+    () => activeGitHubRepoTargetFromState({ activeRepoId, repos }),
+    [activeRepoId, repos]
+  )
   const [owner, repo] = (row.content.repository ?? '').split('/')
   const { lookupSlug } = useRepoSlugIndex()
   const matchedRepo = useMemo(
@@ -340,15 +350,16 @@ function IssueTypeCell({
     let cancelled = false
     setLoading(true)
     const target = getActiveRuntimeTarget(matchedRepo ? ownerSettings : sourceSettings)
+    const args = { ...repoTarget, owner, repo }
     const request =
       target.kind === 'environment'
         ? callRuntimeRpc<ListIssueTypesBySlugResult>(
             target,
             'github.project.listIssueTypesBySlug',
-            { owner, repo },
+            args,
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.listIssueTypesBySlug({ owner, repo })
+        : window.api.gh.listIssueTypesBySlug(args)
     request
       .then((res) => {
         if (cancelled) {
@@ -366,7 +377,7 @@ function IssueTypeCell({
     return () => {
       cancelled = true
     }
-  }, [matchedRepo, open, owner, ownerSettings, repo, sourceSettings])
+  }, [matchedRepo, open, owner, ownerSettings, repo, sourceSettings, repoTarget])
 
   const trigger = (
     <span className="inline-flex items-center gap-1 text-xs">
@@ -828,6 +839,14 @@ function AssigneesCell({
 }): React.JSX.Element {
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
+  // Why (issue #1715): route the assignee lookup to the host that owns the
+  // active repo. Memoized on primitive ids to keep the IPC stable.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const repoTarget = React.useMemo(
+    () => activeGitHubRepoTargetFromState({ activeRepoId, repos }),
+    [activeRepoId, repos]
+  )
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
@@ -849,7 +868,8 @@ function AssigneesCell({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings
+    sourceSettings,
+    repoTarget
   )
 
   const labelContent =
@@ -943,9 +963,22 @@ function LabelsCell({
 }): React.JSX.Element {
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
+  // Why (issue #1715): route the label lookup to the host that owns the
+  // active repo. Memoized on primitive ids to keep the IPC stable.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const repoTarget = React.useMemo(
+    () => activeGitHubRepoTargetFromState({ activeRepoId, repos }),
+    [activeRepoId, repos]
+  )
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
-  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceSettings)
+  const metadata = useRepoLabelsBySlug(
+    open ? owner : null,
+    open ? repo : null,
+    sourceSettings,
+    repoTarget
+  )
 
   const labelContent =
     labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)

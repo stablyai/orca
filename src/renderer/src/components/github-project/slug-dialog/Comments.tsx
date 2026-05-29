@@ -10,6 +10,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import type { GlobalSettings, PRComment } from '../../../../../shared/types'
 import type {
+  GitHubRepoTarget,
   GitHubProjectCommentMutationResult,
   GitHubProjectMutationResult
 } from '../../../../../shared/github-project-types'
@@ -33,6 +34,21 @@ function useRuntimeSettingsForSlug(owner: string, repo: string) {
   )
 }
 
+// Why (issue #1715): the comment mutations also need the repo-host routing
+// hint so they land on the host that owns the active repo.
+function useActiveRepoTarget(): GitHubRepoTarget {
+  const activeRepo = useAppStore((s) =>
+    s.activeRepoId ? (s.repos.find((repo) => repo.id === s.activeRepoId) ?? null) : null
+  )
+  return useMemo(
+    () =>
+      activeRepo
+        ? { repoPath: activeRepo.path, connectionId: activeRepo.connectionId ?? null }
+        : {},
+    [activeRepo]
+  )
+}
+
 export function CommentsList({
   owner,
   repo,
@@ -48,6 +64,7 @@ export function CommentsList({
 }): React.JSX.Element {
   const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
+  const repoTarget = useActiveRepoTarget()
   return (
     <div className="flex flex-col gap-3">
       {comments.length === 0 ? (
@@ -67,6 +84,7 @@ export function CommentsList({
             onDelete={async () => {
               const target = getRuntimeTarget(runtimeSettings)
               const args = {
+                ...repoTarget,
                 owner,
                 repo,
                 commentId: c.id
@@ -88,6 +106,7 @@ export function CommentsList({
             onEdit={async (next) => {
               const target = getRuntimeTarget(runtimeSettings)
               const args = {
+                ...repoTarget,
                 owner,
                 repo,
                 commentId: c.id,
@@ -197,6 +216,7 @@ export function NewCommentForm({
   const [submitting, setSubmitting] = useState(false)
   const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
+  const repoTarget = useActiveRepoTarget()
   return (
     <div className="flex flex-col gap-2">
       <textarea
@@ -220,7 +240,7 @@ export function NewCommentForm({
             setSubmitting(true)
             try {
               const target = getRuntimeTarget(runtimeSettings)
-              const args = { owner, repo, number, body }
+              const args = { ...repoTarget, owner, repo, number, body }
               const res = target
                 ? await callRuntimeRpc<GitHubProjectCommentMutationResult>(
                     target,
