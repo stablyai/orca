@@ -14,6 +14,39 @@ import {
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
+import { appStarSourceSchema } from './gh-star-source'
+
+describe('app_starred_orca schema', () => {
+  it('accepts every declared app star source', () => {
+    for (const source of appStarSourceSchema.options) {
+      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('accepts cohort context on successful app star telemetry', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'settings',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown app star source values', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'github_website'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'landing',
+      repo: 'stablyai/orca'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
 
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {

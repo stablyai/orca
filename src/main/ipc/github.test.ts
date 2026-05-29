@@ -8,6 +8,10 @@ const {
   listWorkItemsMock,
   getAuthenticatedViewerMock,
   mergePRMock,
+  checkOrcaStarredMock,
+  starOrcaMock,
+  trackMock,
+  getCohortAtEmitMock,
   getAllWebContentsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -17,6 +21,10 @@ const {
   listWorkItemsMock: vi.fn(),
   getAuthenticatedViewerMock: vi.fn(),
   mergePRMock: vi.fn(),
+  checkOrcaStarredMock: vi.fn(),
+  starOrcaMock: vi.fn(),
+  trackMock: vi.fn(),
+  getCohortAtEmitMock: vi.fn(),
   getAllWebContentsMock: vi.fn()
 }))
 
@@ -35,7 +43,17 @@ vi.mock('../github/client', () => ({
   listIssues: listIssuesMock,
   listWorkItems: listWorkItemsMock,
   getAuthenticatedViewer: getAuthenticatedViewerMock,
-  mergePR: mergePRMock
+  mergePR: mergePRMock,
+  checkOrcaStarred: checkOrcaStarredMock,
+  starOrca: starOrcaMock
+}))
+
+vi.mock('../telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -70,6 +88,11 @@ describe('registerGitHubHandlers', () => {
     listWorkItemsMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
     mergePRMock.mockReset()
+    checkOrcaStarredMock.mockReset()
+    starOrcaMock.mockReset()
+    trackMock.mockReset()
+    getCohortAtEmitMock.mockReset()
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
     getAllWebContentsMock.mockReset()
     getAllWebContentsMock.mockReturnValue([])
     for (const key of Object.keys(handlers)) {
@@ -269,5 +292,74 @@ describe('registerGitHubHandlers', () => {
       email: 'octocat@example.com'
     })
     expect(getAuthenticatedViewerMock).toHaveBeenCalled()
+  })
+
+  it('emits app_starred_orca once after a successful star with cohort context', async () => {
+    starOrcaMock.mockResolvedValue(true)
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(handlers['gh:starOrca'](null, 'settings')).resolves.toBe(true)
+
+    expect(starOrcaMock).toHaveBeenCalledTimes(1)
+    expect(getCohortAtEmitMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
+      source: 'settings',
+      nth_repo_added: 3
+    })
+  })
+
+  it('accepts every app star source for success telemetry', async () => {
+    starOrcaMock.mockResolvedValue(true)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    for (const source of ['star_nag', 'settings', 'landing'] as const) {
+      await expect(handlers['gh:starOrca'](null, source)).resolves.toBe(true)
+    }
+
+    expect(trackMock).toHaveBeenCalledTimes(3)
+    expect(trackMock.mock.calls.map(([, props]) => props)).toEqual([
+      { source: 'star_nag', nth_repo_added: undefined },
+      { source: 'settings', nth_repo_added: undefined },
+      { source: 'landing', nth_repo_added: undefined }
+    ])
+  })
+
+  it('does not emit app_starred_orca when the star action returns false', async () => {
+    starOrcaMock.mockResolvedValue(false)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(handlers['gh:starOrca'](null, 'landing')).resolves.toBe(false)
+
+    expect(starOrcaMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
+  it('does not emit app_starred_orca when the star action throws', async () => {
+    starOrcaMock.mockRejectedValue(new Error('gh failed'))
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(handlers['gh:starOrca'](null, 'star_nag')).rejects.toThrow('gh failed')
+
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves star result but skips telemetry for an invalid IPC source', async () => {
+    starOrcaMock.mockResolvedValue(true)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(handlers['gh:starOrca'](null, 'github_website')).resolves.toBe(true)
+
+    expect(starOrcaMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })
 })

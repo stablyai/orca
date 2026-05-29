@@ -272,6 +272,7 @@ import type {
 } from '../shared/opencode-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type { AppStarSource } from '../shared/gh-star-source'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -1065,7 +1066,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     checkOrcaStarred: () => Promise<boolean | null>
-    starOrca: () => Promise<boolean>
+    starOrca: (source: AppStarSource) => Promise<boolean>
     /**
      * GitHub API rate-limit snapshot. Does NOT consume quota (the
      * `rate_limit` endpoint is exempt). Cached 30s server-side — pass
