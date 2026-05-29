@@ -195,9 +195,13 @@ export function useOnboardingFlow(
   // detectedAgentIdsRef / isDetectingRef pattern.
   const pathSourceRef = useRef(pathSource)
   const pathFailureReasonRef = useRef(pathFailureReason)
-  useEffect(() => {
-    selectedAgentRef.current = selectedAgent
-  }, [selectedAgent])
+  // Why: stable onboarding handlers read these values at click/async time, so
+  // keep the mirrors fresh before events can run.
+  selectedAgentRef.current = selectedAgent
+  detectedAgentIdsRef.current = detectedAgentIds ?? []
+  isDetectingRef.current = isDetectingAgents
+  pathSourceRef.current = pathSource
+  pathFailureReasonRef.current = pathFailureReason
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
@@ -230,23 +234,6 @@ export function useOnboardingFlow(
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
   const hasExistingProject = repos.length > 0
-
-  // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
-  // the freshest detection snapshot at click time without re-rebinding the
-  // handler whenever the store flips a flag. Mirrors the
-  // `selectedAgentRef` pattern above.
-  useEffect(() => {
-    detectedAgentIdsRef.current = detectedAgentIds ?? []
-  }, [detectedAgentIds])
-  useEffect(() => {
-    isDetectingRef.current = isDetectingAgents
-  }, [isDetectingAgents])
-  useEffect(() => {
-    pathSourceRef.current = pathSource
-  }, [pathSource])
-  useEffect(() => {
-    pathFailureReasonRef.current = pathFailureReason
-  }, [pathFailureReason])
 
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())
