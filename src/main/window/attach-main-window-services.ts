@@ -33,6 +33,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
+import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 
 export function attachMainWindowServices(
@@ -369,25 +370,15 @@ function registerRuntimeWindowLifecycle(
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
-  ipcMain.on(
-    'terminal:file-dropped-from-preload',
-    (
-      _event,
-      args:
-        | { paths: string[]; target: 'editor' }
-        | { paths: string[]; target: 'terminal'; tabId?: string }
-        | { paths: string[]; target: 'composer' }
-        | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-    ) => {
-      if (mainWindow.isDestroyed()) {
-        return
-      }
-
-      // Why: relay exactly one IPC event per drop gesture so the renderer
-      // receives the full batch of paths without timer-based reconstruction.
-      mainWindow.webContents.send('terminal:file-drop', args)
+  ipcMain.on('terminal:file-dropped-from-preload', (_event, args: NativeFileDropPayload) => {
+    if (mainWindow.isDestroyed()) {
+      return
     }
-  )
+
+    // Why: relay exactly one IPC event per drop gesture so the renderer
+    // receives the full batch of paths without timer-based reconstruction.
+    mainWindow.webContents.send('terminal:file-drop', args)
+  })
 }
 
 export function registerUpdaterHandlers(_store: Store): void {
