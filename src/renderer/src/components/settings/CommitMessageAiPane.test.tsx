@@ -1,7 +1,8 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { CommitMessageAiSettings, GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
+import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import {
   getCommitMessageModelDiscoveryHostKey,
   getCommitMessageModelDiscoveryHostKeyForScope
@@ -45,10 +46,10 @@ describe('CommitMessageAiPane', () => {
   it('renders only the opt-in control before the feature is enabled', () => {
     const markup = renderPane(buildSettings())
 
-    expect(markup).toContain('AI Commit Messages')
-    expect(markup).toContain('Enable AI commit messages')
+    expect(markup).toContain('Source Control AI')
+    expect(markup).toContain('Enable Source Control AI')
     expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('Which agent drafts your commit messages')
+    expect(markup).not.toContain('Orca invokes this CLI')
     expect(markup).not.toContain('Thinking effort')
   })
 
@@ -67,9 +68,12 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('aria-checked="true"')
-    expect(markup).toContain('Which agent drafts your commit messages')
-    expect(markup).toContain('Model')
+    expect(markup).toContain('Orca invokes this CLI')
+    expect(markup).toContain('Default model')
     expect(markup).toContain('Thinking effort')
+    expect(markup).toContain('Commit message model')
+    expect(markup).toContain('PR details model')
+    expect(markup).toContain('Branch name model')
     expect(markup).toContain('Higher effort produces more careful messages')
     expect(markup).toContain('Use Conventional Commits.')
     expect(markup).toContain('Save')
@@ -108,7 +112,7 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('AI Commit Messages')
+    expect(markup).toContain('Source Control AI')
     expect(markup).toContain('Custom command')
     expect(markup).toContain('ollama run llama3.1 {prompt}')
   })
@@ -150,8 +154,8 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('Gemini')
-    expect(markup).toContain('Gemini commit message generation is coming soon')
-    expect(markup).not.toContain('Which model the selected agent uses')
+    expect(markup).toContain('Gemini Source Control AI is coming soon')
+    expect(markup).not.toContain('Which model Source Control AI uses')
   })
 
   it('keeps custom command discoverable in settings search metadata', () => {
@@ -165,12 +169,12 @@ describe('CommitMessageAiPane', () => {
   })
 
   it('merges discovered models without clobbering newer settings fields', () => {
-    const config: CommitMessageAiSettings = {
+    const config: SourceControlAiSettings = {
       enabled: true,
       agentId: 'cursor',
       selectedModelByAgent: { cursor: 'stale-model', codex: 'gpt-5.5' },
       selectedThinkingByModel: { 'gpt-5.5': 'low' },
-      customPrompt: 'Use Conventional Commits.',
+      instructionsByOperation: { commitMessage: 'Use Conventional Commits.' },
       customAgentCommand: '',
       discoveredModelsByAgent: {}
     }
@@ -182,7 +186,7 @@ describe('CommitMessageAiPane', () => {
       'auto'
     )
 
-    expect(merged.customPrompt).toBe('Use Conventional Commits.')
+    expect(merged.instructionsByOperation.commitMessage).toBe('Use Conventional Commits.')
     expect(merged.agentId).toBe('cursor')
     expect(merged.selectedModelByAgent).toEqual({
       cursor: 'auto',
@@ -195,12 +199,12 @@ describe('CommitMessageAiPane', () => {
   })
 
   it('keeps SSH discovered models out of the legacy local cache', () => {
-    const config: CommitMessageAiSettings = {
+    const config: SourceControlAiSettings = {
       enabled: true,
       agentId: 'cursor',
       selectedModelByAgent: { cursor: 'auto' },
       selectedThinkingByModel: {},
-      customPrompt: '',
+      instructionsByOperation: {},
       customAgentCommand: '',
       discoveredModelsByAgent: { cursor: [{ id: 'auto', label: 'Auto' }] },
       selectedModelByAgentByHost: {},

@@ -641,6 +641,47 @@ describe('getPRForBranch', () => {
     expect(pr?.number).toBe(77)
   })
 
+  it('normalizes exact linked PR fallback metadata when no GitHub remote is resolved', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce(null)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 77,
+        title: 'Linked fallback PR',
+        state: 'OPEN',
+        url: 'https://example.com/pr/77',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        reviewDecision: '',
+        autoMergeRequest: { enabledAt: '2026-03-28T00:00:00Z' },
+        baseRefName: 'main',
+        headRefName: 'feature/test',
+        baseRefOid: 'base-oid',
+        headRefOid: 'head-oid'
+      })
+    })
+
+    const pr = await getPRForBranch('/non-github-repo', 'feature/test', 77)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '77',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/non-github-repo' }
+    )
+    expect(pr).toMatchObject({
+      number: 77,
+      reviewDecision: null,
+      autoMergeEnabled: true
+    })
+    expect(pr?.mergeQueueRequired).toBeUndefined()
+  })
+
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -1060,6 +1101,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
+    _resetMergeQueueCacheForTests()
   })
 
   it('skips PR review-thread GraphQL fetch while preserving REST comments', async () => {
@@ -1278,6 +1320,41 @@ describe('GitHub GraphQL rate-limit guard', () => {
     await expect(
       mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
     ).resolves.toMatchObject({ ok: false })
+
+    expect(
+      ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
+    ).toHaveLength(1)
+  })
+
+  it('caches unknown merge queue probes after GraphQL failures', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    const prView = {
+      number: 7,
+      title: 'PR',
+      state: 'OPEN',
+      url: 'https://github.com/stablyai/orca/pull/7',
+      statusCheckRollup: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      isDraft: false,
+      mergeable: 'MERGEABLE',
+      reviewDecision: 'APPROVED',
+      mergeStateStatus: 'CLEAN',
+      autoMergeRequest: null,
+      baseRefName: 'main',
+      baseRefOid: 'base-oid',
+      headRefOid: 'head-oid'
+    }
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
+      .mockRejectedValueOnce(new Error('network is down'))
+      .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
+
+    await expect(getPRForBranch('/repo-root', 'feature/test', 7)).resolves.toMatchObject({
+      mergeQueueRequired: null
+    })
+    await expect(getPRForBranch('/repo-root', 'feature/test', 7)).resolves.toMatchObject({
+      mergeQueueRequired: null
+    })
 
     expect(
       ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))

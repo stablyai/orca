@@ -8,6 +8,7 @@ import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { createCoalescedPollRunner } from './coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -22,6 +23,9 @@ export function useGitStatusPolling(): void {
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
   const statusPollInFlightRef = useRef(false)
   const statusPollRerunRef = useRef(false)
@@ -62,7 +66,19 @@ export function useGitStatusPolling(): void {
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const runFetchStatus = useCallback(async () => {
-    if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    if (
+      !shouldPollActiveGitStatus({
+        activeWorktreeId,
+        worktreePath,
+        rightSidebarOpen,
+        rightSidebarTab,
+        openFiles
+      }) ||
+      !activeRepoSupportsGit
+    ) {
       return
     }
     if (!isConnectionReady(activeConnectionId)) {
@@ -93,6 +109,9 @@ export function useGitStatusPolling(): void {
     activeWorktreeId,
     fetchUpstreamStatus,
     isConnectionReady,
+    openFiles,
+    rightSidebarOpen,
+    rightSidebarTab,
     worktreePath,
     setGitStatus,
     setUpstreamStatus,

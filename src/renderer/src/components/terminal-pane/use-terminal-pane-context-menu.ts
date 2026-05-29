@@ -7,6 +7,7 @@ import type { TerminalQuickCommand } from '../../../../shared/types'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -107,24 +108,17 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
-    const text = await window.api.ui.readClipboardText()
-    if (text) {
-      pasteTerminalText(pane.terminal, text)
-      pane.terminal.focus()
-      return
-    }
-    // Why: clipboard has no text — check for an image (e.g. screenshot) and
-    // save it on the same host as this terminal before pasting the file path.
-    try {
-      const connectionId = getConnectionId(worktreeId) ?? null
-      const filePath = await window.api.ui.saveClipboardImageAsTempFile({ connectionId })
-      if (filePath) {
-        pasteTerminalText(pane.terminal, filePath)
+    const connectionId = getConnectionId(worktreeId) ?? null
+    await pasteTerminalClipboard({
+      readClipboardText: window.api.ui.readClipboardText,
+      saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      connectionId,
+      pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+      onImagePasteError: (error) => {
+        const detail = error instanceof Error ? error.message : String(error)
+        onPasteError(`Image paste failed: ${detail}`)
       }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      onPasteError(`Image paste failed: ${detail}`)
-    }
+    })
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close, but xterm.js only accepts input when its own helper textarea is
     // focused. Without this, the user has to click the pane again before

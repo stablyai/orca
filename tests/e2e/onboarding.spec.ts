@@ -118,6 +118,14 @@ function onboardingNotificationSoundSelect(page: Page) {
   return page.getByRole('combobox').first()
 }
 
+async function expectOnboardingNotificationSoundMenuClosed(page: Page): Promise<void> {
+  await expect(page.getByRole('option', { name: /Choose Custom File/i })).toHaveCount(0)
+}
+
+async function expectOnboardingSkipConfirmationClosed(page: Page): Promise<void> {
+  await expect(page.getByRole('dialog', { name: /Skip onboarding\?/i })).toHaveCount(0)
+}
+
 async function expectOnboardingNotificationSound(page: Page, name: RegExp): Promise<void> {
   await expect(onboardingNotificationSoundSelect(page)).toContainText(name)
 }
@@ -125,15 +133,23 @@ async function expectOnboardingNotificationSound(page: Page, name: RegExp): Prom
 async function chooseOnboardingNotificationSound(page: Page, name: RegExp): Promise<void> {
   const soundSelect = onboardingNotificationSoundSelect(page)
   await soundSelect.click()
-  await page.getByRole('option', { name }).click()
+  const option = page.getByRole('option', { name })
+  await expect(option).toBeVisible()
+  // Why: the select menu extends over the onboarding footer on small CI
+  // viewports; keyboard selection avoids pointer fall-through to Skip.
+  await option.press('Enter')
   await expect(soundSelect).toContainText(name)
+  await expectOnboardingNotificationSoundMenuClosed(page)
+  await expectOnboardingSkipConfirmationClosed(page)
 }
 
 async function expectOnboardingCustomSoundOption(page: Page): Promise<void> {
   const soundSelect = onboardingNotificationSoundSelect(page)
   await soundSelect.click()
   await expect(page.getByRole('option', { name: /Choose Custom File/i })).toBeVisible()
-  await page.keyboard.press('Escape')
+  await page.getByRole('option', { selected: true }).press('Enter')
+  await expectOnboardingNotificationSoundMenuClosed(page)
+  await expectOnboardingSkipConfirmationClosed(page)
 }
 
 async function continueOnboarding(page: Page): Promise<void> {

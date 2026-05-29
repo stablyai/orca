@@ -24,6 +24,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   // global store (via useIpcEvents.ts). Reading from the store avoids
   // duplicating the onStateChanged listener and per-target getState IPC calls.
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
@@ -103,6 +104,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         await window.api.ssh.addTarget({ target })
         toast.success('Target added')
       }
+      recordFeatureInteraction('ssh')
       setShowForm(false)
       setEditingId(null)
       setForm(EMPTY_FORM)
@@ -164,6 +166,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleConnect = async (targetId: string): Promise<void> => {
     try {
       await window.api.ssh.connect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     }
@@ -172,6 +175,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleDisconnect = async (targetId: string): Promise<void> => {
     try {
       await window.api.ssh.disconnect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     }
@@ -200,6 +204,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     setTestingIds((prev) => new Set(prev).add(targetId))
     try {
       const result = await window.api.ssh.testConnection({ targetId })
+      recordFeatureInteraction('ssh')
       if (result.success) {
         toast.success('Connection successful')
       } else {
@@ -219,6 +224,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleImport = async (): Promise<void> => {
     try {
       const imported = (await window.api.ssh.importConfig()) as SshTarget[]
+      recordFeatureInteraction('ssh')
       if (imported.length === 0) {
         toast('No new hosts found in ~/.ssh/config')
       } else {

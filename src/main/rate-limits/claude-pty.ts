@@ -6,6 +6,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -182,18 +183,10 @@ export async function fetchViaPty(options?: {
       env: spawnEnv
     })
     const termDisposables: { dispose: () => void }[] = []
-    const disposeTermListeners = (): void => {
-      for (const disposable of termDisposables.splice(0)) {
-        disposable.dispose()
-      }
-    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        // Why: node-pty's NAPI callbacks can outlive the Electron JS
-        // environment if we kill the hidden PTY without disposing them first,
-        // which matches Orca's documented SIGABRT failure mode on shutdown.
         if (claude21UsageSettleTimer) {
           clearTimeout(claude21UsageSettleTimer)
           claude21UsageSettleTimer = null
@@ -202,8 +195,7 @@ export async function fetchViaPty(options?: {
           clearInterval(enterInterval)
           enterInterval = null
         }
-        disposeTermListeners()
-        term.kill()
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
         const { session, weekly } = parsePtyUsage(clean)
@@ -262,8 +254,7 @@ export async function fetchViaPty(options?: {
       if (enterInterval) {
         clearInterval(enterInterval)
       }
-      disposeTermListeners()
-      term.kill()
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
       const clean = stripTerminalControlSequences(output)
       const { session, weekly } = parsePtyUsage(clean)
@@ -356,7 +347,7 @@ export async function fetchViaPty(options?: {
     }
 
     const onExitDisposable = term.onExit(() => {
-      disposeTermListeners()
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
       if (claude21UsageSettleTimer) {
         clearTimeout(claude21UsageSettleTimer)
         claude21UsageSettleTimer = null

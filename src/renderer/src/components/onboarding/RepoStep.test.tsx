@@ -8,6 +8,13 @@ function renderRepoStep(overrides: Partial<ComponentProps<typeof RepoStep>> = {}
     <RepoStep
       cloneUrl=""
       onCloneUrlChange={vi.fn()}
+      nestedScan={null}
+      nestedSelectedPaths={new Set()}
+      onNestedSelectedPathsChange={vi.fn()}
+      nestedGroupName=""
+      onNestedGroupNameChange={vi.fn()}
+      onImportNested={vi.fn()}
+      onCancelNested={vi.fn()}
       onOpenFolder={vi.fn()}
       onOpenServerFolder={vi.fn()}
       onClone={vi.fn()}
@@ -32,5 +39,24 @@ describe('RepoStep', () => {
     expect(html).not.toContain('Project already added')
     expect(html).toContain('Open a folder')
     expect(html).toContain('Clone a repo')
+  })
+
+  it('disables nested import actions when no repositories are selected', () => {
+    const html = renderRepoStep({
+      nestedScan: {
+        selectedPath: '/workspace/platform',
+        selectedPathKind: 'non_git_folder',
+        repos: [{ path: '/workspace/platform/apps/web', displayName: 'web', depth: 2 }],
+        truncated: false,
+        timedOut: false,
+        durationMs: 4,
+        maxDepth: 3
+      },
+      nestedGroupName: 'platform'
+    })
+
+    expect(html).toContain('Import separately')
+    expect(html).toContain('Import as project group')
+    expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(2)
   })
 })

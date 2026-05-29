@@ -108,7 +108,11 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
   }
 
   const config = readCommitMessageAiSettings(settings)
-  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(
+    config.agentId,
+    settings.defaultTuiAgent,
+    settings.disabledTuiAgents
+  )
   const isCustom = isCustomAgentId(resolvedAgentId)
   const activeCapability =
     resolvedAgentId && !isCustomAgentId(resolvedAgentId)
@@ -152,7 +156,11 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
     }
     // Why: this compact tour card must behave like Settings > Git: first
     // enable seeds the agent/model from the default agent when possible.
-    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+    const seedAgentId = resolveCommitMessageAgentChoice(
+      config.agentId,
+      settings.defaultTuiAgent,
+      settings.disabledTuiAgents
+    )
     if (!seedAgentId) {
       writeConfig({ enabled: true, agentId: null })
       return

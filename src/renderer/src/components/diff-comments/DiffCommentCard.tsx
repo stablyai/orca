@@ -54,15 +54,6 @@ export function DiffCommentCard({
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // Why: keep the draft in sync with external body changes when not actively
-  // editing, so a concurrent agent edit (or a delete + recreate) is visible
-  // the next time the user opens the editor.
-  useEffect(() => {
-    if (!editing) {
-      setDraft(body)
-    }
-  }, [body, editing])
-
   // Why: stash `onContentResize` in a ref so the layout/resize effects only
   // re-run on `editing` transitions. The decorator passes a fresh arrow every
   // render; depending on it directly would re-fire the layout effect on every

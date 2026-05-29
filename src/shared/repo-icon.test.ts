@@ -46,6 +46,17 @@ describe('sanitizeRepoIcon', () => {
       src: 'data:image/png;base64,aGVsbG8=',
       source: 'upload'
     })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'data:image/png;base64,aGVsbG8=',
+        source: 'file'
+      })
+    ).toEqual({
+      type: 'image',
+      src: 'data:image/png;base64,aGVsbG8=',
+      source: 'file'
+    })
   })
 
   it('keeps null as an explicit reset', () => {

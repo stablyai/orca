@@ -113,7 +113,7 @@ export function useRepoHeaderDrag({
         }
       }
       // Why anchor to the target header (not midpoint between headers): the
-      // space between two repo group headers is filled with worktree cards,
+      // space between two project group headers is filled with worktree cards,
       // so the midpoint falls *inside another repo's content*. Sitting the
       // indicator just above the target header keeps it at the visual top of
       // where the dragged group would land.

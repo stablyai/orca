@@ -104,4 +104,21 @@ describe('reviewReadyToMerge', () => {
   it('accepts neutral checks when all other gates pass', () => {
     expect(reviewReadyToMerge(baseSummary({ checksStatus: 'neutral' }))).toBe(true)
   })
+
+  it('scopes GitHub merge-state blockers to GitHub summaries', () => {
+    expect(
+      reviewReadyToMerge(
+        baseSummary({
+          identity: {
+            provider: 'gitlab',
+            host: 'gitlab.com',
+            owner: 'acme',
+            repo: 'orca',
+            number: 42
+          },
+          mergeStateStatus: 'BLOCKED'
+        })
+      )
+    ).toBe(true)
+  })
 })

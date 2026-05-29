@@ -14,8 +14,8 @@ type MockStoreState = {
   terminalLayoutsByTabId: Record<
     string,
     {
-      root: { type: 'leaf'; leafId: string }
-      activeLeafId: string
+      root: { type: 'leaf'; leafId: string } | null
+      activeLeafId: string | null
       expandedLeafId: string | null
       ptyIdsByLeafId?: Record<string, string>
     }
@@ -106,6 +106,38 @@ describe('agent hook completion notifications', () => {
       'tab-1': {
         root: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
         activeLeafId: '11111111-1111-4111-8111-111111111111',
+        expandedLeafId: null,
+        ptyIdsByLeafId: {}
+      }
+    }
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('done')
+    })
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey
+      })
+    )
+  })
+
+  it('uses tab-level PTY liveness when an inactive layout is empty', async () => {
+    mockStoreState.terminalLayoutsByTabId = {
+      'tab-1': {
+        root: null,
+        activeLeafId: null,
         expandedLeafId: null,
         ptyIdsByLeafId: {}
       }

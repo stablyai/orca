@@ -1,9 +1,25 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { LoaderCircle, GitMerge, ChevronDown, Trash2 } from 'lucide-react'
+import React, { useCallback, useState } from 'react'
+import {
+  LoaderCircle,
+  GitMerge,
+  ChevronDown,
+  Trash2,
+  GitPullRequestClosed,
+  CircleDot
+} from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
@@ -30,16 +46,25 @@ export default function PRActions({
   const isDeletingWorktree = useAppStore(
     (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
   )
+  const confirm = useConfirmationDialog()
   const [merging, setMerging] = useState(false)
-  const [mergeError, setMergeError] = useState<string | null>(null)
-  const [mergeMenuOpen, setMergeMenuOpen] = useState(false)
-  const mergeMenuRef = useRef<HTMLDivElement>(null)
+  const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const mergePresentation = presentGitHubPRMergeState(pr)
+  const isUpdatingPRState = stateUpdating !== null
+  const primaryMergeDisabled =
+    merging ||
+    isUpdatingPRState ||
+    (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
+  const directMergeDisabled =
+    merging || isUpdatingPRState || !mergePresentation.directMergeAvailable
+  const menuDisabled = merging || isUpdatingPRState
 
   const handleMerge = useCallback(
     async (method: 'merge' | 'squash' | 'rebase' = 'squash') => {
       setMerging(true)
-      setMergeError(null)
-      setMergeMenuOpen(false)
+      setActionError(null)
       try {
         const result = await window.api.gh.mergePR({
           repoPath: repo.path,
@@ -49,12 +74,12 @@ export default function PRActions({
           prRepo: pr.prRepo ?? null
         })
         if (!result.ok) {
-          setMergeError(result.error)
+          setActionError(result.error)
         } else {
           await onRefreshPR()
         }
       } catch (err) {
-        setMergeError(err instanceof Error ? err.message : 'Merge failed')
+        setActionError(err instanceof Error ? err.message : 'Merge failed')
       } finally {
         setMerging(false)
       }
@@ -62,15 +87,13 @@ export default function PRActions({
     [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
   )
 
-  const mergePresentation = presentGitHubPRMergeState(pr)
   const handleAutoMerge = useCallback(async () => {
     if (!mergePresentation.autoMergeAction) {
       return
     }
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMerging(true)
-    setMergeError(null)
-    setMergeMenuOpen(false)
+    setActionError(null)
     try {
       const result = await window.api.gh.setPRAutoMerge({
         repoPath: repo.path,
@@ -80,29 +103,70 @@ export default function PRActions({
         prRepo: pr.prRepo ?? null
       })
       if (!result.ok) {
-        setMergeError(result.error)
+        setActionError(result.error)
       } else {
         await onRefreshPR()
       }
     } catch (err) {
-      setMergeError(err instanceof Error ? err.message : 'Auto-merge update failed')
+      setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
     } finally {
       setMerging(false)
     }
   }, [mergePresentation.autoMergeAction, onRefreshPR, pr.number, pr.prRepo, repo.id, repo.path])
 
-  useEffect(() => {
-    if (!mergeMenuOpen) {
-      return
-    }
-    const handleClickOutside = (e: MouseEvent): void => {
-      if (mergeMenuRef.current && !mergeMenuRef.current.contains(e.target as Node)) {
-        setMergeMenuOpen(false)
+  const handlePRStateChange = useCallback(
+    async (nextState: 'open' | 'closed') => {
+      if (stateUpdating) {
+        return
       }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [mergeMenuOpen])
+      const isClosing = nextState === 'closed'
+      const label = isClosing ? 'Close' : 'Reopen'
+      const confirmed = await confirm({
+        title: `${label} PR #${pr.number}?`,
+        description: isClosing
+          ? 'This will close the pull request.'
+          : 'This will reopen the pull request.',
+        confirmLabel: label,
+        confirmVariant: isClosing ? 'destructive' : 'default'
+      })
+      if (!confirmed) {
+        return
+      }
+      setStateUpdating(nextState)
+      setActionError(null)
+      try {
+        const result = await window.api.gh.updatePRState({
+          repoPath: repo.path,
+          repoId: repo.id,
+          prNumber: pr.number,
+          updates: { state: nextState }
+        })
+        if (!result.ok) {
+          setActionError(result.error)
+          toast.error(result.error)
+        } else {
+          toast.success(isClosing ? 'Pull request closed' : 'Pull request reopened')
+          await onRefreshPR()
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} pull request`
+        setActionError(message)
+        toast.error(message)
+      } finally {
+        setStateUpdating(null)
+      }
+    },
+    [confirm, onRefreshPR, pr.number, repo.id, repo.path, stateUpdating]
+  )
+
+  const handleClosePR = useCallback(async () => {
+    await handlePRStateChange('closed')
+  }, [handlePRStateChange])
+
+  const handleReopenPR = useCallback(async () => {
+    await handlePRStateChange('open')
+  }, [handlePRStateChange])
 
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
@@ -110,31 +174,21 @@ export default function PRActions({
     runWorktreeDelete(worktree.id)
   }, [worktree.id])
 
-  const primaryActionDisabled =
-    merging || (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
-  const directMergeDisabled = merging || !mergePresentation.directMergeAvailable
-
   if (pr.state === 'open') {
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
-                events even when the buttons inside are disabled. */}
-              <span className={cn(primaryActionDisabled && 'cursor-not-allowed')}>
-                <div
-                  className={cn(
-                    'relative flex items-stretch',
-                    primaryActionDisabled && 'pointer-events-none'
-                  )}
-                  ref={mergeMenuRef}
-                >
+          <div className="flex items-stretch">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
+                  events even when the merge button inside is disabled. */}
+                <span className={cn('flex flex-1', primaryMergeDisabled && 'cursor-not-allowed')}>
                   <Button
                     type="button"
                     size="xs"
                     className={cn(
-                      'flex-1 rounded-r-none px-3 text-[11px]',
+                      'w-full rounded-r-none px-3 text-[11px]',
                       'bg-green-600 text-white hover:bg-green-700',
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
@@ -143,7 +197,7 @@ export default function PRActions({
                         ? void handleAutoMerge()
                         : void handleMerge('squash')
                     }
-                    disabled={primaryActionDisabled}
+                    disabled={primaryMergeDisabled}
                   >
                     {merging ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
@@ -151,63 +205,100 @@ export default function PRActions({
                       <GitMerge className="size-3.5" />
                     )}
                     {merging
-                      ? 'Working\u2026'
+                      ? 'Working...'
                       : mergePresentation.directMergeAvailable
                         ? 'Squash and merge'
                         : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                   </Button>
-                  <Button
-                    type="button"
-                    size="xs"
-                    className={cn(
-                      'rounded-l-none border-l border-green-700/50 px-1.5',
-                      'bg-green-600 text-white hover:bg-green-700',
-                      'disabled:opacity-50 disabled:cursor-not-allowed'
-                    )}
-                    onClick={() => setMergeMenuOpen((v) => !v)}
-                    disabled={merging}
-                  >
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                  {mergeMenuOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-popover shadow-md overflow-hidden">
-                      {mergePresentation.autoMergeAction && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
-                          onClick={() => void handleAutoMerge()}
-                        >
-                          {mergePresentation.autoMergeAction.label}
-                        </Button>
-                      )}
-                      {MERGE_METHODS.map((method) => (
-                        <Button
-                          key={method}
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
-                          onClick={() => void handleMerge(method)}
-                          disabled={!mergePresentation.directMergeAvailable}
-                        >
-                          {MERGE_LABELS[method]}
-                        </Button>
-                      ))}
-                    </div>
+                </span>
+              </TooltipTrigger>
+              {primaryMergeDisabled && (
+                <TooltipContent side="bottom" sideOffset={4}>
+                  {mergePresentation.tooltip}
+                </TooltipContent>
+              )}
+            </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="xs"
+                  className={cn(
+                    'rounded-l-none border-l border-green-700/50 px-1.5 shrink-0',
+                    'bg-green-600 text-white hover:bg-green-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
                   )}
-                </div>
-              </span>
-            </TooltipTrigger>
-            {directMergeDisabled && (
-              <TooltipContent side="bottom" sideOffset={4}>
-                {mergePresentation.tooltip}
-              </TooltipContent>
-            )}
-          </Tooltip>
+                  disabled={menuDisabled}
+                  aria-label="More pull request actions"
+                  title="More actions"
+                >
+                  {stateUpdating === 'closed' ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : (
+                    <ChevronDown className="size-3.5" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {mergePresentation.autoMergeAction && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={menuDisabled}
+                      onSelect={() => void handleAutoMerge()}
+                    >
+                      <GitMerge className="size-3.5" />
+                      {mergePresentation.autoMergeAction.label}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {MERGE_METHODS.map((method) => (
+                  <DropdownMenuItem
+                    key={method}
+                    disabled={directMergeDisabled}
+                    onSelect={() => void handleMerge(method)}
+                  >
+                    <GitMerge className="size-3.5" />
+                    {MERGE_LABELS[method]}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={menuDisabled}
+                  onSelect={() => void handleClosePR()}
+                >
+                  <GitPullRequestClosed className="size-3.5" />
+                  Close PR
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </TooltipProvider>
-        {mergeError && <div className="text-[10px] text-rose-500 break-words">{mergeError}</div>}
+        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
+      </div>
+    )
+  }
+
+  if (pr.state === 'closed') {
+    return (
+      <div className="space-y-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => void handleReopenPR()}
+          disabled={isUpdatingPRState}
+        >
+          {stateUpdating === 'open' ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : (
+            <CircleDot className="size-3.5" />
+          )}
+          {stateUpdating === 'open' ? 'Reopening...' : 'Reopen PR'}
+        </Button>
+        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
       </div>
     )
   }
@@ -227,7 +318,7 @@ export default function PRActions({
         ) : (
           <Trash2 className="size-3.5" />
         )}
-        {isDeletingWorktree ? 'Deleting…' : 'Delete Workspace'}
+        {isDeletingWorktree ? 'Deleting...' : 'Delete Workspace'}
       </Button>
     )
   }

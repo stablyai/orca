@@ -45,7 +45,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [commandValue, setCommandValue] = useState('')
+  const [commandValueOverride, setCommandValueOverride] = useState<string | null>(null)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -95,16 +95,10 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
-
-  // Why: with shouldFilter={false} cmdk won't auto-highlight a row, so Enter
-  // has no target. Keep the highlighted value pinned to the first filtered
-  // repo whenever the query changes.
-  useEffect(() => {
-    const first = filteredRepos[0]
-    if (first && !filteredRepos.some((r) => r.id === commandValue)) {
-      setCommandValue(first.id)
-    }
-  }, [filteredRepos, commandValue])
+  const commandValue =
+    commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
+      ? commandValueOverride
+      : (filteredRepos[0]?.id ?? '')
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
@@ -209,14 +203,19 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <Command
               shouldFilter={false}
               value={commandValue}
-              onValueChange={setCommandValue}
+              onValueChange={setCommandValueOverride}
               className="bg-transparent"
             >
               <CommandInput
                 autoFocus
                 placeholder="Search projects..."
                 value={query}
-                onValueChange={setQuery}
+                onValueChange={(nextQuery) => {
+                  // Why: typing creates a new filtered list, so keyboard
+                  // selection should return to the derived first match.
+                  setCommandValueOverride(null)
+                  setQuery(nextQuery)
+                }}
                 onKeyDown={(event) => event.stopPropagation()}
                 className="h-8 py-2 text-xs"
                 wrapperClassName="mx-1 rounded-[7px] border border-border/70 px-2"

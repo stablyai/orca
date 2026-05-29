@@ -16,7 +16,7 @@
 // `pnpm run build:cli`. The verification gate explicitly builds the CLI
 // before running this file.
 import { spawn } from 'child_process'
-import { existsSync, mkdtempSync } from 'fs'
+import { existsSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
@@ -30,6 +30,40 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 
 const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
+
+async function runBuiltCli(
+  userDataPath: string,
+  args: string[],
+  extraEnv: Record<string, string> = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [CLI_PATH, ...args], {
+    env: {
+      ...process.env,
+      ORCA_USER_DATA_PATH: userDataPath,
+      ORCA_TERMINAL_HANDLE: 'term_cli',
+      ...extraEnv
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  const stdoutChunks: string[] = []
+  const stderrChunks: string[] = []
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', (d) => stdoutChunks.push(d))
+  child.stderr.on('data', (d) => stderrChunks.push(d))
+
+  const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
+    child.once('exit', (code) => resolveExit(code ?? 1))
+    child.once('error', rejectExit)
+  })
+
+  return {
+    exitCode,
+    stdout: stdoutChunks.join(''),
+    stderr: stderrChunks.join('')
+  }
+}
 
 describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
   it('emits newline-flushed JSON heartbeats to stderr while waiting', async () => {
@@ -153,6 +187,91 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     } finally {
       db.close()
       await server.stop()
+    }
+  }, 30_000)
+})
+
+describeIfBuilt('orca orchestration reset subprocess', () => {
+  it('validates reset scopes against an isolated runtime through the built CLI', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-reset-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+
+    try {
+      const send = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'send',
+        '--to',
+        'term_target',
+        '--subject',
+        'hello',
+        '--json'
+      ])
+      expect(send.exitCode, send.stderr).toBe(0)
+
+      const create = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'throwaway task',
+        '--json'
+      ])
+      expect(create.exitCode, create.stderr).toBe(0)
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const invalid = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'reset',
+        '--tasks',
+        '--messages',
+        '--json'
+      ])
+      expect(invalid.exitCode).toBe(1)
+      const invalidPayload = JSON.parse(invalid.stdout) as {
+        ok: boolean
+        error: { code: string; message: string }
+      }
+      expect(invalidPayload.ok).toBe(false)
+      expect(invalidPayload.error.code).toBe('invalid_argument')
+      expect(invalidPayload.error.message).toContain('Choose exactly one reset scope')
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const resetTasks = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'reset',
+        '--tasks',
+        '--json'
+      ])
+      expect(resetTasks.exitCode, resetTasks.stderr).toBe(0)
+      expect(JSON.parse(resetTasks.stdout)).toMatchObject({ ok: true, result: { reset: 'tasks' } })
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(0)
+
+      const recreate = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'throwaway task after partial reset',
+        '--json'
+      ])
+      expect(recreate.exitCode, recreate.stderr).toBe(0)
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const resetAll = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      expect(resetAll.exitCode, resetAll.stderr).toBe(0)
+      expect(JSON.parse(resetAll.stdout)).toMatchObject({ ok: true, result: { reset: 'all' } })
+      expect(db.getInbox()).toHaveLength(0)
+      expect(db.listTasks()).toHaveLength(0)
+    } finally {
+      db.close()
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
     }
   }, 30_000)
 })

@@ -13,7 +13,7 @@ import {
   Check,
   MessageSquare,
   ChevronDown,
-  Sparkle,
+  Sparkles,
   RefreshCw,
   Wrench
 } from 'lucide-react'
@@ -95,7 +95,7 @@ function ResolveConflictsWithAIButton({
       {isResolvingWithAI ? (
         <RefreshCw className="size-3.5 animate-spin" />
       ) : (
-        <Sparkle className="size-3.5" />
+        <Sparkles className="size-3.5" />
       )}
       Resolve with AI
     </Button>
@@ -673,7 +673,7 @@ export function prStateColor(state: PRInfo['state']): string {
     case 'open':
       return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20'
     case 'closed':
-      return 'bg-muted text-muted-foreground border-border'
+      return 'bg-destructive/10 text-destructive border-destructive/20'
     case 'draft':
       return 'bg-muted text-muted-foreground/70 border-border'
   }

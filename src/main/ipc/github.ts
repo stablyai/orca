@@ -295,7 +295,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (
       _event,
-      args: { repoPath: string; repoId?: string; limit?: number; query?: string; before?: string }
+      args: {
+        repoPath: string
+        repoId?: string
+        limit?: number
+        query?: string
+        before?: string
+        noCache?: boolean
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return listWorkItems(
@@ -304,7 +311,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.query,
         args.before,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.noCache
       )
     }
   )

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Columns2,
   Copy,
@@ -7,6 +7,7 @@ import {
   FileText,
   ListTree,
   MoreHorizontal,
+  Pencil,
   Rows2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -19,6 +20,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -30,6 +32,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { getEditorHeaderCopyState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { useEditorHeaderFileRename } from './editor-header-file-rename'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -104,7 +107,17 @@ export function EditorPanelHeader({
 }: EditorPanelHeaderProps): React.JSX.Element {
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
+  const skipMenuFocusRestoreRef = useRef(false)
   const headerCopyState = getEditorHeaderCopyState(activeFile)
+  const {
+    canRename,
+    currentFileName,
+    isRenaming,
+    renameInputRef,
+    openRenameInput,
+    commitRename,
+    cancelRename
+  } = useEditorHeaderFileRename(activeFile)
   const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const fileDiffComments = useMemo(
@@ -131,14 +144,43 @@ export function EditorPanelHeader({
             setPathMenuOpen(true)
           }}
         >
-          <button
-            type="button"
-            className="editor-header-path"
-            onClick={onCopyPath}
-            title={headerCopyState.pathTitle}
-          >
-            {headerCopyState.pathLabel}
-          </button>
+          {isRenaming ? (
+            <Input
+              ref={renameInputRef}
+              data-editor-header-rename-input="true"
+              aria-label={`Rename file ${currentFileName}`}
+              defaultValue={currentFileName}
+              // Why: the header is narrow in floating mode; this keeps the
+              // edit field aligned with the path label without growing chrome.
+              className="h-6 w-[16ch] min-w-[104px] max-w-full rounded-sm bg-input/40 px-1.5 py-0 font-mono text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+              spellCheck={false}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  commitRename()
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  cancelRename()
+                }
+              }}
+              onBlur={commitRename}
+            />
+          ) : (
+            <button
+              type="button"
+              className="editor-header-path"
+              onClick={onCopyPath}
+              title={headerCopyState.pathTitle}
+            >
+              {headerCopyState.pathLabel}
+            </button>
+          )}
           <span
             className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}
             aria-live="polite"
@@ -155,7 +197,29 @@ export function EditorPanelHeader({
               style={{ left: pathMenuPoint.x, top: pathMenuPoint.y }}
             />
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+          <DropdownMenuContent
+            className="w-56"
+            sideOffset={0}
+            align="start"
+            onCloseAutoFocus={(event) => {
+              if (!skipMenuFocusRestoreRef.current) {
+                return
+              }
+              skipMenuFocusRestoreRef.current = false
+              event.preventDefault()
+            }}
+          >
+            <DropdownMenuItem
+              disabled={!canRename}
+              onSelect={() => {
+                skipMenuFocusRestoreRef.current = true
+                openRenameInput()
+              }}
+            >
+              <Pencil className="w-3.5 h-3.5 mr-1.5" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
                 void window.api.ui.writeClipboardText(activeFile.filePath)

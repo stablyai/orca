@@ -150,7 +150,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('launches Command Code by its unambiguous binary and injects after startup', () => {
+  it('launches Command Code by its unambiguous binary with a positional prompt', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'command-code',
@@ -160,9 +160,9 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'command-code',
-      launchCommand: 'command-code',
+      launchCommand: "command-code --trust 'Fix the issue'",
       expectedProcess: 'command-code',
-      followupPrompt: 'Fix the issue'
+      followupPrompt: null
     })
   })
 

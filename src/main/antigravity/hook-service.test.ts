@@ -75,6 +75,8 @@ describe('AntigravityHookService', () => {
     expect(script).toContain('/hook/antigravity')
     expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
     expect(script).toContain('payload=$(cat)')
+    expect(script).toContain("payload='{}'")
+    expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
     expect(script).toContain('{"decision":""}')
   })
 
@@ -154,6 +156,8 @@ describe('AntigravityHookService', () => {
       )
       expect(script).toContain('/hook/antigravity')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
+      expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
+      expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
     })
   })
 

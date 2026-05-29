@@ -5,6 +5,7 @@ import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
 import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
 import {
   buildTaskPageRepoSourceState,
+  deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
   reconcileTaskPageItemsAfterLandingRefresh,
@@ -29,6 +30,21 @@ function linearIssue(id: string): LinearIssue {
 }
 
 describe('task page cache selectors', () => {
+  it('uses noCache only for nonce or preference forced GitHub work-item refreshes', () => {
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(true, false)).toEqual({
+      force: true,
+      noCache: true
+    })
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(false, true)).toEqual({
+      force: true,
+      noCache: false
+    })
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(false, false)).toEqual({
+      force: false,
+      noCache: false
+    })
+  })
+
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])

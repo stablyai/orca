@@ -96,7 +96,9 @@ import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
+import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -266,6 +268,7 @@ function App(): React.JSX.Element {
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
+      fetchProjectGroups: s.fetchProjectGroups,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -302,6 +305,7 @@ function App(): React.JSX.Element {
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -364,6 +368,7 @@ function App(): React.JSX.Element {
       setFloatingTerminalOpen((currentOpen) => {
         const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(currentOpen) : nextOpen
         if (resolvedOpen && !currentOpen) {
+          useAppStore.getState().recordFeatureInteraction('floating-workspace')
           rememberFloatingTerminalReturnFocus()
         } else if (!resolvedOpen && currentOpen) {
           restoreFloatingTerminalReturnFocus()
@@ -409,6 +414,11 @@ function App(): React.JSX.Element {
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
+  const renderPetOverlay = shouldRenderPetOverlay({
+    persistedUIReady,
+    petEnabled,
+    petVisible
+  })
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
@@ -453,6 +463,7 @@ function App(): React.JSX.Element {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       featureTipsSeenIds,
+      featureInteractions,
       onboarding,
       persistedUIReady,
       promptedThisSession: featureTipsPromptedThisSessionRef.current,
@@ -476,7 +487,15 @@ function App(): React.JSX.Element {
     // on the next launch just because the user never clicked a dismiss button.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
     actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
-  }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
+  }, [
+    activeModal,
+    actions,
+    featureInteractions,
+    featureTipsSeenIds,
+    onboarding,
+    persistedUIReady,
+    settings
+  ])
 
   useEffect(() => {
     if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
@@ -530,6 +549,7 @@ function App(): React.JSX.Element {
         // the local filesystem and then hydrate stale local workspace state.
         await actions.fetchSettings()
         await actions.fetchRepos()
+        await actions.fetchProjectGroups()
         await actions.fetchAllWorktrees()
         await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()
@@ -776,14 +796,27 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
+      const systemPrefersDark = getSystemPrefersDark()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
       // key have changed?" case.
-      if (canSkipRuntimeMobileSessionSyncKeyBuild(state, previousState)) {
+      if (
+        canSkipRuntimeMobileSessionSyncKeyBuild(
+          state,
+          previousState,
+          systemPrefersDark,
+          previousKey.systemPrefersDark
+        )
+      ) {
         return
       }
-      const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
+      const nextKey = getRuntimeMobileSessionSyncKey(
+        state,
+        previousState,
+        previousKey,
+        systemPrefersDark
+      )
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
@@ -942,7 +975,12 @@ function App(): React.JSX.Element {
       // system
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
       applyDocumentTheme('system')
-      const handler = (): void => applyDocumentTheme('system')
+      const handler = (): void => {
+        applyDocumentTheme('system')
+        // Why: system theme changes do not mutate the store, so mobile
+        // terminal colors need an explicit graph republish.
+        scheduleRuntimeGraphSync()
+      }
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
@@ -1136,7 +1174,12 @@ function App(): React.JSX.Element {
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
       if (isFloatingWorkspacePanelFocused()) {
-        if (isFloatingWorkspacePanelShortcut(e, isMac)) {
+        if (
+          isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
+            context,
+            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          })
+        ) {
           return
         }
       }
@@ -1663,11 +1706,10 @@ function App(): React.JSX.Element {
             {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
             {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
           </Suspense>
-          {/* Why: mount PetOverlay only when the experimental flag is on AND
-          the user hasn't hit "Hide pet" in the status-bar menu. Both
-          conditions must be true — see design doc (pet-overlay.md) on why
-          the two toggles are kept independent. */}
-          {petEnabled && petVisible ? (
+          {/* Why: mount PetOverlay only after persisted UI hydration, with
+          both independent pet toggles allowing it; otherwise a hidden pet
+          flashes while the store still has default visibility. */}
+          {renderPetOverlay ? (
             <Suspense fallback={null}>
               <PetOverlay />
             </Suspense>

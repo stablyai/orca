@@ -150,6 +150,14 @@ export class PtyHandler {
     this.registerHandlers()
   }
 
+  setGraceTimeMs(graceTimeMs: number): void {
+    this.graceTimeMs = Math.max(0, Math.floor(graceTimeMs))
+  }
+
+  get configuredGraceTimeMs(): number {
+    return this.graceTimeMs
+  }
+
   /** Subscribe to PTY-exit events. Used by the relay-hook server to evict
    *  per-paneKey cached payloads when the backing PTY ends. */
   setExitListener(listener: PtyExitListener | null): void {

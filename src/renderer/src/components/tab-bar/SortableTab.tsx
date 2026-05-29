@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
@@ -175,6 +176,193 @@ export default function SortableTab({
   // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
   // the pointer listeners are gated so a drag can't start while typing.
   const dragListeners = isEditing ? undefined : listeners
+  const tabTitle = tab.customTitle ?? tab.title
+  const tabRoot = (
+    <div
+      ref={setNodeRef}
+      data-testid="sortable-tab"
+      data-tab-id={tab.id}
+      data-tab-title={tabTitle}
+      // Why: expose the active/inactive flag as a DOM attribute so E2E specs
+      // can assert on user-observable selection state without reading the
+      // Zustand store. A store-only "is this tab active?" round-trip would
+      // pass even if the tab-bar render path had silently broken (the same
+      // tautology that let PR #1186's render crash ship past E2E in #1193).
+      data-active={isActive ? 'true' : 'false'}
+      {...attributes}
+      {...dragListeners}
+      // Why: on unread activity, tint the whole tab with a subtle amber
+      // wash so the signal is visible at a glance even when the small
+      // bell icon is easy to miss in a long tab bar. Active tabs keep
+      // their existing highlight — the amber wash layers on top so the
+      // tab still reads as "selected + has activity". The wash is
+      // rendered as an absolutely-positioned child below so the ::after
+      // pseudo-element stays free for the drop indicator.
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
+        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+      }`}
+      onDoubleClick={(e) => {
+        if (isEditing) {
+          return
+        }
+        e.stopPropagation()
+        handleRenameOpen()
+      }}
+      onPointerDown={(e) => {
+        if (isEditing || e.button !== 0) {
+          return
+        }
+        onActivate(tab.id)
+        dragListeners?.onPointerDown?.(e)
+      }}
+      onMouseDown={(e) => {
+        // Why: prevent default browser middle-click behavior (auto-scroll)
+        // but do NOT close here — closing removes the element before mouseup,
+        // causing the mouseup to fall through to the terminal and trigger
+        // an X11 primary selection paste on Linux.
+        if (e.button === 1) {
+          e.preventDefault()
+        }
+      }}
+      onMouseUp={preventMiddleButtonDefault}
+      onAuxClick={(e) => {
+        if (isEditing) {
+          return
+        }
+        if (e.button === 1) {
+          e.preventDefault()
+          e.stopPropagation()
+          onClose(tab.id)
+        }
+      }}
+    >
+      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {showActivityAffordance && (
+        // Why: amber wash for unread tabs. Rendered as a real DOM child so
+        // both drop indicators (::before left / ::after right in
+        // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
+        // ::after-based implementation collided with the right-edge drop
+        // indicator and hid it on unread tabs. pointer-events-none keeps
+        // clicks reaching the underlying tab handlers.
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
+      )}
+      {showActivityAffordance ? (
+        // Why: the activity marker sits to the LEFT of the tab title using
+        // Orca's filled bell glyph (amber-500 with a subtle drop shadow)
+        // so it matches the worktree-level bell in the sidebar — keeping
+        // every "needs your attention" surface in Orca consistent.
+        <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
+          <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
+        </span>
+      ) : (
+        // Why: ShellIcon renders a colored brand-style tile for PowerShell,
+        // CMD, and WSL so Windows users can distinguish shells at a glance.
+        // On mac/linux (or Windows tabs without a resolved shell) it falls
+        // back to a matching colored generic-terminal tile — keeping every
+        // tab's leading glyph in the same visual idiom instead of mixing a
+        // flat lucide chevron with the brand tiles. Opacity dims the icon
+        // on inactive tabs to match the existing text treatment without
+        // desaturating the brand colors beyond recognition.
+        <span
+          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
+          data-shell-icon={shellForIcon ?? 'generic'}
+          aria-hidden
+        >
+          <ShellIcon shell={shellForIcon} size={12} />
+        </span>
+      )}
+      {isEditing ? (
+        <Input
+          ref={renameInputRef}
+          data-tab-rename-input="true"
+          value={renameValue}
+          aria-label={`Rename tab ${tabTitle}`}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              commitRename()
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              cancelRename()
+            }
+          }}
+          // Why: stop pointer/mouse events from bubbling to the outer div, which
+          // would otherwise trigger tab activation or start a dnd-kit drag while
+          // the user is trying to click inside the input.
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            // Why: stop propagation so the outer tab's activation/drag handlers
+            // don't fire on clicks inside the input. Also preventDefault on middle
+            // click (button 1) to block Linux X11 primary-selection paste into the
+            // rename field, matching the outer tab's behavior.
+            event.stopPropagation()
+            if (event.button === 1) {
+              event.preventDefault()
+            }
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onAuxClick={(event) => event.stopPropagation()}
+          // Why: the base Input applies w-full min-w-0, which lets flex
+          // shrink it to ~0 when many tabs compete for horizontal space.
+          // Force a minimum width that matches the normal title box so the
+          // rename input stays usable even when the tab bar is saturated.
+          className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
+          spellCheck={false}
+        />
+      ) : (
+        <span className="truncate max-w-[72px] mr-1">{tabTitle}</span>
+      )}
+      {tab.color && !isEditing && (
+        <span
+          className="mr-1.5 size-2 rounded-full shrink-0"
+          style={{ backgroundColor: tab.color }}
+        />
+      )}
+      {isExpanded && !isEditing && (
+        <button
+          className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+            isActive
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+          }`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpand(tab.id)
+          }}
+          title="Collapse pane"
+          aria-label="Collapse pane"
+        >
+          <Minimize2 className="w-3 h-3" />
+        </button>
+      )}
+      {!isEditing && (
+        <button
+          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+            isActive
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+          }`}
+          // Why: per-tab close affordance needs a stable accessible name so
+          // E2E specs can drive the same path a user takes (hover → click X)
+          // instead of bypassing the render layer by calling closeTab() on
+          // the store — a store-only assertion would pass even if this
+          // button had been accidentally unmounted.
+          aria-label={`Close tab ${tabTitle}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose(tab.id)
+          }}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <>
@@ -186,190 +374,20 @@ export default function SortableTab({
           setMenuOpen(true)
         }}
       >
-        <div
-          ref={setNodeRef}
-          data-testid="sortable-tab"
-          data-tab-id={tab.id}
-          data-tab-title={tab.customTitle ?? tab.title}
-          // Why: expose the active/inactive flag as a DOM attribute so E2E specs
-          // can assert on user-observable selection state without reading the
-          // Zustand store. A store-only "is this tab active?" round-trip would
-          // pass even if the tab-bar render path had silently broken (the same
-          // tautology that let PR #1186's render crash ship past E2E in #1193).
-          data-active={isActive ? 'true' : 'false'}
-          {...attributes}
-          {...dragListeners}
-          // Why: on unread activity, tint the whole tab with a subtle amber
-          // wash so the signal is visible at a glance even when the small
-          // bell icon is easy to miss in a long tab bar. Active tabs keep
-          // their existing highlight — the amber wash layers on top so the
-          // tab still reads as "selected + has activity". The wash is
-          // rendered as an absolutely-positioned child below so the ::after
-          // pseudo-element stays free for the drop indicator.
-          className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-          }`}
-          onDoubleClick={(e) => {
-            if (isEditing) {
-              return
-            }
-            e.stopPropagation()
-            handleRenameOpen()
-          }}
-          onPointerDown={(e) => {
-            if (isEditing || e.button !== 0) {
-              return
-            }
-            onActivate(tab.id)
-            dragListeners?.onPointerDown?.(e)
-          }}
-          onMouseDown={(e) => {
-            // Why: prevent default browser middle-click behavior (auto-scroll)
-            // but do NOT close here — closing removes the element before mouseup,
-            // causing the mouseup to fall through to the terminal and trigger
-            // an X11 primary selection paste on Linux.
-            if (e.button === 1) {
-              e.preventDefault()
-            }
-          }}
-          onMouseUp={preventMiddleButtonDefault}
-          onAuxClick={(e) => {
-            if (isEditing) {
-              return
-            }
-            if (e.button === 1) {
-              e.preventDefault()
-              e.stopPropagation()
-              onClose(tab.id)
-            }
-          }}
-        >
-          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-          {showActivityAffordance && (
-            // Why: amber wash for unread tabs. Rendered as a real DOM child so
-            // both drop indicators (::before left / ::after right in
-            // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
-            // ::after-based implementation collided with the right-edge drop
-            // indicator and hid it on unread tabs. pointer-events-none keeps
-            // clicks reaching the underlying tab handlers.
-            <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
-          )}
-          {showActivityAffordance ? (
-            // Why: the activity marker sits to the LEFT of the tab title using
-            // Orca's filled bell glyph (amber-500 with a subtle drop shadow)
-            // so it matches the worktree-level bell in the sidebar — keeping
-            // every "needs your attention" surface in Orca consistent.
-            <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
-              <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
-            </span>
-          ) : (
-            // Why: ShellIcon renders a colored brand-style tile for PowerShell,
-            // CMD, and WSL so Windows users can distinguish shells at a glance.
-            // On mac/linux (or Windows tabs without a resolved shell) it falls
-            // back to a matching colored generic-terminal tile — keeping every
-            // tab's leading glyph in the same visual idiom instead of mixing a
-            // flat lucide chevron with the brand tiles. Opacity dims the icon
-            // on inactive tabs to match the existing text treatment without
-            // desaturating the brand colors beyond recognition.
-            <span
-              className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
-              data-shell-icon={shellForIcon ?? 'generic'}
-              aria-hidden
+        {isEditing || menuOpen ? (
+          tabRoot
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={6}
+              className="max-w-80 whitespace-normal break-words text-left"
             >
-              <ShellIcon shell={shellForIcon} size={12} />
-            </span>
-          )}
-          {isEditing ? (
-            <Input
-              ref={renameInputRef}
-              data-tab-rename-input="true"
-              value={renameValue}
-              aria-label={`Rename tab ${tab.customTitle ?? tab.title}`}
-              onChange={(event) => setRenameValue(event.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  commitRename()
-                } else if (event.key === 'Escape') {
-                  event.preventDefault()
-                  cancelRename()
-                }
-              }}
-              // Why: stop pointer/mouse events from bubbling to the outer div, which
-              // would otherwise trigger tab activation or start a dnd-kit drag while
-              // the user is trying to click inside the input.
-              onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => {
-                // Why: stop propagation so the outer tab's activation/drag handlers
-                // don't fire on clicks inside the input. Also preventDefault on middle
-                // click (button 1) to block Linux X11 primary-selection paste into the
-                // rename field, matching the outer tab's behavior.
-                event.stopPropagation()
-                if (event.button === 1) {
-                  event.preventDefault()
-                }
-              }}
-              onClick={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onAuxClick={(event) => event.stopPropagation()}
-              // Why: the base Input applies w-full min-w-0, which lets flex
-              // shrink it to ~0 when many tabs compete for horizontal space.
-              // Force a minimum width that matches the normal title box so the
-              // rename input stays usable even when the tab bar is saturated.
-              className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
-              spellCheck={false}
-            />
-          ) : (
-            <span className="truncate max-w-[72px] mr-1">{tab.customTitle ?? tab.title}</span>
-          )}
-          {tab.color && !isEditing && (
-            <span
-              className="mr-1.5 size-2 rounded-full shrink-0"
-              style={{ backgroundColor: tab.color }}
-            />
-          )}
-          {isExpanded && !isEditing && (
-            <button
-              className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-                isActive
-                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-              }`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleExpand(tab.id)
-              }}
-              title="Collapse pane"
-              aria-label="Collapse pane"
-            >
-              <Minimize2 className="w-3 h-3" />
-            </button>
-          )}
-          {!isEditing && (
-            <button
-              className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-                isActive
-                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-              }`}
-              // Why: per-tab close affordance needs a stable accessible name so
-              // E2E specs can drive the same path a user takes (hover → click X)
-              // instead of bypassing the render layer by calling closeTab() on
-              // the store — a store-only assertion would pass even if this
-              // button had been accidentally unmounted.
-              aria-label={`Close tab ${tab.customTitle ?? tab.title}`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                onClose(tab.id)
-              }}
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+              {tabTitle}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>

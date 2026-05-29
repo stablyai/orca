@@ -99,7 +99,10 @@ export function reviewReadyToMerge(summary: HostedReviewQueueSummary): boolean {
   if (summary.mergeable !== 'MERGEABLE') {
     return false
   }
-  if (summary.mergeStateStatus === 'BEHIND' || summary.mergeStateStatus === 'BLOCKED') {
+  if (
+    summary.identity.provider === 'github' &&
+    (summary.mergeStateStatus === 'BEHIND' || summary.mergeStateStatus === 'BLOCKED')
+  ) {
     return false
   }
   if (

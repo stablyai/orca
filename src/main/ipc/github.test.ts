@@ -203,7 +203,8 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1'
+      before: 'cursor-1',
+      noCache: true
     })
 
     expect(listWorkItemsMock).toHaveBeenCalledWith(
@@ -212,7 +213,8 @@ describe('registerGitHubHandlers', () => {
       'is:open',
       'cursor-1',
       'origin',
-      null
+      null,
+      true
     )
   })
 
@@ -234,7 +236,8 @@ describe('registerGitHubHandlers', () => {
       '',
       undefined,
       undefined,
-      'openclaw-2'
+      'openclaw-2',
+      undefined
     )
   })
 

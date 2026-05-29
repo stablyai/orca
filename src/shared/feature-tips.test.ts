@@ -30,6 +30,20 @@ describe('feature tips', () => {
     expect(tips.map((tip) => tip.id)).toEqual([])
   })
 
+  it('skips tips for features the user has already interacted with', () => {
+    const tips = getOrderedUnseenFeatureTips({
+      seenTipIds: new Set<FeatureTipId>(),
+      completedTipIds: getCompletedFeatureTipIds({
+        voiceDictationEnabled: false,
+        featureInteractions: {
+          'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
+        }
+      })
+    })
+
+    expect(tips.map((tip) => tip.id)).toEqual([])
+  })
+
   it('normalizes persisted tip ids', () => {
     expect(normalizeFeatureTipIds(['feature-tour', 'bogus', 'voice-dictation'])).toEqual([
       'voice-dictation'

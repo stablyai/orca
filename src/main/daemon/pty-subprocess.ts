@@ -73,9 +73,10 @@ function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
 ): void {
-  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development') {
+  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
     // Why: the daemon inherits the app process env before per-PTY env is
-    // merged, so dev terminals must explicitly drop a parent endpoint.env.
+    // merged. Strip only stale parent endpoints; a fresh explicit endpoint is
+    // needed by hooks whose runners scrub token-like env vars before exec.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
 }

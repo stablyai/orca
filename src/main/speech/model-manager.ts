@@ -113,10 +113,14 @@ export class ModelManager {
 
     const archivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
     let aborted = false
+    const abortController = new AbortController()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
+        // Why: a stalled HTTPS request may never deliver another data chunk;
+        // cancellation must tear down the request immediately.
+        abortController.abort()
       }
     }
     this.activeDownloads.set(modelId, handle)
@@ -127,7 +131,8 @@ export class ModelManager {
         archivePath,
         manifest.sizeBytes,
         modelId,
-        () => aborted
+        () => aborted,
+        abortController.signal
       )
 
       if (aborted) {
@@ -223,9 +228,15 @@ export class ModelManager {
     expectedSize: number,
     modelId: string,
     isAborted: () => boolean,
+    signal?: AbortSignal,
     redirectCount = 0
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new Error('Aborted'))
+        return
+      }
+
       let parsedUrl: URL
       try {
         parsedUrl = new URL(url)
@@ -239,7 +250,8 @@ export class ModelManager {
         return
       }
 
-      const request = httpsGet(parsedUrl, (response: IncomingMessage) => {
+      let request: ReturnType<typeof httpsGet>
+      const onResponse = (response: IncomingMessage): void => {
         if (
           response.statusCode === 301 ||
           response.statusCode === 302 ||
@@ -278,6 +290,7 @@ export class ModelManager {
             expectedSize,
             modelId,
             isAborted,
+            signal,
             redirectCount + 1
           )
             .then(resolve)
@@ -298,8 +311,9 @@ export class ModelManager {
 
         response.on('data', (chunk: Buffer) => {
           if (isAborted()) {
+            request.destroy(new Error('Aborted'))
             response.destroy()
-            fileStream.close()
+            fileStream.destroy()
             return
           }
           downloaded += chunk.length
@@ -316,7 +330,11 @@ export class ModelManager {
             }
           })
           .catch(reject)
-      })
+      }
+
+      request = signal
+        ? httpsGet(parsedUrl, { signal }, onResponse)
+        : httpsGet(parsedUrl, onResponse)
 
       request.on('error', reject)
     })
@@ -367,36 +385,66 @@ export class ModelManager {
       )
 
       let stderr = ''
-      child.stderr?.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString()
-      })
-
-      const timeout = setTimeout(() => {
-        child.kill('SIGKILL')
-        reject(new Error('Extraction timed out after 10 minutes'))
-      }, 600_000)
-      const abortPoll = setInterval(() => {
-        if (isAborted()) {
-          child.kill('SIGKILL')
-          reject(new Error('Aborted'))
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let abortPoll: ReturnType<typeof setInterval> | null = null
+      const cleanup = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
         }
-      }, 250)
-
-      child.on('close', (code) => {
-        clearTimeout(timeout)
-        clearInterval(abortPoll)
+        if (abortPoll) {
+          clearInterval(abortPoll)
+          abortPoll = null
+        }
+        child.stderr?.off('data', onStderrData)
+        child.off('close', onClose)
+        child.off('error', onError)
+      }
+      const fail = (error: Error, killChild = false): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (killChild) {
+          child.kill('SIGKILL')
+        }
+        reject(error)
+      }
+      const onStderrData = (chunk: Buffer): void => {
+        stderr += chunk.toString()
+      }
+      const onClose = (code: number | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
         if (code === 0) {
           resolve()
         } else {
           reject(new Error(`tar exited with code ${code}: ${stderr.slice(0, 500)}`))
         }
-      })
+      }
+      const onError = (err: Error): void => {
+        fail(err)
+      }
 
-      child.on('error', (err) => {
-        clearTimeout(timeout)
-        clearInterval(abortPoll)
-        reject(err)
-      })
+      child.stderr?.on('data', onStderrData)
+      timeout = setTimeout(() => {
+        fail(new Error('Extraction timed out after 10 minutes'), true)
+      }, 600_000)
+      abortPoll = setInterval(() => {
+        if (isAborted()) {
+          // Why: if the extraction child wedges and never emits close/error,
+          // the abort poller must still clear itself when we reject.
+          fail(new Error('Aborted'), true)
+        }
+      }, 250)
+
+      child.on('close', onClose)
+      child.on('error', onError)
     })
   }
 

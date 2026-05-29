@@ -7,6 +7,7 @@ import { codexHookService } from '../codex/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
@@ -22,6 +23,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['antigravity', () => antigravityHookService.install()],
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
+  ['command-code', () => commandCodeHookService.install()],
   ['grok', () => grokHookService.install()],
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()]
@@ -34,6 +36,7 @@ const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
   ['antigravity', () => antigravityHookService.remove()],
   ['cursor', () => cursorHookService.remove()],
   ['droid', () => droidHookService.remove()],
+  ['command-code', () => commandCodeHookService.remove()],
   ['grok', () => grokHookService.remove()],
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()]
@@ -46,6 +49,7 @@ const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
   ['antigravity', () => antigravityHookService.getStatus()],
   ['cursor', () => cursorHookService.getStatus()],
   ['droid', () => droidHookService.getStatus()],
+  ['command-code', () => commandCodeHookService.getStatus()],
   ['grok', () => grokHookService.getStatus()],
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()]

@@ -21,6 +21,13 @@ import type {
 } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import {
+  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+  resolveSourceControlAiForOperation,
+  resolveSourceControlAiPrCreationDefaults
+} from '../../../../shared/source-control-ai'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
 
 type CreatePullRequestDialogProps = {
   open: boolean
@@ -62,10 +69,33 @@ export function CreatePullRequestDialog({
   onCreated
 }: CreatePullRequestDialogProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const repo = useAppStore((s) => s.repos.find((candidate) => candidate.id === repoId) ?? null)
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const submitInFlightRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const prCreationDefaults = React.useMemo(() => {
+    if (!settings) {
+      return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    }
+    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
+      getRuntimeGitScope(settings, repo?.connectionId)
+    )
+    const resolved = resolveSourceControlAiForOperation({
+      settings,
+      repo,
+      operation: 'pullRequest',
+      discoveryHostKey: hostKey,
+      prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    })
+    return resolved.ok
+      ? resolved.value.prCreationDefaults
+      : resolveSourceControlAiPrCreationDefaults({
+          settings,
+          repo,
+          prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+        })
+  }, [repo, settings])
   const {
     aiGenerationEnabled,
     base,
@@ -96,6 +126,7 @@ export function CreatePullRequestDialog({
     eligibility,
     settings,
     submitting,
+    prCreationDefaults,
     onBranchChangedByGeneration
   })
 
@@ -139,10 +170,14 @@ export function CreatePullRequestDialog({
         title: title.trim(),
         body,
         draft,
-        worktreePath
+        worktreePath,
+        useTemplate: prCreationDefaults.useTemplate
       })
       if (result.ok) {
         await onCreated(result)
+        if (prCreationDefaults.openAfterCreate) {
+          window.api.shell.openUrl(result.url)
+        }
         onOpenChange(false)
         return
       }
@@ -178,6 +213,8 @@ export function CreatePullRequestDialog({
     onOpenChange,
     onPushBeforeCreate,
     pushBeforeCreate,
+    prCreationDefaults.openAfterCreate,
+    prCreationDefaults.useTemplate,
     repoPath,
     submitDisabled,
     title,

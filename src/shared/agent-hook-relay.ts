@@ -40,6 +40,7 @@ export type AgentHookSource =
   | 'pi'
   | 'omp'
   | 'droid'
+  | 'command-code'
   | 'grok'
   | 'copilot'
   | 'hermes'
