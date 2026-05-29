@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
         isMainWorktree: boolean
       }
     >(),
+    repos: [] as { id: string; displayName: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
     clearWorktreeDeleteState: vi.fn(),
@@ -96,6 +97,7 @@ describe('runWorktreeBatchDelete', () => {
     mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
     mocks.state.deleteStateByWorktreeId = {}
     mocks.state.worktreeLineageById = {}
+    mocks.state.repos = []
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
     setWorktrees([])
@@ -211,6 +213,28 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'parent',
       allowSkipConfirm: false
+    })
+  })
+
+  it('opens project removal confirmation for a primary workspace', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([
+      {
+        id: 'main',
+        repoId: 'repo-1',
+        displayName: 'main',
+        isMainWorktree: true
+      }
+    ])
+    mocks.state.repos = [{ id: 'repo-1', displayName: 'orca' }]
+
+    runWorktreeDelete('main')
+
+    expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
+      repoId: 'repo-1',
+      displayName: 'orca'
     })
   })
 
