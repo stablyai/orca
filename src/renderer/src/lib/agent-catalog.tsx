@@ -426,7 +426,6 @@ export function AgentIcon({
         width={size}
         height={size}
         alt=""
-        aria-hidden
         style={{ borderRadius: 2 }}
       />
     )

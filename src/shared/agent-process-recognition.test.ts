@@ -20,6 +20,7 @@ describe('agent process recognition', () => {
       processName: 'openclaude'
     })
     expect(isRecognizedAgentType('openclaude')).toBe(true)
+    expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
   it('matches expected agents from platform-specific foreground process paths', () => {
