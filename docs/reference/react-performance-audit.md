@@ -1,0 +1,110 @@
+# React Performance Audit
+
+Status: in progress
+Started: 2026-05-29
+Base commit: `b7fe967780` (`origin/main`, release v1.4.35)
+
+## Goal
+
+Scan the full React surface for `$perf` and `$react-useeffect` issues, keep coverage evidence here, and land the fixes as many small PRs with explicit merge-risk notes.
+
+This document is the audit ledger. A section is not considered fully scanned until it has:
+
+1. File inventory checked from the current worktree.
+2. `useEffect` / `useLayoutEffect` / `useInsertionEffect` sites classified.
+3. Perf-sensitive patterns checked: timers, subscriptions, observers, `JSON.stringify`, storage writes, polling, broad store subscriptions, large list rendering, and render-time derived state.
+4. Each suspicious site dispositioned as "no change", "needs PR", or "covered by PR".
+5. Merge risk recorded for every PR candidate.
+
+## Scope
+
+React hook call scan uses all repo `*.ts` and `*.tsx` files, then narrows to actual AST hook calls. The React Effect surface found on 2026-05-29 is:
+
+- `src/renderer/src/**`
+- `mobile/app/**`
+- `mobile/src/**`
+- `mobile/packages/expo-two-way-audio/src/hooks.ts`
+
+Comment-only mentions outside those paths were ignored.
+
+Initial inventory:
+
+| Metric                                              | Count |
+| --------------------------------------------------- | ----: |
+| Repo `*.ts` / `*.tsx` files                         | 3,011 |
+| Files with real Effect hook calls                   |   285 |
+| Effect hook call sites                              |   970 |
+| `useLayoutEffect` / `useInsertionEffect` call sites |    44 |
+| Empty dependency arrays                             |   111 |
+| Effects with cleanup returns                        |   472 |
+| Effects with subscription/listener/observer shape   |   170 |
+| Effects with timer or animation-frame shape         |   128 |
+| Effects with `JSON.stringify` shape                 |     2 |
+| Set-state-shaped Effects needing manual review      |   270 |
+| `useMemo` call sites in React scope                 |   633 |
+| `useCallback` call sites in React scope             | 1,415 |
+| `useSyncExternalStore` call sites in React scope    |     8 |
+
+## Coverage Ledger
+
+| Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Renderer app shell             | `src/renderer/src/App.tsx`, root components                                                              | Inventory complete, manual review pending     | Check global listeners, beforeunload, media-query, sidebar resize, active-tab repair.                                              |
+| Terminal / PTY                 | `components/Terminal.tsx`, `components/terminal-pane/**`, `components/terminal/**`                       | Inventory complete, manual review pending     | High-risk area: xterm lifecycle, scrollback, remote/mobile parity, focus, WebGL, resize.                                           |
+| Browser pane                   | `components/browser-pane/**`                                                                             | Inventory complete, manual review in progress | Highest Effect density: 62 sites in `BrowserPane.tsx`. Check driver sync, address bar derived state, find state, webview lifetime. |
+| Editor / markdown / Monaco     | `components/editor/**`                                                                                   | Inventory complete, manual review pending     | 117 area Effects. Check editor model cleanup, preview scroll restore, search debounce, generated decorations.                      |
+| Sidebar / worktrees            | `components/sidebar/**`                                                                                  | Inventory complete, manual review in progress | Check worktree list state repair, drag/drop global listeners, kanban pointer flows, inline rename.                                 |
+| Right sidebar / source control | `components/right-sidebar/**`                                                                            | Inventory complete, manual review pending     | Check polling, PR checks, file explorer watch/reveal, source-control local resets. Git provider compatibility required.            |
+| Settings                       | `components/settings/**`                                                                                 | Inventory complete, manual review pending     | 81 area Effects. Many draft-mirror candidates; keep SSH and cross-platform settings behavior intact.                               |
+| Issue, PR, task pages          | `TaskPage.tsx`, `PullRequestPage.tsx`, `GitHubItemDialog.tsx`, `GitLabItemDialog.tsx`, Linear components | Inventory complete, manual review in progress | Large files with many Effects. Separate GitHub, GitLab, Linear, and generic review behavior.                                       |
+| Onboarding / feature wall      | `components/onboarding/**`, `components/feature-wall/**`                                                 | Inventory complete, manual review pending     | Lower merge risk for pure visual/demo state, but avoid changing telemetry semantics.                                               |
+| Status, dashboard, activity    | `components/status-bar/**`, `components/dashboard/**`, `components/activity/**`                          | Inventory complete, manual review pending     | Check interval sharing, retained agent state, activity terminal portals.                                                           |
+| Mobile app routes              | `mobile/app/**`                                                                                          | Inventory complete, manual review pending     | 79 Effects, including large `tasks.tsx` and session route. Remote-client parity required.                                          |
+| Mobile shared source           | `mobile/src/**`                                                                                          | Inventory complete, manual review pending     | Browser pane, transport client context, dictation hook, bottom drawer, new worktree modal.                                         |
+| Expo two-way audio hook        | `mobile/packages/expo-two-way-audio/src/hooks.ts`                                                        | Inventory complete, manual review pending     | Single Effect plus `useSyncExternalStore`; verify native subscription cleanup.                                                     |
+| Tests with hook mocks          | `*.test.ts`, `*.test.tsx`, e2e comments                                                                  | Inventory complete, manual review pending     | Do not count comment-only mentions as app Effect sites; update tests beside behavior changes.                                      |
+
+## Current Findings Queue
+
+These are candidate batches, not final conclusions. Each item needs code inspection before implementation.
+
+| Candidate PR | Area                                                  | Symptom / wasted work to prove                                                                           | Likely files                                                                                                             | Merge risk     |
+| ------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| PR A         | Small controlled-input resets                         | Extra render pass from Effects that mirror one prop into local draft state.                              | `BrowserAddressBar.tsx` covered by #3038; continue with `BrowserFind.tsx`, `PdfFind.tsx`, selected settings draft fields | Low to medium  |
+| PR B         | Settings draft hydration                              | Multiple independent Effects mirror persisted settings into draft state.                                 | `components/settings/**`                                                                                                 | Medium         |
+| PR C         | Browser pane Effect cluster                           | Large Effect cluster may mix external webview sync, derived UI state, and event-specific state repair.   | `BrowserPane.tsx`, `useGrabMode.ts`, browser tabs                                                                        | High           |
+| PR D         | Terminal tab repair and lifecycle                     | Effects repair active terminal/browser tab state after render; could cause extra render and focus churn. | `Terminal.tsx`, `useTerminalTabs.ts`, `TerminalPane.tsx`                                                                 | High           |
+| PR E         | Right-sidebar polling and source-control state repair | PR checks, branch snapshots, file explorer watch/reveal may repeat work after unrelated state changes.   | `ChecksPanel.tsx`, `SourceControl.tsx`, `useGitStatusPolling.ts`, file explorer hooks                                    | High           |
+| PR F         | Mobile route monoliths                                | Mobile task/session routes have many chained Effects and timer/refetch patterns.                         | `mobile/app/h/[hostId]/tasks.tsx`, `mobile/app/h/[hostId]/session/[worktreeId].tsx`                                      | High           |
+| PR G         | Mobile shared components                              | Visible/open Effects reset modal/drawer state and browser address state.                                 | `mobile/src/components/**`, `mobile/src/browser/MobileBrowserPane.tsx`                                                   | Medium         |
+| PR H         | Editor search/preview/decorations                     | Debounce and scroll-restore Effects may be legitimate external sync but need cleanup/count review.       | `components/editor/**`                                                                                                   | Medium to high |
+| PR I         | Feature wall/onboarding demos                         | Animation/demo Effects can often move to event handlers or tighter custom hooks.                         | `components/feature-wall/**`, `components/onboarding/**`                                                                 | Low to medium  |
+| PR J         | GitHub filter controls                                | Extra render pass from mirroring parsed reviewer qualifier into local mode state.                        | `PRFilterDropdowns.tsx` covered by #3041                                                                                 | Low            |
+| PR K         | Sidebar project filter                                | Extra render pass from mirroring the first filtered repo into command selection state.                   | `SidebarFilter.tsx` covered by #3042                                                                                     | Low            |
+
+## Merge Risk Scale
+
+| Risk   | Criteria                                                                                                              | Required verification                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Low    | Isolated local UI state, no persistence, no IPC, no terminal/browser/source-control behavior.                         | Targeted unit test if available plus `pnpm run typecheck:web`.                                          |
+| Medium | Settings, editor UI, mobile local UI, or state persisted per workspace but no transport protocol changes.             | Targeted tests plus manual interaction or focused Playwright/Electron check when UI behavior changes.   |
+| High   | Terminal/PTY, browser webview, source control, mobile remote-client, SSH, polling, persistence, or provider behavior. | Targeted tests, `pnpm run typecheck:web`, and Electron or mobile/manual parity evidence as appropriate. |
+
+## PR Log
+
+| PR    | Branch                               | Area                                                                          | Risk | Status | Evidence                                                                                                     |
+| ----- | ------------------------------------ | ----------------------------------------------------------------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| #3038 | `nwparker/react-perf`                | Audit ledger plus browser address bar top-suggestion mirror Effect removal    | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/browser-pane/BrowserAddressBar.tsx`; `pnpm run typecheck:web`. |
+| #3041 | `nwparker/react-perf-pr-filter`      | PR reviewer filter mode derived from parsed query plus explicit user override | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/github/PRFilterDropdowns.tsx`; `pnpm run typecheck:web`.       |
+| #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
+
+## Reproduction Commands
+
+Run from the worktree root.
+
+```bash
+rg --files -g '*.tsx' -g '*.ts' | wc -l
+rg -l "\\b(useEffect|useLayoutEffect|React\\.useEffect|React\\.useLayoutEffect)\\b" -g '*.tsx' -g '*.ts' | sort
+```
+
+The exact Effect-site counts above came from a TypeScript AST scan so comment-only mentions are not counted.
