@@ -104,7 +104,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
 | #3044 | `nwparker/react-perf-low-risk-2`     | Diff note card removes saved-body-to-draft mirror Effect                      | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/diff-comments/DiffCommentCard.tsx`; `pnpm run typecheck:web`.  |
 | #3051 | `nwparker/react-perf-low-risk-3`     | Status-bar account submenus collapse in provider menu open-change handlers    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/status-bar/StatusBar.tsx`; `pnpm run typecheck:web`.           |
-| #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
+| #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
 
 ## Reproduction Commands
 
