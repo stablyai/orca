@@ -21,6 +21,14 @@ type ActiveGrabOp = {
 /** Hard timeout for an armed grab operation to prevent indefinite hangs. */
 const GRAB_OP_TIMEOUT_MS = 120_000
 
+function isGuestCancellationPayload(rawPayload: unknown): boolean {
+  if (!rawPayload || typeof rawPayload !== 'object') {
+    return false
+  }
+  const payload = rawPayload as Record<string, unknown>
+  return payload.__orcaCancelled === true || payload.message === 'cancelled'
+}
+
 export class BrowserGrabSessionController {
   private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
 
@@ -102,6 +110,12 @@ export class BrowserGrabSessionController {
         try {
           const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('awaitClick'))
           if (!rawPayload || typeof rawPayload !== 'object') {
+            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+            return
+          }
+          // Why: teardown cancellation is an expected user path. Classify it
+          // before payload validation so it cannot surface as an invalid grab.
+          if (isGuestCancellationPayload(rawPayload)) {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
             return
           }

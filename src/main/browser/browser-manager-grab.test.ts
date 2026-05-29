@@ -341,6 +341,20 @@ describe('browserManager grab operations', () => {
       expect(result.kind).toBe('cancelled')
     })
 
+    it('resolves with cancelled when guest returns teardown cancellation marker', async () => {
+      guestExecuteJavaScriptMock.mockResolvedValueOnce({ __orcaCancelled: true })
+
+      const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+      expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'user' })
+    })
+
+    it('resolves with cancelled when guest returns a serialized cancelled error', async () => {
+      guestExecuteJavaScriptMock.mockResolvedValueOnce({ message: 'cancelled' })
+
+      const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+      expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'user' })
+    })
+
     it('resolves with error when executeJavaScript throws', async () => {
       guestExecuteJavaScriptMock.mockRejectedValueOnce(new Error('Script failed'))
 
