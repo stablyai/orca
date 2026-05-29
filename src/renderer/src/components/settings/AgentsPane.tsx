@@ -34,6 +34,9 @@ type AgentsPaneProps = {
   wslCapabilitiesLoading?: boolean
 }
 
+// Why: module-scoped so concurrent AgentRow clicks share the same chain.
+let pendingToggle: Promise<unknown> = Promise.resolve()
+
 type AgentRowProps = {
   agentId: TuiAgent
   label: string
@@ -347,8 +350,13 @@ export function AgentsPane({
   }
 
   const toggleEnabled = (id: TuiAgent): void => {
-    const latestSettings = useAppStore.getState().settings ?? settings
-    updateSettings(buildAgentEnabledSettingsUpdate(latestSettings, id))
+    // Why: serialize toggles so each click computes its next disabledTuiAgents
+    // from the post-IPC store snapshot. Without this, two rapid toggles race
+    // on the full-array replacement and the second silently overwrites the first.
+    pendingToggle = pendingToggle.catch(() => {}).then(() => {
+      const latestSettings = useAppStore.getState().settings ?? settings
+      return Promise.resolve(updateSettings(buildAgentEnabledSettingsUpdate(latestSettings, id)))
+    })
   }
 
   const saveOverride = (id: TuiAgent, value: string): void => {
