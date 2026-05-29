@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, and #3060: 950 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, and #3062: 949 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,6 +93,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR S         | Project group dialog open resets                      | Extra render pass from seeding name/delete dialog local state after the dialog opens.                    | `ProjectGroupNameDialog.tsx`, `ProjectGroupDeleteDialog.tsx` covered by #3058                                            | Low            |
 | PR T         | Onboarding agent fallback disclosure                  | Extra render pass from opening the fallback agent list when a selected agent first appears there.         | `AgentStep.tsx` covered by #3059                                                                                         | Low            |
 | PR U         | Feature-wall tour workflow resets                     | Four local reset Effects run after workflow changes or close instead of in the selection/close path.      | `FeatureWallTourSurface.tsx` covered by #3060                                                                            | Low            |
+| PR V         | Workspace board selection pruning                     | Local kanban selection is repaired in an Effect after the drawer closes or board rows change.             | `use-workspace-kanban-selection.ts` covered by #3062                                                                     | Low            |
 
 ## Merge Risk Scale
 
@@ -119,6 +120,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3058 | `nwparker/react-perf-project-group-dialogs` | Project group dialogs reset local open-state during render              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/ProjectGroupDeleteDialog.tsx src/renderer/src/components/sidebar/ProjectGroupNameDialog.tsx`; `pnpm run typecheck:web`. |
 | #3059 | `nwparker/react-perf-agent-step-latch` | Onboarding agent fallback disclosure latch updates during render        | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/AgentStep.tsx`; `pnpm run typecheck:web`.           |
 | #3060 | `nwparker/react-perf-feature-tour-resets` | Feature-wall tour reset state moves into workflow/close transitions | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
+| #3062 | `nwparker/react-perf-kanban-selection` | Workspace board selection pruning moves out of an Effect          | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-selection.ts`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
