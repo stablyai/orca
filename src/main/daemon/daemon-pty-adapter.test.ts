@@ -852,7 +852,52 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await respawnServer?.shutdown()
     })
 
-    it('replaces an unhealthy macOS resolver daemon before creating a fresh session', async () => {
+    it('preserves an unhealthy macOS resolver daemon when it owns live sessions', async () => {
+      const respawnFn = vi.fn()
+      const exits: { id: string; code: number }[] = []
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      respawnAdapter.onExit((payload) => exits.push(payload))
+      const existing = await respawnAdapter.spawn({ cols: 80, rows: 24 })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(exits).toEqual([])
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(existing.id)
+
+      respawnAdapter.dispose()
+    })
+
+    it('preserves an unhealthy macOS resolver daemon when live sessions have not been reconciled locally', async () => {
+      const respawnFn = vi.fn()
+      const background = await adapter.spawn({ cols: 80, rows: 24 })
+      const backgroundSubprocess = lastSubprocess
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(background.id)
+      expect(backgroundSubprocess.forceKill).not.toHaveBeenCalled()
+
+      respawnAdapter.dispose()
+    })
+
+    it('replaces an unhealthy macOS resolver daemon before creating a fresh session when no sessions are active', async () => {
       let respawnServer: DaemonServer | undefined
       const respawnFn = vi.fn(async () => {
         await server.shutdown()
@@ -867,7 +912,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const exits: { id: string; code: number }[] = []
       const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
       respawnAdapter.onExit((payload) => exits.push(payload))
-      const existing = await respawnAdapter.spawn({ cols: 80, rows: 24 })
       getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
 
       const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
@@ -878,7 +922,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         respawnAdapter.protocolVersion
       )
       expect(respawnFn).toHaveBeenCalledOnce()
-      expect(exits).toContainEqual({ id: existing.id, code: -1 })
+      expect(exits).toEqual([])
       expect(replacement.id).toBeDefined()
 
       respawnAdapter.dispose()

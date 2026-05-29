@@ -3,6 +3,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
   Worktree,
   WorkspaceVisibleTabType,
@@ -29,11 +31,31 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-k
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { branchName } from '@/lib/git-utils'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
+function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
+}
+
+function getActivationSpawnSuppression(layout: TerminalLayoutSnapshot | undefined): true | number {
+  const paneCount = Math.max(
+    1,
+    countTerminalLayoutLeaves(layout?.root),
+    Object.keys(layout?.ptyIdsByLeafId ?? {}).length
+  )
+  return paneCount === 1 ? true : paneCount
+}
 
 function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
   if (!result || result.status === 'updated') {
@@ -838,7 +860,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         changed = true
-        return { ...worktree, head: nextHead, branch: nextBranch }
+        // Why: terminal branch switches only patch branch/head here; auto-derived
+        // titles need the same branch derivation that full worktree listing uses.
+        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
+        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
+        return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
       if (!changed) {
@@ -1466,11 +1492,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   markWorktreeUnread: (worktreeId) => {
-    // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). Interaction with a pane inside the worktree
-    // dismisses the dot via clearWorktreeUnread. Worktree activation via
-    // setActiveWorktree also clears isUnread as a side-effect; that path
-    // predates this PR and is unaffected here.
+    // Why: terminal attention should remain visible until the user engages
+    // with the worktree. Interaction with a pane inside the worktree dismisses
+    // the dot via clearWorktreeUnread. Worktree activation via setActiveWorktree
+    // also clears isUnread as a side-effect; that path predates this PR and is
+    // unaffected here.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {
@@ -1875,7 +1901,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 [worktreeId!]: tabs.map((tab) => ({
                   ...tab,
                   ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  ...(shouldTagTabs ? { pendingActivationSpawn: true } : {})
+                  // Why: the allDead generation bump remounts panes and may
+                  // fresh-spawn PTYs — click side-effects, not real activity.
+                  // Split layouts remount several panes, so count the expected
+                  // pane events instead of suppressing only the first one.
+                  ...(allDead || shouldTagTabs
+                    ? {
+                        pendingActivationSpawn: getActivationSpawnSuppression(
+                          s.terminalLayoutsByTabId[tab.id]
+                        )
+                      }
+                    : {})
                 }))
               }
             }

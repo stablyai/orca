@@ -439,7 +439,7 @@ describe('project groups', () => {
     const rows = buildRows(
       'repo',
       [],
-      repoMap,
+      new Map(),
       null,
       new Set(),
       undefined,
@@ -460,6 +460,118 @@ describe('project groups', () => {
         count: 0,
         projectGroup: group
       })
+    ])
+  })
+
+  it('counts grouped repos before their visible worktrees are loaded', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map([[groupedRepo.id, groupedRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [group],
+      new Set([groupedRepo.id])
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'project-group:group-1',
+      count: 1
+    })
+  })
+
+  it('does not resurrect filtered repos as empty Project Group headers', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map([[groupedRepo.id, groupedRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1'
+    ])
+    expect(rows[0]).toMatchObject({ count: 0 })
+  })
+
+  it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      new Map([[repo.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-1'
     ])
   })
 
@@ -585,6 +697,83 @@ describe('project groups', () => {
     expect(rows[0]).toMatchObject({ count: 1 })
   })
 
+  it('renders imported repos under nested Project Groups before worktree rows load', () => {
+    const rootGroup: ProjectGroup = {
+      id: 'group-root',
+      name: 'Root',
+      parentPath: '/monorepo',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const platformGroup: ProjectGroup = {
+      ...rootGroup,
+      id: 'group-platform',
+      name: 'Platform',
+      parentGroupId: rootGroup.id,
+      tabOrder: 1
+    }
+    const servicesGroup: ProjectGroup = {
+      ...rootGroup,
+      id: 'group-services',
+      name: 'Services',
+      parentGroupId: platformGroup.id,
+      tabOrder: 2
+    }
+    const serviceA: Repo = {
+      ...repo,
+      id: 'repo-service-a',
+      displayName: 'service-a',
+      projectGroupId: servicesGroup.id,
+      projectGroupOrder: 0
+    }
+    const serviceB: Repo = {
+      ...repo,
+      id: 'repo-service-b',
+      displayName: 'service-b',
+      projectGroupId: servicesGroup.id,
+      projectGroupOrder: 1
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map([
+        [serviceA.id, serviceA],
+        [serviceB.id, serviceB]
+      ]),
+      null,
+      new Set(),
+      new Map([
+        [serviceA.id, 0],
+        [serviceB.id, 1]
+      ]),
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [rootGroup, platformGroup, servicesGroup],
+      new Set([serviceA.id, serviceB.id])
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-root',
+      'project-group:group-platform',
+      'project-group:group-services',
+      'repo:repo-service-a',
+      'repo:repo-service-b'
+    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.count)).toEqual([
+      2, 2, 2, 0, 0
+    ])
+  })
+
   it('returns both parent Project Group and repo keys for grouped repo reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
 
@@ -593,11 +782,8 @@ describe('project groups', () => {
     ).toEqual(['project-group:group-1', 'repo:repo-1'])
   })
 
-  it('returns the Ungrouped parent key for ungrouped repo reveals', () => {
-    expect(getGroupKeysForWorktree('repo', worktree, repoMap, null)).toEqual([
-      'project-group:ungrouped',
-      'repo:repo-1'
-    ])
+  it('returns only the repo key for ungrouped repo reveals', () => {
+    expect(getGroupKeysForWorktree('repo', worktree, repoMap, null)).toEqual(['repo:repo-1'])
   })
 })
 

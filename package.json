@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.31-rc.3",
+  "version": "1.4.35",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -68,6 +68,7 @@
     "@parcel/watcher": "^2.5.6",
     "@tanstack/react-virtual": "^3.13.24",
     "@tiptap/extension-code-block-lowlight": "^3.22.5",
+    "@tiptap/extension-details": "^3.22.5",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
     "@tiptap/extension-mathematics": "3.22.5",
@@ -110,6 +111,7 @@
     "posthog-node": "^5.33.3",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.4.3",
+    "react-colorful": "^5.7.0",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",

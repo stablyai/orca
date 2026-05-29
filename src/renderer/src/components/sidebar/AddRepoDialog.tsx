@@ -21,6 +21,14 @@ import { getDefaultCloneParent } from './clone-defaults'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import {
+  buildNestedRepoImportActionTelemetry,
+  buildNestedRepoImportResultTelemetry,
+  buildNestedRepoScanTelemetry,
+  createNestedRepoTelemetryAttemptId,
+  shouldEmitNestedRepoImportSubmitTelemetry,
+  type NestedRepoTelemetryRuntimeKind
+} from '../../../../shared/nested-repo-telemetry'
 import type {
   AddRepoExistingWorkspaceSource,
   AddRepoSetupStepAction
@@ -83,6 +91,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [nestedSelectedPaths, setNestedSelectedPaths] = useState<Set<string>>(new Set())
   const [nestedGroupName, setNestedGroupName] = useState('')
   const [nestedConnectionId, setNestedConnectionId] = useState<string | null>(null)
+  const [nestedAttemptId, setNestedAttemptId] = useState<string | null>(null)
+  const [nestedRuntimeKind, setNestedRuntimeKind] = useState<NestedRepoTelemetryRuntimeKind | null>(
+    null
+  )
+
+  const getNestedRepoRuntimeKind = useCallback(
+    (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
+      if (connectionId) {
+        return 'ssh'
+      }
+      return settings?.activeRuntimeEnvironmentId?.trim() ? 'runtime' : 'local'
+    },
+    [settings?.activeRuntimeEnvironmentId]
+  )
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
@@ -110,12 +132,25 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     closeModal,
     setExistingWorkspaceSource,
     scanNestedRepos,
-    (scan, selectedPath, connectionId) => {
+    (scan, selectedPath, connectionId, attemptId) => {
       setNestedScan(scan)
       setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
       setNestedGroupName(defaultProjectGroupNameForPath(scan.selectedPath || selectedPath))
       setNestedConnectionId(connectionId)
+      setNestedAttemptId(attemptId)
+      setNestedRuntimeKind('ssh')
       setStep('nested')
+    },
+    (scan, attemptId) => {
+      track(
+        'add_repo_nested_scan_result',
+        buildNestedRepoScanTelemetry({
+          attemptId,
+          surface: 'sidebar',
+          runtimeKind: 'ssh',
+          scan
+        })
+      )
     }
   )
 
@@ -217,6 +252,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setNestedSelectedPaths(new Set())
     setNestedGroupName('')
     setNestedConnectionId(null)
+    setNestedAttemptId(null)
+    setNestedRuntimeKind(null)
     resetCreateState()
     resetRemoteState()
   }, [resetRemoteState, resetCreateState])
@@ -242,12 +279,24 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       if (!path) {
         return
       }
+      const attemptId = createNestedRepoTelemetryAttemptId()
       const scan = await scanNestedRepos(path)
+      track(
+        'add_repo_nested_scan_result',
+        buildNestedRepoScanTelemetry({
+          attemptId,
+          surface: 'sidebar',
+          runtimeKind: 'local',
+          scan
+        })
+      )
       if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
         setNestedScan(scan)
         setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
         setNestedGroupName(defaultProjectGroupNameForPath(path))
         setNestedConnectionId(null)
+        setNestedAttemptId(attemptId)
+        setNestedRuntimeKind('local')
         setStep('nested')
         return
       }
@@ -269,10 +318,33 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const handleImportNestedRepos = useCallback(
     async (mode: 'group' | 'separate') => {
-      if (!nestedScan || nestedSelectedPaths.size === 0) {
+      const attemptId = nestedAttemptId
+      if (
+        !nestedScan ||
+        !attemptId ||
+        !shouldEmitNestedRepoImportSubmitTelemetry({
+          attemptId,
+          selectedCount: nestedSelectedPaths.size
+        })
+      ) {
         return
       }
+      const foundCount = nestedScan.repos.length
+      const selectedCount = nestedSelectedPaths.size
+      const runtimeKind = nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId)
       setIsAdding(true)
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId,
+          surface: 'sidebar',
+          runtimeKind,
+          action: mode === 'group' ? 'import_group' : 'import_separate',
+          foundCount,
+          selectedCount
+        })
+      )
+      let resultTracked = false
       try {
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
@@ -281,6 +353,19 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
           mode
         })
+        track(
+          'add_repo_nested_import_result',
+          buildNestedRepoImportResultTelemetry({
+            attemptId,
+            surface: 'sidebar',
+            runtimeKind,
+            mode,
+            foundCount,
+            selectedCount,
+            result
+          })
+        )
+        resultTracked = true
         if (!result) {
           return
         }
@@ -289,7 +374,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           .filter((projectId): projectId is string => typeof projectId === 'string')
         const firstRepoId = importedRepoIds[0]
         if (!firstRepoId) {
-          toast.error('No repositories imported')
+          const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
+          toast.error('No repositories imported', {
+            description: firstFailure ?? undefined
+          })
           return
         }
         for (const projectId of importedRepoIds) {
@@ -313,6 +401,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           })
         }
       } finally {
+        if (!resultTracked) {
+          track(
+            'add_repo_nested_import_result',
+            buildNestedRepoImportResultTelemetry({
+              attemptId,
+              surface: 'sidebar',
+              runtimeKind,
+              mode,
+              foundCount,
+              selectedCount,
+              result: null
+            })
+          )
+        }
         setIsAdding(false)
       }
     },
@@ -320,9 +422,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       fetchWorktrees,
       importNestedRepos,
       nestedGroupName,
+      nestedAttemptId,
       nestedScan,
       nestedSelectedPaths,
       nestedConnectionId,
+      nestedRuntimeKind,
+      getNestedRepoRuntimeKind,
       settings?.activeRuntimeEnvironmentId
     ]
   )
@@ -336,12 +441,24 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       setIsAddingServerPath(true)
       try {
         if (kind === 'git') {
+          const attemptId = createNestedRepoTelemetryAttemptId()
           const scan = await scanNestedRepos(path)
+          track(
+            'add_repo_nested_scan_result',
+            buildNestedRepoScanTelemetry({
+              attemptId,
+              surface: 'sidebar',
+              runtimeKind: getNestedRepoRuntimeKind(null),
+              scan
+            })
+          )
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
             setNestedScan(scan)
             setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
             setNestedGroupName(defaultProjectGroupNameForPath(path))
             setNestedConnectionId(null)
+            setNestedAttemptId(attemptId)
+            setNestedRuntimeKind(getNestedRepoRuntimeKind(null))
             setStep('nested')
             return
           }
@@ -361,7 +478,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         setIsAddingServerPath(false)
       }
     },
-    [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos, serverPath]
+    [addRepoPath, closeModal, fetchWorktrees, getNestedRepoRuntimeKind, scanNestedRepos, serverPath]
   )
 
   const handlePickDestination = useCallback(async () => {
@@ -550,8 +667,36 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     updateRepo
   ])
 
+  const trackNestedBackAction = useCallback((): void => {
+    if (nestedScan && nestedAttemptId) {
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId: nestedAttemptId,
+          surface: 'sidebar',
+          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
+          action: 'back',
+          foundCount: nestedScan.repos.length,
+          selectedCount: nestedSelectedPaths.size
+        })
+      )
+    }
+  }, [
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedRuntimeKind,
+    nestedScan,
+    nestedSelectedPaths.size
+  ])
+
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
-  const handleBack = resetState
+  const handleBack = useCallback(() => {
+    if (step === 'nested') {
+      trackNestedBackAction()
+    }
+    resetState()
+  }, [resetState, step, trackNestedBackAction])
 
   // Why: only the Setup step's "Add another project" back arrow counts as a
   // funnel event — the in-flight Back arrows on clone/remote/create are not
@@ -576,12 +721,19 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             void finishImportedRepoWithoutOpening()
             return
           }
+          if (step === 'nested' && !isAdding) {
+            trackNestedBackAction()
+          }
           closeModal()
           resetState()
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className={`min-w-0 overflow-hidden sm:max-w-lg [&>*]:min-w-0 ${
+          step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
+        }`}
+      >
         {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
         <div className="flex items-center justify-center -mt-1">
           {(step === 'clone' || step === 'remote' || step === 'create') && (
@@ -822,8 +974,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+            <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
+              <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border border-border bg-muted/30 p-3">
                 <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
                   <FolderTree className="size-4" />
                 </div>
@@ -837,7 +989,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
                 <Input
                   value={nestedGroupName}
@@ -851,13 +1003,14 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 selectedPaths={nestedSelectedPaths}
                 onSelectedPathsChange={setNestedSelectedPaths}
                 disabled={isAdding}
+                className="flex-1"
               />
               {nestedScan.truncated || nestedScan.timedOut ? (
                 <div className="text-[11px] text-muted-foreground">
                   Showing partial results from a bounded scan.
                 </div>
               ) : null}
-              <div className="flex items-center gap-2">
+              <div className="shrink-0 flex items-center gap-2">
                 <Button onClick={handleBack} disabled={isAdding} variant="ghost">
                   <ArrowLeft className="size-3.5" />
                   Back

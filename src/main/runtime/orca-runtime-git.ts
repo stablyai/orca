@@ -21,6 +21,7 @@ import type { SourceControlAiOperation } from '../../shared/source-control-ai-ty
 import { getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
+  abortRebase,
   bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
@@ -188,6 +189,20 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await abortMerge(target.worktree.path)
+    return { ok: true }
+  }
+
+  async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.abortRebase(target.worktree.path)
+      return { ok: true }
+    }
+    await abortRebase(target.worktree.path)
     return { ok: true }
   }
 

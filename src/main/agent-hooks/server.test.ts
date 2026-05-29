@@ -2655,11 +2655,11 @@ describe('Codex hook normalization', () => {
 })
 
 describe('Gemini hook normalization', () => {
-  it('PreToolUse surfaces toolName + toolInput', () => {
+  it('BeforeTool surfaces toolName + toolInput', () => {
     const result = _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'read_file',
         tool_input: { path: '/src/index.ts' }
       }),
@@ -2674,7 +2674,7 @@ describe('Gemini hook normalization', () => {
     const result = _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'run_shell_command',
         args: { command: 'git status' }
       }),
@@ -2688,7 +2688,7 @@ describe('Gemini hook normalization', () => {
     _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'read_file',
         tool_input: { path: '/stale.ts' }
       }),

@@ -86,6 +86,11 @@ import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import {
+  normalizeFeatureInteractions,
+  type FeatureInteractionId
+} from '../shared/feature-interactions'
+import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -95,6 +100,7 @@ import {
 } from '../shared/workspace-statuses'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
@@ -110,6 +116,7 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
+import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -232,6 +239,31 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
     return 'none'
   }
   return getDefaultUIState().groupBy
+}
+
+function mergeFeatureInteractions(
+  current: PersistedState['ui']['featureInteractions'],
+  incoming: PersistedState['ui']['featureInteractions']
+): PersistedState['ui']['featureInteractions'] {
+  const currentNormalized = normalizeFeatureInteractions(current)
+  const incomingNormalized = normalizeFeatureInteractions(incoming)
+  const merged = { ...currentNormalized }
+  for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
+    const currentRecord = currentNormalized[id as keyof typeof currentNormalized]
+    merged[id as keyof typeof merged] = currentRecord
+      ? {
+          firstInteractedAt: Math.min(
+            currentRecord.firstInteractedAt,
+            incomingRecord.firstInteractedAt
+          ),
+          interactionCount: Math.max(
+            currentRecord.interactionCount,
+            incomingRecord.interactionCount
+          )
+        }
+      : incomingRecord
+  }
+  return merged
 }
 
 function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
@@ -445,10 +477,18 @@ function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | u
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
 }
 
-function sanitizeRepoUpdatesForPersistence<T extends Partial<Pick<Repo, 'repoIcon'>>>(
-  updates: T
-): T {
+function sanitizeRepoUpdatesForPersistence<
+  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon'>>
+>(updates: T): T {
   const sanitized = { ...updates }
+  if ('badgeColor' in sanitized) {
+    const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
+    if (!badgeColor) {
+      delete sanitized.badgeColor
+    } else {
+      sanitized.badgeColor = badgeColor
+    }
+  }
   if ('repoIcon' in sanitized) {
     const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
     if (repoIcon === undefined) {
@@ -1267,6 +1307,13 @@ export class Store {
   private writeGeneration = 0
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
+  private settingsChangeListeners = new Set<
+    (
+      updates: Partial<GlobalSettings>,
+      settings: GlobalSettings,
+      originWebContentsId?: number
+    ) => void
+  >()
 
   constructor() {
     const loaded = this.load()
@@ -1593,6 +1640,7 @@ export class Store {
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
+            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
@@ -2406,6 +2454,7 @@ export class Store {
       updatedAt: now
     }
     this.state.automations = [...(this.state.automations ?? []), automation]
+    this.recordFeatureInteraction('automation-created')
     this.flush()
     return automation
   }
@@ -2504,6 +2553,9 @@ export class Store {
       createdAt: now
     }
     this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    if (trigger === 'manual') {
+      this.recordFeatureInteraction('automation-run')
+    }
     this.flush()
     return run
   }
@@ -2646,8 +2698,36 @@ export class Store {
     return this.state.settings
   }
 
-  updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+  onSettingsChanged(
+    listener: (
+      updates: Partial<GlobalSettings>,
+      settings: GlobalSettings,
+      originWebContentsId?: number
+    ) => void
+  ): () => void {
+    this.settingsChangeListeners.add(listener)
+    return () => {
+      this.settingsChangeListeners.delete(listener)
+    }
+  }
+
+  private notifySettingsChanged(
+    updates: Partial<GlobalSettings>,
+    originWebContentsId?: number
+  ): void {
+    for (const listener of this.settingsChangeListeners) {
+      listener(updates, this.state.settings, originWebContentsId)
+    }
+  }
+
+  updateSettings(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    if ('disabledTuiAgents' in updates) {
+      sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
@@ -2708,6 +2788,7 @@ export class Store {
         sanitizedUpdates.commitMessageAi
       )
     }
+    const previousSettings = this.state.settings
     this.state.settings = {
       ...this.state.settings,
       ...sanitizedUpdates,
@@ -2718,6 +2799,15 @@ export class Store {
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
+    const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>
+    for (const key of Object.keys(sanitizedUpdates) as (keyof GlobalSettings)[]) {
+      if (!Object.is(previousSettings[key], this.state.settings[key])) {
+        changedUpdates[String(key)] = this.state.settings[key]
+      }
+    }
+    if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
+      this.notifySettingsChanged(changedUpdates, options.originWebContentsId)
+    }
     return this.state.settings
   }
 
@@ -2738,7 +2828,9 @@ export class Store {
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
-      )
+      ),
+      featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
+      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
   }
 
@@ -2772,9 +2864,38 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
-      )
+      ),
+      featureTipsSeenIds:
+        updates.featureTipsSeenIds !== undefined
+          ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
+          : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
+      // Why: runtime RPCs and the renderer can both record education state.
+      // Merge instead of replacing so a stale renderer snapshot cannot erase
+      // runtime-only feature interactions.
+      featureInteractions:
+        updates.featureInteractions !== undefined
+          ? mergeFeatureInteractions(
+              this.state.ui?.featureInteractions,
+              updates.featureInteractions
+            )
+          : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
     this.scheduleSave()
+  }
+
+  recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {
+    const featureInteractions = normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+    const existing = featureInteractions[id]
+    this.updateUI({
+      featureInteractions: {
+        ...featureInteractions,
+        [id]: {
+          firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
+          interactionCount: (existing?.interactionCount ?? 0) + 1
+        }
+      }
+    })
+    return this.getUI()
   }
 
   // ── Onboarding ────────────────────────────────────────────────────

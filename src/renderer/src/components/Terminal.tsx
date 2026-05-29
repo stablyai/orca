@@ -31,7 +31,7 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
-import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
@@ -1330,10 +1330,9 @@ function Terminal(): React.JSX.Element | null {
   // Warn on window close if there are unsaved editor files
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent): void => {
-      // Why: updater restarts intentionally close the app even if a hidden
-      // editor tab still reports dirty. Let ShipIt replace the bundle instead
-      // of vetoing quitAndInstall and leaving the old version running.
-      if (isUpdaterQuitAndInstallInProgress()) {
+      // Why: update/manual restarts pre-save dirty tabs and then intentionally
+      // close the app. Do not let stale dirty flags veto the relaunch path.
+      if (isIntentionalAppRestartInProgress()) {
         return
       }
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
@@ -1350,7 +1349,7 @@ function Terminal(): React.JSX.Element | null {
   // close here. Explicit destructive terminal actions keep their own confirms.
   useEffect(() => {
     return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
-      if (isUpdaterQuitAndInstallInProgress()) {
+      if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
       }

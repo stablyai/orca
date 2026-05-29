@@ -214,15 +214,24 @@ describe('resolveDropdownItems', () => {
     }
   })
 
-  it('shows a destructive Abort merge item only while a merge is in progress', () => {
+  it('shows a destructive abort item only while merge or rebase is in progress', () => {
     const mergeItems = resolveDropdownItems(
       inputs({
         conflictOperation: 'merge',
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+    const rebaseItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'rebase',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
     const mergeByKind = Object.fromEntries(
       mergeItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    const rebaseByKind = Object.fromEntries(
+      rebaseItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
     expect(mergeByKind.abort_merge).toMatchObject({
@@ -231,14 +240,23 @@ describe('resolveDropdownItems', () => {
       disabled: false,
       variant: 'destructive'
     })
+    expect(rebaseByKind.abort_rebase).toMatchObject({
+      label: 'Abort rebase',
+      title: 'Abort the rebase in progress',
+      disabled: false,
+      variant: 'destructive'
+    })
+    expect(mergeByKind.abort_rebase).toBeUndefined()
+    expect(rebaseByKind.abort_merge).toBeUndefined()
 
-    for (const conflictOperation of ['unknown', 'rebase', 'cherry-pick'] as const) {
+    for (const conflictOperation of ['unknown', 'cherry-pick'] as const) {
       const items = resolveDropdownItems(inputs({ conflictOperation }))
       expect(items.some((entry) => entry.kind === 'abort_merge')).toBe(false)
+      expect(items.some((entry) => entry.kind === 'abort_rebase')).toBe(false)
     }
   })
 
-  it('disables Abort merge while another action is busy', () => {
+  it('disables conflict abort actions while another action is busy', () => {
     const items = resolveDropdownItems(
       inputs({
         conflictOperation: 'merge',
@@ -246,9 +264,21 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+    const rebaseItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'rebase',
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
     const abortMerge = items.find((entry) => entry.kind === 'abort_merge')
+    const abortRebase = rebaseItems.find((entry) => entry.kind === 'abort_rebase')
 
     expect(abortMerge).toMatchObject({
+      disabled: true,
+      title: 'Operation in progress…'
+    })
+    expect(abortRebase).toMatchObject({
       disabled: true,
       title: 'Operation in progress…'
     })

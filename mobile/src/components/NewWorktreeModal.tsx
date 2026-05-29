@@ -26,8 +26,13 @@ import {
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
-import { isMobileTuiAgent, MOBILE_TUI_AGENT_LAUNCH_COMMANDS } from '../tasks/mobile-tui-agents'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/types'
+import {
+  filterEnabledMobileTuiAgents,
+  isMobileTuiAgent,
+  isMobileTuiAgentEnabled,
+  MOBILE_TUI_AGENT_LAUNCH_COMMANDS
+} from '../tasks/mobile-tui-agents'
+import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
 
 type Repo = {
@@ -41,7 +46,8 @@ type Repo = {
 type SetupDecision = 'inherit' | 'run' | 'skip'
 type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 type RuntimeSettings = {
-  defaultTuiAgent?: string | 'blank' | null
+  defaultTuiAgent?: TuiAgent | 'blank' | null
+  disabledTuiAgents?: TuiAgent[]
   agentCmdOverrides?: Record<string, string>
 }
 
@@ -66,7 +72,7 @@ type SetupTrustPrompt = {
 }
 
 type AgentOption = {
-  id: string
+  id: TuiAgent | '__blank__'
   label: string
   faviconDomain?: string
 }
@@ -89,10 +95,23 @@ function pickPreferredAgent(
   if (preferred?.id === '__blank__') {
     return preferred
   }
-  if (preferred && (detectedAgentIds === null || detectedAgentIds.has(preferred.id)))
+  if (
+    preferred &&
+    isMobileTuiAgent(preferred.id) &&
+    isMobileTuiAgentEnabled(preferred.id, settings?.disabledTuiAgents) &&
+    (detectedAgentIds === null || detectedAgentIds.has(preferred.id))
+  ) {
     return preferred
+  }
+  const enabledAgents = filterEnabledMobileTuiAgents(
+    MOBILE_AGENT_CATALOG.map((agent) => agent.id),
+    settings?.disabledTuiAgents
+  )
   const detectedOption = AGENT_OPTIONS.find(
-    (agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id)
+    (agent) =>
+      agent.id !== '__blank__' &&
+      enabledAgents.includes(agent.id) &&
+      (detectedAgentIds === null || detectedAgentIds.has(agent.id))
   )
   return detectedOption ?? BLANK_TERMINAL
 }
@@ -371,7 +390,12 @@ export function NewWorktreeModal({
 
   useEffect(() => {
     if (!visible || detectedAgentIds === null || selectedAgent.id === '__blank__') return
-    if (detectedAgentIds.has(selectedAgent.id)) return
+    if (
+      detectedAgentIds.has(selectedAgent.id) &&
+      isMobileTuiAgentEnabled(selectedAgent.id, runtimeSettings?.disabledTuiAgents)
+    ) {
+      return
+    }
     setSelectedAgent(pickPreferredAgent(runtimeSettings, detectedAgentIds))
     setAgentOverridden(false)
   }, [detectedAgentIds, runtimeSettings, selectedAgent.id, visible])
@@ -487,9 +511,30 @@ export function NewWorktreeModal({
         setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
+      let latestRuntimeSettings = runtimeSettings
+      try {
+        const settingsResponse = await client.sendRequest('settings.get')
+        if (settingsResponse.ok) {
+          const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
+          latestRuntimeSettings = result.settings
+          setRuntimeSettings(result.settings)
+        }
+      } catch {
+        // Best-effort refresh; the runtime validates the same setting before spawning.
+      }
+      if (
+        selectedAgent.id !== '__blank__' &&
+        !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+      ) {
+        setSelectedAgent(pickPreferredAgent(latestRuntimeSettings, detectedAgentIds))
+        setAgentOverridden(false)
+        setError('Selected agent is disabled. Choose an enabled agent before creating.')
+        return
+      }
+
       const command =
         selectedAgent.id !== '__blank__'
-          ? (runtimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
+          ? (latestRuntimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
             (isMobileTuiAgent(selectedAgent.id)
               ? MOBILE_TUI_AGENT_LAUNCH_COMMANDS[selectedAgent.id]
               : undefined))
@@ -598,8 +643,17 @@ export function NewWorktreeModal({
     (!needsSetupChoice || setupDecisionChoice != null)
   const visibleAgentOptions =
     detectedAgentIds === null
-      ? AGENT_OPTIONS
-      : AGENT_OPTIONS.filter((agent) => detectedAgentIds.has(agent.id))
+      ? AGENT_OPTIONS.filter(
+          (agent) =>
+            agent.id !== '__blank__' &&
+            isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
+        )
+      : AGENT_OPTIONS.filter(
+          (agent) =>
+            agent.id !== '__blank__' &&
+            detectedAgentIds.has(agent.id) &&
+            isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
+        )
   const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
 
   return (

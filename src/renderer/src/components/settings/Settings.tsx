@@ -45,6 +45,7 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -295,6 +296,9 @@ function Settings(): React.JSX.Element {
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (isIntentionalAppRestartInProgress()) {
+        return
+      }
       if (!hasUnsavedCommitPromptChanges) {
         return
       }

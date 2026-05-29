@@ -312,6 +312,7 @@ function getTrustedSystemUserHookSignatures(
     console.warn('[codex-hook-service] failed to read system hook trust entries', error)
     return signatures
   }
+  const trustedHashesByEvent = getTrustedSystemHookHashesByEvent(systemConfigPath, trustEntries)
   for (const [eventName, definitions] of Object.entries(systemHooks)) {
     if (!Array.isArray(definitions)) {
       continue
@@ -333,20 +334,54 @@ function getTrustedSystemUserHookSignatures(
         if (!entry) {
           return
         }
+        const expectedHash = computeTrustedHash(entry)
         const state = trustEntries.get(computeTrustKey(entry))
-        if (state?.trustedHash === computeTrustedHash(entry)) {
-          const signature = getTrustSignature(entry)
-          const enabled = state.enabled !== false
-          // Why: runtime deduping collapses identical system hook definitions;
-          // if any duplicate remains enabled, keep the mirrored hook enabled.
-          if (enabled || !signatures.has(signature)) {
-            signatures.set(signature, enabled)
-          }
+        const enabled =
+          state?.trustedHash === expectedHash
+            ? state.enabled !== false
+            : trustedHashesByEvent.get(entry.eventLabel)?.get(expectedHash)
+        if (enabled === undefined) {
+          return
+        }
+        const signature = getTrustSignature(entry)
+        // Why: runtime deduping collapses identical system hook definitions;
+        // if any duplicate remains enabled, keep the mirrored hook enabled.
+        if (enabled || !signatures.has(signature)) {
+          signatures.set(signature, enabled)
         }
       })
     })
   }
   return signatures
+}
+
+function getTrustedSystemHookHashesByEvent(
+  systemConfigPath: string,
+  trustEntries: ReadonlyMap<string, CodexHookTrustState>
+): Map<CodexEventLabel, Map<string, boolean>> {
+  const trustedHashesByEvent = new Map<CodexEventLabel, Map<string, boolean>>()
+  const canonicalSystemConfigPath = getCodexCanonicalTrustPath(systemConfigPath)
+  for (const [key, state] of trustEntries) {
+    const parsed = parseTrustKey(key)
+    if (!parsed || !state.trustedHash) {
+      continue
+    }
+    if (getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalSystemConfigPath) {
+      continue
+    }
+    let hashes = trustedHashesByEvent.get(parsed.eventLabel)
+    if (!hashes) {
+      hashes = new Map()
+      trustedHashesByEvent.set(parsed.eventLabel, hashes)
+    }
+    const enabled = state.enabled !== false
+    // Why: Codex trust keys include hook indices. If a user reorders hooks,
+    // the hash still proves the same event+command identity was approved.
+    if (enabled || !hashes.has(state.trustedHash)) {
+      hashes.set(state.trustedHash, enabled)
+    }
+  }
+  return trustedHashesByEvent
 }
 
 function collectMirroredRuntimeUserHookTrustEntries(

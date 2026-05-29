@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname, join, resolve } from 'path'
+import { extname, resolve } from 'path'
 import type { ChildProcess } from 'child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -33,6 +33,7 @@ import {
 import {
   getStatus,
   abortMerge,
+  abortRebase,
   detectConflictOperation,
   getDiff,
   commitChanges,
@@ -282,22 +283,20 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
 async function isDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  resolveEntryPath: (entryPath: string) => Promise<string>
+  _resolveEntryPath: (entryPath: string) => Promise<string>
 ): Promise<boolean> {
+  // Why: following a symlink just to decorate readDir can touch macOS
+  // TCC-protected app containers. Treat links as file-like until the user
+  // explicitly opens them.
+  void _resolveEntryPath
+  if (entry.isSymbolicLink()) {
+    void dirPath
+    return false
+  }
   if (entry.isDirectory()) {
     return true
   }
-  if (!entry.isSymbolicLink()) {
-    return false
-  }
-  try {
-    // Why: directory symlinks inside a workspace should navigate like folders
-    // without bypassing the local authorized-path boundary.
-    const entryPath = await resolveEntryPath(join(dirPath, entry.name))
-    return (await stat(entryPath)).isDirectory()
-  } catch {
-    return false
-  }
+  return false
 }
 
 export function registerFilesystemHandlers(
@@ -710,6 +709,21 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await abortMerge(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:abortRebase',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.abortRebase(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await abortRebase(worktreePath)
     }
   )
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard } from './SourceControl'
+import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -334,13 +334,13 @@ describe('ConflictSummaryCard', () => {
     expect(markup.indexOf('Resolve with AI')).toBeLessThan(markup.indexOf('Review conflicts'))
   })
 
-  it('shows Abort merge only for merge conflicts', () => {
+  it('shows the matching abort action for merge and rebase conflicts only', () => {
     const mergeMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
         isResolvingWithAI={false}
-        onAbortMerge={vi.fn()}
+        onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -350,14 +350,28 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         isResolvingWithAI={false}
-        onAbortMerge={vi.fn()}
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+    const cherryPickMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="cherry-pick"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
     )
 
     expect(mergeMarkup).toContain('Abort merge')
+    expect(mergeMarkup).not.toContain('Abort rebase')
+    expect(rebaseMarkup).toContain('Abort rebase')
     expect(rebaseMarkup).not.toContain('Abort merge')
+    expect(cherryPickMarkup).not.toContain('Abort merge')
+    expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
   it('renders the Sparkles icon on the idle Resolve with AI button', () => {
@@ -374,5 +388,24 @@ describe('ConflictSummaryCard', () => {
     expect(markup).toContain('Resolve with AI')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
+  })
+})
+
+describe('OperationBanner', () => {
+  it('shows abort actions for merge and rebase but not cherry-pick', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
+      <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
+    )
+    const cherryPickMarkup = renderToStaticMarkup(
+      <OperationBanner conflictOperation="cherry-pick" onAbortOperation={vi.fn()} />
+    )
+
+    expect(mergeMarkup).toContain('Abort merge')
+    expect(rebaseMarkup).toContain('Abort rebase')
+    expect(cherryPickMarkup).not.toContain('Abort merge')
+    expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 })

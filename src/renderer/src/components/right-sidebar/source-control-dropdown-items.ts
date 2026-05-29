@@ -16,6 +16,7 @@ export type DropdownActionKind =
   | 'commit_push'
   | 'commit_sync'
   | 'abort_merge'
+  | 'abort_rebase'
   | 'create_pr'
   | 'push_create_pr'
   | 'push'
@@ -419,13 +420,15 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     fetchItem,
     publishItem
   ]
-  if (conflictOperation === 'merge') {
+  if (conflictOperation === 'merge' || conflictOperation === 'rebase') {
+    const isRebase = conflictOperation === 'rebase'
+    const label = isRebase ? 'Abort rebase' : 'Abort merge'
     entries.push(
       { kind: 'separator' },
       {
-        kind: 'abort_merge',
-        label: 'Abort merge',
-        title: globalBusy ? 'Operation in progress…' : 'Abort the merge in progress',
+        kind: isRebase ? 'abort_rebase' : 'abort_merge',
+        label,
+        title: globalBusy ? 'Operation in progress…' : `Abort the ${conflictOperation} in progress`,
         disabled: globalBusy,
         variant: 'destructive'
       }

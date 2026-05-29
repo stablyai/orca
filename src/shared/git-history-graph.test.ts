@@ -146,6 +146,12 @@ describe('git history graph model', () => {
       id: 'B',
       color: GIT_HISTORY_REMOTE_REF_COLOR
     })
+    const incomingLaneIndex = viewModels[0]!.inputSwimlanes.findIndex(
+      (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
+    )
+    expect(viewModels[0]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
+      GIT_HISTORY_REMOTE_REF_COLOR
+    )
   })
 
   it('colors incoming boundary lanes as remote when upstream commits are omitted', () => {
@@ -181,6 +187,12 @@ describe('git history graph model', () => {
       id: 'B',
       color: GIT_HISTORY_REMOTE_REF_COLOR
     })
+    const incomingLaneIndex = viewModels[2]!.inputSwimlanes.findIndex(
+      (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
+    )
+    expect(viewModels[2]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
+      GIT_HISTORY_REMOTE_REF_COLOR
+    )
   })
 
   it('assigns stable colors to current, remote, and base refs', () => {

@@ -670,6 +670,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return
     }
 
+    const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
+    const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+    if (daemonLiveSessionCount === null || liveSessionCount > 0) {
+      console.warn(
+        daemonLiveSessionCount === null
+          ? '[daemon] macOS system resolver unavailable - preserving daemon because live session state could not be verified'
+          : `[daemon] macOS system resolver unavailable - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+      )
+      return
+    }
+
     // Why: replacing the daemon kills its sessions without daemon-side exit
     // fanout. Emit exits first so renderer panes do not write to dead PTYs.
     this.fanoutSyntheticExits(-1)
@@ -681,6 +692,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
       })
     }
     await this.respawnPromise
+  }
+
+  private async getDaemonLiveSessionCount(): Promise<number | null> {
+    try {
+      await this.client.ensureConnected()
+      const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+      return result.sessions.filter((session) => session.isAlive).length
+    } catch {
+      return null
+    }
   }
 
   private async doRespawn(message = '[daemon] Daemon died — respawning'): Promise<void> {

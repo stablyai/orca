@@ -285,6 +285,10 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.abortMerge', { worktreePath })
   }
 
+  async abortRebase(worktreePath: string): Promise<void> {
+    await this.mux.request('git.abortRebase', { worktreePath })
+  }
+
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
     return (await this.mux.request('git.branchCompare', {
       worktreePath,
@@ -401,7 +405,7 @@ export class SshGitProvider implements IGitProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean }
+    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<void> {
     await this.mux.request('git.removeWorktree', { worktreePath, force, ...options })
   }

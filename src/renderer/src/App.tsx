@@ -96,6 +96,7 @@ import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
@@ -304,6 +305,7 @@ function App(): React.JSX.Element {
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -366,6 +368,7 @@ function App(): React.JSX.Element {
       setFloatingTerminalOpen((currentOpen) => {
         const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(currentOpen) : nextOpen
         if (resolvedOpen && !currentOpen) {
+          useAppStore.getState().recordFeatureInteraction('floating-workspace')
           rememberFloatingTerminalReturnFocus()
         } else if (!resolvedOpen && currentOpen) {
           restoreFloatingTerminalReturnFocus()
@@ -411,6 +414,11 @@ function App(): React.JSX.Element {
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
+  const renderPetOverlay = shouldRenderPetOverlay({
+    persistedUIReady,
+    petEnabled,
+    petVisible
+  })
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
@@ -455,6 +463,7 @@ function App(): React.JSX.Element {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       featureTipsSeenIds,
+      featureInteractions,
       onboarding,
       persistedUIReady,
       promptedThisSession: featureTipsPromptedThisSessionRef.current,
@@ -478,7 +487,15 @@ function App(): React.JSX.Element {
     // on the next launch just because the user never clicked a dismiss button.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
     actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
-  }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
+  }, [
+    activeModal,
+    actions,
+    featureInteractions,
+    featureTipsSeenIds,
+    onboarding,
+    persistedUIReady,
+    settings
+  ])
 
   useEffect(() => {
     if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
@@ -1689,11 +1706,10 @@ function App(): React.JSX.Element {
             {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
             {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
           </Suspense>
-          {/* Why: mount PetOverlay only when the experimental flag is on AND
-          the user hasn't hit "Hide pet" in the status-bar menu. Both
-          conditions must be true — see design doc (pet-overlay.md) on why
-          the two toggles are kept independent. */}
-          {petEnabled && petVisible ? (
+          {/* Why: mount PetOverlay only after persisted UI hydration, with
+          both independent pet toggles allowing it; otherwise a hidden pet
+          flashes while the store still has default visibility. */}
+          {renderPetOverlay ? (
             <Suspense fallback={null}>
               <PetOverlay />
             </Suspense>

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile, rm } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -29,6 +29,10 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../../shared/git-discard-path-safety'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -461,6 +465,10 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
 
 export async function abortMerge(worktreePath: string): Promise<void> {
   await gitExecFileAsync(['merge', '--abort'], { cwd: worktreePath })
+}
+
+export async function abortRebase(worktreePath: string): Promise<void> {
+  await gitExecFileAsync(['rebase', '--abort'], { cwd: worktreePath })
 }
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -1105,11 +1113,16 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
     // File is not tracked by git
   }
 
-  await (tracked
-    ? gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
-        cwd: worktreePath
-      })
-    : rm(resolvedTarget, { force: true, recursive: true }))
+  if (tracked) {
+    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
+      cwd: worktreePath
+    })
+    return
+  }
+
+  await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+    cleanUntrackedPaths(worktreePath, [targetPath])
+  )
 }
 
 function normalizeGitPathForCompare(filePath: string): string {
@@ -1139,6 +1152,19 @@ async function listTrackedPathSpecs(
   return trackedPaths
 }
 
+async function cleanUntrackedPaths(
+  worktreePath: string,
+  filePaths: readonly string[]
+): Promise<void> {
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    if (chunk.length > 0) {
+      // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk], { cwd: worktreePath })
+    }
+  }
+}
+
 /**
  * Discard working tree changes for many paths in a small number of subprocesses.
  */
@@ -1160,18 +1186,18 @@ export async function bulkDiscardChanges(worktreePath: string, filePaths: string
   const untrackedPaths = filePaths.filter(
     (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
   )
-
-  for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
-      cwd: worktreePath
-    })
-  }
-
-  await Promise.all(
-    untrackedPaths.map((filePath) =>
-      rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
-    )
+  await removeSafeUntrackedDiscardTargets(
+    worktreePath,
+    untrackedPaths,
+    (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths),
+    async () => {
+      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+        await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
+          cwd: worktreePath
+        })
+      }
+    }
   )
 }
 

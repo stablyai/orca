@@ -64,11 +64,13 @@ const {
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn(() => 1_000_000)
 
-  const daemonClientMock = vi.fn().mockImplementation(() => ({
-    ensureConnected: vi.fn(async () => {}),
-    request: vi.fn(async () => ({ sessions: [] })),
-    disconnect: vi.fn()
-  }))
+  const daemonClientMock = vi.fn().mockImplementation(function MockDaemonClient() {
+    return {
+      ensureConnected: vi.fn(async () => {}),
+      request: vi.fn(async () => ({ sessions: [] })),
+      disconnect: vi.fn()
+    }
+  })
 
   // Why: every DaemonSpawner constructed under test pushes into this array so
   // assertions can check "was the *same* spawner reused across restart?".
@@ -435,6 +437,30 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(legacyAdapter.listProcesses).toHaveBeenCalled()
   })
 
+  it('routes affected v9 daemon sessions through a legacy adapter on launch', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
+    netConnectMock.mockImplementation(() => {
+      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      return {
+        on(event: string, cb: () => void) {
+          handlers[event]?.push(cb)
+          if (event === 'connect') {
+            queueMicrotask(() => cb())
+          }
+          return this
+        },
+        destroy() {}
+      }
+    })
+
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
+    expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
+  })
+
   it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -732,6 +758,79 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
+  })
+
+  it('preserves a resolver-unhealthy daemon when it owns live sessions', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        return {
+          sessions: [
+            { sessionId: 'wt-1@@live', isAlive: true },
+            { sessionId: 'wt-1@@dead', isAlive: false }
+          ]
+        }
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    getMacDaemonSystemResolverHealthMock.mockReturnValueOnce('unhealthy')
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves a resolver-unhealthy daemon when live session state cannot be verified', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        throw new Error('listSessions failed')
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    getMacDaemonSystemResolverHealthMock.mockReturnValueOnce('unhealthy')
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
   })
 
   it('uses the direct daemon entry when Electron app path is already out/main', async () => {

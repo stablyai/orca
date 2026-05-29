@@ -910,6 +910,44 @@ describe('updateWorktreeGitIdentity', () => {
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
+
+  it('follows the new branch in the title when displayName was auto-derived from the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'feature'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('main')
+  })
+
+  it('preserves a custom title when displayName differs from the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'My Cool Work'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('My Cool Work')
+  })
 })
 
 describe('createWorktree base status merge', () => {

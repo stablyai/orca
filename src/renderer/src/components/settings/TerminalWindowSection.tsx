@@ -4,7 +4,7 @@ import type { GlobalSettings, TerminalColorOverrides } from '../../../../shared/
 import { isGlassEffectActive } from '../../../../shared/glass-theme'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { ColorField, NumberField } from './SettingsFormControls'
+import { ColorField, NumberField, SettingsSwitch } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 
@@ -164,26 +164,17 @@ export function TerminalWindowSection({
               </p>
             ) : null}
           </div>
-          <button
-            role="switch"
-            aria-checked={effectiveBlur}
+          <SettingsSwitch
+            checked={effectiveBlur}
             disabled={themeIsGlass}
-            onClick={() => {
+            ariaLabel="Window Blur"
+            onChange={() => {
               if (themeIsGlass) {
                 return
               }
               updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })
             }}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-              themeIsGlass ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-            } ${effectiveBlur ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                effectiveBlur ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </div>
 
         {blurPendingRestart ? (

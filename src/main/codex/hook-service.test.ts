@@ -252,6 +252,58 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
   })
 
+  it('mirrors system user hook approvals when the system trust indices are stale', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: 'first-stop-hook' }] },
+              { hooks: [{ type: 'command', command: 'second-stop-hook' }] }
+            ]
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'second-stop-hook'
+        },
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: 'stop',
+          groupIndex: 1,
+          handlerIndex: 0,
+          command: 'first-stop-hook'
+        }
+      ]),
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`))
+  })
+
   it('skips plugin-placeholder system hooks when mirroring into runtime CODEX_HOME', () => {
     const pluginCommands = [
       'node "${CLAUDE_PLUGIN_ROOT}/scripts/on-stop.mjs"',

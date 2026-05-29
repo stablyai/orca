@@ -1,10 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bumped from 8 -> 9 so new app launches do not reuse daemon processes
-// that cannot report their own macOS system resolver health.
-export const PROTOCOL_VERSION = 9
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8] as const
+// Why: bumped from 9 -> 10 so affected v9 daemons are preserved as legacy
+// instead of being resolver-health replaced while they own live PTY sessions.
+export const PROTOCOL_VERSION = 10
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'

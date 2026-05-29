@@ -50,10 +50,14 @@ export function NotificationStep({
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
+  const syncedNotificationSettingsRef = useRef(notificationSettings)
 
-  useEffect(() => {
+  if (syncedNotificationSettingsRef.current !== notificationSettings) {
+    syncedNotificationSettingsRef.current = notificationSettings
+    // Why: handlers optimistically update the ref before persisted settings
+    // flow back through props, so local re-renders must not overwrite it.
     notificationSettingsRef.current = notificationSettings
-  }, [notificationSettings])
+  }
 
   useEffect(() => {
     // Why: onboarding sits above body-level portals, so the select menu must

@@ -1,5 +1,5 @@
 import type { IBufferLine, IBufferRange } from '@xterm/xterm'
-import { extractTerminalFileLinks, resolveTerminalFileLink } from '@/lib/terminal-links'
+import { extractTerminalFileLinkCandidates, resolveTerminalFileLink } from '@/lib/terminal-links'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -10,9 +10,11 @@ import {
 
 type FileLinkHitTestDeps = {
   startupCwd: string
+  terminalHomePath?: string | null
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
+  pathExistsCache?: Map<string, boolean>
 }
 
 export function openFilePathLinkAtBufferPosition(
@@ -27,8 +29,17 @@ export function openFilePathLinkAtBufferPosition(
   }
 
   for (const logicalLine of logicalLines) {
-    for (const parsed of extractTerminalFileLinks(logicalLine.text)) {
-      const resolved = deps.startupCwd ? resolveTerminalFileLink(parsed, deps.startupCwd) : null
+    const matches: {
+      absolutePath: string
+      line: number | null
+      column: number | null
+      pathText: string
+      cachedExists: boolean | undefined
+    }[] = []
+    for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
+      const resolved = deps.startupCwd
+        ? resolveTerminalFileLink(parsed, deps.startupCwd, deps.terminalHomePath)
+        : null
       if (!resolved) {
         continue
       }
@@ -36,7 +47,23 @@ export function openFilePathLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, deps)
+      const cacheKey = `${deps.runtimeEnvironmentId ?? 'active'}\0${resolved.absolutePath}`
+      matches.push({
+        absolutePath: resolved.absolutePath,
+        line: resolved.line,
+        column: resolved.column,
+        pathText: parsed.pathText,
+        cachedExists: deps.pathExistsCache?.get(cacheKey)
+      })
+    }
+
+    const cachedMatch = matches
+      .filter((match) => match.cachedExists)
+      .sort((a, b) => b.pathText.length - a.pathText.length)[0]
+    const uncachedMatch = matches.find((match) => match.cachedExists !== false)
+    const match = cachedMatch ?? uncachedMatch
+    if (match) {
+      openDetectedFilePath(match.absolutePath, match.line, match.column, deps)
       return true
     }
   }

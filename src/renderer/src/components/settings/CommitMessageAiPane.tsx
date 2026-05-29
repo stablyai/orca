@@ -317,7 +317,11 @@ export function CommitMessageAiPane({
       }),
     [baseAgentCapabilities, discoveryHostKey, modelDiscoveryByAgent]
   )
-  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(
+    config.agentId,
+    settings.defaultTuiAgent,
+    settings.disabledTuiAgents
+  )
   const unsupportedSelectedAgent =
     config.agentId &&
     !isCustomAgentId(config.agentId) &&
@@ -491,13 +495,21 @@ export function CommitMessageAiPane({
     // user previously persisted 'custom', keep it and let them re-edit the
     // command — no implicit reset to a preset.
     const defaultTuiAgent = settings.defaultTuiAgent
-    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, defaultTuiAgent)
+    const seedAgentId = resolveCommitMessageAgentChoice(
+      config.agentId,
+      defaultTuiAgent,
+      settings.disabledTuiAgents
+    )
     if (!seedAgentId) {
       writeConfig({ enabled: true, agentId: null })
       return
     }
     writeConfig((current) => {
-      const currentSeedAgentId = resolveCommitMessageAgentChoice(current.agentId, defaultTuiAgent)
+      const currentSeedAgentId = resolveCommitMessageAgentChoice(
+        current.agentId,
+        defaultTuiAgent,
+        settings.disabledTuiAgents
+      )
       const agentId = currentSeedAgentId ?? seedAgentId
       const currentCapability = isCustomAgentId(agentId)
         ? undefined
@@ -529,6 +541,7 @@ export function CommitMessageAiPane({
         selectedThinkingByModel: nextSelectedThinkingByModel
       }
     })
+    useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
   }
 
   const onAgentChange = (newAgentId: string): void => {

@@ -17,6 +17,7 @@ import { SshTargetRow } from './SshTargetRow'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
@@ -30,8 +31,10 @@ export function useRemoteRepo(
   showNestedRepoReview?: (
     scan: NestedRepoScanResult,
     selectedPath: string,
-    connectionId: string
-  ) => void
+    connectionId: string,
+    attemptId: string
+  ) => void,
+  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -111,9 +114,11 @@ export function useRemoteRepo(
     setIsAddingRemote(true)
     setRemoteError(null)
     try {
+      const attemptId = createNestedRepoTelemetryAttemptId()
       const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId)
+      onNestedScanResult?.(scan ?? null, attemptId)
       if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId)
+        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId)
         return
       }
       const result = await window.api.repos.addRemote({
@@ -165,6 +170,7 @@ export function useRemoteRepo(
     remotePath,
     scanNestedRepos,
     showNestedRepoReview,
+    onNestedScanResult,
     fetchWorktrees,
     setStep,
     setAddedRepo,

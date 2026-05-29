@@ -137,19 +137,12 @@ function ensureElectronPackageInstalled() {
   }
 
   // Why: CI has observed Electron's postinstall exiting cleanly without
-  // writing path.txt; native rebuild and tests both need the binary path.
-  console.log('[rebuild] Electron package binary is missing; rerunning Electron install.')
+  // writing path.txt; use our strict installer instead of Electron's install.js
+  // so partial extracts and poisoned caches are rejected before native rebuild.
+  console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
   resetPartialElectronInstall()
   try {
-    execFileSync(process.execPath, [require.resolve('electron/install.js')], {
-      cwd: projectDir,
-      env: {
-        ...process.env,
-        ELECTRON_SKIP_BINARY_DOWNLOAD: '',
-        force_no_cache: 'true'
-      },
-      stdio: 'inherit'
-    })
+    runElectronPackageBinaryInstall()
   } catch (/** @type {any} */ err) {
     console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
     logElectronInstallDiagnostics()
@@ -182,6 +175,31 @@ function ensureElectronPackageInstalled() {
       )
       process.exit(1)
     }
+  }
+}
+
+function runElectronPackageBinaryInstall() {
+  const env = { ...process.env }
+  delete env.ELECTRON_SKIP_BINARY_DOWNLOAD
+  delete env.npm_config_electron_skip_binary_download
+
+  const result = spawnSync(
+    process.execPath,
+    ['config/scripts/install-electron-package-binary.mjs'],
+    {
+      cwd: projectDir,
+      env,
+      stdio: 'inherit'
+    }
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `config/scripts/install-electron-package-binary.mjs exited with status ${result.status}`
+    )
   }
 }
 

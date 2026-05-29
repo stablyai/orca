@@ -43,10 +43,15 @@ function ensureIncomingRemoteLane(
   // Why: HEAD-only history omits upstream commits, so the graph must still
   // synthesize the remote lane that used to arrive from those hidden rows.
   if (!hasNode(outputSwimlanes, mergeBase, GIT_HISTORY_REMOTE_REF_COLOR)) {
-    if (!hasNode(outputSwimlanes, mergeBase, GIT_HISTORY_REF_COLOR)) {
-      outputSwimlanes.push({ id: mergeBase, color: GIT_HISTORY_REF_COLOR })
-    }
-    outputSwimlanes.push({ id: mergeBase, color: GIT_HISTORY_REMOTE_REF_COLOR })
+    const localMergeBaseIndex = outputSwimlanes.findIndex(
+      (node) => node.id === mergeBase && node.color === GIT_HISTORY_REF_COLOR
+    )
+    const remoteMergeBaseIndex =
+      localMergeBaseIndex === -1 ? inputSwimlanes.length : localMergeBaseIndex + 1
+    outputSwimlanes.splice(remoteMergeBaseIndex, 0, {
+      id: mergeBase,
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
   }
 
   if (hasNode(inputSwimlanes, GIT_HISTORY_INCOMING_CHANGES_ID, GIT_HISTORY_REMOTE_REF_COLOR)) {

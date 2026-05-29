@@ -70,6 +70,10 @@ export class SshConnection {
     return { ...this.target }
   }
 
+  setCallbacks(callbacks: SshConnectionCallbacks): void {
+    this.callbacks = callbacks
+  }
+
   // Why: exposes whether a passphrase/password is already cached in-memory for
   // this connection. Used by ssh:needsPassphrasePrompt so callers can decide
   // whether a manual-reconnect will prompt or go through silently. Without this,
@@ -451,17 +455,25 @@ export class SshConnection {
         client.off('ready', onReady)
         client.off('error', onStartupError)
       }
+      const swallowLateStartupError = (): void => {
+        // Why: ssh2 can emit another socket error while a failed or cancelled
+        // pre-handshake client is being destroyed, after startup has settled.
+      }
+      const guardStartupDestroy = (): void => {
+        client.on('error', swallowLateStartupError)
+      }
 
       const onReady = (): void => {
         if (settled) {
           return
         }
-        cleanupStartupListeners()
         // Why: connect() completion races with explicit disconnect(). Once a
         // newer connect attempt or disconnect bumps the generation/disposed
         // state, this late ready event must not resurrect the torn-down client.
         if (this.disposed || connectGeneration !== this.connectGeneration) {
           settled = true
+          guardStartupDestroy()
+          cleanupStartupListeners()
           client.end()
           client.destroy()
           reject(new Error('SSH connection attempt was cancelled'))
@@ -470,6 +482,8 @@ export class SshConnection {
         settled = true
         this.client = client
         this.proxyProcess = null
+        this.setupDisconnectHandler(client)
+        cleanupStartupListeners()
         // Why: ssh2 leaves Nagle's algorithm on by default. For single-byte
         // keystrokes through a remote PTY this stacks with the kernel's
         // delayed-ACK timer and adds up to ~40 ms per keystroke. OpenSSH's
@@ -487,7 +501,6 @@ export class SshConnection {
         }
         client.setNoDelay(true)
         this.setState('connected')
-        this.setupDisconnectHandler(client)
         resolve()
       }
 
@@ -495,6 +508,7 @@ export class SshConnection {
         if (settled) {
           return
         }
+        guardStartupDestroy()
         cleanupStartupListeners()
         settled = true
         client.destroy()

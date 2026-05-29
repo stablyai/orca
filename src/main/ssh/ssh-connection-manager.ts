@@ -18,6 +18,13 @@ export class SshConnectionManager {
     this.callbacks = callbacks
   }
 
+  setCallbacks(callbacks: SshConnectionCallbacks): void {
+    this.callbacks = callbacks
+    for (const connection of this.connections.values()) {
+      connection.setCallbacks(callbacks)
+    }
+  }
+
   async connect(target: SshTarget): Promise<SshConnection> {
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {

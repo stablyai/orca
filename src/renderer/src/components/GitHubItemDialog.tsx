@@ -108,6 +108,7 @@ import {
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -3247,12 +3248,14 @@ function findWorkspaceAttachedToPR(
 
 function pickDefaultAgent(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[]
+  detectedAgents: TuiAgent[],
+  disabledAgents?: TuiAgent[]
 ): TuiAgent | null {
-  if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
+  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
+  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
     return defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id))?.id ?? null
+  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
 type CheckDetailsLoadState = {
@@ -3445,9 +3448,13 @@ function ChecksTab({
         typeof connectionId === 'string'
           ? await activeStore.ensureRemoteDetectedAgents(connectionId)
           : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(activeStore.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultAgent(
+        activeStore.settings?.defaultTuiAgent,
+        detectedAgents,
+        activeStore.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
 

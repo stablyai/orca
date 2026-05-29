@@ -31,6 +31,7 @@ import {
   FileText,
   GitBranch,
   Globe,
+  Keyboard as KeyboardIcon,
   Mic,
   Monitor,
   Plus,
@@ -59,6 +60,10 @@ import {
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
 import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
+import {
+  getTerminalLiveSpecialKeyBytes,
+  isTerminalLiveInputWithinByteLimit
+} from '../../../../src/terminal/terminal-live-input'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
@@ -335,7 +340,8 @@ function TerminalPaneView({
   onModesChanged,
   onKeyboardAvoidanceMetrics,
   onHaptic,
-  onTerminalInput
+  onTerminalInput,
+  onTerminalTap
 }: {
   handle: string
   active: boolean
@@ -350,6 +356,7 @@ function TerminalPaneView({
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput: (handle: string, bytes: string) => void
+  onTerminalTap: (handle: string) => void
 }) {
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
@@ -379,6 +386,7 @@ function TerminalPaneView({
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
         onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
+        onTerminalTap={() => onTerminalTap(handle)}
       />
     </View>
   )
@@ -679,6 +687,10 @@ export default function SessionScreen() {
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
+  const [liveInputCapture, setLiveInputCapture] = useState('')
+  const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
+    () => new Set()
+  )
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
@@ -745,6 +757,7 @@ export default function SessionScreen() {
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
+  const liveInputRef = useRef<TextInput>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -781,6 +794,7 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'markdown' &&
     activeSessionTab?.type !== 'file' &&
     activeSessionTab?.type !== 'browser'
+  const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -1818,6 +1832,8 @@ export default function SessionScreen() {
     terminalsRef.current = []
     setSessionTabs([])
     setActiveSessionTabId(null)
+    setLiveInputCapture('')
+    setLiveInputTerminalHandles(new Set())
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
   }, [clearTerminalCache, worktreeId])
@@ -2145,6 +2161,117 @@ export default function SessionScreen() {
       // Transient failure
     }
   }
+
+  const sendLiveTerminalInput = useCallback(
+    (handle: string, bytes: string) => {
+      if (bytes.length === 0) return
+      if (!isTerminalLiveInputWithinByteLimit(bytes)) {
+        triggerError()
+        showToast('Input too large (max 256 KiB)', 1500)
+        return
+      }
+      const rpc = clientRef.current
+      if (
+        !rpc ||
+        connStateRef.current !== 'connected' ||
+        handle !== activeHandleRef.current ||
+        activeSessionTabTypeRef.current !== 'terminal'
+      ) {
+        return
+      }
+      void rpc
+        .sendRequest('terminal.send', {
+          terminal: handle,
+          text: bytes,
+          enter: false,
+          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {})
+        })
+        .catch(() => {
+          // Transient failure
+        })
+    },
+    [showToast]
+  )
+
+  const focusLiveInput = useCallback(() => {
+    if (!canSend || !liveInputEnabled) return
+    liveInputRef.current?.focus()
+  }, [canSend, liveInputEnabled])
+
+  const handleTerminalTap = useCallback(
+    (handle: string) => {
+      if (handle !== activeHandleRef.current) return
+      focusLiveInput()
+    },
+    [focusLiveInput]
+  )
+
+  const toggleLiveInput = useCallback(() => {
+    if (!activeHandle) return
+    const nextEnabled = !liveInputTerminalHandles.has(activeHandle)
+    setLiveInputTerminalHandles((prev) => {
+      const next = new Set(prev)
+      if (nextEnabled) {
+        next.add(activeHandle)
+      } else {
+        next.delete(activeHandle)
+      }
+      return next
+    })
+    setLiveInputCapture('')
+    if (nextEnabled) {
+      setTimeout(() => liveInputRef.current?.focus(), 50)
+    } else {
+      liveInputRef.current?.blur()
+    }
+  }, [activeHandle, liveInputTerminalHandles])
+
+  const handleLiveInputChange = useCallback(
+    (text: string) => {
+      if (!activeHandle) {
+        setLiveInputCapture('')
+        liveInputRef.current?.setNativeProps({ text: '' })
+        return
+      }
+      if (!liveInputTerminalHandles.has(activeHandle)) {
+        setLiveInputCapture('')
+        liveInputRef.current?.setNativeProps({ text: '' })
+        return
+      }
+      if (text.length > 0) {
+        sendLiveTerminalInput(activeHandle, text)
+      }
+      setLiveInputCapture('')
+      // Why: the field is only a keyboard capture surface. Clearing the
+      // native value prevents subsequent phone-keyboard events from replaying
+      // already-sent characters when React state remains the empty string.
+      liveInputRef.current?.setNativeProps({ text: '' })
+    },
+    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
+  )
+
+  const handleLiveInputKeyPress = useCallback(
+    (event: { nativeEvent: { key: string } }) => {
+      if (!activeHandle) return
+      if (!liveInputTerminalHandles.has(activeHandle)) return
+      const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
+      if (!bytes) return
+      sendLiveTerminalInput(activeHandle, bytes)
+      setLiveInputCapture('')
+      liveInputRef.current?.setNativeProps({ text: '' })
+    },
+    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
+  )
+
+  const handleLiveInputSubmit = useCallback(() => {
+    if (!activeHandle) return
+    if (!liveInputTerminalHandles.has(activeHandle)) return
+    sendLiveTerminalInput(activeHandle, '\r')
+    setLiveInputCapture('')
+    liveInputRef.current?.setNativeProps({ text: '' })
+  }, [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -3085,6 +3212,7 @@ export default function SessionScreen() {
                 onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
                 onHaptic={handleHaptic}
                 onTerminalInput={handleTerminalInput}
+                onTerminalTap={handleTerminalTap}
               />
             ))}
             {toastMessage && (
@@ -3135,6 +3263,31 @@ export default function SessionScreen() {
                       color={canSend ? colors.textSecondary : colors.textMuted}
                     />
                   )}
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    liveInputEnabled && styles.accessoryKeyActive,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={toggleLiveInput}
+                  accessibilityLabel={
+                    liveInputEnabled
+                      ? 'Switch to buffered command input'
+                      : 'Switch to live terminal input'
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.accessoryKeyText,
+                      liveInputEnabled && styles.accessoryKeyTextActive,
+                      !canSend && styles.accessoryKeyTextDisabled
+                    ]}
+                  >
+                    Live
+                  </Text>
                 </Pressable>
                 {canPaste && (
                   <Pressable
@@ -3223,72 +3376,107 @@ export default function SessionScreen() {
             </View>
 
             {/* Input bar */}
-            <View style={styles.inputBar}>
-              <TextInput
-                style={styles.textInput}
-                value={input}
-                onChangeText={setInput}
-                placeholder="Type a command…"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="send"
-                editable={canSend}
-                onSubmitEditing={() => void handleSend()}
-              />
+            {liveInputEnabled ? (
               <Pressable
-                style={[
-                  styles.dictationButton,
-                  (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
-                  !canSend && styles.sendButtonDisabled
-                ]}
+                style={[styles.inputBar, styles.liveInputBar]}
                 disabled={!canSend}
-                onPress={() => {
-                  if (dictation.isProcessing) {
-                    void dictation.cancel()
-                  } else if (dictation.isStarting) {
-                    return
-                  } else if (dictation.isRecording) {
-                    void dictation.stop()
-                  } else {
-                    void dictation.start().catch((err) => {
-                      triggerError()
-                      showToast(err instanceof Error ? err.message : String(err))
-                    })
-                  }
-                }}
-                onLongPress={() => {
-                  if (dictation.isRecording || dictation.isProcessing) {
-                    void dictation.cancel()
-                  }
-                }}
-                accessibilityLabel={
-                  dictation.isRecording
-                    ? 'Stop voice dictation'
-                    : dictation.isProcessing
-                      ? 'Cancel voice dictation'
-                      : dictation.isStarting
-                        ? 'Starting voice dictation'
-                        : 'Start voice dictation'
-                }
+                onPress={focusLiveInput}
+                accessibilityLabel="Focus live terminal input"
               >
-                {dictation.isProcessing ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : dictation.isStarting || dictation.isRecording ? (
-                  <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
-                ) : (
-                  <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                )}
+                <View style={styles.liveInputBadge}>
+                  <KeyboardIcon size={13} color={colors.textPrimary} strokeWidth={2.2} />
+                  <Text style={styles.liveInputBadgeText}>Live</Text>
+                </View>
+                <Text style={styles.liveInputHint} numberOfLines={1}>
+                  Keyboard input goes to terminal
+                </Text>
+                <TextInput
+                  ref={liveInputRef}
+                  style={styles.liveInputCapture}
+                  value={liveInputCapture}
+                  onChangeText={handleLiveInputChange}
+                  onKeyPress={handleLiveInputKeyPress}
+                  onSubmitEditing={handleLiveInputSubmit}
+                  placeholder=""
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
+                  editable={canSend}
+                  importantForAutofill="no"
+                  textContentType="none"
+                />
               </Pressable>
-              <Pressable
-                style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-                disabled={!canSend}
-                onPress={() => void handleSend()}
-                accessibilityLabel="Send command"
-              >
-                <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
-              </Pressable>
-            </View>
+            ) : (
+              <View style={styles.inputBar}>
+                <TextInput
+                  style={styles.textInput}
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Type a command…"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  editable={canSend}
+                  onSubmitEditing={() => void handleSend()}
+                />
+                <Pressable
+                  style={[
+                    styles.dictationButton,
+                    (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
+                    !canSend && styles.sendButtonDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => {
+                    if (dictation.isProcessing) {
+                      void dictation.cancel()
+                    } else if (dictation.isStarting) {
+                      return
+                    } else if (dictation.isRecording) {
+                      void dictation.stop()
+                    } else {
+                      void dictation.start().catch((err) => {
+                        triggerError()
+                        showToast(err instanceof Error ? err.message : String(err))
+                      })
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (dictation.isRecording || dictation.isProcessing) {
+                      void dictation.cancel()
+                    }
+                  }}
+                  accessibilityLabel={
+                    dictation.isRecording
+                      ? 'Stop voice dictation'
+                      : dictation.isProcessing
+                        ? 'Cancel voice dictation'
+                        : dictation.isStarting
+                          ? 'Starting voice dictation'
+                          : 'Start voice dictation'
+                  }
+                >
+                  {dictation.isProcessing ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : dictation.isStarting || dictation.isRecording ? (
+                    <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
+                  ) : (
+                    <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                  disabled={!canSend}
+                  onPress={() => void handleSend()}
+                  accessibilityLabel="Send command"
+                >
+                  <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -4005,6 +4193,9 @@ const styles = StyleSheet.create({
   accessoryKeyPressed: {
     backgroundColor: colors.borderSubtle
   },
+  accessoryKeyActive: {
+    backgroundColor: colors.accentBlue
+  },
   customAccessoryKey: {
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -4016,6 +4207,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: typography.monoFamily
+  },
+  accessoryKeyTextActive: {
+    color: colors.textPrimary,
+    fontWeight: '700'
   },
   accessoryKeyTextDisabled: {
     color: colors.textMuted
@@ -4039,6 +4234,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
+  },
+  liveInputBar: {
+    gap: spacing.sm
+  },
+  liveInputBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accentBlue,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button
+  },
+  liveInputBadgeText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: typography.monoFamily
+  },
+  liveInputHint: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily
+  },
+  liveInputCapture: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+    color: colors.textPrimary
   },
   sendButton: {
     backgroundColor: colors.bgRaised,

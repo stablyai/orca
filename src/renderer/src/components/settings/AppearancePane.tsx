@@ -1,9 +1,7 @@
-/* eslint-disable max-lines -- Why: AppearancePane is the single owner of all
-   appearance settings UI; splitting individual sections (theme, zoom, fonts,
-   layout, titlebar, status bar, sidebar) into separate files would scatter
-   related controls without a meaningful abstraction boundary. */
+/* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
+   visibility settings together so the searchable settings rows share one filtered surface. */
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -43,6 +41,8 @@ type AppearancePaneProps = {
   fontSuggestions: string[]
 }
 
+let glassEffectAtRendererBoot: boolean | null = null
+
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
   if (combos.length === 0) {
     return <span className="text-xs text-muted-foreground">Unassigned</span>
@@ -73,21 +73,18 @@ export function AppearancePane({
   const zoomOutKeyCombos = useShortcutKeyCombos('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
   const isMac = navigator.userAgent.includes('Mac')
-  // Why: vibrancy + transparent: true are window-creation-only Electron options.
-  // Snapshot the glassEffect at component mount and compare to the live setting
-  // to detect glass on/off toggles that require a window relaunch. Mirrors
-  // the windowBackgroundBlur pattern in TerminalWindowSection.
-  const bootGlassEffectRef = useRef<boolean>(settings.glassEffect)
-  const glassBoundaryCrossed = settings.glassEffect !== bootGlassEffectRef.current
+  if (glassEffectAtRendererBoot === null) {
+    // Why: vibrancy + transparent: true are window-creation-only Electron
+    // options. Keep this snapshot for the renderer lifetime, not the pane
+    // mount lifetime, so the restart banner survives settings navigation.
+    glassEffectAtRendererBoot = settings.glassEffect
+  }
+  const glassBoundaryCrossed = settings.glassEffect !== glassEffectAtRendererBoot
   const [relaunching, setRelaunching] = useState(false)
-
-  useEffect(() => {
-    bootGlassEffectRef.current = settings.glassEffect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const handleRelaunch = async (): Promise<void> => {
     if (relaunching) {
@@ -140,25 +137,11 @@ export function AppearancePane({
             description="Frosted glass surfaces over the desktop wallpaper. macOS only."
             keywords={['glass', 'vibrancy', 'transparent', 'blur', 'frosted']}
           >
-            <SettingsRow
+            <SettingsSwitchRow
               label="Glass effect"
               description="Frosted glass surfaces over the desktop wallpaper. Works with any theme; requires relaunch."
-              control={
-                <button
-                  role="switch"
-                  aria-checked={settings.glassEffect}
-                  onClick={() => updateSettings({ glassEffect: !settings.glassEffect })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                    settings.glassEffect ? 'bg-foreground' : 'bg-muted-foreground/30'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none block size-3.5 rounded-full bg-background-opaque shadow-sm transition-transform ${
-                      settings.glassEffect ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              }
+              checked={settings.glassEffect}
+              onChange={() => updateSettings({ glassEffect: !settings.glassEffect })}
             />
           </SearchableSetting>
         ) : null}
@@ -299,7 +282,23 @@ export function AppearancePane({
                   label={toggle.title}
                   description={toggle.toggleDescription}
                   checked={enabled}
-                  onChange={() => toggleStatusBarItem(toggle.id)}
+                  onChange={() => {
+                    if (toggle.id === 'resource-usage') {
+                      recordFeatureInteraction('resource-manager')
+                    } else if (toggle.id === 'ports') {
+                      recordFeatureInteraction('ports')
+                    } else if (toggle.id === 'ssh') {
+                      recordFeatureInteraction('ssh')
+                    } else if (
+                      toggle.id === 'claude' ||
+                      toggle.id === 'codex' ||
+                      toggle.id === 'gemini' ||
+                      toggle.id === 'opencode-go'
+                    ) {
+                      recordFeatureInteraction('usage-tracking')
+                    }
+                    toggleStatusBarItem(toggle.id)
+                  }}
                   ariaLabel={toggle.title}
                 />
               </SearchableSetting>

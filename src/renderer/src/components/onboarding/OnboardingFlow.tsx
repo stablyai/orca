@@ -14,6 +14,7 @@ import { OnboardingTourStep } from './OnboardingTourStep'
 import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
+import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 
 const stepCopy = {
@@ -174,11 +175,7 @@ export default function OnboardingFlow({
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-background-opaque p-4 text-foreground"
       data-onboarding-overlay
       onPointerDown={(event) => {
-        if (event.button !== 0) {
-          return
-        }
-        const target = event.target
-        if (!(target instanceof Element) || target.closest('[data-onboarding-modal]')) {
+        if (!shouldRequestOnboardingSkipConfirmation(event)) {
           return
         }
         requestSkipConfirmation('button')
@@ -292,7 +289,9 @@ export default function OnboardingFlow({
                     currentStep.id === 'agentSetup'
                       ? 'mt-4'
                       : currentStep.id === 'repo'
-                        ? 'mt-6'
+                        ? flow.nestedScan
+                          ? 'mt-6 overflow-hidden'
+                          : 'mt-6'
                         : 'mt-10'
                   )
             )}
@@ -370,7 +369,7 @@ export default function OnboardingFlow({
               busyLabel={busyLabel}
               onSkipToRepo={() => void flow.skipToRepo()}
               stepIndex={stepIndex}
-              onBack={flow.back}
+              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
               showPrimary={currentStep.id !== 'repo' || flow.hasExistingProject}
               primaryBusy={shouldShowFooterBusy}
               primaryLabel={footerPrimaryLabel}

@@ -99,6 +99,34 @@ function probeSocket(socketPath: string): Promise<boolean> {
   })
 }
 
+async function getAliveDaemonSessionCount(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<number | null> {
+  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
+  try {
+    await client.ensureConnected()
+    const result = await client.request<ListSessionsResult>('listSessions', undefined)
+    return result.sessions.filter((session) => session.isAlive).length
+  } catch {
+    return null
+  } finally {
+    client.disconnect()
+  }
+}
+
+function createPreservedDaemonHandle(
+  runtimeDir: string,
+  protocolVersion = PROTOCOL_VERSION
+): { shutdown(): Promise<void> } {
+  return {
+    shutdown: async () => {
+      await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
+    }
+  }
+}
+
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
     const entryPath = getDaemonEntryPath()
@@ -106,6 +134,15 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     if (healthy) {
       const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
       if (resolverHealth === 'unhealthy') {
+        const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+        if (liveSessionCount !== 0) {
+          console.warn(
+            liveSessionCount === null
+              ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
+              : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+          )
+          return createPreservedDaemonHandle(runtimeDir)
+        }
         console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
@@ -122,11 +159,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         } else {
           // Why: daemon is already running from a previous app session and
           // responded to a protocol-level ping. Safe to reuse.
-          return {
-            shutdown: async () => {
-              await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
-            }
-          }
+          return createPreservedDaemonHandle(runtimeDir)
         }
       }
     }

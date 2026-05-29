@@ -17,6 +17,21 @@ describe('workspace agent selection', () => {
     expect(pickWorkspaceAgent({ defaultTuiAgent: 'codex' }, new Set(['claude']))).toBe('claude')
   })
 
+  it('skips disabled preferred and fallback agents', () => {
+    expect(
+      pickWorkspaceAgent(
+        { defaultTuiAgent: 'codex', disabledTuiAgents: ['codex'] },
+        new Set(['claude', 'codex'])
+      )
+    ).toBe('claude')
+    expect(
+      pickWorkspaceAgent(
+        { defaultTuiAgent: null, disabledTuiAgents: ['claude', 'codex', 'not-real'] },
+        new Set(['claude', 'codex'])
+      )
+    ).toBe('blank')
+  })
+
   it('honors blank terminal as an explicit no-agent preference', () => {
     expect(pickWorkspaceAgent({ defaultTuiAgent: 'blank' }, new Set(['claude', 'codex']))).toBe(
       'blank'
@@ -30,6 +45,9 @@ describe('workspace agent selection', () => {
   it('uses the preferred/default display value while detection is still pending', () => {
     expect(pickWorkspaceAgent({ defaultTuiAgent: 'codex' }, null)).toBe('codex')
     expect(pickWorkspaceAgent({ defaultTuiAgent: null }, null)).toBe('claude')
+    expect(
+      pickWorkspaceAgent({ defaultTuiAgent: 'codex', disabledTuiAgents: ['codex'] }, null)
+    ).toBe('claude')
   })
 
   it('normalizes legacy blank sentinel and labels known choices', () => {

@@ -7,7 +7,7 @@ import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 import {
@@ -46,6 +46,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.bulkStage')
     expect(methods).toContain('git.bulkUnstage')
     expect(methods).toContain('git.abortMerge')
+    expect(methods).toContain('git.abortRebase')
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.bulkDiscard')
     expect(methods).toContain('git.conflictOperation')
@@ -91,6 +92,37 @@ describe('GitHandler', () => {
 
       await expect(fs.access(path.join(tmpDir, '.git', 'MERGE_HEAD'))).rejects.toThrow()
       await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('main\n')
+    })
+  })
+
+  describe('abortRebase', () => {
+    it('aborts an in-progress rebase', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseBranch = execFileSync('git', ['branch', '--show-current'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }).trim()
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'feature\n')
+      gitCommit(tmpDir, 'feature change')
+      execFileSync('git', ['checkout', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'main\n')
+      gitCommit(tmpDir, 'main change')
+      execFileSync('git', ['checkout', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+
+      expect(() =>
+        execFileSync('git', ['rebase', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).resolves.toBeUndefined()
+
+      await dispatcher.callRequest('git.abortRebase', { worktreePath: tmpDir })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).rejects.toThrow()
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-apply'))).rejects.toThrow()
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('feature\n')
     })
   })
 
@@ -452,6 +484,59 @@ describe('GitHandler', () => {
           filePaths: ['file.txt', '../../../etc/passwd']
         })
       ).rejects.toThrow('outside the worktree')
+    })
+
+    it('rejects untracked child paths through symlinked parents', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-git-outside-'))
+      const outsideFile = path.join(outsideDir, 'keep.txt')
+      writeFileSync(outsideFile, 'outside')
+      symlinkSync(
+        outsideDir,
+        path.join(tmpDir, 'link'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+
+      try {
+        await expect(
+          dispatcher.callRequest('git.discard', {
+            worktreePath: tmpDir,
+            filePath: 'link/keep.txt'
+          })
+        ).rejects.toThrow('outside the worktree')
+        await expect(fs.access(outsideFile)).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects bulk untracked child paths through symlinked parents before deleting anything', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-git-outside-'))
+      const outsideFile = path.join(outsideDir, 'keep.txt')
+      const untrackedFile = path.join(tmpDir, 'new.txt')
+      writeFileSync(outsideFile, 'outside')
+      writeFileSync(untrackedFile, 'untracked')
+      symlinkSync(
+        outsideDir,
+        path.join(tmpDir, 'link'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+
+      try {
+        await expect(
+          dispatcher.callRequest('git.bulkDiscard', {
+            worktreePath: tmpDir,
+            filePaths: ['new.txt', 'link/keep.txt']
+          })
+        ).rejects.toThrow('outside the worktree')
+        await expect(fs.access(outsideFile)).resolves.toBeUndefined()
+        await expect(fs.access(untrackedFile)).resolves.toBeUndefined()
+      } finally {
+        await fs.rm(outsideDir, { recursive: true, force: true })
+      }
     })
   })
 

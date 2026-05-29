@@ -650,6 +650,7 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeView = useAppStore((s) => s.activeView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
@@ -1060,7 +1061,15 @@ export function ResourceUsageStatusSegment({
   }, [openSpacePage])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          recordFeatureInteraction('resource-manager')
+        }
+        setOpen(nextOpen)
+      }}
+    >
       <Tooltip delayDuration={150}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

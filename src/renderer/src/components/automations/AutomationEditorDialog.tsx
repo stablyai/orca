@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the automation editor keeps its form fields
+   colocated so create/edit draft preservation rules stay reviewable. */
 import React from 'react'
 import { Info, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
@@ -113,6 +116,15 @@ export function AutomationEditorDialog({
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
   const isHermesCreate = !isEditing && createTarget === 'hermes'
+  const visibleAgents = React.useMemo(() => {
+    const enabledIds = new Set(
+      filterEnabledTuiAgents(
+        AGENT_CATALOG.map((agent) => agent.id),
+        settings?.disabledTuiAgents
+      )
+    )
+    return AGENT_CATALOG.filter((agent) => enabledIds.has(agent.id) || agent.id === draft.agentId)
+  }, [draft.agentId, settings?.disabledTuiAgents])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -312,7 +324,7 @@ export function AutomationEditorDialog({
             {isHermesCreate ? null : (
               <Field label="Agent">
                 <AgentCombobox
-                  agents={AGENT_CATALOG}
+                  agents={visibleAgents}
                   value={draft.agentId}
                   onValueChange={(agentId) =>
                     agentId && onDraftChange((current) => ({ ...current, agentId }))

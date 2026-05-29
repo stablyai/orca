@@ -1,14 +1,27 @@
+/* eslint-disable max-lines -- Why: the Agents pane keeps catalog rows, default
+   selection, and per-agent controls together so settings reconciliation stays
+   visible in one file. */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
-import { SettingsBadge, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import {
+  SettingsBadge,
+  SettingsSegmentedControl,
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
+} from './SettingsFormControls'
+import {
+  isTuiAgentEnabled,
+  normalizeDisabledTuiAgents
+} from '../../../../shared/tui-agent-selection'
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
@@ -23,9 +36,11 @@ type AgentRowProps = {
   homepageUrl: string
   defaultCmd: string
   isDetected: boolean
+  isEnabled: boolean
   isDefault: boolean
   cmdOverride: string | undefined
   onSetDefault: () => void
+  onToggleEnabled: () => void
   onSaveOverride: (value: string) => void
 }
 
@@ -33,6 +48,55 @@ type AgentCommandOverrideInputProps = {
   defaultCmd: string
   cmdOverride: string | undefined
   onSaveOverride: (value: string) => void
+}
+
+type AgentAvailability = 'enabled' | 'disabled'
+
+type AgentAvailabilityControlProps = {
+  label: string
+  isEnabled: boolean
+  onToggleEnabled: () => void
+}
+
+export function buildAgentEnabledSettingsUpdate(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
+  id: TuiAgent
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  const wasDisabled = latestDisabled.includes(id)
+  const nextDisabled = wasDisabled
+    ? latestDisabled.filter((agent) => agent !== id)
+    : [...latestDisabled, id]
+
+  return {
+    disabledTuiAgents: nextDisabled,
+    ...(settings.defaultTuiAgent === id && !wasDisabled ? { defaultTuiAgent: null } : {})
+  }
+}
+
+export function AgentAvailabilityControl({
+  label,
+  isEnabled,
+  onToggleEnabled
+}: AgentAvailabilityControlProps): React.JSX.Element {
+  const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
+
+  return (
+    <SettingsSegmentedControl<AgentAvailability>
+      value={value}
+      onChange={(next) => {
+        if (next !== value) {
+          onToggleEnabled()
+        }
+      }}
+      ariaLabel={`${label} availability`}
+      size="sm"
+      options={[
+        { value: 'enabled', label: 'Enabled' },
+        { value: 'disabled', label: 'Disabled' }
+      ]}
+    />
+  )
 }
 
 function AgentCommandOverrideInput({
@@ -98,21 +162,30 @@ function AgentRow({
   homepageUrl,
   defaultCmd,
   isDetected,
+  isEnabled,
   isDefault,
   cmdOverride,
   onSetDefault,
+  onToggleEnabled,
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
+  const availabilityDescription = isEnabled
+    ? isDetected
+      ? 'Shown in launch and default choices.'
+      : 'Install to use in launch and default choices.'
+    : isDetected
+      ? 'Hidden from launch and default choices.'
+      : 'Hidden from launch and default choices if installed.'
 
   return (
-    <div className={cn('py-3', !isDetected && 'opacity-60')}>
-      <div className="flex items-center gap-3">
+    <div className={cn('py-3', !isDetected && 'opacity-70')}>
+      <div className="flex flex-wrap items-start gap-3">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 sm:min-w-[12rem]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
             {isDetected ? (
@@ -120,6 +193,7 @@ function AgentRow({
             ) : (
               <SettingsBadge tone="muted">Not installed</SettingsBadge>
             )}
+            {!isEnabled && <SettingsBadge tone="muted">Disabled</SettingsBadge>}
           </div>
           <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
             {cmdOverride ? (
@@ -131,10 +205,17 @@ function AgentRow({
               defaultCmd
             )}
           </div>
+          <div className="mt-1 text-[11px] text-muted-foreground">{availabilityDescription}</div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          {isDetected && (
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onToggleEnabled={onToggleEnabled}
+          />
+
+          {isDetected && isEnabled && (
             <Button
               type="button"
               variant={isDefault ? 'secondary' : 'ghost'}
@@ -249,9 +330,15 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
+  const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
   const setDefault = (id: TuiAgent | 'blank' | null): void => {
     updateSettings({ defaultTuiAgent: id })
+  }
+
+  const toggleEnabled = (id: TuiAgent): void => {
+    const latestSettings = useAppStore.getState().settings ?? settings
+    updateSettings(buildAgentEnabledSettingsUpdate(latestSettings, id))
   }
 
   const saveOverride = (id: TuiAgent, value: string): void => {
@@ -264,6 +351,10 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
     updateSettings({ agentCmdOverrides: next })
   }
 
+  const enabledDetectedAgents = AGENT_CATALOG.filter(
+    (a) =>
+      (detectedIds === null || detectedIds.has(a.id)) && isTuiAgentEnabled(a.id, disabledAgents)
+  )
   const detectedAgents = AGENT_CATALOG.filter((a) => detectedIds === null || detectedIds.has(a.id))
   const undetectedAgents = AGENT_CATALOG.filter(
     (a) => detectedIds !== null && !detectedIds.has(a.id)
@@ -273,7 +364,9 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
   // so the Auto pill should only light up when the default is null OR when a
   // selected agent id is no longer detected on PATH.
   const isAutoDefault =
-    defaultAgent === null || (defaultAgent !== 'blank' && !detectedIds?.has(defaultAgent))
+    defaultAgent === null ||
+    (defaultAgent !== 'blank' &&
+      (!detectedIds?.has(defaultAgent) || !isTuiAgentEnabled(defaultAgent, disabledAgents)))
   const isBlankDefault = defaultAgent === 'blank'
 
   return (
@@ -300,7 +393,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
             {isBlankDefault && <Check className="size-3.5" />}
           </DefaultAgentPill>
 
-          {detectedAgents.map((agent) => {
+          {enabledDetectedAgents.map((agent) => {
             const isActive = defaultAgent === agent.id
             return (
               <DefaultAgentPill
@@ -355,9 +448,11 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
                 isDetected
+                isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={defaultAgent === agent.id}
                 cmdOverride={cmdOverrides[agent.id]}
                 onSetDefault={() => setDefault(agent.id)}
+                onToggleEnabled={() => toggleEnabled(agent.id)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
               />
             ))}
@@ -385,9 +480,11 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
                 isDetected={false}
+                isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={false}
                 cmdOverride={undefined}
                 onSetDefault={() => {}}
+                onToggleEnabled={() => toggleEnabled(agent.id)}
                 onSaveOverride={() => {}}
               />
             ))}

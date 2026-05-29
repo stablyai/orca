@@ -154,6 +154,13 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 
 export type EagerPtyHandle = { flush: () => string; dispose: () => void }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
+const eagerBufferTextEncoder = new TextEncoder()
+const eagerBufferTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
+
+type EagerBufferChunk = {
+  data: string
+  bytes: number
+}
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
   return eagerPtyHandles.get(ptyId)
@@ -164,22 +171,47 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
 const EAGER_BUFFER_MAX_BYTES = 512 * 1024
 
+function clampUtf8Tail(data: string, maxBytes: number): EagerBufferChunk {
+  const encoded = eagerBufferTextEncoder.encode(data)
+  if (encoded.byteLength <= maxBytes) {
+    return { data, bytes: encoded.byteLength }
+  }
+  let start = encoded.byteLength - maxBytes
+  while (start < encoded.byteLength && (encoded[start] & 0xc0) === 0x80) {
+    start += 1
+  }
+  const tail = eagerBufferTextDecoder.decode(encoded.subarray(start))
+  return { data: tail, bytes: encoded.byteLength - start }
+}
+
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void
 ): EagerPtyHandle {
   ensurePtyDispatcher()
 
-  const buffer: string[] = []
+  // Why: a head index instead of Array.shift() — shift() is O(n), making
+  // pre-attach buffering quadratic under many small chunks. Compaction is deferred.
+  const chunks: EagerBufferChunk[] = []
+  let head = 0
   let bufferBytes = 0
 
   const dataHandler = (data: string): void => {
-    buffer.push(data)
-    bufferBytes += data.length
-    // Trim from the front when the buffer exceeds the cap, keeping the
-    // most recent output which contains the shell prompt.
-    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && buffer.length > 1) {
-      bufferBytes -= buffer.shift()!.length
+    // A single chunk larger than the cap would otherwise bypass trimming and
+    // store the whole payload; keep only its most-recent tail.
+    const chunk = clampUtf8Tail(data, EAGER_BUFFER_MAX_BYTES)
+    chunks.push(chunk)
+    bufferBytes += chunk.bytes
+    // Drop whole leading chunks (keeping the prompt-bearing tail) until within cap.
+    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && head < chunks.length - 1) {
+      bufferBytes -= chunks[head].bytes
+      chunks[head] = { data: '', bytes: 0 }
+      head += 1
+    }
+    // Compact when dead slots reach half the array so it can't grow unbounded.
+    if (head > 0 && head * 2 >= chunks.length) {
+      chunks.splice(0, head)
+      head = 0
     }
   }
   const exitHandler = (code: number): void => {
@@ -197,8 +229,13 @@ export function registerEagerPtyBuffer(
 
   const handle: EagerPtyHandle = {
     flush() {
-      const data = buffer.join('')
-      buffer.length = 0
+      const data = chunks
+        .slice(head)
+        .map((chunk) => chunk.data)
+        .join('')
+      chunks.length = 0
+      head = 0
+      bufferBytes = 0
       return data
     },
     dispose() {

@@ -55,6 +55,9 @@ let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
+// Why: a manually promoted background check can emit an error event before the
+// paired promise catch runs; keep the promotion attached to that launch.
+let backgroundCheckPromotedToUserInitiated = false
 let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
@@ -620,14 +623,21 @@ function runBackgroundUpdateCheck(
   // currentStatus flips to 'checking'. Track the launch in memory to dedupe
   // that gap without persisting a successful-check timestamp before the result.
   backgroundCheckLaunchPending = true
+  backgroundCheckPromotedToUserInitiated = false
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
   const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
+    const wasUserInitiated =
+      userInitiatedCheck || backgroundCheckPromotedToUserInitiated || undefined
     backgroundCheckLaunchPending = false
-    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise', err)
+    backgroundCheckPromotedToUserInitiated = false
+    if (wasUserInitiated) {
+      userInitiatedCheck = false
+    }
+    void sendCheckFailureStatus(String(err?.message ?? err), wasUserInitiated, 'promise', err)
   })
 }
 
@@ -674,13 +684,20 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     enableIncludePrerelease()
   }
 
+  const checkAlreadyInFlight = backgroundCheckLaunchPending || currentStatus.state === 'checking'
   userInitiatedCheck = true
   // Why: a manual check is independent of any active nudge campaign. Reset the
   // nudge marker so the resulting status is not decorated with activeNudgeId,
   // which would cause a later dismiss to consume the campaign by accident.
   activeUpdateNudgeId = null
-  // Don't send 'checking' here — the 'checking-for-update' event handler does it,
-  // and sending it from both places causes duplicate notifications (issue #35).
+  // Why: manual checks should visibly respond before feed pinning or the
+  // electron-updater event fires; duplicate event broadcasts are suppressed by
+  // status equality below.
+  sendStatus({ state: 'checking', userInitiated: true })
+  if (checkAlreadyInFlight) {
+    backgroundCheckPromotedToUserInitiated = true
+    return
+  }
 
   const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()

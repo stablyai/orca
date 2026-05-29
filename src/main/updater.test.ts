@@ -179,7 +179,7 @@ describe('updater', () => {
   })
 
   it('deduplicates identical check errors from the event and rejected promise', async () => {
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', new Error('boom'))
@@ -192,7 +192,7 @@ describe('updater', () => {
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
     await vi.waitFor(() => {
       const statuses = sendMock.mock.calls
@@ -210,7 +210,7 @@ describe('updater', () => {
   })
 
   it('surfaces net::ERR_FAILED to user-initiated checks with a friendly message', async () => {
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
@@ -223,7 +223,7 @@ describe('updater', () => {
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
     await vi.waitFor(() => {
       const statuses = sendMock.mock.calls
@@ -248,6 +248,199 @@ describe('updater', () => {
     expect(statuses).not.toContainEqual(
       expect.objectContaining({ state: 'error', message: 'net::ERR_FAILED' })
     )
+  })
+
+  it('shows checking immediately for a user-initiated check while feed pinning is pending', async () => {
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    const checkingStatuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+      .filter(
+        (status) => typeof status === 'object' && status !== null && status.state === 'checking'
+      )
+
+    expect(checkingStatuses).toEqual([{ state: 'checking', userInitiated: true }])
+  })
+
+  it('keeps background checks event-driven before checking-for-update fires', async () => {
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+
+    expect(
+      sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+        .some(
+          (status) => typeof status === 'object' && status !== null && status.state === 'checking'
+        )
+    ).toBe(false)
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('checking-for-update')
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'checking' })
+    )
+  })
+
+  it('promotes a pending background check to user-initiated without launching a duplicate check', async () => {
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    checkForUpdatesFromMenu()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('update-not-available')
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('keeps promoted background promise failures user-initiated after a paired error event', async () => {
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
+      })
+      return Promise.reject(new Error('net::ERR_FAILED'))
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    checkForUpdatesFromMenu()
+    resolveTags({ tags: [], state: 'no-newer' })
+
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          state: 'error',
+          userInitiated: true,
+          message: expect.stringContaining("Couldn't reach the update server")
+        })
+      )
+    })
+
+    const resultStatuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+      .filter(
+        (status) =>
+          typeof status === 'object' &&
+          status !== null &&
+          (status.state === 'idle' || status.state === 'error')
+      )
+
+    expect(resultStatuses).toEqual([
+      expect.objectContaining({
+        state: 'error',
+        userInitiated: true,
+        message: expect.stringContaining("Couldn't reach the update server")
+      })
+    ])
+  })
+
+  it('deduplicates repeated manual checks while the immediate checking status is active', async () => {
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    checkForUpdatesFromMenu()
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(1)
   })
 
   it('opts into the RC channel when checkForUpdatesFromMenu is called with includePrerelease', async () => {

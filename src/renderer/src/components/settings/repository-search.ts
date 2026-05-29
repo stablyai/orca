@@ -18,6 +18,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         'project icon',
         'repository icon',
         'color',
+        'hex',
         'badge',
         'emoji',
         'favicon'

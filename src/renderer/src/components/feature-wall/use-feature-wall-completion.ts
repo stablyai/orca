@@ -51,7 +51,11 @@ export function useFeatureWallCompletion(
   const commitMessageAi = settings?.commitMessageAi
   const resolvedCommitMessageAgent =
     settings && commitMessageAi?.enabled === true
-      ? resolveCommitMessageAgentChoice(commitMessageAi.agentId, settings.defaultTuiAgent)
+      ? resolveCommitMessageAgentChoice(
+          commitMessageAi.agentId,
+          settings.defaultTuiAgent,
+          settings.disabledTuiAgents
+        )
       : null
   const aiCommitPrConfigured =
     commitMessageAi?.enabled === true &&

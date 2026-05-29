@@ -25,6 +25,13 @@ describe('StatusIndicator', () => {
     expect(classNames).toContain('animate-spin')
   })
 
+  it('renders permission as an amber attention dot', () => {
+    const classNames = renderDotClassNames('permission')
+
+    expect(classNames).toContain('bg-amber-500')
+    expect(classNames).not.toContain('bg-red-500')
+  })
+
   it('renders active as full emerald dot', () => {
     const classNames = renderDotClassNames('active')
 

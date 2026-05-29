@@ -61,6 +61,20 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('lets release-cut tag a version that is already present on main', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const bumpStep = parsedWorkflow.jobs.cut.steps.find(
+      (step) => step.name === 'Bump package.json and tag'
+    )
+
+    expect(bumpStep.run).toContain('git diff --cached --quiet')
+    expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
+  })
+
   it('installs the Electron package binary in PR checks without changing native module ABI', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)

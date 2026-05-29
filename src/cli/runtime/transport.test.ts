@@ -85,4 +85,33 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       result: { satisfied: true }
     })
   })
+
+  it('rejects promptly when the runtime closes the socket before responding', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      // Read the request, then close cleanly without writing a terminal frame.
+      socket.once('data', () => socket.end())
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+
+    // A generous timeout: a passing fix rejects on close well before this; the
+    // pre-fix behavior would hang the full duration and trip vitest's own limit.
+    const start = Date.now()
+    await expect(sendRequest(metadata, 'status.get', undefined, 60000)).rejects.toMatchObject({
+      code: 'runtime_unavailable'
+    })
+    expect(Date.now() - start).toBeLessThan(5000)
+  })
 })

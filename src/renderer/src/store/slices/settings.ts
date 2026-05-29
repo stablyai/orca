@@ -12,6 +12,7 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quic
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -269,6 +270,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
             createId: createOpenInApplicationId
           }
         )
+      }
+      if ('disabledTuiAgents' in updates) {
+        sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
       }
       const nextSettings = await window.api.settings.set(sanitizedUpdates)
       set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))

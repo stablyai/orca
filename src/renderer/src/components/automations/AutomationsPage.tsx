@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -251,10 +252,13 @@ export default function AutomationsPage(): React.JSX.Element {
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
+    settings?.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
       ? settings.defaultTuiAgent
-      : AGENTS[0]
+      : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
@@ -519,6 +523,10 @@ export default function AutomationsPage(): React.JSX.Element {
       setIsLoading(false)
     }
   }, [setSelectedId])
+
+  const hydratePersistedUIState = useCallback(async (): Promise<void> => {
+    useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
+  }, [])
 
   useEffect(() => {
     void fetchAllWorktrees()
@@ -857,6 +865,14 @@ export default function AutomationsPage(): React.JSX.Element {
       toast.error('Enter a valid 5-field cron expression before saving.')
       return
     }
+    if (
+      editingAutomationId === null &&
+      !isHermesSave &&
+      !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
+    ) {
+      toast.error('Choose an enabled agent before saving.')
+      return
+    }
     setIsSaving(true)
     try {
       const selectedWorkspaceExists =
@@ -903,6 +919,9 @@ export default function AutomationsPage(): React.JSX.Element {
               jobId: editingExternalTarget.job.id
             })
           : window.api.automations.createExternal(input))
+        if (!editingExternalTarget) {
+          useAppStore.getState().recordFeatureInteraction('automation-created')
+        }
         await refresh()
         setCreateOpen(false)
         setEditingExternalTarget(null)
@@ -978,6 +997,9 @@ export default function AutomationsPage(): React.JSX.Element {
             dtstart: now,
             missedRunGraceMinutes
           })
+      if (!editingAutomationId) {
+        await hydratePersistedUIState()
+      }
       setAutomations((current) => {
         const next = current.filter((entry) => entry.id !== automation.id)
         return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
@@ -1053,6 +1075,7 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const runNow = async (automation: Automation): Promise<void> => {
     await window.api.automations.runNow({ id: automation.id })
+    await hydratePersistedUIState()
     await refresh()
     toast.message('Automation run queued.')
   }
@@ -1068,6 +1091,7 @@ export default function AutomationsPage(): React.JSX.Element {
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
       await window.api.automations.runNow({ id: automationId })
+      await hydratePersistedUIState()
       await refresh()
       toast.message('Automation run queued.')
     } catch (error) {
@@ -1096,6 +1120,9 @@ export default function AutomationsPage(): React.JSX.Element {
         jobId: job.id,
         action
       })
+      if (action === 'run') {
+        useAppStore.getState().recordFeatureInteraction('automation-run')
+      }
       await refresh()
       toast.success(
         action === 'delete'

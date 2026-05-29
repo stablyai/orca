@@ -363,7 +363,8 @@ export function buildRows(
   ),
   nestLineage = false,
   settings?: AppState['settings'],
-  projectGroups: readonly ProjectGroup[] = []
+  projectGroups: readonly ProjectGroup[] = [],
+  placeholderRepoIds: ReadonlySet<string> = new Set()
 ): Row[] {
   const result: Row[] = []
 
@@ -420,6 +421,17 @@ export function buildRows(
       grouped.set(key, { label, items: [], repo })
     }
     grouped.get(key)!.items.push(w)
+  }
+  if (groupBy === 'repo' && projectGroups.length > 0) {
+    for (const repoId of placeholderRepoIds) {
+      const repo = repoMap.get(repoId)
+      const key = `repo:${repoId}`
+      if (!grouped.has(key)) {
+        // Why: nested repo imports can persist repos before their worktree rows
+        // are available, but filters must not resurrect hidden repo headers.
+        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
+      }
+    }
   }
 
   const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
@@ -612,22 +624,7 @@ export function buildRows(
     appendProjectGroup(projectGroup, 0)
   }
 
-  const ungrouped = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? [])
-  if (ungrouped.length > 0) {
-    const key = getProjectGroupHeaderKey(null)
-    result.push({
-      type: 'header',
-      key,
-      label: 'Ungrouped',
-      count: ungrouped.length,
-      tone: PROJECT_GROUP_META.tone,
-      icon: PROJECT_GROUP_META.icon,
-      projectGroup: { id: null, name: 'Ungrouped', tabOrder: Number.MAX_SAFE_INTEGER }
-    })
-    if (!collapsedGroups.has(key)) {
-      appendOrderedGroups(ungrouped, 1)
-    }
-  }
+  appendOrderedGroups(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? []), 0)
 
   return result
 }
@@ -686,10 +683,5 @@ export function getGroupKeysForWorktree(
     const parentId = groupsById.get(currentGroupId)?.parentGroupId ?? null
     currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
   }
-  return [
-    ...(groupIds.length > 0
-      ? groupIds.map((id) => getProjectGroupHeaderKey(id))
-      : [getProjectGroupHeaderKey(null)]),
-    groupKey
-  ]
+  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]
 }

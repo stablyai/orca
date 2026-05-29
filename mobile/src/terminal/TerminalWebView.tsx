@@ -31,6 +31,7 @@ export type TerminalSelectionEvents = {
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string) => void
+  onTerminalTap?: () => void
 }
 
 export type TerminalWebViewHandle = {
@@ -1538,6 +1539,9 @@ const XTERM_HTML = `<!DOCTYPE html>
       return;
     }
     if (dispatch.mode === 'surface') {
+      if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
+        notify({ type: 'terminal-tap' });
+      }
       clearLongPress();
       if (e.touches.length === 0) {
         dispatch.mode = 'idle';
@@ -1797,7 +1801,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onModesChanged,
     onKeyboardAvoidanceMetrics,
     onHaptic,
-    onTerminalInput
+    onTerminalInput,
+    onTerminalTap
   },
   ref
 ) {
@@ -1900,6 +1905,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } else if (msg.type === 'terminal-input') {
         const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
         if (bytes.length > 0) onTerminalInput?.(bytes)
+      } else if (msg.type === 'terminal-tap') {
+        onTerminalTap?.()
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -1932,7 +1939,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onModesChanged,
       onKeyboardAvoidanceMetrics,
       onHaptic,
-      onTerminalInput
+      onTerminalInput,
+      onTerminalTap
     ]
   )
 
