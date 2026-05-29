@@ -854,6 +854,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'jumpToTabIndex') {
+      mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
+      return
+    }
+
     if (action.type === 'worktreeHistoryNavigate') {
       // Why: routed through main so the chord reaches the renderer even when
       // a terminal (xterm.js) or a browser guest has focus — both surfaces

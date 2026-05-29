@@ -2418,6 +2418,11 @@ const api = {
       ipcRenderer.on('ui:jumpToWorktreeIndex', listener)
       return () => ipcRenderer.removeListener('ui:jumpToWorktreeIndex', listener)
     },
+    onJumpToTabIndex: (callback: (index: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
+      ipcRenderer.on('ui:jumpToTabIndex', listener)
+      return () => ipcRenderer.removeListener('ui:jumpToTabIndex', listener)
+    },
     onWorktreeHistoryNavigate: (
       callback: (direction: 'back' | 'forward') => void
     ): (() => void) => {
