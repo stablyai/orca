@@ -348,7 +348,10 @@ const inflightPRRequests = new Map<
   { promise: Promise<PRInfo | null>; force: boolean; generation: number; lookupHintKey: string }
 >()
 const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
-const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
+const inflightChecksRequests = new Map<
+  string,
+  { promise: Promise<PRCheckDetail[]>; force: boolean; generation: number }
+>()
 const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 type InflightWorkItems = {
   promise: Promise<GitHubWorkItem[]>
@@ -356,6 +359,7 @@ type InflightWorkItems = {
 }
 const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 const prRequestGenerations = new Map<string, number>()
+const checksRequestGenerations = new Map<string, number>()
 const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
@@ -2091,10 +2095,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const inflightRequest = inflightChecksRequests.get(inflightKey)
-    if (inflightRequest) {
-      return inflightRequest
+    if (inflightRequest && (!options?.force || inflightRequest.force)) {
+      return inflightRequest.promise
     }
 
+    const generation = (checksRequestGenerations.get(inflightKey) ?? 0) + 1
+    checksRequestGenerations.set(inflightKey, generation)
     const request = (async () => {
       try {
         const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
@@ -2119,6 +2125,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               prRepo: prRepo ?? null,
               noCache: options?.force
             })) as PRCheckDetail[])
+        // Why: a post-push force refresh must beat an older polling request for
+        // the same stale head SHA; otherwise stale checks can overwrite fresh.
+        if (checksRequestGenerations.get(inflightKey) !== generation) {
+          return checks
+        }
         set((s) => {
           const nextState: Partial<AppState> = {
             checksCache: {
@@ -2154,11 +2165,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
         return []
       } finally {
-        inflightChecksRequests.delete(inflightKey)
+        const activeRequest = inflightChecksRequests.get(inflightKey)
+        if (activeRequest?.generation === generation) {
+          inflightChecksRequests.delete(inflightKey)
+        }
       }
     })()
 
-    inflightChecksRequests.set(inflightKey, request)
+    inflightChecksRequests.set(inflightKey, {
+      promise: request,
+      force: Boolean(options?.force),
+      generation
+    })
     return request
   },
 
@@ -2634,11 +2652,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (checksChanged) {
           updates.checksCache = nextChecksCache
         }
-      }
-      // Signal the Checks panel to force-refresh immediately if it is open.
-      updates.checksPostPushNonceByWorktree = {
-        ...s.checksPostPushNonceByWorktree,
-        [worktreeId]: (s.checksPostPushNonceByWorktree[worktreeId] ?? 0) + 1
+        // Why: this is a GitHub PR-only signal; GitLab/other hosted reviews
+        // should not see a checks refresh event from the GitHub slice.
+        updates.checksPostPushNonceByWorktree = {
+          ...s.checksPostPushNonceByWorktree,
+          [worktreeId]: (s.checksPostPushNonceByWorktree[worktreeId] ?? 0) + 1
+        }
       }
       return updates
     })
