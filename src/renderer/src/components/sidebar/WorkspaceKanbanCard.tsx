@@ -110,6 +110,8 @@ function WorkspaceKanbanCompactCard({
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
+  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
+  const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const isDeleting = deleteState?.isDeleting ?? false
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [titleRenaming, setTitleRenaming] = useState(false)
@@ -269,6 +271,8 @@ function WorkspaceKanbanCompactCard({
               className="flex-1 text-[12px]"
               onEditingChange={setTitleRenaming}
               onRename={handleRenameTitle}
+              beginEditing={renamingWorktreeId === worktree.id}
+              onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
             {repo ? (
               <Tooltip>

@@ -159,6 +159,34 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
     expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: false,
+          control: true,
+          alt: false,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBe(false)
 
     // Why: tab.rename (Mod+R) intentionally shares its binding with
     // browser.reload, but the two live in different scopes (tabs vs browser),

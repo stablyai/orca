@@ -1214,7 +1214,7 @@ function App(): React.JSX.Element {
       // focus zone because the browser pane owns its own Cmd+R reload and that
       // focus never reaches this renderer-window handler. Only terminal tabs
       // have an inline title editor, so other active tab types fall through.
-      if (matchShortcut('tab.rename')) {
+      if (workspaceActive && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
           e.preventDefault()
@@ -1224,12 +1224,14 @@ function App(): React.JSX.Element {
         }
       }
 
-      // Why: open the active worktree's inline title editor. Reveal it first so
-      // its card is mounted even when sidebar filters would otherwise hide it.
-      if (matchShortcut('workspace.rename') && activeWorktreeId) {
+      // Why: open the active worktree's inline title editor. Open/reveal it
+      // first so the card is mounted and visible even when sidebar filters or
+      // collapse state would otherwise hide it.
+      if (workspaceActive && matchShortcut('workspace.rename') && activeWorktreeId) {
         e.preventDefault()
         notifyTerminalCapture('workspace.rename')
         const store = useAppStore.getState()
+        store.setSidebarOpen(true)
         store.revealWorktreeInSidebar(activeWorktreeId)
         store.setRenamingWorktreeId(activeWorktreeId)
         return
@@ -1327,7 +1329,8 @@ function App(): React.JSX.Element {
     floatingUnifiedTabCount,
     keybindings,
     settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus
+    setFloatingTerminalOpenWithFocus,
+    workspaceActive
   ])
 
   useLayoutEffect(() => {
