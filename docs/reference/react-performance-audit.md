@@ -49,7 +49,7 @@ Initial inventory:
 
 Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, #3066, #3067, #3068, and #3069: 936 Effect hook call sites.
 
-Open medium-risk PRs #3070, #3073, and #3077 each lower their branch count to 935 Effect hook call sites, and open high-risk PR #3075 lowers its branch count to 932 Effect hook call sites. These are not counted in the merged baseline until reviewed and merged.
+Open medium-risk PRs #3070, #3073, and #3077 each lower their branch count to 935 Effect hook call sites; open medium-risk PR #3079 lowers its branch count to 926; and open high-risk PR #3075 lowers its branch count to 932. These are not counted in the merged baseline until reviewed and merged.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,6 +107,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR AE        | New-workspace composer note ref                       | A note ref mirror Effect runs after each note edit so stable PR/MR selection callbacks can read latest text. | `useComposerState.ts` covered by #3073                                                                                   | Medium         |
 | PR AF        | Source-control selection ref mirrors                  | Four ref mirror Effects keep stable source-control row handlers pointed at latest selection inputs.         | `useSourceControlSelection.ts` covered by #3075                                                                          | High           |
 | PR AG        | Notebook cell editor callback refs                    | A ref mirror Effect keeps embedded Monaco save/deactivate handlers pointed at latest callbacks.             | `IpynbViewer.tsx` covered by #3077                                                                                       | Medium         |
+| PR AH        | Rich markdown editor ref mirrors                      | Nine ref mirror Effects keep stable ProseMirror/menu handlers pointed at latest editor UI state.            | `RichMarkdownEditor.tsx` covered by #3079                                                                                | Medium         |
 
 ## Merge Risk Scale
 
@@ -145,6 +146,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3073 | `nwparker/react-perf-composer-note-ref` | New-workspace composer note ref mirror moves out of an Effect | Medium | Open   | `pnpm exec oxlint src/renderer/src/hooks/useComposerState.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/composer-branch-selection.test.ts`; `pnpm run typecheck:web`. |
 | #3075 | `nwparker/react-perf-source-control-selection-refs` | Source-control selection ref mirrors move out of Effects | High | Open   | `pnpm exec oxlint src/renderer/src/components/right-sidebar/useSourceControlSelection.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/right-sidebar/useSourceControlSelection.test.ts`; `pnpm run typecheck:web`. |
 | #3077 | `nwparker/react-perf-ipynb-cell-editor-refs` | Notebook cell editor callback refs move out of an Effect | Medium | Open   | `pnpm exec oxlint src/renderer/src/components/editor/IpynbViewer.tsx`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/ipynb-parse.test.ts`; `pnpm run typecheck:web`. |
+| #3079 | `nwparker/react-perf-rich-markdown-refs` | Rich markdown editor ref mirrors move out of Effects | Medium | Open   | `pnpm exec oxlint src/renderer/src/components/editor/RichMarkdownEditor.tsx`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/rich-markdown-key-handler.test.ts src/renderer/src/components/editor/RichMarkdownSlashMenu.test.tsx src/renderer/src/components/editor/markdown-doc-completions.test.ts src/renderer/src/components/editor/rich-markdown-commands.test.ts`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
