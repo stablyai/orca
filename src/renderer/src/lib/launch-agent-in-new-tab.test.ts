@@ -6,6 +6,7 @@ const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+const mockTrack = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -50,7 +51,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 }))
 
 vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
+  track: mockTrack,
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
@@ -88,6 +89,32 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('does not track prompt-sent for argv prompt launches', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'fix the spinner',
+      launchSource: 'onboarding'
+    })
+
+    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('does not track prompt-sent for draft launches', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'review this before sending',
+      promptDelivery: 'draft'
+    })
+
+    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
   it('seeds working after Command Code submit-after-ready prompt delivery', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -120,5 +147,21 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       agentType: 'command-code'
     })
+    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('does not track prompt-sent when submit-after-ready delivery fails', async () => {
+    mockPasteDraftWhenAgentReady.mockResolvedValue(false)
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+    await Promise.resolve()
+
+    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 })

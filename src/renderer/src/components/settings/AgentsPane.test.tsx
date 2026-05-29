@@ -2,7 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription } from './agent-awake-copy'
@@ -16,16 +16,34 @@ import {
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 
+const detectedAgentsMock = vi.hoisted(() => ({
+  detectedIds: ['claude'] as TuiAgent[] | null,
+  refresh: vi.fn()
+}))
+
+vi.mock('@/hooks/useDetectedAgents', () => ({
+  useDetectedAgents: () => ({
+    detectedIds: detectedAgentsMock.detectedIds,
+    isLoading: detectedAgentsMock.detectedIds === null,
+    isRefreshing: false,
+    refresh: detectedAgentsMock.refresh
+  })
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
 }
 
-function renderPane(settings: GlobalSettings): string {
+function renderPane(
+  settings: GlobalSettings,
+  props: Partial<React.ComponentProps<typeof AgentsPane>> = {}
+): string {
   return renderToStaticMarkup(
     React.createElement(AgentsPane, {
       settings,
-      updateSettings: vi.fn()
+      updateSettings: vi.fn(),
+      ...props
     })
   )
 }
@@ -77,6 +95,8 @@ function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
 
 describe('AgentsPane', () => {
   beforeEach(() => {
+    detectedAgentsMock.detectedIds = ['claude']
+    detectedAgentsMock.refresh.mockReset()
     useAppStore.setState({
       settingsSearchQuery: '',
       detectedAgentIds: ['claude'],
@@ -87,12 +107,28 @@ describe('AgentsPane', () => {
 
   it('renders the keep-awake toggle from settings', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
+    const hostRuntimeLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 
+    expect(markup).toContain('Agent location')
+    expect(markup).toContain(`Show installed agents from ${hostRuntimeLabel}`)
     expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
       'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
     expect(markup).toContain('aria-checked="false"')
+  })
+
+  it('keeps the agent location aligned with a WSL default terminal while capabilities load', () => {
+    const markup = renderPane(
+      {
+        ...getDefaultSettings('/tmp'),
+        terminalWindowsShell: 'wsl.exe'
+      },
+      { wslCapabilitiesLoading: true }
+    )
+
+    expect(markup).toContain('Show installed agents from WSL default.')
+    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
   })
 
   it('describes Windows lid behavior according to the device', () => {
@@ -225,5 +261,10 @@ describe('AgentsPane', () => {
     ).toEqual({
       disabledTuiAgents: []
     })
+  })
+
+  it('includes agent location search metadata', () => {
+    expect(matchesSettingsSearch('wsl', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('windows', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 })

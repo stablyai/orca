@@ -120,7 +120,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4" data-settings-section="cli">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">Orca CLI</h2>
         <p className="text-xs text-muted-foreground">

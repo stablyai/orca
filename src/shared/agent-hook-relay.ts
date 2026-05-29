@@ -60,6 +60,9 @@ export type AgentHookRelayEnvelope = {
   /** Preserved from the relay-side normalized hook event so Orca can
    *  distinguish a true same-prompt retry from a cached-prompt tool ping. */
   hasExplicitPrompt?: boolean
+  /** Optional stable per-turn key from the relay-side listener. Used only for
+   *  in-memory dedupe; never included in product telemetry payloads. */
+  promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
   /** Claude tool execution id, when the source hook provides one. */

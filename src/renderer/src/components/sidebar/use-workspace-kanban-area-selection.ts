@@ -76,9 +76,9 @@ export function useWorkspaceKanbanAreaSelection({
   const dragRef = useRef<AreaSelectionDragState | null>(null)
   const updateSelectionForAreaRef = useRef(updateSelectionForArea)
 
-  useEffect(() => {
-    updateSelectionForAreaRef.current = updateSelectionForArea
-  }, [updateSelectionForArea])
+  // Why: pointer handlers are stable while selection commits must call the
+  // latest board-selection updater before the next event can fire.
+  updateSelectionForAreaRef.current = updateSelectionForArea
 
   const cancelAreaSelectionDrag = useCallback(() => {
     const state = dragRef.current

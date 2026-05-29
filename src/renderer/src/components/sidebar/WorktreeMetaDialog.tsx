@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -24,6 +24,11 @@ function parseExplicitGitHubIssueUrl(input: string): string | null {
   }
 
   return trimmed
+}
+
+function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
 }
 
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
@@ -93,20 +98,21 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     ? Boolean(issueUrlFromInput)
     : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
-  const autoResize = useCallback(() => {
-    const ta = textareaRef.current
-    if (!ta) {
-      return
-    }
-    ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
-  }, [])
+  const setCommentTextareaRef = useCallback(
+    (textarea: HTMLTextAreaElement | null) => {
+      textareaRef.current = textarea
+      if (textarea && isEditMeta) {
+        resizeCommentTextarea(textarea)
+      }
+    },
+    [isEditMeta]
+  )
 
-  useEffect(() => {
-    if (isEditMeta) {
-      autoResize()
-    }
-  }, [isEditMeta, commentInput, autoResize])
+  const handleCommentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCommentInput(event.target.value)
+    // Why: notes should grow in the same input event; a passive Effect leaves a stale height.
+    resizeCommentTextarea(event.currentTarget)
+  }, [])
 
   const canSave = useMemo(() => {
     if (!worktreeId) {
@@ -336,9 +342,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">Comment</label>
             <textarea
-              ref={textareaRef}
+              ref={setCommentTextareaRef}
               value={commentInput}
-              onChange={(e) => setCommentInput(e.target.value)}
+              onChange={handleCommentChange}
               onKeyDown={handleCommentKeyDown}
               placeholder="Notes about this worktree..."
               rows={3}

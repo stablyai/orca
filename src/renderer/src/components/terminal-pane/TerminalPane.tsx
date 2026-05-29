@@ -67,6 +67,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import {
   getTerminalQuickCommandScope,
+  isTerminalQuickCommandComplete,
   terminalQuickCommandMatchesRepo
 } from '../../../../shared/terminal-quick-commands'
 import {
@@ -366,8 +367,8 @@ export default function TerminalPane({
     : quickCommandRepoId
       ? 'This Repo'
       : null
-  const validQuickCommands = (settings?.terminalQuickCommands ?? []).filter(
-    (command) => command.label.trim() && command.command.trimEnd()
+  const validQuickCommands = (settings?.terminalQuickCommands ?? []).filter((command) =>
+    isTerminalQuickCommandComplete(command)
   )
   const repoQuickCommands = validQuickCommands.filter((command) => {
     const scope = getTerminalQuickCommandScope(command)
@@ -376,6 +377,15 @@ export default function TerminalPane({
   const globalQuickCommands = validQuickCommands.filter(
     (command) => getTerminalQuickCommandScope(command).type === 'global'
   )
+  const quickCommandGroupId =
+    useAppStore(
+      (s) =>
+        s.unifiedTabsByWorktree[worktreeId]?.find(
+          (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
+        )?.groupId ??
+        s.activeGroupIdByWorktree[worktreeId] ??
+        null
+    ) ?? null
 
   const openQuickCommandEditor = useCallback((scope: TerminalQuickCommandScope): void => {
     setQuickCommandDraft(createTerminalQuickCommandDraft(scope))
@@ -1485,6 +1495,7 @@ export default function TerminalPane({
     paneTransportsRef,
     paneCwdRef,
     worktreeId,
+    groupId: quickCommandGroupId,
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,

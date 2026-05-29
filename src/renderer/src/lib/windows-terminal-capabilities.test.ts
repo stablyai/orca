@@ -6,21 +6,27 @@ import {
   resetWindowsTerminalCapabilitiesForTests
 } from './windows-terminal-capabilities'
 
-function stubTerminalCapabilityApi(args: { wslAvailable: boolean; pwshAvailable: boolean }): {
+function stubTerminalCapabilityApi(args: {
+  wslAvailable: boolean
+  pwshAvailable: boolean
+  wslDistros?: string[]
+}): {
   wslIsAvailable: ReturnType<typeof vi.fn>
+  wslListDistros: ReturnType<typeof vi.fn>
   pwshIsAvailable: ReturnType<typeof vi.fn>
 } {
   const wslIsAvailable = vi.fn().mockResolvedValue(args.wslAvailable)
+  const wslListDistros = vi.fn().mockResolvedValue(args.wslDistros ?? [])
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
 
   vi.stubGlobal('window', {
     api: {
-      wsl: { isAvailable: wslIsAvailable },
+      wsl: { isAvailable: wslIsAvailable, listDistros: wslListDistros },
       pwsh: { isAvailable: pwshIsAvailable }
     }
   })
 
-  return { wslIsAvailable, pwshIsAvailable }
+  return { wslIsAvailable, wslListDistros, pwshIsAvailable }
 }
 
 describe('windows terminal capabilities', () => {
@@ -37,16 +43,22 @@ describe('windows terminal capabilities', () => {
 
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
       wslAvailable: false,
-      pwshAvailable: false
+      wslDistros: [],
+      pwshAvailable: false,
+      isLoading: false
     })
 
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual({
       wslAvailable: true,
-      pwshAvailable: true
+      wslDistros: [],
+      pwshAvailable: true,
+      isLoading: false
     })
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
       wslAvailable: true,
-      pwshAvailable: true
+      wslDistros: [],
+      pwshAvailable: true,
+      isLoading: false
     })
 
     await loadWindowsTerminalCapabilities()
@@ -59,14 +71,16 @@ describe('windows terminal capabilities', () => {
     const pwshIsAvailable = vi.fn().mockRejectedValue(new Error('pwsh probe failed'))
     vi.stubGlobal('window', {
       api: {
-        wsl: { isAvailable: wslIsAvailable },
+        wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
         pwsh: { isAvailable: pwshIsAvailable }
       }
     })
 
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual({
       wslAvailable: true,
-      pwshAvailable: false
+      wslDistros: [],
+      pwshAvailable: false,
+      isLoading: false
     })
   })
 
@@ -75,7 +89,7 @@ describe('windows terminal capabilities', () => {
     const pwshIsAvailable = vi.fn().mockResolvedValue(false)
     vi.stubGlobal('window', {
       api: {
-        wsl: { isAvailable: wslIsAvailable },
+        wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
         pwsh: { isAvailable: pwshIsAvailable }
       }
     })
@@ -98,7 +112,7 @@ describe('windows terminal capabilities', () => {
     const pwshIsAvailable = vi.fn().mockResolvedValue(false)
     vi.stubGlobal('window', {
       api: {
-        wsl: { isAvailable: wslIsAvailable },
+        wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
         pwsh: { isAvailable: pwshIsAvailable }
       }
     })

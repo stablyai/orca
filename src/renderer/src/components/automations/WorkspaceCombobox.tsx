@@ -25,18 +25,29 @@ export function WorkspaceCombobox({
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
+  const focusFrameRef = React.useRef<number | null>(null)
   const selected = worktrees.find((worktree) => worktree.id === value) ?? null
 
-  React.useEffect(() => {
-    if (!open) {
-      return
+  const focusSearchInput = React.useCallback(() => {
+    if (focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
     }
-    const frame = requestAnimationFrame(() => inputRef.current?.focus())
-    return () => cancelAnimationFrame(frame)
-  }, [open])
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null
+      inputRef.current?.focus()
+    })
+  }, [])
+
+  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen && focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
+    }
+  }, [])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -54,7 +65,10 @@ export function WorkspaceCombobox({
       <PopoverContent
         align="start"
         className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
-        onOpenAutoFocus={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          focusSearchInput()
+        }}
       >
         <Command>
           <CommandInput ref={inputRef} placeholder="Search workspaces..." />

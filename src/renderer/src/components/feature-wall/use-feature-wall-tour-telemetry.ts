@@ -78,10 +78,10 @@ export function useFeatureWallTourTelemetry(args: {
   const telemetryRef = useRef<FeatureWallTourTelemetryState>(createFeatureWallTourTelemetryState())
   const sourceRef = useRef(source)
   const getDepthSummaryRef = useRef(getDepthSummary)
-  useEffect(() => {
-    sourceRef.current = source
-    getDepthSummaryRef.current = getDepthSummary
-  }, [getDepthSummary, source])
+  // Why: close telemetry may emit from stable callbacks; keep the payload
+  // inputs current before open/close Effects or unmount cleanup can run.
+  sourceRef.current = source
+  getDepthSummaryRef.current = getDepthSummary
 
   const emitCloseTelemetry = useCallback(() => {
     const payload = buildFeatureWallClosedTelemetry(

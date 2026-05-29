@@ -41,6 +41,9 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
+   *  distro still wins when the cwd already identifies a WSL distro. */
+  terminalWindowsWslDistro?: string | null
   /** Why: PowerShell is the top-level shell family in product terms, but on
    *  Windows we may need to choose between inbox Windows PowerShell 5.1 and
    *  pwsh.exe at spawn time. Threading the persisted implementation choice
