@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Maximize2, Smartphone, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -52,6 +52,9 @@ export function MobilePane(): React.JSX.Element {
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
+  const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
+  const latestDeviceCountRef = useRef(devices.length)
+  latestDeviceCountRef.current = devices.length
 
   const loadDevices = useCallback(async () => {
     try {
@@ -92,6 +95,9 @@ export function MobilePane(): React.JSX.Element {
         })
         if (result.available) {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
+          // Why: pairing polling waits for a new device relative to the exact
+          // QR-generation moment, even if the device list changes mid-request.
+          setDeviceCountAtQr(latestDeviceCountRef.current)
           setQrDataUrl(result.qrDataUrl)
           setPairingUrl(result.pairingUrl)
           setEndpoint(result.endpoint)
@@ -116,15 +122,6 @@ export function MobilePane(): React.JSX.Element {
 
   // Why: after generating a QR code the device only appears once the phone
   // actually connects (lastSeenAt > 0). Poll until a new device shows up.
-  const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  useEffect(() => {
-    if (!qrDataUrl) {
-      setDeviceCountAtQr(null)
-      return
-    }
-    setDeviceCountAtQr(devices.length)
-  }, [qrDataUrl]) // eslint-disable-line react-hooks/exhaustive-deps
-
   useMobilePairingDevicePolling({
     deviceCountAtQr,
     currentDeviceCount: devices.length,
