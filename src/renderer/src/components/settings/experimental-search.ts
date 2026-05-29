@@ -48,6 +48,22 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Compact worktree cards',
+    description: 'Hide redundant second lines in the worktree sidebar.',
+    keywords: [
+      'experimental',
+      'worktree',
+      'worktrees',
+      'workspace',
+      'workspaces',
+      'compact',
+      'sidebar',
+      'cards',
+      'branch',
+      'metadata'
+    ]
+  },
+  {
     title: 'Symlinks on worktrees',
     description:
       'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
@@ -81,5 +97,6 @@ export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
   activity: findEntry('Agents View'),
   terminalAttention: findEntry('Terminal attention'),
+  compactWorktreeCards: findEntry('Compact worktree cards'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

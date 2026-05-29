@@ -115,6 +115,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const compactCards = settings?.experimentalCompactWorktreeCards === true
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -182,9 +183,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
-  // Why: the branch repeats the title for un-renamed worktrees, so it's hidden
-  // when they match — only show the branch sub-line when it adds information.
-  const showBranch = !isFolder && branch !== worktree.displayName
+  // Why: compact cards are experimental because mixed card heights can be
+  // surprising; the default keeps the explicit branch row visible.
+  const showBranch = !isFolder && (!compactCards || branch !== worktree.displayName)
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
@@ -554,14 +555,85 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id)
   const cacheTtlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
-  // Why: render the branch/badge sub-line only when it carries something, so an
-  // un-renamed single-line worktree collapses to one row instead of an empty band.
-  const hasMetaRow =
+  const hasMetadataBadge =
     (!!repo && !hideRepoBadge) ||
     isFolder ||
-    showBranch ||
-    (!!conflictOperation && conflictOperation !== 'unknown') ||
-    cacheStartedAt != null
+    (!!conflictOperation && conflictOperation !== 'unknown')
+  // Why: disabled mode intentionally restores the explicit metadata lane; only
+  // the experimental path removes the row when it would add no visible content.
+  const hasMetaRow = !compactCards || hasMetadataBadge || showBranch || cacheStartedAt != null
+  const showUnreadQuickAction = cardProps.includes('unread')
+  const showTitleRowUnread = compactCards && showUnreadQuickAction
+  const showLeftUnread = !compactCards && showUnreadQuickAction
+  const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
+  const showTitleRowDetails = compactCards && (hasDetails || hasPorts)
+  const showMetaRowDetails = !compactCards && (hasDetails || hasPorts)
+  const showHeaderActions =
+    showTitleRowUnread ||
+    showTitleRowPrimary ||
+    showTitleRowDetails ||
+    (showDeleteQuickAction && !isDeleting)
+
+  const unreadQuickAction = showUnreadQuickAction ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-workspace-board-preserve-open=""
+          onPointerDown={stopQuickActionPointerPropagation}
+          onClick={handleToggleUnreadQuick}
+          className={cn(
+            'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
+            'hover:bg-accent/80 active:scale-95',
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+          )}
+          aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
+        >
+          {worktree.isUnread ? (
+            <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
+          ) : (
+            <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        <span>{unreadTooltip}</span>
+      </TooltipContent>
+    </Tooltip>
+  ) : null
+
+  const detailsAndPorts =
+    hasDetails || hasPorts ? (
+      <WorktreeCardDetailsHover
+        issue={metaIssue}
+        linearIssue={metaLinearIssue}
+        review={metaReview}
+        comment={metaComment}
+        detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+        onEditIssue={handleEditIssue}
+        onEditComment={handleEditComment}
+        onOpenGitHubIssueInOrca={
+          metaIssue && 'url' in metaIssue && metaIssue.url ? handleOpenGitHubIssueInOrca : undefined
+        }
+        onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
+        onOpenReviewInOrca={
+          metaReview?.url && metaReview.provider === 'github' ? handleOpenReviewInOrca : undefined
+        }
+      >
+        <div className="flex shrink-0 items-center gap-1">
+          {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
+          {hasDetails && (
+            <WorktreeCardMetaBadges
+              issue={metaIssue}
+              linearIssue={metaLinearIssue}
+              review={metaReview}
+              comment={metaComment}
+              className="ml-0 pr-0"
+            />
+          )}
+        </div>
+      </WorktreeCardDetailsHover>
+    ) : null
 
   const cardBody = (
     <div
@@ -594,12 +666,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
         </div>
       )}
 
-      {/* Why: keep this column to just the dot — stacking anything else here
-           (e.g. the unread toggle, which now lives in the title-row cluster)
-           sets a height floor that pads single-line cards. */}
-      {cardProps.includes('status') && (
+      {compactCards && cardProps.includes('status') ? (
         <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mt-[2px] shrink-0" />
-      )}
+      ) : cardProps.includes('status') || showLeftUnread ? (
+        <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
+          {cardProps.includes('status') && (
+            <WorktreeActivityStatusIndicator worktreeId={worktree.id} />
+          )}
+
+          {showLeftUnread && unreadQuickAction}
+        </div>
+      ) : null}
 
       {/* Content area */}
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -638,6 +715,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
               onRename={handleRenameTitle}
             />
 
+            {!compactCards && worktree.isMainWorktree && !isFolder && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
+                  >
+                    primary
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Primary worktree (original clone directory)
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {worktree.isSparse && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -662,44 +755,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {((worktree.isMainWorktree && !isFolder) ||
-            hasDetails ||
-            hasPorts ||
-            cardProps.includes('unread') ||
-            (showDeleteQuickAction && !isDeleting)) && (
+          {showHeaderActions && (
             <div className="ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5">
-              {/* Why: unread toggle leads the right cluster (left of the primary
-                   star and PR/ports indicators); the rest right-align on the title
-                   line so a single-line card stays one line and icons line up. */}
-              {cardProps.includes('unread') && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      data-workspace-board-preserve-open=""
-                      onPointerDown={stopQuickActionPointerPropagation}
-                      onClick={handleToggleUnreadQuick}
-                      className={cn(
-                        'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
-                        'hover:bg-accent/80 active:scale-95',
-                        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                      )}
-                      aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
-                    >
-                      {worktree.isUnread ? (
-                        <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
-                      ) : (
-                        <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    <span>{unreadTooltip}</span>
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {showTitleRowUnread && unreadQuickAction}
 
-              {worktree.isMainWorktree && !isFolder && (
+              {showTitleRowPrimary && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
@@ -715,45 +775,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </Tooltip>
               )}
 
-              {(hasDetails || hasPorts) && (
-                <WorktreeCardDetailsHover
-                  issue={metaIssue}
-                  linearIssue={metaLinearIssue}
-                  review={metaReview}
-                  comment={metaComment}
-                  detailsAfter={
-                    hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
-                  }
-                  onEditIssue={handleEditIssue}
-                  onEditComment={handleEditComment}
-                  onOpenGitHubIssueInOrca={
-                    metaIssue && 'url' in metaIssue && metaIssue.url
-                      ? handleOpenGitHubIssueInOrca
-                      : undefined
-                  }
-                  onOpenLinearIssueInOrca={
-                    linearIssue?.url ? handleOpenLinearIssueInOrca : undefined
-                  }
-                  onOpenReviewInOrca={
-                    metaReview?.url && metaReview.provider === 'github'
-                      ? handleOpenReviewInOrca
-                      : undefined
-                  }
-                >
-                  <div className="flex shrink-0 items-center gap-1">
-                    {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
-                    {hasDetails && (
-                      <WorktreeCardMetaBadges
-                        issue={metaIssue}
-                        linearIssue={metaLinearIssue}
-                        review={metaReview}
-                        comment={metaComment}
-                        className="ml-0 pr-0"
-                      />
-                    )}
-                  </div>
-                </WorktreeCardDetailsHover>
-              )}
+              {showTitleRowDetails && detailsAndPorts}
 
               {showDeleteQuickAction && !isDeleting && (
                 <Tooltip>
@@ -782,9 +804,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
           )}
         </div>
 
-        {/* Why: the branch/badge sub-line only renders when it carries something,
-             so an un-renamed single-line worktree collapses to one row instead of
-             leaving an empty band. The PR/ports indicators now live on the title row. */}
         {hasMetaRow && (
           <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
@@ -828,6 +847,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />
               )}
             </div>
+
+            {showMetaRowDetails && (
+              <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">
+                {detailsAndPorts}
+              </div>
+            )}
           </div>
         )}
 
