@@ -12,9 +12,11 @@ export const TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY: SettingsSearchEntry[] = [
       'cmd',
       'command prompt',
       'default',
+      'git bash',
       'wsl',
       'linux',
       'bash',
+      'bash.exe',
       'ubuntu'
     ]
   }

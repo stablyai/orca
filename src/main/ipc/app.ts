@@ -11,6 +11,7 @@ import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
+import { resolveGitBashPath } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
@@ -118,6 +119,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
+  ipcMain.handle('gitBash:resolvePath', (): string | null => resolveGitBashPath())
 
   // Why: ABC, Polish Pro, US Extended, ABC Extended, and every CJK Roman
   // IME all report a US-QWERTY base layer to navigator.keyboard.getLayoutMap()

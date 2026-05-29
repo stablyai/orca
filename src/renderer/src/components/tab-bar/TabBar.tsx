@@ -29,6 +29,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
+  type BuiltInWindowsTerminalShell,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -552,17 +556,20 @@ function TabBarInner({
             // shells as flat items — default pinned to the top with the
             // Ctrl+T hint — matches the "no popouts, show all options at
             // once" rec. Each entry uses a shell-specific icon (ShellIcon)
-            // so PowerShell / CMD / WSL are distinguishable at a glance.
+            // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
             // Labels use "CMD Prompt" instead of "Command Prompt" to keep
             // each row narrow enough that the shortcut hint fits without
             // wrapping.
             (() => {
               const allShells: {
                 label: string
-                shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+                shell: BuiltInWindowsTerminalShell
               }[] = [
                 { label: 'PowerShell', shell: 'powershell.exe' },
                 { label: 'CMD Prompt', shell: 'cmd.exe' },
+                ...(windowsTerminalCapabilities.gitBashPath
+                  ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
+                  : []),
                 ...(windowsTerminalCapabilities.wslAvailable
                   ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
                   : [])

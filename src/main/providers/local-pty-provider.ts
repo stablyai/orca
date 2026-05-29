@@ -32,6 +32,12 @@ import {
 } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import {
+  isWindowsGitBashShellPath,
+  resolveGitBashPath,
+  resolveWindowsGitBashShellPath
+} from '../git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -209,6 +215,7 @@ export class LocalPtyProvider implements IPtyProvider {
         'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
+      const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
       // Why: shell selection can arrive either as a canonical setting value
       // ('powershell.exe') or as a concrete PowerShell executable path from a
       // one-off override. Normalize both forms back to the PowerShell family so
@@ -217,18 +224,24 @@ export class LocalPtyProvider implements IPtyProvider {
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
-      shellPath = shouldResolvePowerShellFamily
-        ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
-            implementation: powerShellImplementation,
-            pwshAvailable: this.opts.pwshAvailable?.() ?? false
-          }) ?? shellFamily)
-        : shellFamily
+      if (resolvedGitBashPath) {
+        shellPath = resolvedGitBashPath
+      } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
+        shellPath = 'powershell.exe'
+      } else {
+        shellPath = shouldResolvePowerShellFamily
+          ? (resolveEffectiveWindowsPowerShell({
+              shellFamily:
+                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                  ? 'powershell.exe'
+                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                    ? normalizedShellFamily
+                    : undefined,
+              implementation: powerShellImplementation,
+              pwshAvailable: this.opts.pwshAvailable?.() ?? false
+            }) ?? shellFamily)
+          : shellFamily
+      }
       // Why: one-off overrides and persisted shell-family selection keep the
       // same priority, while the shared resolver chooses which PowerShell
       // executable is safe to run right now if that family is selected.
@@ -287,6 +300,11 @@ export class LocalPtyProvider implements IPtyProvider {
     // Python scripts run inside the terminal.
     if (process.platform === 'win32') {
       spawnEnv.PYTHONUTF8 ??= '1'
+      if (isWindowsGitBashShellPath(shellPath)) {
+        // Why: Git for Windows login startup files otherwise cd to $HOME,
+        // ignoring node-pty's cwd for repo-scoped terminals.
+        spawnEnv.CHERE_INVOKING ??= '1'
+      }
     }
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
@@ -605,6 +623,10 @@ export class LocalPtyProvider implements IPtyProvider {
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      const gitBashPath = resolveGitBashPath()
+      if (gitBashPath) {
+        profiles.push({ name: 'Git Bash', path: gitBashPath })
+      }
       if (isWslAvailable()) {
         profiles.push({ name: 'WSL', path: 'wsl.exe' })
       }

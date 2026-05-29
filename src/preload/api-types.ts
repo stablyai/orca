@@ -2105,6 +2105,9 @@ export type PreloadApi = {
   pwsh: {
     isAvailable: () => Promise<boolean>
   }
+  gitBash: {
+    resolvePath: () => Promise<string | null>
+  }
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
     onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void

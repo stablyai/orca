@@ -843,6 +843,7 @@ function Settings(): React.JSX.Element {
                       ghostty={ghostty}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+                      gitBashPath={windowsTerminalCapabilities.gitBashPath}
                     />
                   ) : null}
                 </SettingsSection>

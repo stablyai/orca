@@ -1,9 +1,10 @@
 import React from 'react'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 
-export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | typeof WINDOWS_GIT_BASH_SHELL
 
 // Why: the "+" dropdown and per-tab tab strip both need a visual distinction
-// between PowerShell, CMD, and WSL sessions. Stock lucide glyphs don't
+// between PowerShell, CMD, Git Bash, and WSL sessions. Stock lucide glyphs don't
 // differentiate — every session rendered as the same generic chevron. These
 // hand-crafted icons (derived from the official brand marks and redrawn as
 // small currentColor-aware paths so they inherit the tab's text color) make
@@ -77,6 +78,31 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
+function GitBashIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="1.5" y="3" width="21" height="18" rx="2.5" fill="#F05032" />
+      <text
+        x="12"
+        y="15.2"
+        textAnchor="middle"
+        fontSize="7"
+        fontWeight="800"
+        fill="#ffffff"
+        fontFamily="system-ui, -apple-system, sans-serif"
+      >
+        Git
+      </text>
+    </svg>
+  )
+}
+
 function GenericTerminalIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // Why: matches the tile treatment of PowerShell/CMD/WSL so the tab strip
   // reads as a consistent set of badges instead of a flat monochrome chevron.
@@ -119,6 +145,7 @@ export function ShellIcon({
   size?: number
 }): React.JSX.Element {
   const normalized = (shell ?? '').toLowerCase()
+  const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return <PowerShellIcon size={size} />
   }
@@ -127,6 +154,9 @@ export function ShellIcon({
   }
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
     return <WslIcon size={size} />
+  }
+  if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
+    return <GitBashIcon size={size} />
   }
   return <GenericTerminalIcon size={size} />
 }

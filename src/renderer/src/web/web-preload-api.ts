@@ -441,6 +441,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ssh: createSshApi(),
     wsl: { isAvailable: () => Promise.resolve(false) },
     pwsh: { isAvailable: () => Promise.resolve(false) },
+    gitBash: { resolvePath: () => Promise.resolve(null) },
     agentStatus: {
       onSet: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),

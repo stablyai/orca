@@ -256,7 +256,7 @@ export default function SortableTab({
         </span>
       ) : (
         // Why: ShellIcon renders a colored brand-style tile for PowerShell,
-        // CMD, and WSL so Windows users can distinguish shells at a glance.
+        // CMD, Git Bash, and WSL so Windows users can distinguish shells at a glance.
         // On mac/linux (or Windows tabs without a resolved shell) it falls
         // back to a matching colored generic-terminal tile — keeping every
         // tab's leading glyph in the same visual idiom instead of mixing a

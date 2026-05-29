@@ -60,6 +60,7 @@ import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -76,6 +77,8 @@ type TerminalPaneProps = {
   wslAvailable?: boolean
   /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
   pwshAvailable?: boolean
+  /** Resolved Git for Windows bash.exe path, when installed on this machine. */
+  gitBashPath?: string | null
 }
 
 export function TerminalPane({
@@ -87,7 +90,8 @@ export function TerminalPane({
   setScrollbackMode,
   ghostty,
   wslAvailable,
-  pwshAvailable
+  pwshAvailable,
+  gitBashPath
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
@@ -114,6 +118,7 @@ export function TerminalPane({
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
+  const showGitBashOption = Boolean(gitBashPath) || windowsShell === WINDOWS_GIT_BASH_SHELL
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -134,6 +139,8 @@ export function TerminalPane({
               'powershell',
               'cmd',
               'command prompt',
+              'git bash',
+              'bash.exe',
               'default'
             ]}
           >
@@ -148,6 +155,15 @@ export function TerminalPane({
                   options={[
                     { value: 'powershell.exe', label: 'PowerShell' },
                     { value: 'cmd.exe', label: 'Command Prompt' },
+                    ...(showGitBashOption
+                      ? [
+                          {
+                            value: WINDOWS_GIT_BASH_SHELL,
+                            label: 'Git Bash',
+                            disabled: !gitBashPath
+                          }
+                        ]
+                      : []),
                     ...(wslAvailable ? [{ value: 'wsl.exe', label: 'WSL' }] : [])
                   ]}
                 />

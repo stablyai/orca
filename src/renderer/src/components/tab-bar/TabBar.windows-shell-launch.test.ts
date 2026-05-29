@@ -1,3 +1,6 @@
+/* oxlint-disable max-lines -- Why: TabBar Windows shell tests share a large
+   mocked dropdown/render harness; keeping shell variants together prevents
+   fixture drift across PowerShell, WSL, and Git Bash cases. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
@@ -15,7 +18,7 @@ const useAppStoreMock = vi.fn(
       activeTabType: 'terminal' | 'editor' | 'browser' | null
       gitStatusByWorktree: Record<string, never[]>
       settings: {
-        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
       }
     }) => unknown
@@ -235,7 +238,8 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: vi.fn().mockResolvedValue(false) },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) }
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue(null) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -282,7 +286,8 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: vi.fn().mockResolvedValue(true) },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) }
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue(null) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -316,5 +321,53 @@ describe('TabBar PowerShell launch wiring', () => {
     })
 
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).not.toBeNull()
+  })
+
+  it('shows the Git Bash terminal row when shared Windows capabilities find bash.exe', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue('C:\\Program Files\\Git\\bin\\bash.exe') }
+      }
+    })
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities()
+
+    const tabBarModule = await import('./TabBar')
+    const candidate = tabBarModule.default ?? tabBarModule
+    const TabBar =
+      typeof candidate === 'function'
+        ? candidate
+        : typeof (candidate as { type?: unknown }).type === 'function'
+          ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
+          : null
+    expect(TabBar).not.toBeNull()
+
+    const onNewTerminalWithShell = vi.fn()
+    const element = TabBar!({
+      tabs: [],
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onNewTerminalTab: () => {},
+      onNewTerminalWithShell,
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {}
+    })
+
+    const item = findDropdownMenuItemByText(expandNode(element), 'New Terminal: Git Bash')
+    expect(item).not.toBeNull()
+
+    const onSelect = item?.props.onSelect as (() => void) | undefined
+    onSelect?.()
+
+    expect(onNewTerminalWithShell).toHaveBeenCalledWith('git-bash')
   })
 })

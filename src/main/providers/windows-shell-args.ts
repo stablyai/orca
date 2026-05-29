@@ -75,6 +75,14 @@ export function resolveWindowsShellLaunchArgs(
     }
   }
 
+  if (shellBasename === 'bash.exe') {
+    return {
+      shellArgs: ['--login', '-i'],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    }
+  }
+
   if (shellBasename === 'wsl.exe') {
     const wslInfo = parseWslPath(cwd)
     if (wslInfo) {

@@ -6,21 +6,28 @@ import {
   resetWindowsTerminalCapabilitiesForTests
 } from './windows-terminal-capabilities'
 
-function stubTerminalCapabilityApi(args: { wslAvailable: boolean; pwshAvailable: boolean }): {
+function stubTerminalCapabilityApi(args: {
+  wslAvailable: boolean
+  pwshAvailable: boolean
+  gitBashPath?: string | null
+}): {
   wslIsAvailable: ReturnType<typeof vi.fn>
   pwshIsAvailable: ReturnType<typeof vi.fn>
+  resolveGitBashPath: ReturnType<typeof vi.fn>
 } {
   const wslIsAvailable = vi.fn().mockResolvedValue(args.wslAvailable)
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
+  const resolveGitBashPath = vi.fn().mockResolvedValue(args.gitBashPath ?? null)
 
   vi.stubGlobal('window', {
     api: {
       wsl: { isAvailable: wslIsAvailable },
-      pwsh: { isAvailable: pwshIsAvailable }
+      pwsh: { isAvailable: pwshIsAvailable },
+      gitBash: { resolvePath: resolveGitBashPath }
     }
   })
 
-  return { wslIsAvailable, pwshIsAvailable }
+  return { wslIsAvailable, pwshIsAvailable, resolveGitBashPath }
 }
 
 describe('windows terminal capabilities', () => {
@@ -30,28 +37,33 @@ describe('windows terminal capabilities', () => {
   })
 
   it('shares WSL and PowerShell availability between terminal UI consumers', async () => {
-    const { wslIsAvailable, pwshIsAvailable } = stubTerminalCapabilityApi({
+    const { wslIsAvailable, pwshIsAvailable, resolveGitBashPath } = stubTerminalCapabilityApi({
       wslAvailable: true,
-      pwshAvailable: true
+      pwshAvailable: true,
+      gitBashPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
     })
 
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
       wslAvailable: false,
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashPath: null
     })
 
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual({
       wslAvailable: true,
-      pwshAvailable: true
+      pwshAvailable: true,
+      gitBashPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
     })
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
       wslAvailable: true,
-      pwshAvailable: true
+      pwshAvailable: true,
+      gitBashPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
     })
 
     await loadWindowsTerminalCapabilities()
     expect(wslIsAvailable).toHaveBeenCalledTimes(1)
     expect(pwshIsAvailable).toHaveBeenCalledTimes(1)
+    expect(resolveGitBashPath).toHaveBeenCalledTimes(1)
   })
 
   it('keeps WSL available when the PowerShell version probe fails', async () => {
@@ -60,13 +72,15 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable },
-        pwsh: { isAvailable: pwshIsAvailable }
+        pwsh: { isAvailable: pwshIsAvailable },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue(null) }
       }
     })
 
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual({
       wslAvailable: true,
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashPath: null
     })
   })
 
@@ -76,7 +90,8 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable },
-        pwsh: { isAvailable: pwshIsAvailable }
+        pwsh: { isAvailable: pwshIsAvailable },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue(null) }
       }
     })
 
@@ -99,7 +114,8 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable },
-        pwsh: { isAvailable: pwshIsAvailable }
+        pwsh: { isAvailable: pwshIsAvailable },
+        gitBash: { resolvePath: vi.fn().mockResolvedValue(null) }
       }
     })
 
@@ -114,5 +130,24 @@ describe('windows terminal capabilities', () => {
     })
 
     expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps Git Bash unavailable when the Git Bash path probe fails', async () => {
+    const wslIsAvailable = vi.fn().mockResolvedValue(false)
+    const pwshIsAvailable = vi.fn().mockResolvedValue(false)
+    const resolveGitBashPath = vi.fn().mockRejectedValue(new Error('git bash probe failed'))
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: wslIsAvailable },
+        pwsh: { isAvailable: pwshIsAvailable },
+        gitBash: { resolvePath: resolveGitBashPath }
+      }
+    })
+
+    await expect(loadWindowsTerminalCapabilities()).resolves.toEqual({
+      wslAvailable: false,
+      pwshAvailable: false,
+      gitBashPath: null
+    })
   })
 })

@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react'
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
   pwshAvailable: boolean
+  gitBashPath: string | null
 }
 
 const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   wslAvailable: false,
-  pwshAvailable: false
+  pwshAvailable: false,
+  gitBashPath: null
 }
 
 const CAPABILITY_CACHE_TTL_MS = 30_000
@@ -52,10 +54,11 @@ export function loadWindowsTerminalCapabilities(
   const requestId = ++latestCapabilityRequestId
   pendingCapabilities = Promise.all([
     window.api.wsl.isAvailable().catch(() => false),
-    window.api.pwsh.isAvailable().catch(() => false)
+    window.api.pwsh.isAvailable().catch(() => false),
+    window.api.gitBash.resolvePath().catch(() => null)
   ])
-    .then(([wslAvailable, pwshAvailable]) => {
-      const capabilities = { wslAvailable, pwshAvailable }
+    .then(([wslAvailable, pwshAvailable, gitBashPath]) => {
+      const capabilities = { wslAvailable, pwshAvailable, gitBashPath }
       if (requestId === latestCapabilityRequestId) {
         pendingCapabilities = null
         publish(capabilities, now)

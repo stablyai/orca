@@ -468,6 +468,10 @@ const api = {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
   },
 
+  gitBash: {
+    resolvePath: (): Promise<string | null> => ipcRenderer.invoke('gitBash:resolvePath')
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 
