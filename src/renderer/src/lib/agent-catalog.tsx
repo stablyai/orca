@@ -42,13 +42,6 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli'
   },
   {
-    id: 'adal',
-    label: 'AdaL',
-    cmd: 'adal',
-    faviconDomain: 'sylph.ai',
-    homepageUrl: 'https://docs.sylph.ai'
-  },
-  {
     id: 'opencode',
     label: 'OpenCode',
     cmd: 'opencode',
@@ -227,6 +220,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'adal',
+    label: 'AdaL',
+    cmd: 'adal',
+    faviconDomain: 'sylph.ai',
+    homepageUrl: 'https://docs.sylph.ai'
   }
 ]
 

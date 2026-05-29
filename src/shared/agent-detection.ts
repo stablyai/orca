@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: terminal-title agent detection is centralized so status inference stays consistent across renderer/runtime callers. */
 /**
  * Shared agent detection utilities — used by both the main process (stats
  * collection) and the renderer (activity indicators, unread badges).
@@ -31,8 +32,7 @@ export const AGENT_NAMES = [
   'opencode',
   'openclaw',
   'aider',
-  'grok',
-  'adal'
+  'grok'
 ]
 
 // Why: `android` contains `droid`; unlike the legacy agent names above, Droid
@@ -44,6 +44,7 @@ const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // otherwise count as agent activity.
 const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
 const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+const ADAL_AGENT_NAME_RE = /(?<![\w./\\-])adal(?![\w./\\-])/i
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
@@ -185,7 +186,8 @@ function containsAgentName(title: string): boolean {
     containsLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
-    HERMES_AGENT_NAME_RE.test(title)
+    HERMES_AGENT_NAME_RE.test(title) ||
+    ADAL_AGENT_NAME_RE.test(title)
   )
 }
 
@@ -383,7 +385,7 @@ export function getAgentLabel(title: string): string | null {
   if (lower.includes('opencode')) {
     return 'OpenCode'
   }
-  if (lower.includes('adal')) {
+  if (ADAL_AGENT_NAME_RE.test(title)) {
     return 'AdaL'
   }
   if (lower.includes('aider')) {
@@ -463,8 +465,15 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
+  const hasAdalAgentName = ADAL_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
+  if (
+    hasLegacyAgentName ||
+    hasDroidAgentName ||
+    hasHermesAgentName ||
+    hasAgyAgentName ||
+    hasAdalAgentName
+  ) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
     }

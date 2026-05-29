@@ -37,4 +37,12 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('cmd.exe')).toBe(false)
     expect(recognizeAgentProcess('cmd.exe')).toBeNull()
   })
+
+  it('recognizes AdaL process names from npm global bin paths', () => {
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\adal.cmd`)).toEqual({
+      agent: 'adal',
+      processName: 'adal'
+    })
+    expect(isRecognizedAgentType('adal')).toBe(true)
+  })
 })

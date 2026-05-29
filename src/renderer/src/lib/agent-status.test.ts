@@ -207,6 +207,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
+  it('classifies synthesized AdaL titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ AdaL')).toBe('working')
+    expect(detectAgentStatusFromTitle('AdaL ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('AdaL - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('AdaL working')).toBe('working')
+  })
+
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -248,6 +255,11 @@ describe('detectAgentStatusFromTitle', () => {
   it('does not treat path fragments containing Hermes as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/hermes/working')).not.toBe('working')
     expect(detectAgentStatusFromTitle('C:\\hermes\\ready')).toBeNull()
+  })
+
+  it('does not treat path fragments containing AdaL as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/adal/working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('C:\\adal\\ready')).toBeNull()
   })
 })
 
@@ -396,6 +408,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('⠋ AdaL')).toBe('AdaL')
+    expect(getAgentLabel('AdaL ready')).toBe('AdaL')
   })
 
   it('labels GitHub Copilot CLI', () => {
@@ -406,6 +420,10 @@ describe('getAgentLabel', () => {
 
   it('does not label Android titles as Droid', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
+  })
+
+  it('does not label AdaL path fragments as AdaL', () => {
+    expect(getAgentLabel('C:\\adal\\ready')).toBeNull()
   })
 })
 
@@ -717,6 +735,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
   })
 
+  it("maps 'adal' to 'AdaL'", () => {
+    expect(formatAgentTypeLabel('adal')).toBe('AdaL')
+  })
+
   it("maps 'command-code' to 'Command Code'", () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
   })
@@ -743,6 +765,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
+    expect(agentTypeToIconAgent('adal')).toBe('adal')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {
