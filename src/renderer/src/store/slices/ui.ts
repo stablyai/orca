@@ -856,12 +856,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
-  openSpacePage: () =>
+  openSpacePage: () => {
+    get().recordFeatureInteraction?.('workspace-cleanup')
     set((state) => ({
       activeView: 'space',
       previousViewBeforeSpace:
         state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
-    })),
+    }))
+  },
   closeSpacePage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeSpace

@@ -960,6 +960,36 @@ describe('createUISlice feature interactions', () => {
 })
 
 describe('createUISlice space navigation', () => {
+  it('records Space page opens as workspace cleanup interactions', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const now = 1_700_000_000_000
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    try {
+      const store = createUIStore()
+      store.getState().hydratePersistedUI(makePersistedUI())
+      setMock.mockClear()
+
+      store.getState().openSpacePage()
+
+      const expected: FeatureInteractionState = {
+        'workspace-cleanup': { firstInteractedAt: now, interactionCount: 1 }
+      }
+      expect(store.getState().featureInteractions).toEqual(expected)
+      expect(setMock).toHaveBeenCalledWith({ featureInteractions: expected })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('returns to the tasks page after opening Space from an in-progress draft', () => {
     const store = createUIStore()
 
