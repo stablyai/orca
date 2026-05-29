@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, and #3064: 946 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, and #3065: 945 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -96,6 +96,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR V         | Workspace board selection pruning                     | Local kanban selection is repaired in an Effect after the drawer closes or board rows change.             | `use-workspace-kanban-selection.ts` covered by #3062                                                                     | Low            |
 | PR W         | Workspace board column resize                         | Two mirror Effects sync the latest commit callback and external committed width after render.             | `use-workspace-kanban-column-resize.ts` covered by #3063                                                                 | Low            |
 | PR X         | Terminal quick-command dialog draft                   | Dialog draft and agent preset search are reset in an Effect after the dialog opens or retargets.          | `TerminalQuickCommandDialog.tsx` covered by #3064                                                                        | Low            |
+| PR Y         | Onboarding notification settings ref                  | A ref mirror Effect keeps notification handlers pointed at the latest settings.                            | `NotificationStep.tsx` covered by #3065                                                                                  | Low            |
 
 ## Merge Risk Scale
 
@@ -125,6 +126,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3062 | `nwparker/react-perf-kanban-selection` | Workspace board selection pruning moves out of an Effect          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-selection.ts`; `pnpm run typecheck:web`. |
 | #3063 | `nwparker/react-perf-kanban-column` | Workspace board column width mirror Effects move to render-time synchronization | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-column-resize.ts`; `pnpm run typecheck:web`. |
 | #3064 | `nwparker/react-perf-quick-command-dialog` | Terminal quick-command dialog resets draft state during render | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/terminal-quick-commands/TerminalQuickCommandDialog.tsx`; `pnpm run typecheck:web`. |
+| #3065 | `nwparker/react-perf-notification-step-ref` | Onboarding notification settings ref mirror moves out of an Effect | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/NotificationStep.tsx`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
