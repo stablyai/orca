@@ -439,7 +439,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     pty: createPtyApi(),
     ssh: createSshApi(),
-    wsl: { isAvailable: () => Promise.resolve(false) },
+    wsl: { isAvailable: () => Promise.resolve(false), listDistros: () => Promise.resolve([]) },
     pwsh: { isAvailable: () => Promise.resolve(false) },
     agentStatus: {
       onSet: () => noopUnsubscribe,
@@ -1789,12 +1789,16 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    claudeTarget: { runtime: 'host', wslDistro: null },
+    codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   }
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
+    refreshCodexForTarget: () => Promise.resolve(empty),
+    refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
@@ -1803,7 +1807,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 }
 
 function createAccountsApi(): never {
-  const empty = { accounts: [], activeAccountId: null }
+  const empty = {
+    accounts: [],
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
+  }
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),

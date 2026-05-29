@@ -1,4 +1,6 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: runtime file command tests share mocked fs,
+   authorization, and watcher lifecycle fixtures; splitting would duplicate the
+   setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'

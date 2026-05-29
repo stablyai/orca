@@ -71,6 +71,8 @@ export type CreateOrAttachRequest = {
      *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
      *  or the hard-coded powershell.exe fallback. */
     shellOverride?: string
+    /** Preferred WSL distro for generic `wsl.exe` launches. */
+    terminalWindowsWslDistro?: string | null
     /** Why: the UI keeps PowerShell as one shell family, but the runtime may
      *  need to substitute pwsh.exe for powershell.exe when the user selected
      *  PowerShell 7+. Forward the persisted implementation choice so the daemon

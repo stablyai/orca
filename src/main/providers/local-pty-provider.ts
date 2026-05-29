@@ -31,7 +31,8 @@ import {
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
-import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import { addWslEnvKeys } from '../wsl-env'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -93,10 +94,17 @@ function disposePtyListeners(id: string): void {
 
 function getWslContextFromWorktreeId(
   worktreeId: string | undefined
-): { distro: string } | undefined {
+): { distro: string; treatPosixCwdAsWsl: true } | undefined {
   const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
-  return wslInfo ? { distro: wslInfo.distro } : undefined
+  return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
+}
+
+function getWslContextFromPreferredDistro(
+  distro: string | null | undefined
+): { distro: string } | undefined {
+  const trimmed = distro?.trim()
+  return trimmed ? { distro: trimmed } : undefined
 }
 
 function clearPtyState(id: string): void {
@@ -146,7 +154,7 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; isWsl?: boolean }
+    ctx?: { command?: string; isWsl?: boolean; wslDistro?: string | null }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -183,6 +191,10 @@ export class LocalPtyProvider implements IPtyProvider {
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
     const worktreeWslContext =
       process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
+    const preferredWslContext =
+      process.platform === 'win32'
+        ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
+        : undefined
 
     let shellPath: string
     let shellArgs: string[]
@@ -236,7 +248,12 @@ export class LocalPtyProvider implements IPtyProvider {
       // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
       // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
       // wsl.exe /mnt/<drive> cwd translation in one place.
-      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, worktreeWslContext)
+      const resolved = resolveWindowsShellLaunchArgs(
+        shellPath,
+        cwd,
+        defaultCwd,
+        worktreeWslContext ?? preferredWslContext
+      )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
@@ -290,17 +307,56 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const launchWslDistro =
+      wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
     const finalEnv = this.opts.buildSpawnEnv
-      ? this.opts.buildSpawnEnv(id, spawnEnv, { command: args.command, isWsl: isWslShell })
+      ? this.opts.buildSpawnEnv(id, spawnEnv, {
+          command: args.command,
+          isWsl: isWslShell,
+          wslDistro: launchWslDistro
+        })
       : spawnEnv
-    if (
-      process.platform === 'win32' &&
-      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
-      isHostCodexHomeForWsl(finalEnv.CODEX_HOME)
-    ) {
-      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
-      // use its Linux-side ~/.codex instead of inheriting a Windows path.
-      delete finalEnv.CODEX_HOME
+    if (process.platform === 'win32') {
+      const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
+      if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+        if (codexHomeWslInfo) {
+          if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
+            delete finalEnv.CODEX_HOME
+            delete finalEnv.ORCA_CODEX_HOME
+          } else {
+            finalEnv.CODEX_HOME = codexHomeWslInfo.linuxPath
+            finalEnv.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
+            // Why: wsl.exe only imports non-default env vars named in WSLENV.
+            addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+            if (!launchWslDistro) {
+              const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
+                distro: codexHomeWslInfo.distro
+              })
+              shellArgs = resolved.shellArgs
+              effectiveCwd = resolved.effectiveCwd
+              validationCwd = resolved.validationCwd
+            }
+          }
+        } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
+          // Why: Orca's selected Codex runtime home is host-local. WSL Codex
+          // must use its Linux-side ~/.codex instead of a Windows path.
+          delete finalEnv.CODEX_HOME
+          delete finalEnv.ORCA_CODEX_HOME
+        } else if (finalEnv.CODEX_HOME) {
+          addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+        }
+        if (finalEnv.CLAUDE_CONFIG_DIR) {
+          // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
+          // through Windows wsl.exe; non-default env vars need WSLENV import.
+          addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
+        }
+      } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
+        // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
+        // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
+        // CODEX_HOME from it after user profiles run.
+        delete finalEnv.CODEX_HOME
+        delete finalEnv.ORCA_CODEX_HOME
+      }
     }
     if (!wslInfo && process.platform !== 'win32') {
       // Why: any Orca-injected overlay env that user rc files can clobber
