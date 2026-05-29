@@ -329,15 +329,6 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleFindShortcut)
   }, [keybindings])
 
-  useEffect(
-    () => () => {
-      // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
-      // visit look partially broken because whole sections stay hidden before the user types again.
-      setSettingsSearchQuery('')
-    },
-    [setSettingsSearchQuery]
-  )
-
   useEffect(() => {
     if (!settings || !settingsNavigationTarget) {
       return

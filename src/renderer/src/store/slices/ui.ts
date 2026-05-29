@@ -888,7 +888,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
-  openSettingsPage: () =>
+  openSettingsPage: () => {
+    // Why: settings search is a transient page filter; opening Settings
+    // should never inherit hidden sections from the previous visit.
+    get().setSettingsSearchQuery('')
     set((state) => ({
       activeView: 'settings',
       // Why: Settings is a temporary detour from either terminal or the
@@ -897,7 +900,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // dumping the user into terminal.
       previousViewBeforeSettings:
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
-    })),
+    }))
+  },
   closeSettingsPage: () =>
     set((state) => {
       const previousView =
