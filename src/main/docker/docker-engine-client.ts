@@ -19,6 +19,7 @@ export type DockerBuildImageOptions = {
   tag: string
   timeoutMs?: number
   dockerfileContent?: string
+  labels?: Record<string, string>
 }
 
 export type DockerCreateContainerOptions = {
@@ -28,6 +29,7 @@ export type DockerCreateContainerOptions = {
   command?: string[]
   env?: Record<string, string>
   name?: string
+  labels?: Record<string, string>
 }
 
 export type DockerExecOptions = {
@@ -73,7 +75,12 @@ export type DockerEngineClientLike = {
   pullImage(image: string): Promise<void>
   createContainer(options: DockerCreateContainerOptions): Promise<{ id: string }>
   startContainer(id: string): Promise<void>
-  inspectContainer(id: string): Promise<{ id: string; imageId: string; running: boolean }>
+  inspectContainer(id: string): Promise<{
+    id: string
+    imageId: string
+    running: boolean
+    labels?: Record<string, string>
+  }>
   exec(options: DockerExecOptions): Promise<DockerExecResult>
   spawnExec(options: DockerExecSessionOptions): Promise<DockerExecSession>
   stopContainer(id: string): Promise<void>
@@ -99,6 +106,7 @@ export class DockerEngineClient implements DockerEngineClientLike {
         options.dockerfileContent ? dockerfilePath : options.dockerfilePath,
         '-t',
         options.tag,
+        ...labelArgs(options.labels),
         options.contextPath
       ]
       await execDocker(args, { timeoutMs: options.timeoutMs })
@@ -125,6 +133,7 @@ export class DockerEngineClient implements DockerEngineClientLike {
     for (const [key, value] of Object.entries(options.env ?? {})) {
       args.push('--env', `${key}=${value}`)
     }
+    args.push(...labelArgs(options.labels))
     if (options.name) {
       args.push('--name', options.name)
     }
@@ -137,15 +146,25 @@ export class DockerEngineClient implements DockerEngineClientLike {
     await execDocker(['start', id])
   }
 
-  async inspectContainer(id: string): Promise<{ id: string; imageId: string; running: boolean }> {
-    const result = await execDocker([
-      'inspect',
-      '--format',
-      '{{.Id}} {{.Image}} {{.State.Running}}',
-      id
-    ])
-    const [containerId, imageId, running] = result.stdout.trim().split(/\s+/)
-    return { id: containerId, imageId, running: running === 'true' }
+  async inspectContainer(id: string): Promise<{
+    id: string
+    imageId: string
+    running: boolean
+    labels?: Record<string, string>
+  }> {
+    const result = await execDocker(['inspect', '--format', '{{json .}}', id])
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      Id?: string
+      Image?: string
+      State?: { Running?: boolean }
+      Config?: { Labels?: Record<string, string> | null }
+    }
+    return {
+      id: parsed.Id ?? id,
+      imageId: parsed.Image ?? '',
+      running: parsed.State?.Running === true,
+      labels: parsed.Config?.Labels ?? undefined
+    }
   }
 
   async exec(options: DockerExecOptions): Promise<DockerExecResult> {
@@ -282,6 +301,10 @@ function buildExecArgs(options: DockerExecOptions): string[] {
   }
   args.push(options.containerId, ...options.args)
   return args
+}
+
+function labelArgs(labels: Record<string, string> | undefined): string[] {
+  return Object.entries(labels ?? {}).flatMap(([key, value]) => ['--label', `${key}=${value}`])
 }
 
 async function execDocker(

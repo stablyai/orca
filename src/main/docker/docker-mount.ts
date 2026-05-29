@@ -1,4 +1,5 @@
 import path from 'path'
+import { normalizeDockerMountTarget } from './docker-container-path'
 
 export type DockerBindMount = {
   source: string
@@ -22,7 +23,7 @@ export function resolveDockerBindMount(options: ResolveDockerBindMountOptions): 
 
   return {
     source,
-    target: options.containerPath ?? DEFAULT_CONTAINER_WORKDIR,
+    target: normalizeDockerMountTarget(options.containerPath ?? DEFAULT_CONTAINER_WORKDIR),
     readonly: options.readonly
   }
 }
