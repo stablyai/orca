@@ -371,6 +371,25 @@ describe('LocalPtyProvider', () => {
       expect(onExit).toHaveBeenCalledWith(id, -1)
     })
 
+    it('does not destroy after an intentional Windows shutdown kill', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      const destroySpy = vi.fn(() => {
+        killSpy()
+      })
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: killSpy,
+        destroy: destroySpy
+      })
+
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      await provider.shutdown(id, { immediate: true })
+
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(destroySpy).not.toHaveBeenCalled()
+    })
+
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
@@ -509,6 +528,24 @@ describe('LocalPtyProvider', () => {
       expect(mock2Kill).toHaveBeenCalled()
       const list = await provider.listProcesses()
       expect(list).toHaveLength(0)
+    })
+
+    it('does not destroy after intentional Windows orphan kills', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const destroySpy = vi.fn()
+      const killSpy = vi.fn()
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: killSpy,
+        destroy: destroySpy
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      provider.killAll()
+
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(destroySpy).not.toHaveBeenCalled()
     })
   })
 })

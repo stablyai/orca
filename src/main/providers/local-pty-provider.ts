@@ -106,7 +106,7 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
 }
 
-function destroyPtyProcess(proc: pty.IPty): void {
+function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
   // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
   // releases the ptmx fd to the OS — without this call the fd leaks until GC
   // (see docs/fix-pty-fd-leak.md). destroy() also registers a close listener
@@ -114,9 +114,11 @@ function destroyPtyProcess(proc: pty.IPty): void {
   // the time that listener runs the child may have exited and its pid been
   // recycled to an unrelated user process — SIGHUP would land on a Chrome tab,
   // editor, etc. Neutralize proc.kill on this instance before calling
-  // destroy() to defuse the hazard. Windows exempt: WindowsTerminal.destroy
-  // IS a kill() call via _deferNoArgs, so neutralizing it would leak the
-  // ConPTY agent.
+  // destroy() to defuse the hazard. On Windows, destroy() is itself kill();
+  // skip it only after we have already killed the ConPTY.
+  if (process.platform === 'win32' && options.alreadyKilled) {
+    return
+  }
   if (process.platform !== 'win32') {
     ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
   }
@@ -134,7 +136,7 @@ function safeKillAndClean(id: string, proc: pty.IPty): void {
   } catch {
     /* Process may already be dead */
   }
-  destroyPtyProcess(proc)
+  destroyPtyProcess(proc, { alreadyKilled: true })
   clearPtyState(id)
 }
 
@@ -501,7 +503,7 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       /* Process may already be dead */
     }
-    destroyPtyProcess(proc)
+    destroyPtyProcess(proc, { alreadyKilled: true })
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)
