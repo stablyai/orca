@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, and #3062: 949 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, and #3063: 947 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -94,6 +94,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR T         | Onboarding agent fallback disclosure                  | Extra render pass from opening the fallback agent list when a selected agent first appears there.         | `AgentStep.tsx` covered by #3059                                                                                         | Low            |
 | PR U         | Feature-wall tour workflow resets                     | Four local reset Effects run after workflow changes or close instead of in the selection/close path.      | `FeatureWallTourSurface.tsx` covered by #3060                                                                            | Low            |
 | PR V         | Workspace board selection pruning                     | Local kanban selection is repaired in an Effect after the drawer closes or board rows change.             | `use-workspace-kanban-selection.ts` covered by #3062                                                                     | Low            |
+| PR W         | Workspace board column resize                         | Two mirror Effects sync the latest commit callback and external committed width after render.             | `use-workspace-kanban-column-resize.ts` covered by #3063                                                                 | Low            |
 
 ## Merge Risk Scale
 
@@ -120,7 +121,8 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3058 | `nwparker/react-perf-project-group-dialogs` | Project group dialogs reset local open-state during render              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/ProjectGroupDeleteDialog.tsx src/renderer/src/components/sidebar/ProjectGroupNameDialog.tsx`; `pnpm run typecheck:web`. |
 | #3059 | `nwparker/react-perf-agent-step-latch` | Onboarding agent fallback disclosure latch updates during render        | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/AgentStep.tsx`; `pnpm run typecheck:web`.           |
 | #3060 | `nwparker/react-perf-feature-tour-resets` | Feature-wall tour reset state moves into workflow/close transitions | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
-| #3062 | `nwparker/react-perf-kanban-selection` | Workspace board selection pruning moves out of an Effect          | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-selection.ts`; `pnpm run typecheck:web`. |
+| #3062 | `nwparker/react-perf-kanban-selection` | Workspace board selection pruning moves out of an Effect          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-selection.ts`; `pnpm run typecheck:web`. |
+| #3063 | `nwparker/react-perf-kanban-column` | Workspace board column width mirror Effects move to render-time synchronization | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-column-resize.ts`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
