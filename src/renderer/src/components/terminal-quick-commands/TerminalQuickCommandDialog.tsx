@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type {
   Repo,
@@ -97,6 +97,8 @@ export function TerminalQuickCommandDialog({
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const [agentPresetOpen, setAgentPresetOpen] = useState(false)
   const [agentPresetQuery, setAgentPresetQuery] = useState('')
+  const wasOpenRef = useRef(open)
+  const syncedCommandRef = useRef(command)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
@@ -110,13 +112,21 @@ export function TerminalQuickCommandDialog({
   const selectedRepoId = selectedRepo?.id ?? ''
   const selectedRepoMissing = selectedScope.type === 'repo' && selectedRepo === null
 
-  useEffect(() => {
-    if (open) {
-      setDraft({ ...command })
+  if (!open) {
+    wasOpenRef.current = false
+  } else if (!wasOpenRef.current || syncedCommandRef.current !== command) {
+    wasOpenRef.current = true
+    syncedCommandRef.current = command
+    // Why: opening or retargeting the dialog should render the new command
+    // draft immediately instead of repairing it in a follow-up Effect.
+    setDraft({ ...command })
+    if (agentPresetOpen) {
       setAgentPresetOpen(false)
+    }
+    if (agentPresetQuery) {
       setAgentPresetQuery('')
     }
-  }, [command, open])
+  }
 
   const agentPresets = useMemo(() => {
     return AGENT_CATALOG.map((entry, index) => {
