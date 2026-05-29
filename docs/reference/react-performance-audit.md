@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, and #3066: 940 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, #3066, and #3067: 938 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -98,6 +98,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR X         | Terminal quick-command dialog draft                   | Dialog draft and agent preset search are reset in an Effect after the dialog opens or retargets.          | `TerminalQuickCommandDialog.tsx` covered by #3064                                                                        | Low            |
 | PR Y         | Onboarding notification settings ref                  | A ref mirror Effect keeps notification handlers pointed at the latest settings.                            | `NotificationStep.tsx` covered by #3065                                                                                  | Low            |
 | PR Z         | Onboarding agent-selection ref mirrors                | Five ref mirror Effects keep stable onboarding handlers pointed at latest selection/detection snapshots.   | `use-onboarding-flow.ts` covered by #3066                                                                                | Low            |
+| PR AA        | Workspace board drag ref mirrors                      | Area-selection and card-drag pointer handlers receive latest board callbacks through Effect-updated refs.  | `use-workspace-kanban-area-selection.ts`, `use-workspace-kanban-card-pointer-drag.ts` covered by #3067                    | Low            |
 
 ## Merge Risk Scale
 
@@ -129,6 +130,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3064 | `nwparker/react-perf-quick-command-dialog` | Terminal quick-command dialog resets draft state during render | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/terminal-quick-commands/TerminalQuickCommandDialog.tsx`; `pnpm run typecheck:web`. |
 | #3065 | `nwparker/react-perf-notification-step-ref` | Onboarding notification settings ref mirror moves out of an Effect | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/NotificationStep.tsx`; `pnpm run typecheck:web`. |
 | #3066 | `nwparker/react-perf-onboarding-agent-refs` | Onboarding agent-selection ref mirrors move out of Effects | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/use-onboarding-flow.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/onboarding/agent-picked-payload.test.ts`; `pnpm run typecheck:web`. |
+| #3067 | `nwparker/react-perf-kanban-drag-refs` | Workspace board drag ref mirrors move out of Effects | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts src/renderer/src/components/sidebar/use-workspace-kanban-card-pointer-drag.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-workspace-kanban-card-pointer-drag.test.ts src/renderer/src/components/sidebar/workspace-kanban-area-selection.test.ts`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
