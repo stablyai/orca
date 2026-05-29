@@ -13,6 +13,10 @@ import {
   getLinearIssueTextSavePlan,
   type LinearIssueTextField
 } from './linear-issue-text-save-plan'
+import {
+  createLinearIssueTextDraftState,
+  resolveLinearIssueTextDraftState
+} from './linear-issue-text-draft-state'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
@@ -44,43 +48,43 @@ export function LinearIssueTextEditor({
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
-  const [titleDraft, setTitleDraft] = useState(issue.title)
-  const [descriptionDraft, setDescriptionDraft] = useState(issue.description ?? '')
-  const [savingField, setSavingField] = useState<'title' | 'description' | null>(null)
-  const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
+  const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
+  const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
-  const lastSyncedTitleRef = useRef(issue.title)
-  const lastSyncedDescriptionRef = useRef(issue.description ?? '')
-
-  useEffect(() => {
-    const nextDescription = issue.description ?? ''
-    if (issue.id !== lastIssueIdRef.current) {
-      lastIssueIdRef.current = issue.id
-      lastSyncedTitleRef.current = issue.title
-      lastSyncedDescriptionRef.current = nextDescription
-      setTitleDraft(issue.title)
-      setDescriptionDraft(nextDescription)
+  const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
+  const issueChanged = draftState.issueId !== issue.id
+  if (resolvedDraftState !== draftState) {
+    // Why: Linear can push updated title/description while another field has
+    // unsaved edits; reconcile only untouched drafts before the next paint.
+    setDraftState(resolvedDraftState)
+    if (issueChanged && savingField !== null) {
       setSavingField(null)
-      return
     }
-
-    const previousTitle = lastSyncedTitleRef.current
-    const previousDescription = lastSyncedDescriptionRef.current
-
-    // Why: optimistic saves can update one field while the user has unsaved
-    // edits in the other; only sync fields that still match the last source.
-    if (issue.title !== previousTitle && titleDraft === previousTitle) {
-      setTitleDraft(issue.title)
-    }
-    if (nextDescription !== previousDescription && descriptionDraft === previousDescription) {
-      setDescriptionDraft(nextDescription)
-    }
-
-    lastSyncedTitleRef.current = issue.title
-    lastSyncedDescriptionRef.current = nextDescription
-  }, [descriptionDraft, issue.description, issue.id, issue.title, titleDraft])
+    lastIssueIdRef.current = issue.id
+  }
+  const titleDraft = resolvedDraftState.title
+  const descriptionDraft = resolvedDraftState.description
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
+  const titleRef = useAutosizeTextArea(titleDraft)
+  const updateTitleDraft = useCallback(
+    (title: string): void => {
+      setDraftState((current) => ({
+        ...resolveLinearIssueTextDraftState(current, issue),
+        title
+      }))
+    },
+    [issue]
+  )
+  const updateDescriptionDraft = useCallback(
+    (description: string): void => {
+      setDraftState((current) => ({
+        ...resolveLinearIssueTextDraftState(current, issue),
+        description
+      }))
+    },
+    [issue]
+  )
 
   const saveField = useCallback(
     async (field: LinearIssueTextField, descriptionOverride?: string) => {
@@ -91,7 +95,7 @@ export function LinearIssueTextEditor({
         titleDraft
       })
       if (savePlan.kind === 'empty-title') {
-        setTitleDraft(issue.title)
+        updateTitleDraft(issue.title)
         toast.error('Title is required')
         return
       }
@@ -120,9 +124,9 @@ export function LinearIssueTextEditor({
         patchLinearIssue(issue.id, revert)
         if (stillEditingIssue) {
           if (field === 'title') {
-            setTitleDraft(issue.title)
+            updateTitleDraft(issue.title)
           } else {
-            setDescriptionDraft(issue.description ?? '')
+            updateDescriptionDraft(issue.description ?? '')
           }
         }
         toast.error(error instanceof Error ? error.message : `Failed to update ${field}`)
@@ -142,7 +146,9 @@ export function LinearIssueTextEditor({
       onIssueChange,
       patchLinearIssue,
       settings,
-      titleDraft
+      titleDraft,
+      updateDescriptionDraft,
+      updateTitleDraft
     ]
   )
 
@@ -159,10 +165,10 @@ export function LinearIssueTextEditor({
 
   const saveDescriptionValue = useCallback(
     (value: string) => {
-      setDescriptionDraft(value)
+      updateDescriptionDraft(value)
       void saveField('description', value)
     },
-    [saveField]
+    [saveField, updateDescriptionDraft]
   )
 
   const handleTitleKeyDown = useCallback(
@@ -188,7 +194,7 @@ export function LinearIssueTextEditor({
           <textarea
             ref={titleRef}
             value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
+            onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}
             onKeyDown={handleTitleKeyDown}
             disabled={savingField === 'title'}
@@ -215,7 +221,7 @@ export function LinearIssueTextEditor({
         <div className="relative">
           <LinearIssueMarkdownDescriptionEditor
             value={descriptionDraft}
-            onChange={setDescriptionDraft}
+            onChange={updateDescriptionDraft}
             onSave={saveDescriptionValue}
             density={density}
             disabled={savingField === 'description'}
