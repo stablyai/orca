@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -23,12 +23,16 @@ export function ProjectGroupDeleteDialog({
   onConfirm
 }: ProjectGroupDeleteDialogProps): React.JSX.Element {
   const [deleting, setDeleting] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
 
-  useEffect(() => {
-    if (open) {
+  // Why: opening the dialog must clear a stale in-flight state before the
+  // destructive button renders; an Effect would leave one disabled frame.
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open && deleting) {
       setDeleting(false)
     }
-  }, [open])
+  }
 
   const handleConfirm = useCallback(async () => {
     if (deleting) {

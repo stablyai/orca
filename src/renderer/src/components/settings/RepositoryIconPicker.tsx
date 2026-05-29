@@ -3,12 +3,14 @@ import { toast } from 'sonner'
 import { Github, Image, Link2, RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
 import { faviconUrlFromWebsite, type RepoIcon } from '../../../../shared/repo-icon'
-import { REPO_COLORS } from '../../../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/constants'
+import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { ColorPicker } from '../ui/color-picker'
 import { RepoIconGlyph, REPO_LUCIDE_ICON_OPTIONS } from '../repo/repo-icon'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -31,6 +33,8 @@ export function RepositoryIconPicker({
   const selectedLucideName =
     repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : repo.repoIcon == null ? 'Folder' : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
+  const selectedBadgeColor = normalizeRepoBadgeColor(repo.badgeColor) ?? DEFAULT_REPO_BADGE_COLOR
+  const isPresetBadgeColor = REPO_COLORS.some((color) => color === selectedBadgeColor)
   const initialTab =
     repo.repoIcon?.type === 'image' ? 'image' : repo.repoIcon?.type === 'emoji' ? 'emoji' : 'icon'
   const runtimeTarget = useMemo(
@@ -52,6 +56,7 @@ export function RepositoryIconPicker({
   }, [repo.repoIcon, selectedLucideName])
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
+  const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })
 
   const handleUploadImage = async () => {
     try {
@@ -115,7 +120,7 @@ export function RepositoryIconPicker({
       <div className="flex items-center gap-3">
         <RepoIconGlyph
           repoIcon={repo.repoIcon}
-          color={repo.badgeColor}
+          color={selectedBadgeColor}
           className="size-10 shrink-0 rounded-md border border-border/70 bg-muted/30"
           iconClassName="size-5"
         />
@@ -135,22 +140,39 @@ export function RepositoryIconPicker({
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {REPO_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            onClick={() => updateRepo(repo.id, { badgeColor: color })}
-            className={cn(
-              'size-7 rounded-[4px] transition-all',
-              repo.badgeColor === color
-                ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
-            )}
-            style={{ backgroundColor: color }}
-            title={color}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Color</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          {REPO_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => setBadgeColor(color)}
+              aria-label={`Use ${color} repo color`}
+              aria-pressed={selectedBadgeColor === color}
+              className={cn(
+                'size-7 rounded-[4px] outline-none transition-all focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                selectedBadgeColor === color
+                  ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
+                  : 'hover:ring-1 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background'
+              )}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+          <ColorPicker
+            value={selectedBadgeColor}
+            onChange={setBadgeColor}
+            label={
+              isPresetBadgeColor
+                ? 'Choose custom repo color'
+                : `Custom repo color ${selectedBadgeColor}`
+            }
+            selected={!isPresetBadgeColor}
+            triggerLabel="Custom"
+            showHexInTrigger={!isPresetBadgeColor}
+            className="h-7 px-2"
           />
-        ))}
+        </div>
       </div>
 
       <Tabs defaultValue={initialTab} className="gap-3">

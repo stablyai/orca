@@ -1910,6 +1910,9 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
+  /** Experimental: compact worktree cards by hiding a redundant metadata row
+   *  when the title and branch already say the same thing. */
+  experimentalCompactWorktreeCards: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the

@@ -24,8 +24,19 @@ export class CdpWsProxy {
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
-      const onListenError = (error: Error): void => {
+      const failStart = (error: Error): void => {
+        this.httpServer?.removeListener('error', onListenError)
+        this.wss?.close()
+        this.wss = null
+        this.httpServer?.close()
+        this.httpServer = null
+        // Why: a bind failure happens after debugger attach; release it here
+        // because callers cannot safely call stop() on a failed start.
+        this.detachDebugger()
         reject(error)
+      }
+      const onListenError = (error: Error): void => {
+        failStart(error)
       }
       this.wss.on('connection', (ws) => {
         if (this.client) {
@@ -46,7 +57,7 @@ export class CdpWsProxy {
           this.port = addr.port
           resolve(`ws://127.0.0.1:${this.port}`)
         } else {
-          reject(new Error('Failed to bind proxy server'))
+          failStart(new Error('Failed to bind proxy server'))
         }
       })
       this.httpServer.once('error', onListenError)
