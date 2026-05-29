@@ -100,6 +100,7 @@ import {
 } from '../shared/workspace-statuses'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
@@ -476,10 +477,18 @@ function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | u
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
 }
 
-function sanitizeRepoUpdatesForPersistence<T extends Partial<Pick<Repo, 'repoIcon'>>>(
-  updates: T
-): T {
+function sanitizeRepoUpdatesForPersistence<
+  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon'>>
+>(updates: T): T {
   const sanitized = { ...updates }
+  if ('badgeColor' in sanitized) {
+    const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
+    if (!badgeColor) {
+      delete sanitized.badgeColor
+    } else {
+      sanitized.badgeColor = badgeColor
+    }
+  }
   if ('repoIcon' in sanitized) {
     const repoIcon = sanitizeRepoIcon(sanitized.repoIcon)
     if (repoIcon === undefined) {
