@@ -315,6 +315,7 @@ export type CacheEntry<T> = {
 
 type FetchOptions = {
   force?: boolean
+  noCache?: boolean
 }
 
 type RepoScopedFetchOptions = FetchOptions & {
@@ -354,6 +355,7 @@ const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 type InflightWorkItems = {
   promise: Promise<GitHubWorkItem[]>
   force: boolean
+  noCache: boolean
 }
 const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 const prRequestGenerations = new Map<string, number>()
@@ -1648,12 +1650,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const existing = inflightWorkItemsRequests.get(key)
     if (existing) {
       // Why: a user-initiated refresh (force=true) must not silently dedupe to
-      // a non-forcing fetch already in flight — the result would be no fresher
-      // than what the user just asked to invalidate. Wait for the non-forcing
-      // request to settle (success or failure — we discard the result either
-      // way), then fall through to issue a new forced request. Non-forcing
-      // callers continue to dedupe onto any in-flight request as before.
-      if (options?.force && !existing.force) {
+      // a less-fresh fetch already in flight. noCache=true is stricter than a
+      // cacheable forced landing probe because it must bypass gh api's cache too.
+      if ((options?.force && !existing.force) || (options?.noCache && !existing.noCache)) {
         await existing.promise.catch(() => {})
       } else {
         return existing.promise
@@ -1667,7 +1666,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoPath,
           repoId,
           limit,
-          query: query || undefined
+          query: query || undefined,
+          ...(options?.noCache ? { noCache: true } : {})
         })
         // Why: stamp repoId at the renderer fetch boundary so every downstream
         // consumer (cross-repo merge, row rendering, drawer) can rely on the
@@ -1720,7 +1720,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     inflightWorkItemsRequests.set(key, {
       promise: request,
-      force: Boolean(options?.force)
+      force: Boolean(options?.force),
+      noCache: Boolean(options?.noCache)
     })
     return request
   },

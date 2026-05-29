@@ -121,6 +121,7 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import {
   buildTaskPageRepoSourceState,
+  deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearIssue,
   reconcileTaskPageLinearIssuesAfterLandingRefresh,
@@ -3510,7 +3511,7 @@ export default function TaskPage(): React.JSX.Element {
     // when this effect dispatched preserves later additions.
     const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: forcedFetch || shouldProbeOnLanding
+      ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear only the repos this effect was responsible for

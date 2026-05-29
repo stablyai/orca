@@ -595,9 +595,15 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor' },
+        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
         expectedMethod: 'github.listWorkItems',
-        expectedParams: withRepo({ repoPath, limit: 20, query: 'is:pr', before: 'cursor' })
+        expectedParams: withRepo({
+          repoPath,
+          limit: 20,
+          query: 'is:pr',
+          before: 'cursor',
+          noCache: true
+        })
       },
       {
         key: 'prChecks',

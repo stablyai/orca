@@ -140,6 +140,27 @@ describe('GitHub issue source split', () => {
     )
   })
 
+  it('omits gh api cache args for no-cache recent work-item requests', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: '[]'
+    })
+
+    await listWorkItems('/repo-root', 10, undefined, undefined, undefined, undefined, true)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['api', 'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'],
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({
       source: { owner: 'stablyai', repo: 'orca' },

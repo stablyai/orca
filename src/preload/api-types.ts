@@ -936,6 +936,7 @@ export type PreloadApi = {
       limit?: number
       query?: string
       before?: string
+      noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
