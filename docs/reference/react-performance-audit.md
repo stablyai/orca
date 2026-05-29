@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, and #3053: 962 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, and #3054: 959 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -87,6 +87,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR M         | Status-bar account menus                              | Extra render pass from closing Claude/Codex account submenus in Effects after the provider menu closes.  | `StatusBar.tsx` covered by #3051                                                                                         | Low            |
 | PR N         | Browser tab favicon fallback                          | Extra render pass from resetting failed favicon state in an Effect after tab favicon identity changes.   | `BrowserTab.tsx` covered by #3052                                                                                        | Low            |
 | PR O         | Workspace title rename draft                          | Redundant draft sync Effect runs while the inline title rename input is not mounted.                     | `WorktreeTitleInlineRename.tsx` covered by #3053                                                                         | Low            |
+| PR P         | Feature-wall tour static substep repair               | Three no-op Effects scan static step arrays and repair ids that are only written from those arrays.      | `FeatureWallTourSurface.tsx` covered by #3054                                                                            | Low            |
 
 ## Merge Risk Scale
 
@@ -107,6 +108,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3051 | `nwparker/react-perf-low-risk-3`     | Status-bar account submenus collapse in provider menu open-change handlers    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/status-bar/StatusBar.tsx`; `pnpm run typecheck:web`.           |
 | #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
 | #3053 | `nwparker/react-perf-low-risk-5`     | Inline workspace-title rename removes inactive draft sync Effect              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/WorktreeTitleInlineRename.tsx`; `pnpm run typecheck:web`. |
+| #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
