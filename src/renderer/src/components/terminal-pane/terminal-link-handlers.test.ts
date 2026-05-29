@@ -14,6 +14,7 @@ import {
 } from './terminal-link-handlers'
 import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { resolveFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+import { isTerminalFilePathLocalToClient } from './terminal-file-open-routing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -153,6 +154,44 @@ describe('isTerminalLinkActivation', () => {
     expect(isTerminalLinkActivation({ metaKey: false, ctrlKey: true })).toBe(true)
     expect(isTerminalLinkActivation({ metaKey: true, ctrlKey: false })).toBe(false)
     expect(isTerminalLinkActivation(undefined)).toBe(false)
+  })
+})
+
+describe('isTerminalFilePathLocalToClient', () => {
+  it('allows local OS actions only for client-local paths', () => {
+    expect(
+      isTerminalFilePathLocalToClient(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        '/repo/report.docx'
+      )
+    ).toBe(true)
+
+    expect(
+      isTerminalFilePathLocalToClient(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: 'ssh-1'
+        },
+        '/repo/report.docx'
+      )
+    ).toBe(false)
+
+    expect(
+      isTerminalFilePathLocalToClient(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        '/tmp/report.docx'
+      )
+    ).toBe(false)
   })
 })
 
@@ -984,6 +1023,17 @@ describe('createFilePathLinkProvider range bounds', () => {
       provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
     })
   }
+
+  it('does not client-probe remote runtime paths outside the worktree', async () => {
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    vi.mocked(window.api.shell.pathExists).mockResolvedValue(true)
+
+    const links = await collectLinks('/tmp/report.docx')
+
+    expect(links).toEqual([])
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
 
   function containsBufferPoint(link: ILink, x: number, y: number): boolean {
     const { start, end } = link.range
